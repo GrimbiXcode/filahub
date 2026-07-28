@@ -27,32 +27,40 @@ export function useAuth(options?: UseAuthOptions) {
   });
 
   const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: async () => {
-      await utils.invalidate();
+    onSuccess: () => {
+      // Erst zum Login navigieren, dann den Cache im Hintergrund
+      // aktualisieren. Umgekehrt würde die Navigation auf Refetches der
+      // geschützten Queries warten, die nach dem Logout mit 401
+      // fehlschlagen und inkl. Retry-Backoffs mehrere Sekunden blockieren.
       navigate(redirectPath);
+      void utils.invalidate();
     },
   });
 
   const logout = useCallback(() => logoutMutation.mutate(), [logoutMutation]);
 
+  // Nach einem 401 (z. B. durch Logout oder abgelaufene Session) behält
+  // TanStack Query die alten Daten – dann als abgemeldet behandeln.
+  const isUnauthenticated = error?.data?.code === "UNAUTHORIZED";
+
   useEffect(() => {
-    if (redirectOnUnauthenticated && !isLoading && !user) {
+    if (redirectOnUnauthenticated && !isLoading && (!user || isUnauthenticated)) {
       const currentPath = window.location.pathname;
       if (currentPath !== redirectPath) {
         navigate(redirectPath);
       }
     }
-  }, [redirectOnUnauthenticated, isLoading, user, navigate, redirectPath]);
+  }, [redirectOnUnauthenticated, isLoading, user, isUnauthenticated, navigate, redirectPath]);
 
   return useMemo(
     () => ({
-      user: user ?? null,
-      isAuthenticated: !!user,
+      user: isUnauthenticated ? null : (user ?? null),
+      isAuthenticated: !!user && !isUnauthenticated,
       isLoading: isLoading || logoutMutation.isPending,
       error,
       logout,
       refresh: refetch,
     }),
-    [user, isLoading, logoutMutation.isPending, error, logout, refetch],
+    [user, isUnauthenticated, isLoading, logoutMutation.isPending, error, logout, refetch],
   );
 }
