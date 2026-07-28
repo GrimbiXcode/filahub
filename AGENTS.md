@@ -123,6 +123,10 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 - Die App lauscht auf Port 3000; empfohlen ist ein Reverse Proxy mit HTTPS
   (Caddy: `reverse_proxy 127.0.0.1:3000`). Ohne HTTPS funktioniert das
   Session-Cookie in Produktion nicht.
+- `compose.yml` ist eine Deployment-Vorlage (App-Image von GHCR + MySQL 8.4
+  mit Volume); Anleitung im `README.md`. Das DB-Schema wird weiterhin von
+  einem Repo-Checkout aus mit `npm run db:push` synchronisiert (drizzle-kit
+  ist nicht Teil des Runtime-Images).
 - MySQL muss vom Container/Host aus erreichbar sein; Setup siehe `README.md`
   (Datenbank anlegen, `npm run db:push`).
 
