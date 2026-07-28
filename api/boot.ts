@@ -10,6 +10,8 @@ import { startTelegramBot } from "./telegram/bot";
 const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
+// Health-Endpunkt für Docker-Healthchecks und Reverse Proxies
+app.get("/health", (c) => c.json({ status: "ok" }));
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",

@@ -127,6 +127,9 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
   mit Volume); Anleitung im `README.md`. Das DB-Schema wird weiterhin von
   einem Repo-Checkout aus mit `npm run db:push` synchronisiert (drizzle-kit
   ist nicht Teil des Runtime-Images).
+- Healthchecks: `GET /health` (in `api/boot.ts`) liefert `{ "status": "ok" }`;
+  das Dockerfile definiert darauf einen `HEALTHCHECK`, die Compose-Vorlage
+  ebenfalls.
 - MySQL muss vom Container/Host aus erreichbar sein; Setup siehe `README.md`
   (Datenbank anlegen, `npm run db:push`).
 
