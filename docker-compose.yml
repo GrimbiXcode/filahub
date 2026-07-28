@@ -5,9 +5,9 @@
 #      (DATABASE_URL in .env is overridden below and can be ignored here)
 #   2. Set a strong DB password in both places marked "change-me"
 #   3. docker compose up -d
-#   4. Apply the DB schema once, from a repo checkout:
-#        DATABASE_URL=mysql://filahub:change-me@localhost:3306/filahub npm run db:push
 #
+# The app applies pending DB migrations automatically on startup
+# (db/migrations) – no manual schema step is needed.
 # Put a reverse proxy with HTTPS (e.g. Caddy) in front of port 3000.
 # The session cookie requires HTTPS outside of localhost.
 

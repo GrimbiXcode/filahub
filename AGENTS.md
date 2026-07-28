@@ -124,9 +124,11 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
   (Caddy: `reverse_proxy 127.0.0.1:3000`). Ohne HTTPS funktioniert das
   Session-Cookie in Produktion nicht.
 - `docker-compose.yml` ist eine Deployment-Vorlage (App-Image von GHCR + MySQL 8.4
-  mit Volume); Anleitung im `README.md`. Das DB-Schema wird weiterhin von
-  einem Repo-Checkout aus mit `npm run db:push` synchronisiert (drizzle-kit
-  ist nicht Teil des Runtime-Images).
+  mit Volume); Anleitung im `README.md`. Beim Server-Start (Produktion) werden
+  ausstehende SQL-Migrationen aus `db/migrations/` automatisch angewendet
+  (`migrateDb` in `api/queries/connection.ts`) – frische Datenbanken
+  initialisieren sich selbst. Nach Schema-Änderungen daher immer
+  `npm run db:generate` ausführen und die erzeugten Dateien committen.
 - Healthchecks: `GET /health` (in `api/boot.ts`) liefert `{ "status": "ok" }`;
   das Dockerfile definiert darauf einen `HEALTHCHECK`, die Compose-Vorlage
   ebenfalls.

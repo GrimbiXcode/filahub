@@ -43,13 +43,16 @@ cp .env.example .env
 
 ## 3. Set up the database
 
-Create a MySQL database and sync the schema:
+Create a MySQL database:
 
 ```bash
 mysql -u user -p -e "CREATE DATABASE filahub CHARACTER SET utf8mb4;"
-npm install
-npm run db:push
 ```
+
+The app applies pending SQL migrations (`db/migrations/`) automatically on
+startup, so a fresh database initializes itself. For local development you
+can alternatively sync the schema directly with `npm run db:push`; after
+schema changes, regenerate the migration files with `npm run db:generate`.
 
 ## 4. Run
 
@@ -89,21 +92,17 @@ cp .env.example .env   # fill in APP_SECRET + Telegram values
 
 # 2. set a database password: replace "change-me" in both places in docker-compose.yml
 
-# 3. start app + database
+# 3. start app + database – pending DB migrations are applied automatically
 docker compose up -d
-
-# 4. apply the DB schema once, from a repo checkout
-#    (drizzle-kit is a dev dependency and therefore not part of the app image)
-DATABASE_URL=mysql://filahub:change-me@localhost:3306/filahub npm run db:push
 ```
 
 Notes:
 
 - `DATABASE_URL` from `.env` is overridden by `docker-compose.yml` so the app talks
   to the bundled `db` service – you can ignore that variable for Compose.
-- MySQL is published on `127.0.0.1:3306` so you can run `npm run db:push`
-  (schema migrations) from the host; remove that port mapping if you manage
-  the schema differently.
+- MySQL is published on `127.0.0.1:3306` in case you want to inspect the
+  database or run drizzle commands from the host; remove that port mapping
+  if you don't need it.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
 

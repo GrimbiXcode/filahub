@@ -27,7 +27,12 @@ export default app;
 if (env.isProduction) {
   const { serve } = await import("@hono/node-server");
   const { serveStaticFiles } = await import("./lib/vite");
+  const { migrateDb } = await import("./queries/connection");
   serveStaticFiles(app);
+
+  // Schema-Migrationen anwenden, bevor Bot und Server auf die DB zugreifen
+  await migrateDb();
+  console.log("Datenbank-Migrationen angewendet.");
 
   const port = parseInt(process.env.PORT || "3000");
   startTelegramBot();
