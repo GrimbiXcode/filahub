@@ -69,7 +69,19 @@
   * {
     @apply border-border;
   }
+  :root {
+    /* App ist hell; ohne Angabe erben eingebettete iframes den
+       Dark-Mode des Systems und rendern transparente Flaechen schwarz */
+    color-scheme: light;
+  }
+  .dark {
+    color-scheme: dark;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+  /* Telegram-Login-Widget: Iframe-Canvas explizit hell halten */
+  iframe[src*="oauth.telegram.org"] {
+    color-scheme: light;
   }
 }
