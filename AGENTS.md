@@ -13,7 +13,7 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
 - **Datenbank:** Drizzle ORM + MySQL (`mysql2`, `drizzle-kit`)
 - **Auth:** Telegram Login Widget + Bot-Code-Login, JWT-Session-Cookie (`jose`, HS256)
-- **Laufzeit:** Node.js 20, ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
+- **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
 ## Projektstruktur
 
@@ -116,7 +116,7 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 
 ## Deployment
 
-- Multi-Stage-`Dockerfile` (node:20-alpine): Build-Stage mit `npm run build`,
+- Multi-Stage-`Dockerfile` (node:26-alpine): Build-Stage mit `npm run build`,
   Runtime-Stage mit `npm ci --omit=dev`, `CMD ["node", "dist/boot.js"]`.
   Achtung: Das Image kopiert zusätzlich `drizzle.config.ts` und `db/`
   (für Migrationen zur Laufzeit).
