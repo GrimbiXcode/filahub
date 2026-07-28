@@ -80,14 +80,14 @@ Docker Compose with a MySQL service or an external database server).
 
 ### With Docker Compose (deployment template)
 
-`compose.yml` is a ready-to-use deployment template: the app image from GHCR
+`docker-compose.yml` is a ready-to-use deployment template: the app image from GHCR
 plus a MySQL 8.4 service with a persistent volume.
 
 ```bash
 # 1. prepare configuration (see section 2)
 cp .env.example .env   # fill in APP_SECRET + Telegram values
 
-# 2. set a database password: replace "change-me" in both places in compose.yml
+# 2. set a database password: replace "change-me" in both places in docker-compose.yml
 
 # 3. start app + database
 docker compose up -d
@@ -99,7 +99,7 @@ DATABASE_URL=mysql://filahub:change-me@localhost:3306/filahub npm run db:push
 
 Notes:
 
-- `DATABASE_URL` from `.env` is overridden by `compose.yml` so the app talks
+- `DATABASE_URL` from `.env` is overridden by `docker-compose.yml` so the app talks
   to the bundled `db` service – you can ignore that variable for Compose.
 - MySQL is published on `127.0.0.1:3306` so you can run `npm run db:push`
   (schema migrations) from the host; remove that port mapping if you manage
