@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
 import Home from "./pages/Home";
+import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
 import SpoolTypes from "./pages/SpoolTypes";
 import StorageBoxes from "./pages/StorageBoxes";
@@ -13,6 +14,7 @@ export default function App() {
     <ErrorBoundary>
       <Routes>
         <Route path="/" element={<Home />} />
+        <Route path="/import" element={<Import />} />
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
         <Route path="/lagerboxen" element={<StorageBoxes />} />

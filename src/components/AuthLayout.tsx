@@ -21,7 +21,14 @@ import {
 } from "@/components/ui/sidebar";
 import { LOGIN_PATH } from "@/const";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Archive, Disc3, LayoutDashboard, LogOut, PanelLeft } from "lucide-react";
+import {
+  Archive,
+  Disc3,
+  FileUp,
+  LayoutDashboard,
+  LogOut,
+  PanelLeft,
+} from "lucide-react";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
@@ -29,6 +36,7 @@ import { Button } from "./ui/button";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "Materialübersicht", path: "/" },
+  { icon: FileUp, label: "Import", path: "/import" },
   { icon: Disc3, label: "Rollentypen", path: "/rollentypen" },
   { icon: Archive, label: "Lagerboxen", path: "/lagerboxen" },
 ];

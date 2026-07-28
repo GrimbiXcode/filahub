@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { importManyInputSchema } from "@contracts/import";
 import { createRouter, authedQuery } from "./middleware";
 import {
   addWeighing,
@@ -106,6 +107,44 @@ export const materialRouter = createRouter({
       }
       await deleteMaterial(ctx.user.id, input.id);
       return { ok: true };
+    }),
+
+  /** Massenimport: erzeugt pro Position `anzahl` identische Materialien. */
+  importMany: authedQuery
+    .input(importManyInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      const gesamt = input.items.reduce(
+        (summe, item) => summe + item.anzahl,
+        0,
+      );
+      if (gesamt > 200) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Maximal 200 Datensätze pro Import",
+        });
+      }
+      let created = 0;
+      for (const item of input.items) {
+        // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
+        const name = [item.hersteller, item.typ, item.farbe]
+          .map((s) => s?.trim())
+          .filter(Boolean)
+          .join(" ");
+        for (let i = 0; i < item.anzahl; i++) {
+          await createMaterial({
+            userId: ctx.user.id,
+            name,
+            materialType: item.typ,
+            manufacturer: item.hersteller || undefined,
+            color: item.farbe || undefined,
+            priceCents: item.priceCents ?? undefined,
+            purchaseDate: input.purchaseDate ?? undefined,
+            nominalWeight: item.nenngewicht,
+          });
+          created++;
+        }
+      }
+      return { created };
     }),
 
   /** Neue Wägung: gemessenes Bruttogewicht (Material + Rolle + ggf. Box) */
