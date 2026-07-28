@@ -1,125 +1,137 @@
-# Filament-Lager
+# filahub
 
-Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filamente mit
-Rollentypen und Lagerboxen (Drybox) inkl. Leergewicht, Wägungen mit
-automatischer Restmengenberechnung, Kennungen zum schnellen Wiederfinden,
-Telegram-Login.
+Web application for managing a 3D-printing filament inventory: filaments with
+spool/packaging types and storage boxes (dryboxes) including tare weight,
+weigh-ins with automatic remaining-quantity calculation, short IDs for quick
+retrieval, and Telegram-only login.
 
-**Stack:** React + Vite + Tailwind (Frontend) · Hono + tRPC (Backend) ·
-Drizzle ORM + MySQL (Datenbank)
+**Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
+Drizzle ORM + MySQL (database)
 
 ---
 
-## 1. Telegram-Bot anlegen
+## 1. Create a Telegram bot
 
-1. In Telegram [@BotFather](https://t.me/BotFather) öffnen
-2. `/newbot` senden, Name und Username wählen (z. B. `DeinFilamentLagerBot`)
-3. Den **Token** notieren (sieht aus wie `123456789:ABCdeFG…`)
-4. **Domain hinterlegen (wichtig für das Login-Widget):** Bei @BotFather
-   `/setdomain` senden, den Bot wählen und deine Domain eintragen
-   (z. B. `filament.deinedomain.at` – ohne https://, ohne Pfad)
-5. Dem neuen Bot `/id` schreiben → er antwortet mit deiner **Telegram-User-ID**
-   (die brauchst du für die Whitelist und die Admin-Rolle)
+1. Open [@BotFather](https://t.me/BotFather) in Telegram
+2. Send `/newbot`, choose a name and username (e.g. `YourFilahubBot`)
+3. Note the **token** (looks like `123456789:ABCdeFG…`)
+4. **Set a domain (required for the login widget):** send `/setdomain` to
+   @BotFather, select your bot and enter your domain
+   (e.g. `filahub.yourdomain.at` – no https://, no path)
+5. Message your new bot with `/id` → it replies with your **Telegram user ID**
+   (needed for the whitelist and the admin role)
 
-> Hinweis: `/id` ist eine eingebaute Funktion dieser App – sobald der Bot
-> läuft, antwortet er darauf mit deiner ID.
+> Note: `/id` is a built-in feature of this app – once the bot is running,
+> it replies to it with your ID.
 
-## 2. Konfiguration
+## 2. Configuration
 
 ```bash
 cp .env.example .env
-# .env ausfüllen: APP_SECRET (z. B. `openssl rand -hex 32`), DATABASE_URL,
+# fill in .env: APP_SECRET (e.g. `openssl rand -hex 32`), DATABASE_URL,
 # TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_ALLOWED_IDS, OWNER_TELEGRAM_ID
 ```
 
-| Variable | Bedeutung |
+| Variable | Purpose |
 |---|---|
-| `APP_SECRET` | Zufalls-Secret für Session-Tokens |
-| `DATABASE_URL` | MySQL-Verbindungsstring |
-| `TELEGRAM_BOT_TOKEN` | Token von @BotFather |
-| `TELEGRAM_BOT_USERNAME` | Bot-Username ohne @ |
-| `TELEGRAM_ALLOWED_IDS` | Erlaubte Telegram-IDs (kommagetrennt); leer = offene Registrierung |
-| `OWNER_TELEGRAM_ID` | Telegram-ID des Admins |
+| `APP_SECRET` | Random secret for signing session tokens |
+| `DATABASE_URL` | MySQL connection string |
+| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
+| `TELEGRAM_BOT_USERNAME` | Bot username without @ |
+| `TELEGRAM_ALLOWED_IDS` | Allowed Telegram IDs (comma-separated); empty = open registration |
+| `OWNER_TELEGRAM_ID` | Telegram ID of the admin |
 
-## 3. Datenbank einrichten
+## 3. Set up the database
 
-MySQL-Datenbank anlegen und Schema synchronisieren:
+Create a MySQL database and sync the schema:
 
 ```bash
-mysql -u benutzer -p -e "CREATE DATABASE filament_lager CHARACTER SET utf8mb4;"
+mysql -u user -p -e "CREATE DATABASE filahub CHARACTER SET utf8mb4;"
 npm install
 npm run db:push
 ```
 
-## 4. Starten
+## 4. Run
 
-### Ohne Docker
+### Without Docker
 
 ```bash
 npm install
 npm run build
-npm start          # läuft auf Port 3000 (PORT in .env änderbar)
+npm start          # runs on port 3000 (PORT in .env)
 ```
 
-### Mit Docker
+### With Docker
 
 ```bash
-docker build -t filament-lager .
-docker run -d --name filament-lager \
+docker build -t filahub .
+docker run -d --name filahub \
   --env-file .env \
   -p 3000:3000 \
   --restart unless-stopped \
-  filament-lager
+  filahub
 ```
 
-Die MySQL-Datenbank muss vom Container aus erreichbar sein (z. B. Docker-Compose
-mit MySQL-Service oder externer Datenbankserver).
+Prebuilt images are published to the GitHub Container Registry
+(`ghcr.io/<owner>/filahub`) whenever a version tag is pushed.
 
-## 5. Domain & HTTPS (empfohlen: Caddy als Reverse Proxy)
+The MySQL database must be reachable from the container (e.g. via
+Docker Compose with a MySQL service or an external database server).
 
-Die App lauscht auf Port 3000. Für deine Domain davor einen Reverse Proxy mit
-HTTPS schalten. Mit [Caddy](https://caddyserver.com) genügt eine Zeile in der
-`Caddyfile`:
+## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
+
+The app listens on port 3000. Put a reverse proxy with HTTPS in front of it
+for your domain. With [Caddy](https://caddyserver.com), one line in the
+`Caddyfile` is enough:
 
 ```
-filament.deinedomain.at {
+filahub.yourdomain.at {
     reverse_proxy 127.0.0.1:3000
 }
 ```
 
-DNS: A-Record der Domain auf die IP des VPS zeigen lassen. Caddy holt sich das
-TLS-Zertifikat automatisch. Alternativ geht natürlich auch nginx + Certbot.
+DNS: point an A record of the domain to your server's IP. Caddy obtains the
+TLS certificate automatically. nginx + Certbot works too, of course.
 
-> Das Session-Cookie wird außerhalb von localhost als `Secure; SameSite=None`
-> gesetzt – HTTPS ist daher im Produktivbetrieb erforderlich.
+> Outside of localhost, the session cookie is set as `Secure; SameSite=None`
+> – HTTPS is therefore required in production.
 
-## 6. Login-Ablauf
+## 6. Login flow
 
-**Primär: offizielles Telegram Login Widget** (Knopf auf der Login-Seite)
+**Primary: official Telegram Login Widget** (button on the login page)
 
-1. Auf „Log in with Telegram“ klicken
-2. Telegram öffnet den offiziellen Bestätigungsdialog – Identität wird dabei
-   auch über die hinterlegte Telefonnummer bestätigt
-3. Bestätigen → angemeldet
+1. Click "Log in with Telegram"
+2. Telegram opens the official confirmation dialog – your identity is also
+   verified via your registered phone number
+3. Confirm → logged in
 
-> Voraussetzung: Die Domain muss per `/setdomain` bei @BotFather hinterlegt
-> sein (siehe Schritt 1). Das Widget benötigt außerdem Third-Party-Cookies;
-> in Browsern mit strikter Blockierung ggf. die Alternative nutzen.
+> Prerequisite: the domain must be registered via `/setdomain` at @BotFather
+> (see step 1). The widget also requires third-party cookies; in browsers
+> with strict blocking, use the alternative below.
 
-**Alternativ: Code-Login über den Bot**
+**Alternative: code login via the bot**
 
-1. Bot-Link auf der Login-Seite anklicken
-2. Dem Bot `/login` schreiben → 6-stelligen Code erhalten (10 Min. gültig)
-3. Code auf der Website eingeben → angemeldet
+1. Click the bot link on the login page
+2. Send `/login` to the bot → receive a 6-digit code (valid for 10 min)
+3. Enter the code on the website → logged in
 
-Bei aktiver Whitelist (`TELEGRAM_ALLOWED_IDS`) können sich nur die
-hinterlegten IDs anmelden. Die `OWNER_TELEGRAM_ID` erhält die Admin-Rolle.
+When the whitelist (`TELEGRAM_ALLOWED_IDS`) is active, only the listed IDs
+can sign in. The `OWNER_TELEGRAM_ID` receives the admin role.
 
-## Nützliche Befehle
+## Useful commands
 
-| Befehl | Zweck |
+| Command | Purpose |
 |---|---|
-| `npm run dev` | Entwicklungsserver mit HMR |
-| `npm run check` | TypeScript-Prüfung |
-| `npm run build` | Produktions-Build nach `dist/` |
-| `npm run db:push` | Schema-Änderungen in die DB synchronisieren |
+| `npm run dev` | Dev server with HMR |
+| `npm run check` | TypeScript check |
+| `npm run build` | Production build to `dist/` |
+| `npm run lint` | ESLint |
+| `npm run test` | Vitest |
+| `npm run db:push` | Sync schema changes to the database |
+
+## CI / CD
+
+- **Push to `main`:** the Docker image is built (without pushing) to verify
+  the build works.
+- **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with
+  the version and `latest`.
