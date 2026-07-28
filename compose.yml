@@ -1,0 +1,50 @@
+# Deployment template for filahub (app + MySQL).
+#
+# Usage:
+#   1. cp .env.example .env  and fill in APP_SECRET + Telegram values
+#      (DATABASE_URL in .env is overridden below and can be ignored here)
+#   2. Set a strong DB password in both places marked "change-me"
+#   3. docker compose up -d
+#   4. Apply the DB schema once, from a repo checkout:
+#        DATABASE_URL=mysql://filahub:change-me@localhost:3306/filahub npm run db:push
+#
+# Put a reverse proxy with HTTPS (e.g. Caddy) in front of port 3000.
+# The session cookie requires HTTPS outside of localhost.
+
+services:
+  db:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: filahub
+      MYSQL_USER: filahub
+      MYSQL_PASSWORD: change-me
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    volumes:
+      - db-data:/var/lib/mysql
+    # Bound to localhost only: lets you run `npm run db:push` from the host
+    # (schema migrations) without exposing MySQL to the network.
+    ports:
+      - "127.0.0.1:3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  app:
+    image: ghcr.io/grimbixcode/filahub:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Points the app at the db service; overrides DATABASE_URL from .env.
+      # The password must match MYSQL_PASSWORD above.
+      DATABASE_URL: mysql://filahub:change-me@db:3306/filahub
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db-data:

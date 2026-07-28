@@ -73,10 +73,39 @@ docker run -d --name filahub \
 ```
 
 Prebuilt images are published to the GitHub Container Registry
-(`ghcr.io/<owner>/filahub`) whenever a version tag is pushed.
+(`ghcr.io/grimbixcode/filahub`) whenever a version tag is pushed.
 
 The MySQL database must be reachable from the container (e.g. via
 Docker Compose with a MySQL service or an external database server).
+
+### With Docker Compose (deployment template)
+
+`compose.yml` is a ready-to-use deployment template: the app image from GHCR
+plus a MySQL 8.4 service with a persistent volume.
+
+```bash
+# 1. prepare configuration (see section 2)
+cp .env.example .env   # fill in APP_SECRET + Telegram values
+
+# 2. set a database password: replace "change-me" in both places in compose.yml
+
+# 3. start app + database
+docker compose up -d
+
+# 4. apply the DB schema once, from a repo checkout
+#    (drizzle-kit is a dev dependency and therefore not part of the app image)
+DATABASE_URL=mysql://filahub:change-me@localhost:3306/filahub npm run db:push
+```
+
+Notes:
+
+- `DATABASE_URL` from `.env` is overridden by `compose.yml` so the app talks
+  to the bundled `db` service – you can ignore that variable for Compose.
+- MySQL is published on `127.0.0.1:3306` so you can run `npm run db:push`
+  (schema migrations) from the host; remove that port mapping if you manage
+  the schema differently.
+- Updating to a new release: `docker compose pull && docker compose up -d`.
+- Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 
