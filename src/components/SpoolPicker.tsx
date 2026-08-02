@@ -114,7 +114,7 @@ export function SpoolPicker({
         )}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate">{preset.displayName}</span>
+        <span className="leading-tight">{preset.displayName}</span>
         <span className="text-xs text-muted-foreground">
           {formatGrams(preset.tareWeight)} Tara
           {!preset.isCurrent && " · ältere Ausführung"}
@@ -150,7 +150,10 @@ export function SpoolPicker({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent
+        className="w-[26rem] max-w-[calc(100vw-2rem)] min-w-[--radix-popover-trigger-width] p-0"
+        align="start"
+      >
         <Command>
           <CommandInput placeholder="Hersteller, Serie oder Gewicht suchen …" />
           <CommandList>
@@ -193,7 +196,7 @@ export function SpoolPicker({
                       )}
                     />
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <span className="truncate">{own.name}</span>
+                      <span className="leading-tight">{own.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {formatGrams(own.tareWeight)} Tara
                       </span>
