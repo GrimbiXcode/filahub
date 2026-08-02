@@ -26,8 +26,19 @@ services:
     # (schema migrations) without exposing MySQL to the network.
     ports:
       - "127.0.0.1:3306:3306"
+    # Echte Abfrage als Anwendungsbenutzer statt `mysqladmin ping`:
+    #   - `ping` liefert auch bei "Access denied" den Exit-Code 0 und
+    #   - erreicht über `-h localhost` den Unix-Socket, den schon der
+    #     temporäre Server während der Initialisierung anlegt.
+    # Beides zusammen meldet "healthy", bevor die App sich anmelden kann.
+    # `-h 127.0.0.1` erzwingt TCP (erst nach der Initialisierung offen) und
+    # prüft zusätzlich Zugangsdaten und Existenz der Datenbank.
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_PASSWORD"]
+      test:
+        [
+          "CMD-SHELL",
+          'mysql -h 127.0.0.1 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" -e "SELECT 1" "$$MYSQL_DATABASE" >/dev/null 2>&1',
+        ]
       interval: 5s
       timeout: 3s
       retries: 20
