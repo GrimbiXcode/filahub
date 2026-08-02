@@ -12,6 +12,7 @@ import {
   findRecentWeighings,
   findWeighing,
   materialBelongsToUser,
+  presetVariantIsSelectable,
   spoolTypeBelongsToUser,
   storageBoxBelongsToUser,
   updateMaterial,
@@ -33,17 +34,41 @@ const materialInput = z.object({
   purchaseDate: dateString,
   nominalWeight: z.number().int().positive("Nennmenge muss > 0 sein"),
   spoolTypeId: z.number().int().positive().nullable().optional(),
+  spoolPresetVariantId: z.number().int().positive().nullable().optional(),
   storageBoxId: z.number().int().positive().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
 
+/**
+ * Einzige Stelle, an der die Rollenauswahl geprüft wird: entweder ein eigener
+ * Rollentyp oder eine Variante aus dem Preset-Katalog, nie beides. Geprüft
+ * wird immer der Zustand *nach* dem Patch, sonst könnte man über eine
+ * Teilaktualisierung beide Felder gleichzeitig belegen.
+ */
 async function validateForeignKeys(
   userId: number,
   spoolTypeId?: number | null,
+  spoolPresetVariantId?: number | null,
   storageBoxId?: number | null,
 ) {
+  if (spoolTypeId != null && spoolPresetVariantId != null) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Bitte entweder einen eigenen Rollentyp oder eine Rolle aus dem Katalog wählen.",
+    });
+  }
   if (spoolTypeId != null && !(await spoolTypeBelongsToUser(userId, spoolTypeId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiger Rollentyp" });
+  }
+  if (
+    spoolPresetVariantId != null &&
+    !(await presetVariantIsSelectable(spoolPresetVariantId))
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Ungültige Rolle aus dem Katalog",
+    });
   }
   if (storageBoxId != null && !(await storageBoxBelongsToUser(userId, storageBoxId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültige Lagerbox" });
@@ -72,7 +97,12 @@ export const materialRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { initialGrossWeight, ...data } = input;
-      await validateForeignKeys(ctx.user.id, data.spoolTypeId, data.storageBoxId);
+      await validateForeignKeys(
+        ctx.user.id,
+        data.spoolTypeId,
+        data.spoolPresetVariantId,
+        data.storageBoxId,
+      );
       const id = await createMaterial(
         {
           ...data,
@@ -91,10 +121,23 @@ export const materialRouter = createRouter({
     .input(materialInput.partial().extend({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
-      if (!(await materialBelongsToUser(ctx.user.id, id))) {
+      const existing = await findMaterialById(ctx.user.id, id);
+      if (!existing) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Material nicht gefunden" });
       }
-      await validateForeignKeys(ctx.user.id, data.spoolTypeId, data.storageBoxId);
+      // Effektiven Zustand nach dem Patch prüfen, nicht nur die gesendeten Felder
+      const nextSpoolTypeId =
+        data.spoolTypeId !== undefined ? data.spoolTypeId : existing.spoolTypeId;
+      const nextPresetVariantId =
+        data.spoolPresetVariantId !== undefined
+          ? data.spoolPresetVariantId
+          : existing.spoolPresetVariantId;
+      await validateForeignKeys(
+        ctx.user.id,
+        nextSpoolTypeId,
+        nextPresetVariantId,
+        data.storageBoxId,
+      );
       await updateMaterial(ctx.user.id, id, data);
       return { ok: true };
     }),
