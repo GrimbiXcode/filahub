@@ -20,11 +20,13 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
-                AdminPresets, AdminProposals, Login, NotFound
+                Settings, AdminPresets, AdminProposals, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn)
-  providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc)
+  providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
+                format.tsx (bindet die Formatierer an den angemeldeten Benutzer)
   hooks/        useAuth, use-mobile
-  lib/          format.ts, utils.ts (cn-Helfer)
+  lib/          formatContext.ts (useFormat), format.ts (Füllstandsfarben),
+                importPrompt.ts, utils.ts (cn-Helfer)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   router.ts     appRouter: ping, auth, spoolType, storageBox, material, preset, admin
@@ -37,7 +39,8 @@ api/            Hono/tRPC-Backend
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
-                types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen)
+                types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen),
+                locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer)
 ```
 
 ## Pfad-Aliase
@@ -156,6 +159,17 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 - Preise in Cent (`priceCents`), Gewichte in Gramm, Abmessungen in ganzen
   Millimetern, Kaufdatum als `YYYY-MM-DD`-String
   (`date(..., { mode: "string" })`).
+- **Währung und Regionalformat hängen am Benutzer**, nicht an der App:
+  `users.currency` (ISO-4217) und `users.locale` (BCP-47, `NULL` = Locale des
+  Browsers). `priceCents` bleibt währungsneutral – ein Währungswechsel ändert
+  nur die Beschriftung, es wird nichts umgerechnet und nichts pro Material
+  gespeichert.
+- Zahlen, Gewichte, Prozente, Geldbeträge und Daten **nie roh rendern**,
+  sondern über `useFormat()` (`src/lib/formatContext.ts`). Die reinen
+  Funktionen dahinter stehen in `contracts/format.ts` und bekommen die Locale
+  als Argument. Ausnahme: `formatNominalWeight` in `contracts/presets.ts` ist
+  bewusst locale-frei, weil der Wert serverseitig in den denormalisierten
+  `displayName` der Preset-Varianten fließt.
 
 ## Tests
 
@@ -166,9 +180,12 @@ Datenbank.
 
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
-- Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`
-  und `materialStats`. Alle laufen ohne Datenbank – reine zod- und
+- Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
+  `materialStats` und `format`. Alle laufen ohne Datenbank – reine zod- und
   Funktionstests. Bei neuen Backend-Features Tests in `api/` anlegen.
+- `api/format.test.ts` testet die gemeinsamen Formatierer aus
+  `contracts/format.ts` – Tests unterhalb von `src/` würde vitest nicht
+  einsammeln.
 
 ### Integrationstests (`npm run test:integration`)
 

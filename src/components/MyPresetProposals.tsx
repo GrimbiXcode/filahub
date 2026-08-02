@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 
 const STATUS_VARIANT: Record<
@@ -47,6 +47,7 @@ function describePayload(payload: unknown): string {
 
 export function MyPresetProposals() {
   const utils = trpc.useUtils();
+  const { formatDate } = useFormat();
   const { data: proposals, isLoading } = trpc.preset.proposals.mine.useQuery();
 
   const withdraw = trpc.preset.proposals.withdraw.useMutation({
@@ -96,7 +97,7 @@ export function MyPresetProposals() {
         {(proposals ?? []).map((p) => (
           <TableRow key={p.id}>
             <TableCell className="whitespace-nowrap">
-              {formatDate(p.createdAt.toISOString().slice(0, 10))}
+              {formatDate(p.createdAt)}
             </TableCell>
             <TableCell>
               {p.kind === "new"

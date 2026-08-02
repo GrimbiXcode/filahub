@@ -39,12 +39,13 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { SpoolTypeItem } from "@/types";
 
 export default function SpoolTypes() {
   const utils = trpc.useUtils();
+  const { formatGrams } = useFormat();
   const { data: spoolTypes, isLoading } = trpc.spoolType.list.useQuery();
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -344,7 +345,8 @@ export default function SpoolTypes() {
                   <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium">
                     Leergewicht: {formatGrams(calculatedTare)}
                     <span className="ml-1 font-normal text-muted-foreground">
-                      ({calcGross} g − {calcNominal} g)
+                      ({formatGrams(parseInt(calcGross, 10))} −{" "}
+                      {formatGrams(parseInt(calcNominal, 10))})
                     </span>
                   </div>
                 ) : (

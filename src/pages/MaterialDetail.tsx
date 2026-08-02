@@ -37,11 +37,8 @@ import {
 import {
   fillLevelColor,
   fillLevelTextColor,
-  formatDate,
-  formatDateTime,
-  formatEuro,
-  formatGrams,
 } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
@@ -50,6 +47,13 @@ export default function MaterialDetail() {
   const materialId = Number(id);
   const navigate = useNavigate();
   const utils = trpc.useUtils();
+  const {
+    formatDate,
+    formatDateTime,
+    formatGrams,
+    formatMoney,
+    formatPercent,
+  } = useFormat();
 
   const { data: material, isLoading } = trpc.material.byId.useQuery(
     { id: materialId },
@@ -162,7 +166,7 @@ export default function MaterialDetail() {
               </div>
               {material.remainingPercent != null && (
                 <span className="text-2xl font-semibold text-muted-foreground">
-                  {material.remainingPercent} %
+                  {formatPercent(material.remainingPercent)}
                 </span>
               )}
             </div>
@@ -193,7 +197,7 @@ export default function MaterialDetail() {
                 <div className="text-muted-foreground">Restwert</div>
                 <div className="font-medium">
                   {material.priceCents != null && material.nominalWeight > 0
-                    ? formatEuro(
+                    ? formatMoney(
                         Math.round(
                           (material.priceCents * material.remainingWeight) /
                             material.nominalWeight,
@@ -223,7 +227,7 @@ export default function MaterialDetail() {
                 <dt className="text-muted-foreground">Farbe</dt>
                 <dd>{material.color ?? "–"}</dd>
                 <dt className="text-muted-foreground">Preis</dt>
-                <dd>{formatEuro(material.priceCents)}</dd>
+                <dd>{formatMoney(material.priceCents)}</dd>
                 <dt className="text-muted-foreground">Kaufdatum</dt>
                 <dd>{formatDate(material.purchaseDate)}</dd>
                 <dt className="text-muted-foreground">Rolle / Verpackung</dt>

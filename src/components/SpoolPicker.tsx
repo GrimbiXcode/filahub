@@ -21,7 +21,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { cn } from "@/lib/utils";
 import type { PresetOption, SpoolTypeItem } from "@/types";
 
@@ -59,6 +59,7 @@ export function SpoolPicker({
   disabled,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const { formatGrams } = useFormat();
 
   const selected = useMemo(() => {
     const ref = decodeSpoolRef(value);

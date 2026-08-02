@@ -14,6 +14,25 @@ export async function findUserByUnionId(unionId: string) {
 }
 
 /**
+ * Anzeige-Einstellungen eines Benutzers ändern (Währung, Regionalformat).
+ * `locale: null` bedeutet „Locale des Browsers verwenden“.
+ */
+export async function updateUserSettings(
+  userId: number,
+  patch: { currency?: string; locale?: string | null },
+) {
+  const values: Partial<InsertUser> = {};
+  if (patch.currency !== undefined) values.currency = patch.currency;
+  if (patch.locale !== undefined) values.locale = patch.locale;
+  if (Object.keys(values).length === 0) return;
+
+  await getDb()
+    .update(schema.users)
+    .set(values)
+    .where(eq(schema.users.id, userId));
+}
+
+/**
  * Legt einen Benutzer an bzw. aktualisiert ihn beim Login.
  * Rolle: explizit gesetzter Owner (OWNER_TELEGRAM_ID) oder der allererste
  * registrierte Benutzer wird Admin.

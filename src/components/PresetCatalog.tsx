@@ -24,7 +24,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import type { PresetVariantNode, PresetVersionNode } from "@/types";
@@ -67,16 +67,20 @@ function HideToggle({
   );
 }
 
-function versionSubtitle(version: PresetVersionNode) {
+function versionSubtitle(
+  version: PresetVersionNode,
+  formatDate: (value: string | Date | null | undefined) => string,
+) {
   const parts: string[] = [];
   if (version.spoolMaterial) parts.push(SPOOL_MATERIAL_LABELS[version.spoolMaterial]);
-  if (version.validFrom) parts.push(`ab ${version.validFrom}`);
-  if (version.validTo) parts.push(`bis ${version.validTo}`);
+  if (version.validFrom) parts.push(`ab ${formatDate(version.validFrom)}`);
+  if (version.validTo) parts.push(`bis ${formatDate(version.validTo)}`);
   return parts.join(" · ");
 }
 
 export function PresetCatalog() {
   const utils = trpc.useUtils();
+  const { formatGrams, formatDate } = useFormat();
   const { data: tree, isLoading } = trpc.preset.tree.useQuery();
   const [changeFor, setChangeFor] = useState<PresetVariantNode | null>(null);
 
@@ -201,7 +205,7 @@ export function PresetCatalog() {
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
-                            {versionSubtitle(version)}
+                            {versionSubtitle(version, formatDate)}
                           </span>
                         </div>
                         <HideToggle

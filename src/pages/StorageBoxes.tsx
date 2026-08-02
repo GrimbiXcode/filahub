@@ -35,12 +35,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
 
 export default function StorageBoxes() {
   const utils = trpc.useUtils();
+  const { formatGrams } = useFormat();
   const { data: boxes, isLoading } = trpc.storageBox.list.useQuery();
   const { data: materials } = trpc.material.list.useQuery();
 

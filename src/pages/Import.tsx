@@ -23,8 +23,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { importPayloadSchema } from "@contracts/import";
-import { IMPORT_PROMPT } from "@/lib/importPrompt";
-import { parseEuroToCents } from "@/lib/format";
+import { buildImportPrompt } from "@/lib/importPrompt";
+import { useFormat } from "@/lib/formatContext";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 
@@ -48,7 +48,10 @@ function stripCodeFences(text: string): string {
 }
 
 /** Liefert die Validierungsfehler einer Zeile (leer = gültig). */
-function zeilenFehler(zeile: ImportZeile): string[] {
+function zeilenFehler(
+  zeile: ImportZeile,
+  parseMoney: (value: string) => number | null,
+): string[] {
   const fehler: string[] = [];
   if (!zeile.typ.trim()) fehler.push("Typ fehlt");
   const gewicht = Number(zeile.nenngewicht);
@@ -57,7 +60,7 @@ function zeilenFehler(zeile: ImportZeile): string[] {
   const anzahl = Number(zeile.anzahl);
   if (!Number.isInteger(anzahl) || anzahl < 1 || anzahl > 50)
     fehler.push("Anzahl ungültig");
-  if (zeile.preis.trim() && parseEuroToCents(zeile.preis) === null)
+  if (zeile.preis.trim() && parseMoney(zeile.preis) === null)
     fehler.push("Preis ungültig");
   return fehler;
 }
@@ -67,7 +70,9 @@ const DATUM_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 export default function Import() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
+  const { centsToInput, currency, currencySymbol, parseMoney } = useFormat();
   const dateiInputRef = useRef<HTMLInputElement>(null);
+  const importPrompt = buildImportPrompt(currency);
 
   const [jsonText, setJsonText] = useState("");
   const [pruefFehler, setPruefFehler] = useState<string | null>(null);
@@ -85,7 +90,7 @@ export default function Import() {
 
   const promptKopieren = async () => {
     try {
-      await navigator.clipboard.writeText(IMPORT_PROMPT);
+      await navigator.clipboard.writeText(importPrompt);
       toast.success("Prompt in die Zwischenablage kopiert");
     } catch {
       toast.error("Kopieren fehlgeschlagen – bitte manuell markieren");
@@ -130,7 +135,7 @@ export default function Import() {
         typ: p.typ,
         farbe: p.farbe ?? "",
         nenngewicht: String(p.nenngewicht),
-        preis: p.preis != null ? String(p.preis).replace(".", ",") : "",
+        preis: p.preis != null ? centsToInput(Math.round(p.preis * 100)) : "",
         anzahl: String(p.anzahl),
       }))
     );
@@ -151,7 +156,7 @@ export default function Import() {
     setZeilen(prev => prev?.filter((_, i) => i !== index) ?? null);
   };
 
-  const fehlerProZeile = (zeilen ?? []).map(zeilenFehler);
+  const fehlerProZeile = (zeilen ?? []).map(z => zeilenFehler(z, parseMoney));
   const hatFehler = fehlerProZeile.some(f => f.length > 0);
   const kaufdatumUngueltig = kaufdatum !== "" && !DATUM_REGEX.test(kaufdatum);
   const gesamtAnzahl = (zeilen ?? []).reduce((summe, z) => {
@@ -174,7 +179,7 @@ export default function Import() {
         hersteller: z.hersteller.trim() || undefined,
         farbe: z.farbe.trim() || undefined,
         nenngewicht: Number(z.nenngewicht),
-        priceCents: parseEuroToCents(z.preis) ?? undefined,
+        priceCents: parseMoney(z.preis) ?? undefined,
         anzahl: Number(z.anzahl),
       })),
     });
@@ -204,7 +209,7 @@ export default function Import() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <pre className="whitespace-pre-wrap rounded-md bg-muted p-4 text-sm max-h-64 overflow-y-auto">
-              {IMPORT_PROMPT}
+              {importPrompt}
             </pre>
             <div>
               <Button variant="outline" onClick={promptKopieren}>
@@ -301,7 +306,9 @@ export default function Import() {
                         <TableHead>Typ</TableHead>
                         <TableHead>Farbe</TableHead>
                         <TableHead className="w-28">Nenngewicht (g)</TableHead>
-                        <TableHead className="w-28">Preis (€)</TableHead>
+                        <TableHead className="w-28">
+                          Preis ({currencySymbol})
+                        </TableHead>
                         <TableHead className="w-20">Anzahl</TableHead>
                         <TableHead className="w-12" />
                       </TableRow>

@@ -22,7 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { centsToEuroString, parseEuroToCents } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 
@@ -43,6 +43,7 @@ function buildAutoName(manufacturer: string, type: string, color: string) {
 export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const isEdit = !!material;
   const utils = trpc.useUtils();
+  const { centsToInput, currencySymbol, formatGrams, parseMoney } = useFormat();
   const { data: spoolTypes } = trpc.spoolType.list.useQuery();
   const { data: presetOptions } = trpc.preset.options.useQuery();
   const { data: storageBoxes } = trpc.storageBox.list.useQuery();
@@ -83,7 +84,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       setMaterialType(material?.materialType ?? "");
       setManufacturer(material?.manufacturer ?? "");
       setColor(material?.color ?? "");
-      setPrice(centsToEuroString(material?.priceCents));
+      setPrice(centsToInput(material?.priceCents));
       setPurchaseDate(material?.purchaseDate ?? "");
       setNominalWeight(material ? String(material.nominalWeight) : "1000");
       setSpoolRef(
@@ -182,7 +183,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       materialType: materialType.trim(),
       manufacturer: manufacturer.trim() || null,
       color: color.trim() || null,
-      priceCents: parseEuroToCents(price),
+      priceCents: parseMoney(price),
       purchaseDate: purchaseDate || null,
       nominalWeight: nominal,
       // Immer beide Felder senden, damit ein Wechsel das jeweils andere leert
@@ -271,13 +272,13 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-price">Preis (€)</Label>
+              <Label htmlFor="m-price">Preis ({currencySymbol})</Label>
               <Input
                 id="m-price"
                 inputMode="decimal"
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="z. B. 24,99"
+                placeholder={`z. B. ${centsToInput(2499)}`}
               />
             </div>
             <div className="grid gap-2">
@@ -321,7 +322,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   <SelectItem value={NONE}>Keine Box</SelectItem>
                   {storageBoxes?.map((b) => (
                     <SelectItem key={b.id} value={String(b.id)}>
-                      {b.name} ({b.tareWeight} g)
+                      {b.name} ({formatGrams(b.tareWeight)})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -346,8 +347,9 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   placeholder="Gemessenes Gesamtgewicht beim Kauf"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Tara gesamt: {totalTare} g (Rolle {selectedSpoolTare} g
-                  {selectedBox ? ` + Box ${selectedBox.tareWeight} g` : ""})
+                  Tara gesamt: {formatGrams(totalTare)} (Rolle{" "}
+                  {formatGrams(selectedSpoolTare)}
+                  {selectedBox ? ` + Box ${formatGrams(selectedBox.tareWeight)}` : ""})
                 </p>
               </div>
             )}

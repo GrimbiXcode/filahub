@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Package, Plus, Scale, Search, Weight, Archive, Euro } from "lucide-react";
+import { Package, Plus, Scale, Search, Weight, Archive, Wallet } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
@@ -27,13 +27,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  fillLevelColor,
-  fillLevelTextColor,
-  formatDate,
-  formatEuro,
-  formatGrams,
-} from "@/lib/format";
+import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
@@ -42,6 +37,7 @@ const ALL = "__all__";
 export default function Home() {
   const navigate = useNavigate();
   const { data: materials, isLoading } = trpc.material.list.useQuery();
+  const { formatDate, formatGrams, formatMoney, formatPercent } = useFormat();
 
   const [search, setSearch] = useState("");
   const [identifierLookup, setIdentifierLookup] = useState("");
@@ -155,10 +151,10 @@ export default function Home() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Restwert</CardTitle>
-              <Euro className="h-4 w-4 text-muted-foreground" />
+              <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatEuro(stats.totalValue)}</div>
+              <div className="text-2xl font-bold">{formatMoney(stats.totalValue)}</div>
               <p className="text-xs text-muted-foreground">anteilig nach Restmenge</p>
             </CardContent>
           </Card>
@@ -367,7 +363,7 @@ export default function Home() {
                               {formatGrams(m.remainingWeight)}
                               {m.remainingPercent != null && (
                                 <span className="text-muted-foreground font-normal">
-                                  {" "}({m.remainingPercent} %)
+                                  {" "}({formatPercent(m.remainingPercent)})
                                 </span>
                               )}
                             </span>
@@ -381,7 +377,7 @@ export default function Home() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>{formatEuro(m.priceCents)}</TableCell>
+                        <TableCell>{formatMoney(m.priceCents)}</TableCell>
                         <TableCell>{formatDate(m.purchaseDate)}</TableCell>
                         <TableCell className="text-right">
                           <div

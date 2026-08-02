@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type SpoolTypeItem } from "@/types";
 
@@ -37,6 +37,7 @@ type Props = {
  */
 export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
   const utils = trpc.useUtils();
+  const { formatGrams } = useFormat();
   // Der Aufrufer gibt der Komponente einen key je Rollentyp – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [manufacturer, setManufacturer] = useState(

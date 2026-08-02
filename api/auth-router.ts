@@ -2,13 +2,14 @@ import * as cookie from "cookie";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { Session } from "@contracts/constants";
+import { currencySchema, localeSchema } from "@contracts/locale";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { env } from "./lib/env";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
-import { upsertUser } from "./queries/users";
+import { updateUserSettings, upsertUser } from "./queries/users";
 
 function assertAllowed(telegramId: string) {
   if (env.telegramAllowedIds.length > 0 && !env.telegramAllowedIds.includes(telegramId)) {
@@ -32,6 +33,19 @@ function sessionCookie(token: string, headers: Headers) {
 
 export const authRouter = createRouter({
   me: authedQuery.query((opts) => opts.ctx.user),
+
+  /** Anzeige-Einstellungen des angemeldeten Benutzers ändern */
+  updateSettings: authedQuery
+    .input(
+      z.object({
+        currency: currencySchema.optional(),
+        locale: localeSchema.optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await updateUserSettings(ctx.user.id, input);
+      return { success: true };
+    }),
 
   /** Öffentliche Login-Konfiguration (Bot-Username für die Login-Seite) */
   loginInfo: publicQuery.query(() => ({

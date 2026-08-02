@@ -23,6 +23,10 @@ export const users = mysqlTable("users", {
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
   role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  /** Anzeigewährung als ISO-4217-Code (siehe contracts/locale.ts) */
+  currency: varchar("currency", { length: 3 }).default("EUR").notNull(),
+  /** BCP-47-Locale für Zahlen- und Datumsformate; NULL = Locale des Browsers */
+  locale: varchar("locale", { length: 35 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()

@@ -10,6 +10,7 @@ import SpoolTypes from "./pages/SpoolTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import Settings from "./pages/Settings";
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
         <Route path="/lagerboxen" element={<StorageBoxes />} />
+        <Route path="/einstellungen" element={<Settings />} />
         <Route path="/verwaltung/presets" element={<AdminPresets />} />
         <Route path="/verwaltung/vorschlaege" element={<AdminProposals />} />
         <Route path="/login" element={<Login />} />

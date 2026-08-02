@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
@@ -24,6 +24,7 @@ type Props = {
 
 export function WeighingDialog({ open, onOpenChange, material }: Props) {
   const utils = trpc.useUtils();
+  const { formatGrams, formatPercent } = useFormat();
   const [grossWeight, setGrossWeight] = useState("");
   const [note, setNote] = useState("");
 
@@ -135,7 +136,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
                 <span>Effektiv übrig</span>
                 <span>
                   {formatGrams(preview.remaining)}
-                  {preview.percent != null && ` (${preview.percent} %)`}
+                  {preview.percent != null && ` (${formatPercent(preview.percent)})`}
                 </span>
               </div>
             </div>

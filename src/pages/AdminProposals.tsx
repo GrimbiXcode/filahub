@@ -37,7 +37,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type { AdminProposalItem } from "@/types";
 
@@ -88,6 +88,7 @@ function payloadRows(payload: unknown): { label: string; value: string }[] {
 
 export default function AdminProposals() {
   const utils = trpc.useUtils();
+  const { formatDate } = useFormat();
   const [status, setStatus] = useState<string>("pending");
   const [detail, setDetail] = useState<AdminProposalItem | null>(null);
   const [rejecting, setRejecting] = useState<AdminProposalItem | null>(null);
@@ -176,7 +177,7 @@ export default function AdminProposals() {
                     onClick={() => setDetail(p)}
                   >
                     <TableCell className="whitespace-nowrap">
-                      {formatDate(p.createdAt.toISOString().slice(0, 10))}
+                      {formatDate(p.createdAt)}
                     </TableCell>
                     <TableCell>{p.submittedBy?.name ?? "–"}</TableCell>
                     <TableCell>

@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatGrams } from "@/lib/format";
+import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 import type {
   PresetManufacturerNode,
@@ -52,6 +52,7 @@ type DeleteTarget = {
 
 export default function AdminPresets() {
   const utils = trpc.useUtils();
+  const { formatGrams } = useFormat();
   const { data: tree, isLoading } = trpc.admin.preset.tree.useQuery(undefined, {
     retry: false,
   });
