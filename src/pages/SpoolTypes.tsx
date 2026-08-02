@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Calculator, Disc3, Pencil, Plus, Trash2 } from "lucide-react";
+import { Calculator, Disc3, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
+import { MyPresetProposals } from "@/components/MyPresetProposals";
+import { PresetCatalog } from "@/components/PresetCatalog";
+import { ProposePresetDialog } from "@/components/ProposePresetDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatGrams } from "@/lib/format";
 import { trpc } from "@/providers/trpc";
@@ -45,6 +50,7 @@ export default function SpoolTypes() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SpoolTypeItem | null>(null);
   const [deleting, setDeleting] = useState<SpoolTypeItem | null>(null);
+  const [proposing, setProposing] = useState<SpoolTypeItem | null>(null);
 
   const [name, setName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
@@ -152,67 +158,116 @@ export default function SpoolTypes() {
           </Button>
         </div>
 
-        <Card>
-          <CardContent className="pt-6">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : (spoolTypes ?? []).length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-center">
-                <Disc3 className="h-10 w-10 text-muted-foreground/50" />
-                <p className="font-medium">Noch keine Rollentypen angelegt</p>
-                <p className="text-sm text-muted-foreground">
-                  Lege z. B. „Kunststoffspule 1 kg (140 g)“ oder „Pappspule (55 g)“ an –
-                  das Leergewicht wird bei jeder Wägung automatisch abgezogen.
-                </p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Hersteller</TableHead>
-                    <TableHead>Leergewicht</TableHead>
-                    <TableHead>Notizen</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(spoolTypes ?? []).map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell>{s.manufacturer ?? "–"}</TableCell>
-                      <TableCell>{formatGrams(s.tareWeight)}</TableCell>
-                      <TableCell className="max-w-[300px] truncate text-muted-foreground">
-                        {s.notes ?? "–"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              setEditing(s);
-                              setDialogOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleting(s)}>
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <Tabs defaultValue="eigene">
+          <TabsList>
+            <TabsTrigger value="eigene">Meine Rollentypen</TabsTrigger>
+            <TabsTrigger value="katalog">Preset-Katalog</TabsTrigger>
+            <TabsTrigger value="vorschlaege">Meine Vorschläge</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="eigene">
+            <Card>
+              <CardContent className="pt-6">
+                {isLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : (spoolTypes ?? []).length === 0 ? (
+                  <div className="flex flex-col items-center gap-2 py-12 text-center">
+                    <Disc3 className="h-10 w-10 text-muted-foreground/50" />
+                    <p className="font-medium">Noch keine Rollentypen angelegt</p>
+                    <p className="text-sm text-muted-foreground">
+                      Lege z. B. „Kunststoffspule 1 kg (140 g)“ oder „Pappspule (55 g)“ an –
+                      das Leergewicht wird bei jeder Wägung automatisch abgezogen.
+                    </p>
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Hersteller</TableHead>
+                        <TableHead>Leergewicht</TableHead>
+                        <TableHead>Notizen</TableHead>
+                        <TableHead className="text-right">Aktionen</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(spoolTypes ?? []).map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="font-medium">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {s.name}
+                              {s.sourceVariantId != null && (
+                                <Badge variant="secondary" className="font-normal">
+                                  aus Katalog
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>{s.manufacturer ?? "–"}</TableCell>
+                          <TableCell>{formatGrams(s.tareWeight)}</TableCell>
+                          <TableCell className="max-w-[300px] truncate text-muted-foreground">
+                            {s.notes ?? "–"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Als Preset vorschlagen"
+                                onClick={() => setProposing(s)}
+                              >
+                                <Upload className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Bearbeiten"
+                                onClick={() => {
+                                  setEditing(s);
+                                  setDialogOpen(true);
+                                }}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Löschen"
+                                onClick={() => setDeleting(s)}
+                              >
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="katalog">
+            <Card>
+              <CardContent className="pt-6">
+                <PresetCatalog />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="vorschlaege">
+            <Card>
+              <CardContent className="pt-6">
+                <MyPresetProposals />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -331,6 +386,13 @@ export default function SpoolTypes() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ProposePresetDialog
+        key={proposing?.id ?? "none"}
+        spoolType={proposing}
+        open={proposing != null}
+        onOpenChange={(o) => !o && setProposing(null)}
+      />
 
       <AlertDialog open={deleting != null} onOpenChange={(o) => !o && setDeleting(null)}>
         <AlertDialogContent>
