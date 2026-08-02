@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Calculator, Disc3, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
@@ -40,7 +40,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { formatGrams } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { SpoolTypeItem } from "@/types";
 
 export default function SpoolTypes() {
@@ -60,34 +60,37 @@ export default function SpoolTypes() {
   const [calcGross, setCalcGross] = useState("");
   const [calcNominal, setCalcNominal] = useState("");
 
-  useEffect(() => {
-    if (!dialogOpen) return;
-    setName(editing?.name ?? "");
-    setManufacturer(editing?.manufacturer ?? "");
-    setTareWeight(editing ? String(editing.tareWeight) : "");
-    setNotes(editing?.notes ?? "");
+  /** Dialog öffnen und die Felder aus dem Eintrag befüllen (`null` = neu). */
+  const openDialog = (spoolType: SpoolTypeItem | null) => {
+    setEditing(spoolType);
+    setName(spoolType?.name ?? "");
+    setManufacturer(spoolType?.manufacturer ?? "");
+    setTareWeight(spoolType ? String(spoolType.tareWeight) : "");
+    setNotes(spoolType?.notes ?? "");
     setCalcGross("");
     setCalcNominal("");
-  }, [dialogOpen, editing]);
+    setDialogOpen(true);
+  };
 
   /**
    * Berechnetes Leergewicht: gemessenes Gewicht der neuen Rolle minus
    * Nenn-Füllmenge des Materials (z. B. 1250 g - 1000 g = 250 g).
    */
-  const calculatedTare = useMemo(() => {
-    const gross = parseInt(calcGross, 10);
-    const nominal = parseInt(calcNominal, 10);
+  const computeTare = (grossValue: string, nominalValue: string) => {
+    const gross = parseInt(grossValue, 10);
+    const nominal = parseInt(nominalValue, 10);
     if (!Number.isFinite(gross) || !Number.isFinite(nominal) || gross <= 0 || nominal <= 0)
       return null;
     return gross - nominal;
-  }, [calcGross, calcNominal]);
+  };
 
-  // Berechnetes Leergewicht automatisch ins Tara-Feld übernehmen
-  useEffect(() => {
-    if (calculatedTare != null && calculatedTare >= 0) {
-      setTareWeight(String(calculatedTare));
-    }
-  }, [calculatedTare]);
+  const calculatedTare = computeTare(calcGross, calcNominal);
+
+  /** Ergebnis des Rechners direkt ins Tara-Feld übernehmen. */
+  const applyCalculatedTare = (grossValue: string, nominalValue: string) => {
+    const tare = computeTare(grossValue, nominalValue);
+    if (tare != null && tare >= 0) setTareWeight(String(tare));
+  };
 
   const invalidate = () => {
     utils.spoolType.list.invalidate();
@@ -149,10 +152,7 @@ export default function SpoolTypes() {
             </p>
           </div>
           <Button
-            onClick={() => {
-              setEditing(null);
-              setDialogOpen(true);
-            }}
+            onClick={() => openDialog(null)}
           >
             <Plus className="mr-2 h-4 w-4" /> Neuer Rollentyp
           </Button>
@@ -226,10 +226,7 @@ export default function SpoolTypes() {
                                 variant="ghost"
                                 size="icon"
                                 title="Bearbeiten"
-                                onClick={() => {
-                                  setEditing(s);
-                                  setDialogOpen(true);
-                                }}
+                                onClick={() => openDialog(s)}
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
@@ -318,7 +315,10 @@ export default function SpoolTypes() {
                     type="number"
                     min={1}
                     value={calcGross}
-                    onChange={(e) => setCalcGross(e.target.value)}
+                    onChange={(e) => {
+                      setCalcGross(e.target.value);
+                      applyCalculatedTare(e.target.value, calcNominal);
+                    }}
                     placeholder="z. B. 1250"
                   />
                 </div>
@@ -331,7 +331,10 @@ export default function SpoolTypes() {
                     type="number"
                     min={1}
                     value={calcNominal}
-                    onChange={(e) => setCalcNominal(e.target.value)}
+                    onChange={(e) => {
+                      setCalcNominal(e.target.value);
+                      applyCalculatedTare(calcGross, e.target.value);
+                    }}
                     placeholder="z. B. 1000"
                   />
                 </div>

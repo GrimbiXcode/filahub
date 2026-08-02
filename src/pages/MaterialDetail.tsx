@@ -42,7 +42,7 @@ import {
   formatEuro,
   formatGrams,
 } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
 export default function MaterialDetail() {

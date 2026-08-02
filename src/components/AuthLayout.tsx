@@ -132,18 +132,15 @@ function AuthLayoutContent({
   const navigate = useNavigate();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
-  const [isResizing, setIsResizing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  // In der eingeklappten Leiste gibt es nichts zu ziehen – abgeleitet statt
+  // per Effekt zurückgesetzt.
+  const isResizing = isDragging && !isCollapsed;
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = [...menuItems, ...adminMenuItems].find(
     item => item.path === location.pathname,
   );
   const isMobile = useIsMobile();
-
-  useEffect(() => {
-    if (isCollapsed) {
-      setIsResizing(false);
-    }
-  }, [isCollapsed]);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -157,7 +154,7 @@ function AuthLayoutContent({
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
+      setIsDragging(false);
     };
 
     if (isResizing) {
@@ -295,7 +292,7 @@ function AuthLayoutContent({
           className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
           onMouseDown={() => {
             if (isCollapsed) return;
-            setIsResizing(true);
+            setIsDragging(true);
           }}
           style={{ zIndex: 50 }}
         />

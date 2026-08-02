@@ -25,7 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type {
   PresetManufacturerNode,
   PresetSeriesNode,

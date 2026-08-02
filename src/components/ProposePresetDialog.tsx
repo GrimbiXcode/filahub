@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatGrams } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type SpoolTypeItem } from "@/types";
 
 type Props = {

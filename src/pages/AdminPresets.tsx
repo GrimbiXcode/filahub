@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatGrams } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type {
   PresetManufacturerNode,
   PresetSeriesNode,

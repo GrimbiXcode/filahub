@@ -26,7 +26,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatGrams } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { PresetVariantNode, PresetVersionNode } from "@/types";
 import { ProposeChangeDialog } from "./ProposeChangeDialog";
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { decodeSpoolRef, encodeSpoolRef } from "@contracts/presets";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { centsToEuroString, parseEuroToCents } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 
 type Props = {
@@ -62,37 +62,48 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const [initialGrossWeight, setInitialGrossWeight] = useState("");
   const [notes, setNotes] = useState("");
   /** Sobald der Benutzer die Bezeichnung manuell anfasst, nicht mehr auto-befüllen */
-  const nameTouched = useRef(false);
+  const [nameTouched, setNameTouched] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    nameTouched.current = !!material?.name;
-    setIdentifier(material?.identifier ?? "");
-    setName(material?.name ?? "");
-    setMaterialType(material?.materialType ?? "");
-    setManufacturer(material?.manufacturer ?? "");
-    setColor(material?.color ?? "");
-    setPrice(centsToEuroString(material?.priceCents));
-    setPurchaseDate(material?.purchaseDate ?? "");
-    setNominalWeight(material ? String(material.nominalWeight) : "1000");
-    setSpoolRef(
-      material?.spoolPresetVariantId
-        ? encodeSpoolRef("preset", material.spoolPresetVariantId)
-        : material?.spoolTypeId
-          ? encodeSpoolRef("own", material.spoolTypeId)
-          : NO_SPOOL,
-    );
-    setStorageBoxId(material?.storageBoxId ? String(material.storageBoxId) : NONE);
-    setInitialGrossWeight("");
-    setNotes(material?.notes ?? "");
-  }, [open, material]);
+  /**
+   * Formular beim Öffnen befüllen – und nur dann. Bewusst während des
+   * Renderns statt in einem Effekt, damit kein Zwischenstand mit den alten
+   * Werten sichtbar wird (https://react.dev/reference/react/useState).
+   *
+   * Der Schlüssel hängt an der ID, nicht am `material`-Objekt: Sonst würde
+   * jedes Neuladen der Materialliste die laufende Eingabe überschreiben.
+   */
+  const formKey = open ? String(material?.id ?? "neu") : null;
+  const [appliedFormKey, setAppliedFormKey] = useState<string | null>(null);
+  if (formKey !== appliedFormKey) {
+    setAppliedFormKey(formKey);
+    if (formKey !== null) {
+      setNameTouched(!!material?.name);
+      setIdentifier(material?.identifier ?? "");
+      setName(material?.name ?? "");
+      setMaterialType(material?.materialType ?? "");
+      setManufacturer(material?.manufacturer ?? "");
+      setColor(material?.color ?? "");
+      setPrice(centsToEuroString(material?.priceCents));
+      setPurchaseDate(material?.purchaseDate ?? "");
+      setNominalWeight(material ? String(material.nominalWeight) : "1000");
+      setSpoolRef(
+        material?.spoolPresetVariantId
+          ? encodeSpoolRef("preset", material.spoolPresetVariantId)
+          : material?.spoolTypeId
+            ? encodeSpoolRef("own", material.spoolTypeId)
+            : NO_SPOOL,
+      );
+      setStorageBoxId(material?.storageBoxId ? String(material.storageBoxId) : NONE);
+      setInitialGrossWeight("");
+      setNotes(material?.notes ?? "");
+    }
+  }
 
-  // Bezeichnung automatisch aus Hersteller + Typ + Farbe befüllen,
-  // solange der Benutzer das Feld nicht selbst bearbeitet hat
-  useEffect(() => {
-    if (nameTouched.current) return;
-    setName(buildAutoName(manufacturer, materialType, color));
-  }, [manufacturer, materialType, color]);
+  // Bezeichnung aus Hersteller + Typ + Farbe vorschlagen, solange der
+  // Benutzer das Feld nicht selbst bearbeitet hat – abgeleitet statt in
+  // den Zustand zurückgeschrieben.
+  const autoName = buildAutoName(manufacturer, materialType, color);
+  const effectiveName = nameTouched ? name : autoName;
 
   // Vorschläge aus bereits erfassten Materialien (neue Werte erscheinen
   // beim nächsten Mal automatisch in der Auswahl)
@@ -158,7 +169,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const nominal = parseInt(nominalWeight, 10);
-    const finalName = name.trim() || buildAutoName(manufacturer, materialType, color);
+    const finalName = effectiveName.trim() || autoName;
     if (!finalName) return toast.error("Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)");
     if (!materialType.trim()) return toast.error("Bitte eine Materialart angeben");
     if (!Number.isFinite(nominal) || nominal <= 0)
@@ -251,9 +262,9 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Label htmlFor="m-name">Bezeichnung *</Label>
               <Input
                 id="m-name"
-                value={name}
+                value={effectiveName}
                 onChange={(e) => {
-                  nameTouched.current = true;
+                  setNameTouched(true);
                   setName(e.target.value);
                 }}
                 placeholder="Wird automatisch aus Hersteller + Typ + Farbe befüllt"
