@@ -29,6 +29,7 @@ src/            React-Frontend
                 importPrompt.ts, utils.ts (cn-Helfer)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
+  devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, spoolType, storageBox, material, preset, admin
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
@@ -146,6 +147,38 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 `OWNER_TELEGRAM_ID` (Admin). `drizzle.config.ts` benötigt ebenfalls
 `DATABASE_URL`.
 
+## Lokal anmelden ohne Telegram (DEV_LOGIN)
+
+Für die Entwicklung und für automatisierte Oberflächenprüfungen gibt es eine
+Anmeldung ohne Bot-Token und ohne Telefon: `DEV_LOGIN=1` setzen, dann legt
+`GET /api/dev-login` das Konto `dev-login` als **Admin** an, setzt das
+Session-Cookie und leitet auf `/`. Auf der Anmeldeseite erscheint zusätzlich
+der Knopf „Ohne Telegram anmelden“.
+
+Zwei Sperren, beide müssen offen sein: `NODE_ENV` darf nicht `production` sein
+**und** `DEV_LOGIN` muss gesetzt sein. Trifft eines nicht zu, wird die Route in
+`registerDevLogin` (`api/devLogin.ts`) gar nicht erst registriert und läuft in
+den 404 von `/api/*`. `auth.loginInfo` meldet den Zustand als
+`devLoginAvailable` an die Anmeldeseite.
+
+Fertige Startkonfigurationen liegen in `.claude/launch.json`:
+
+- **`filahub-dev`** – `npm run dev` mit `DEV_LOGIN=1`, alles Weitere aus der
+  eigenen `.env`.
+- **`filahub-dev-sandbox`** – dasselbe gegen eine Wegwerf-Datenbank, ganz ohne
+  `.env`. Voraussetzung ist derselbe Container wie für die Integrationstests:
+
+```bash
+docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
+  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+
+DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' npm run db:migrate
+```
+
+Achtung: `npm run test:integration` löscht **alle Tabellen** dieser Datenbank –
+die Sandbox ist bewusst wegwerfbar und nie die eigene Entwicklungsdatenbank.
+
 ## Code-Stil
 
 - Sprache im Code, in Fehlermeldungen, Kommentaren und UI-Texten: **Deutsch**
@@ -238,6 +271,9 @@ TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
 ## Sicherheit
 
 - Nie Secrets committen: `.env` ist gitignored, nur `.env.example` pflegen.
+- `DEV_LOGIN` gehört nur in lokale `.env`-Dateien. In Produktion wirkt es
+  ohnehin nicht (siehe „Lokal anmelden ohne Telegram“), taucht aber trotzdem
+  nicht in Deployment-Konfigurationen auf.
 - `APP_SECRET` signiert alle Sessions – bei Kompromittierung rotieren.
 - Whitelist `TELEGRAM_ALLOWED_IDS` begrenzt Registrierungen; `OWNER_TELEGRAM_ID`
   bekommt die Admin-Rolle.

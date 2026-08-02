@@ -22,7 +22,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LOGIN_PATH } from "@/const";
+import { LOGIN_PATH, SETTINGS_PATH } from "@/const";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Archive,
@@ -253,6 +253,23 @@ function AuthLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location.pathname === SETTINGS_PATH}
+                  onClick={() => navigate(SETTINGS_PATH)}
+                  tooltip="Einstellungen"
+                  className="h-10 transition-all font-normal"
+                >
+                  <Settings
+                    className={`h-4 w-4 ${
+                      location.pathname === SETTINGS_PATH ? "text-primary" : ""
+                    }`}
+                  />
+                  <span>Einstellungen</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -278,13 +295,6 @@ function AuthLayoutContent({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem
-                  onClick={() => navigate("/einstellungen")}
-                  className="cursor-pointer"
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Einstellungen</span>
-                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"

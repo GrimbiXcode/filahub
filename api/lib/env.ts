@@ -24,4 +24,11 @@ export const env = {
     .filter(Boolean),
   /** Telegram-User-ID des ersten Admins (optional, sonst: erster registrierte Nutzer) */
   ownerTelegramId: process.env.OWNER_TELEGRAM_ID ?? "",
+  /**
+   * Anmeldung ohne Telegram für die lokale Entwicklung (`DEV_LOGIN=1`).
+   * Wirkt nur außerhalb von NODE_ENV=production – siehe api/devLogin.ts.
+   */
+  devLogin: ["1", "true"].includes((process.env.DEV_LOGIN ?? "").toLowerCase()),
+  /** Anzeigename des Entwickler-Kontos */
+  devLoginName: process.env.DEV_LOGIN_NAME || "Dev-Benutzer",
 };

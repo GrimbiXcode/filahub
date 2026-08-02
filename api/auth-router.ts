@@ -52,6 +52,8 @@ export const authRouter = createRouter({
     botUsername: env.telegramBotUsername,
     botConfigured: !!env.telegramBotToken,
     whitelistActive: env.telegramAllowedIds.length > 0,
+    /** Steuert den Entwickler-Login auf der Anmeldeseite (siehe api/devLogin.ts) */
+    devLoginAvailable: !env.isProduction && env.devLogin,
   })),
 
   /** Code vom Telegram-Bot einlösen und Session setzen */

@@ -1,0 +1,24 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "filahub-dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["DEV_LOGIN=1", "npm", "run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "filahub-dev-sandbox",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DEV_LOGIN=1",
+        "APP_SECRET=dev-sandbox-secret",
+        "DATABASE_URL=mysql://filahub:filahub@127.0.0.1:3399/filahub_test",
+        "npm",
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    }
+  ]
+}

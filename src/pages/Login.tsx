@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { MessageCircleCode, Send } from "lucide-react";
+import { MessageCircleCode, Send, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -149,6 +149,32 @@ export default function Login() {
                   <Send className="mt-0.5 h-4 w-4 shrink-0" /> {error}
                 </p>
               )}
+            </>
+          )}
+
+          {/*
+            Nur lokal mit DEV_LOGIN=1 – bewusst außerhalb des
+            botConfigured-Zweigs, sonst wäre er ohne Bot-Token unerreichbar.
+          */}
+          {loginInfo?.devLoginAvailable && (
+            <>
+              <div className="flex items-center gap-3">
+                <Separator className="flex-1" />
+                <span className="text-xs text-muted-foreground">Entwicklung</span>
+                <Separator className="flex-1" />
+              </div>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => {
+                  // Voller Seitenwechsel: Der Server setzt das Cookie und
+                  // leitet weiter, der Client startet danach sauber neu.
+                  window.location.href = "/api/dev-login";
+                }}
+              >
+                <Wrench className="mr-2 h-4 w-4" />
+                Ohne Telegram anmelden
+              </Button>
             </>
           )}
         </CardContent>
