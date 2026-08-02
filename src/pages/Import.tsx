@@ -26,7 +26,7 @@ import { importPayloadSchema } from "@contracts/import";
 import { IMPORT_PROMPT } from "@/lib/importPrompt";
 import { parseEuroToCents } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 
 /** Editierbare Tabellenzeile: alle Werte als Text, Validierung live. */
 type ImportZeile = {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Scale } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatGrams } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
 type Props = {
@@ -27,12 +27,18 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
   const [grossWeight, setGrossWeight] = useState("");
   const [note, setNote] = useState("");
 
-  useEffect(() => {
+  // Formular beim Öffnen leeren. Bewusst während des Renderns statt im
+  // Effekt: React verwirft den Render sofort wieder und rendert mit den
+  // neuen Werten neu, sodass kein Zwischenstand mit alten Eingaben
+  // sichtbar wird (https://react.dev/reference/react/useState).
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
       setGrossWeight("");
       setNote("");
     }
-  }, [open]);
+  }
 
   const preview = useMemo(() => {
     if (!material) return null;
@@ -89,7 +95,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
           <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tara Rolle/Verpackung</span>
-              <span>{formatGrams(material.spoolType?.tareWeight ?? 0)}</span>
+              <span>{formatGrams(material.spoolTareWeight)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">

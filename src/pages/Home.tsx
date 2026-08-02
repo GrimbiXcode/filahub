@@ -34,7 +34,7 @@ import {
   formatEuro,
   formatGrams,
 } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
 const ALL = "__all__";
@@ -374,7 +374,7 @@ export default function Home() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          <div>{m.spoolType?.name ?? "–"}</div>
+                          <div>{m.spoolLabel ?? "–"}</div>
                           {m.storageBox && (
                             <div className="flex items-center gap-1 text-xs">
                               <Archive className="h-3 w-3" /> {m.storageBox.name}

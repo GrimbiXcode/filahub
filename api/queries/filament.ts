@@ -1,10 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
+import { resolveSpoolTare } from "@contracts/presets";
 import {
   materials,
+  presetSpoolVariants,
   spoolTypes,
   storageBoxes,
   weighings,
   type Material,
+  type PresetSpoolVariant,
   type SpoolType,
   type StorageBox,
   type Weighing,
@@ -27,6 +30,7 @@ export async function createSpoolType(data: {
   name: string;
   manufacturer?: string;
   tareWeight: number;
+  sourceVariantId?: number | null;
   notes?: string;
 }) {
   const [{ id }] = await getDb().insert(spoolTypes).values(data).$returningId();
@@ -124,11 +128,17 @@ export async function deleteStorageBox(userId: number, id: number) {
 export type MaterialWithRelations = Material & {
   spoolType: SpoolType | null;
   storageBox: StorageBox | null;
+  /** Referenzierte Variante aus dem Preset-Katalog (Alternative zu spoolType) */
+  spoolPresetVariant: PresetSpoolVariant | null;
 };
 
 export type MaterialOverview = MaterialWithRelations & {
   /** Summe der Leergewichte (Rolle + Box) in Gramm */
   tareWeight: number;
+  /** Leergewicht nur der Rolle/Verpackung in Gramm (eigen oder Preset) */
+  spoolTareWeight: number;
+  /** Anzeigename der gewählten Rolle, null wenn keine gewählt ist */
+  spoolLabel: string | null;
   /** Effektiv übrige Materialmenge in Gramm */
   remainingWeight: number;
   /** Verbleibend in Prozent der Nennmenge (0–100), null ohne Nennmenge */
@@ -155,8 +165,10 @@ export function computeMaterialStats(
   lastWeighing: Weighing | null,
   weighingCount: number,
 ): MaterialOverview {
-  const tareWeight =
-    (material.spoolType?.tareWeight ?? 0) + (material.storageBox?.tareWeight ?? 0);
+  const spoolTareWeight = resolveSpoolTare(material);
+  const spoolLabel =
+    material.spoolPresetVariant?.displayName ?? material.spoolType?.name ?? null;
+  const tareWeight = spoolTareWeight + (material.storageBox?.tareWeight ?? 0);
   const remainingWeight =
     lastWeighing != null
       ? Math.max(0, lastWeighing.grossWeight - tareWeight)
@@ -165,14 +177,28 @@ export function computeMaterialStats(
     material.nominalWeight > 0
       ? Math.min(100, Math.max(0, Math.round((remainingWeight / material.nominalWeight) * 100)))
       : null;
-  return { ...material, tareWeight, remainingWeight, remainingPercent, lastWeighing, weighingCount };
+  return {
+    ...material,
+    tareWeight,
+    spoolTareWeight,
+    spoolLabel,
+    remainingWeight,
+    remainingPercent,
+    lastWeighing,
+    weighingCount,
+  };
 }
 
 export async function findMaterialsByUser(userId: number): Promise<MaterialOverview[]> {
   const db = getDb();
   const rows = await db.query.materials.findMany({
     where: eq(materials.userId, userId),
-    with: { spoolType: true, storageBox: true, weighings: true },
+    with: {
+      spoolType: true,
+      storageBox: true,
+      spoolPresetVariant: true,
+      weighings: true,
+    },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
   });
   return rows.map((row) => {
@@ -186,6 +212,7 @@ export async function findMaterialsByUser(userId: number): Promise<MaterialOverv
         ...rest,
         spoolType: normalizeRelation(row.spoolType),
         storageBox: normalizeRelation(row.storageBox),
+        spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
       row.weighings.length,
@@ -199,6 +226,7 @@ export async function findMaterialById(userId: number, id: number) {
     with: {
       spoolType: true,
       storageBox: true,
+      spoolPresetVariant: true,
       weighings: { orderBy: (t, { desc: d }) => [d(t.weighedAt), d(t.id)] },
     },
   });
@@ -211,6 +239,7 @@ export async function findMaterialById(userId: number, id: number) {
         ...rest,
         spoolType: normalizeRelation(row.spoolType),
         storageBox: normalizeRelation(row.storageBox),
+        spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
       list.length,
@@ -231,6 +260,7 @@ export async function createMaterial(
     purchaseDate?: string | null;
     nominalWeight: number;
     spoolTypeId?: number | null;
+    spoolPresetVariantId?: number | null;
     storageBoxId?: number | null;
     notes?: string;
   },
@@ -257,6 +287,7 @@ export async function updateMaterial(
     purchaseDate: string | null;
     nominalWeight: number;
     spoolTypeId: number | null;
+    spoolPresetVariantId: number | null;
     storageBoxId: number | null;
     notes: string | null;
   }>,
@@ -318,6 +349,29 @@ export async function storageBoxBelongsToUser(userId: number, id: number) {
     .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)))
     .limit(1);
   return row.length > 0;
+}
+
+/**
+ * Prüft, ob eine Preset-Variante existiert und wählbar ist. Der Katalog ist
+ * global, deshalb gibt es hier keine Benutzerzuordnung – ausgeblendete Presets
+ * bleiben bewusst zuweisbar (z. B. wenn ein Material sie schon nutzt).
+ */
+export async function presetVariantIsSelectable(id: number) {
+  const row = await getDb()
+    .select({ id: presetSpoolVariants.id })
+    .from(presetSpoolVariants)
+    .where(and(eq(presetSpoolVariants.id, id), eq(presetSpoolVariants.active, true)))
+    .limit(1);
+  return row.length > 0;
+}
+
+/** Anzahl der Materialien, die eine Preset-Variante referenzieren. */
+export async function countMaterialsWithPresetVariant(id: number) {
+  const rows = await getDb()
+    .select({ id: materials.id })
+    .from(materials)
+    .where(eq(materials.spoolPresetVariantId, id));
+  return rows.length;
 }
 
 /** Letzte Wägungen aller Materialien des Benutzers (für Statistik). */

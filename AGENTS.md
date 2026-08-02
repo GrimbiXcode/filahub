@@ -19,21 +19,25 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
 
 ```
 src/            React-Frontend
-  pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Login, NotFound
+  pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
+                AdminPresets, AdminProposals, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc)
   hooks/        useAuth, use-mobile
   lib/          format.ts, utils.ts (cn-Helfer)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
-  router.ts     appRouter: ping, auth, spoolType, storageBox, material
+  router.ts     appRouter: ping, auth, spoolType, storageBox, material, preset, admin
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login)
-  queries/      connection.ts (getDb, Drizzle-Instanz), users.ts, filament.ts (DB-Zugriff)
-db/             schema.ts, relations.ts, seed.ts (Stub), migrations/ (drizzle-kit-Output)
-contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts, types.ts
+  queries/      connection.ts (getDb, Drizzle-Instanz), users.ts, filament.ts,
+                presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog)
+db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
+                migrations/ (drizzle-kit-Output)
+contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
+                types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen)
 ```
 
 ## Pfad-Aliase
@@ -52,11 +56,13 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 | `npm run check` | TypeScript-Prüfung (`tsc -b`, Projekt-Referenzen) |
 | `npm run build` | `vite build` → `dist/public`, dann esbuild-Bundle von `api/boot.ts` → `dist/boot.js` |
 | `npm start` | Produktionsstart: `NODE_ENV=production node dist/boot.js` |
-| `npm run test` | Vitest (`vitest run`) |
+| `npm run test` | Vitest ohne Datenbank (`vitest run`) |
+| `npm run test:integration` | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`) |
 | `npm run lint` | ESLint (Flat-Config) |
 | `npm run format` | Prettier über das ganze Repo |
 | `npm run db:push` | Drizzle-Schema direkt in die DB synchronisieren |
 | `npm run db:generate` / `db:migrate` | Migrationen erzeugen / anwenden (Output: `db/migrations/`) |
+| `npm run db:seed` | Startkatalog der Presets einspielen (idempotent) |
 
 TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
 `tsconfig.app.json` (`src/`), `tsconfig.server.json` (`api/`, `contracts/`,
@@ -78,11 +84,55 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   `ctx.user.id` berücksichtigen (siehe Muster in `api/materialRouter.ts` mit
   `validateForeignKeys` und den `*BelongsToUser`-Hilfsfunktionen in
   `api/queries/filament.ts`).
+  **Einzige Ausnahme:** die `preset_*`-Tabellen sind ein globaler, von
+  Administratoren gepflegter Katalog und haben bewusst keine `userId`. Der
+  Benutzerbezug steckt allein in `hidden_spool_presets` (Ausblenden) und
+  `preset_proposals` (Einreicher).
 - **Auth-Fluss:** `createContext` ruft `authenticateRequest` auf; nicht
   angemeldete Requests bekommen `user: undefined` statt eines Fehlers –
   die Prozedur-Middleware entscheidet. Session = JWT (HS256, 1 Jahr) im
   Cookie `filament_sid`. Außerhalb von localhost wird das Cookie als
   `Secure; SameSite=None` gesetzt → HTTPS ist im Produktivbetrieb Pflicht.
+
+## Preset-Katalog
+
+Global gepflegte Hersteller und Spulen, aus denen Benutzer auswählen können,
+statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
+`preset_manufacturers` → `preset_spool_series` → `preset_spool_versions` →
+`preset_spool_variants` (eine Variante je Netto-Materialgewicht).
+
+- **Rollenwahl am Material:** entweder `materials.spoolTypeId` (eigener
+  Rollentyp) **oder** `materials.spoolPresetVariantId` – nie beides. Geprüft
+  wird das an genau einer Stelle (`validateForeignKeys` in
+  `api/materialRouter.ts`), und zwar immer der Zustand *nach* dem Patch. Die
+  Priorität beim Auflösen der Tara steht in `resolveSpoolTare`
+  (`contracts/presets.ts`) und wird von Server und Client gemeinsam genutzt.
+- **`displayName` auf der Variante** ist denormalisiert. Nach jeder Umbenennung
+  auf Hersteller-, Serien- oder Versionsebene muss
+  `refreshVariantDisplayNames` laufen (passiert in den `update*`-Funktionen in
+  `api/queries/presets.ts`).
+- **Materialarten** (`preset_series_material_types`) sind ein weicher
+  Sortierhinweis, **kein Filter**: `materials.materialType` ist Freitext
+  („PLA“, „PLA+“, „PLA Silk“), hartes Filtern würde passende Rollen
+  verstecken. Siehe `materialTypeMatches`.
+- **Ausblenden** (`hidden_spool_presets`) wirkt kaskadierend nach unten und
+  betrifft nur die Auswahl; bereits zugewiesene Rollen bleiben gültig.
+- **Löschen** ist nur ohne Untereinträge und ohne referenzierende Materialien
+  erlaubt – es gibt keine Fremdschlüssel in der Datenbank, sonst ginge still
+  die Tara verloren. Ansonsten `active: false` setzen.
+- **Vorschläge** (`preset_proposals`) speichern einen vollständigen
+  JSON-Schnappschuss, keinen Diff. Das Anwenden in `applyProposal`
+  (`api/adminRouter.ts`) kommt ohne Transaktionen aus (planetscale-Modus):
+  jeder Schritt ist ein find-or-create über einen Unique-Key, der
+  Statuswechsel kommt zuletzt und wirkt über den `pending`-Filter als
+  optimistische Sperre.
+- **Startkatalog:** `db/presets/catalog.ts` (reine Daten) wird von
+  `seedSpoolPresets()` eingespielt – beim Serverstart in Produktion und über
+  `npm run db:seed` lokal. Bestehende Zeilen werden nur überschrieben, wenn
+  `source = "seed"` und `seedRevision < PRESET_SEED_REVISION`. Änderungen von
+  Administratoren (`admin`) und übernommene Vorschläge (`community`) bleiben
+  dauerhaft unangetastet. Für inhaltliche Korrekturen am Startkatalog
+  `PRESET_SEED_REVISION` erhöhen.
 
 ## Konfiguration / Umgebungsvariablen
 
@@ -103,15 +153,48 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
   keine neuen Basis-Komponenten erfinden. Styling über Tailwind + `cn()` aus `src/lib/utils.ts`.
 - DB-Schema nur in `db/schema.ts` (+ `relations.ts`) pflegen; Typen über
   `$inferSelect` / `$inferInsert` ableiten, nicht manuell duplizieren.
-- Preise in Cent (`priceCents`), Gewichte in Gramm, Kaufdatum als
-  `YYYY-MM-DD`-String (`date(..., { mode: "string" })`).
+- Preise in Cent (`priceCents`), Gewichte in Gramm, Abmessungen in ganzen
+  Millimetern, Kaufdatum als `YYYY-MM-DD`-String
+  (`date(..., { mode: "string" })`).
 
 ## Tests
 
+Zwei getrennte Suiten – Unit-Tests laufen immer, Integrationstests nur mit
+Datenbank.
+
+### Unit-Tests (`npm run test`)
+
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
-- Aktuell existieren noch keine Testdateien – bei neuen Backend-Features
-  Tests in `api/` anlegen.
+- Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`
+  und `materialStats`. Alle laufen ohne Datenbank – reine zod- und
+  Funktionstests. Bei neuen Backend-Features Tests in `api/` anlegen.
+
+### Integrationstests (`npm run test:integration`)
+
+- `api/mysql.integration.test.ts`, konfiguriert in
+  `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
+  `npm run test` ohne Datenbank lauffähig bleibt.
+- Getestet wird gegen **MySQL 8.4** – dieselbe Version wie in
+  `docker-compose.yml`. MariaDB weicht bei JSON-Spalten (dort nur ein
+  `longtext`-Alias), Kollation (`utf8mb4_0900_ai_ci` ist akzentunempfindlich)
+  und beim `sql_mode` ab; solche Unterschiede fallen nur hier auf.
+- Abgedeckt: Migrationen, Idempotenz des Seedings, Katalog- und
+  Vorschlagsfluss über die tRPC-Router, Unique-Keys, Enums, `$returningId`,
+  die optimistische Sperre über `affectedRows`, Zeitstempel und Strict Mode.
+- Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
+  mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **alle Tabellen** der
+  Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).
+
+```bash
+docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
+  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+
+TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
+  npm run test:integration
+```
+
 - Vor einem Commit mindestens `npm run check` (und `npm run lint`) laufen lassen.
 
 ## Deployment

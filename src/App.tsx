@@ -1,6 +1,8 @@
 import { Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster } from "@/components/ui/sonner";
+import AdminPresets from "./pages/AdminPresets";
+import AdminProposals from "./pages/AdminProposals";
 import Home from "./pages/Home";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
@@ -18,6 +20,8 @@ export default function App() {
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
         <Route path="/lagerboxen" element={<StorageBoxes />} />
+        <Route path="/verwaltung/presets" element={<AdminPresets />} />
+        <Route path="/verwaltung/vorschlaege" element={<AdminProposals />} />
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

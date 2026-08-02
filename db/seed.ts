@@ -1,17 +1,23 @@
-import { getDb } from "../api/queries/connection";
-// TODO: import tables from "./schema"
+import { seedSpoolPresets } from "../api/queries/presetSeed";
 
+/**
+ * Manuelles Seeding für die lokale Entwicklung: `npm run db:seed`.
+ *
+ * In Produktion läuft dasselbe automatisch beim Serverstart
+ * (siehe api/boot.ts). Der Aufruf ist idempotent – bestehende Einträge
+ * werden nur überschrieben, wenn sie aus dem Seed stammen und die
+ * Revision veraltet ist.
+ */
 async function seed() {
-  const db = getDb();
-  console.log("Seeding database...");
-
-  // TODO: insert seed data, e.g.
-  // await db.insert(schema.posts).values([
-  //   { title: "First post", content: "Hello world" },
-  // ]);
-
-  console.log("Done.");
-  process.exit(0); // close MySQL connection pool
+  console.log("Preset-Katalog wird eingespielt …");
+  const stats = await seedSpoolPresets();
+  console.log(
+    `Fertig: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`,
+  );
+  process.exit(0); // MySQL-Pool schließen
 }
 
-seed();
+seed().catch((error) => {
+  console.error("Seeding fehlgeschlagen:", error);
+  process.exit(1);
+});

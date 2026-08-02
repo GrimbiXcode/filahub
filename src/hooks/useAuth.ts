@@ -1,4 +1,4 @@
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import { useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { LOGIN_PATH } from "@/const";
@@ -56,6 +56,7 @@ export function useAuth(options?: UseAuthOptions) {
     () => ({
       user: isUnauthenticated ? null : (user ?? null),
       isAuthenticated: !!user && !isUnauthenticated,
+      isAdmin: !isUnauthenticated && user?.role === "admin",
       isLoading: isLoading || logoutMutation.isPending,
       error,
       logout,

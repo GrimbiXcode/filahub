@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Archive, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { formatGrams } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
 
 export default function StorageBoxes() {
@@ -53,13 +53,15 @@ export default function StorageBoxes() {
   const [tareWeight, setTareWeight] = useState("");
   const [notes, setNotes] = useState("");
 
-  useEffect(() => {
-    if (!dialogOpen) return;
-    setName(editing?.name ?? "");
-    setLocation(editing?.location ?? "");
-    setTareWeight(editing ? String(editing.tareWeight) : "");
-    setNotes(editing?.notes ?? "");
-  }, [dialogOpen, editing]);
+  /** Dialog öffnen und die Felder aus dem Eintrag befüllen (`null` = neu). */
+  const openDialog = (box: StorageBoxItem | null) => {
+    setEditing(box);
+    setName(box?.name ?? "");
+    setLocation(box?.location ?? "");
+    setTareWeight(box ? String(box.tareWeight) : "");
+    setNotes(box?.notes ?? "");
+    setDialogOpen(true);
+  };
 
   const assignedCount = (boxId: number) =>
     (materials ?? []).filter((m) => m.storageBoxId === boxId).length;
@@ -125,10 +127,7 @@ export default function StorageBoxes() {
             </p>
           </div>
           <Button
-            onClick={() => {
-              setEditing(null);
-              setDialogOpen(true);
-            }}
+            onClick={() => openDialog(null)}
           >
             <Plus className="mr-2 h-4 w-4" /> Neue Lagerbox
           </Button>
@@ -188,10 +187,7 @@ export default function StorageBoxes() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => {
-                                setEditing(b);
-                                setDialogOpen(true);
-                              }}
+                              onClick={() => openDialog(b)}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>

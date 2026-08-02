@@ -42,7 +42,7 @@ import {
   formatEuro,
   formatGrams,
 } from "@/lib/format";
-import { trpc } from "@/providers/trpc";
+import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
 export default function MaterialDetail() {
@@ -227,11 +227,16 @@ export default function MaterialDetail() {
                 <dt className="text-muted-foreground">Kaufdatum</dt>
                 <dd>{formatDate(material.purchaseDate)}</dd>
                 <dt className="text-muted-foreground">Rolle / Verpackung</dt>
-                <dd className="flex items-center gap-1.5">
-                  {material.spoolType ? (
+                <dd className="flex flex-wrap items-center gap-1.5">
+                  {material.spoolLabel ? (
                     <>
                       <Disc3 className="h-4 w-4 text-muted-foreground" />
-                      {material.spoolType.name} ({formatGrams(material.spoolType.tareWeight)} Tara)
+                      {material.spoolLabel} ({formatGrams(material.spoolTareWeight)} Tara)
+                      {material.spoolPresetVariant && (
+                        <Badge variant="secondary" className="font-normal">
+                          Katalog
+                        </Badge>
+                      )}
                     </>
                   ) : (
                     "–"

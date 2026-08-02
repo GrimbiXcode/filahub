@@ -34,6 +34,18 @@ if (env.isProduction) {
   await migrateDb();
   console.log("Datenbank-Migrationen angewendet.");
 
+  // Startkatalog nachziehen. Idempotent und bewusst nicht startkritisch:
+  // ein Fehler hier darf den Server nicht am Hochfahren hindern.
+  try {
+    const { seedSpoolPresets } = await import("./queries/presetSeed");
+    const stats = await seedSpoolPresets();
+    console.log(
+      `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`,
+    );
+  } catch (error) {
+    console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);
+  }
+
   const port = parseInt(process.env.PORT || "3000");
   startTelegramBot();
   // Auf allen Interfaces lauschen, damit der Container von außen
