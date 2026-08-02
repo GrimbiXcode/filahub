@@ -115,19 +115,19 @@ async function applyProposal(
 
   switch (payload.scope) {
     case "manufacturer":
-      await updateManufacturer(targetId, payload.patch);
+      await updateManufacturer(targetId, payload.patch, "community");
       return targetId;
     case "series": {
       const { materialTypes, ...rest } = payload.patch;
-      await updateSeries(targetId, rest);
+      await updateSeries(targetId, rest, "community");
       if (materialTypes) await setSeriesMaterialTypes(targetId, materialTypes);
       return targetId;
     }
     case "version":
-      await updateVersion(targetId, payload.patch);
+      await updateVersion(targetId, payload.patch, "community");
       return targetId;
     case "variant":
-      await updateVariant(targetId, payload.patch);
+      await updateVariant(targetId, payload.patch, "community");
       return targetId;
   }
 }

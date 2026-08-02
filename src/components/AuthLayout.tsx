@@ -9,6 +9,8 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarGroup,
+  SidebarGroupLabel,
   SidebarFooter,
   SidebarHeader,
   SidebarInset,
@@ -16,6 +18,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
@@ -25,7 +28,9 @@ import {
   Archive,
   Disc3,
   FileUp,
+  Inbox,
   LayoutDashboard,
+  Library,
   LogOut,
   PanelLeft,
 } from "lucide-react";
@@ -39,6 +44,12 @@ const menuItems = [
   { icon: FileUp, label: "Import", path: "/import" },
   { icon: Disc3, label: "Rollentypen", path: "/rollentypen" },
   { icon: Archive, label: "Lagerboxen", path: "/lagerboxen" },
+];
+
+/** Nur für Administratoren sichtbar; abgesichert wird serverseitig (adminQuery) */
+const adminMenuItems = [
+  { icon: Library, label: "Preset-Katalog", path: "/verwaltung/presets" },
+  { icon: Inbox, label: "Vorschläge", path: "/verwaltung/vorschlaege" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -116,14 +127,16 @@ function AuthLayoutContent({
   children,
   setSidebarWidth,
 }: AuthLayoutContentProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { state, toggleSidebar } = useSidebar();
   const isCollapsed = state === "collapsed";
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = menuItems.find(item => item.path === location.pathname);
+  const activeMenuItem = [...menuItems, ...adminMenuItems].find(
+    item => item.path === location.pathname,
+  );
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -210,6 +223,35 @@ function AuthLayoutContent({
                 );
               })}
             </SidebarMenu>
+
+            {isAdmin && (
+              <>
+                <SidebarSeparator className="my-2" />
+                <SidebarGroup className="py-0">
+                  <SidebarGroupLabel>Verwaltung</SidebarGroupLabel>
+                  <SidebarMenu className="px-2 py-1">
+                    {adminMenuItems.map(item => {
+                      const isActive = location.pathname === item.path;
+                      return (
+                        <SidebarMenuItem key={item.path}>
+                          <SidebarMenuButton
+                            isActive={isActive}
+                            onClick={() => navigate(item.path)}
+                            tooltip={item.label}
+                            className={`h-10 transition-all font-normal`}
+                          >
+                            <item.icon
+                              className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                            />
+                            <span>{item.label}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                  </SidebarMenu>
+                </SidebarGroup>
+              </>
+            )}
           </SidebarContent>
 
           <SidebarFooter className="p-3">

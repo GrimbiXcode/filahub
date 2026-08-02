@@ -577,8 +577,9 @@ export async function createVariant(data: {
 // ---------------------------------------------------------------------------
 // Katalogpflege (Administration)
 //
-// Bearbeitet ein Administrator einen Seed-Eintrag, wechselt dessen `source`
-// auf „admin“ – ab dann fasst ihn das Seeding nie wieder an.
+// Wird ein Seed-Eintrag bearbeitet, wechselt dessen `source` auf „admin“ bzw.
+// bei übernommenen Community-Vorschlägen auf „community“ – ab dann fasst ihn
+// das Seeding nie wieder an.
 // ---------------------------------------------------------------------------
 
 export async function updateManufacturer(
@@ -589,10 +590,11 @@ export async function updateManufacturer(
     notes: string | null;
     active: boolean;
   }>,
+  source: "admin" | "community" = "admin",
 ) {
   await getDb()
     .update(presetManufacturers)
-    .set({ ...data, source: "admin" })
+    .set({ ...data, source })
     .where(eq(presetManufacturers.id, id));
   if (data.name !== undefined) await refreshVariantDisplayNames("manufacturer", id);
   return getDb().query.presetManufacturers.findFirst({
@@ -603,10 +605,11 @@ export async function updateManufacturer(
 export async function updateSeries(
   id: number,
   data: Partial<{ name: string; notes: string | null; active: boolean }>,
+  source: "admin" | "community" = "admin",
 ) {
   await getDb()
     .update(presetSpoolSeries)
-    .set({ ...data, source: "admin" })
+    .set({ ...data, source })
     .where(eq(presetSpoolSeries.id, id));
   if (data.name !== undefined) await refreshVariantDisplayNames("series", id);
   return getDb().query.presetSpoolSeries.findFirst({
@@ -624,10 +627,11 @@ export async function updateVersion(
     notes: string | null;
     active: boolean;
   }>,
+  source: "admin" | "community" = "admin",
 ) {
   await getDb()
     .update(presetSpoolVersions)
-    .set({ ...data, source: "admin" })
+    .set({ ...data, source })
     .where(eq(presetSpoolVersions.id, id));
   if (data.name !== undefined) await refreshVariantDisplayNames("version", id);
   return getDb().query.presetSpoolVersions.findFirst({
@@ -646,6 +650,7 @@ export async function updateVariant(
     notes: string | null;
     active: boolean;
   }>,
+  source: "admin" | "community" = "admin",
 ) {
   const db = getDb();
   const current = await db.query.presetSpoolVariants.findFirst({
@@ -659,7 +664,7 @@ export async function updateVariant(
       : current.displayName;
   await db
     .update(presetSpoolVariants)
-    .set({ ...data, displayName, source: "admin" })
+    .set({ ...data, displayName, source })
     .where(eq(presetSpoolVariants.id, id));
   return db.query.presetSpoolVariants.findFirst({
     where: eq(presetSpoolVariants.id, id),
