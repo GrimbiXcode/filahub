@@ -35,6 +35,22 @@ export const PRESET_SCOPES = [
 ] as const;
 export type PresetScope = (typeof PRESET_SCOPES)[number];
 
+export const PRESET_PROPOSAL_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+  "withdrawn",
+] as const;
+export type PresetProposalStatus = (typeof PRESET_PROPOSAL_STATUSES)[number];
+
+/** Beschriftung des Vorschlagsstatus für die Oberfläche */
+export const PRESET_PROPOSAL_STATUS_LABELS: Record<PresetProposalStatus, string> = {
+  pending: "Offen",
+  approved: "Übernommen",
+  rejected: "Abgelehnt",
+  withdrawn: "Zurückgezogen",
+};
+
 /** Beschriftung der Katalogebene für die Oberfläche */
 export const PRESET_SCOPE_LABELS: Record<PresetScope, string> = {
   manufacturer: "Hersteller",
