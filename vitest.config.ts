@@ -16,5 +16,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["api/**/*.test.ts", "api/**/*.spec.ts"],
+    // Integrationstests brauchen eine MySQL-Datenbank und laufen separat
+    // über `npm run test:integration` (vitest.integration.config.ts).
+    exclude: ["**/node_modules/**", "**/dist/**", "api/**/*.integration.test.ts"],
   },
 });

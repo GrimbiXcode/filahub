@@ -192,12 +192,36 @@ For administrators, under **Verwaltung**:
 | `npm run check` | TypeScript check |
 | `npm run build` | Production build to `dist/` |
 | `npm run lint` | ESLint |
-| `npm run test` | Vitest |
+| `npm run test` | Vitest (no database needed) |
+| `npm run test:integration` | Vitest against a real MySQL database (see below) |
 | `npm run db:push` | Sync schema changes to the database |
 | `npm run db:seed` | Seed the preset catalogue (idempotent) |
 
+## Integration tests
+
+`npm run test` runs the unit tests, which need no database. The integration
+tests run the real chain – migrations, seeding, tRPC routers – against
+**MySQL 8.4**, the same version as in `docker-compose.yml`. This matters:
+MariaDB behaves differently for JSON columns, collation and `sql_mode`, so
+those differences only surface here.
+
+```bash
+docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
+  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+
+TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
+  npm run test:integration
+```
+
+> Every run **drops all tables** of the target database and re-applies the
+> migrations. The connection therefore comes from `TEST_DATABASE_URL` only and
+> must differ from `DATABASE_URL` – use a dedicated test database.
+
 ## CI / CD
 
+- **Push to `main` and pull requests:** TypeScript check, unit tests and the
+  integration tests against a `mysql:8.4` service container.
 - **Push to `main`:** the Docker image is built (without pushing) to verify
   the build works.
 - **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with

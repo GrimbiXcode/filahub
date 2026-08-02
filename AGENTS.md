@@ -56,7 +56,8 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 | `npm run check` | TypeScript-Prüfung (`tsc -b`, Projekt-Referenzen) |
 | `npm run build` | `vite build` → `dist/public`, dann esbuild-Bundle von `api/boot.ts` → `dist/boot.js` |
 | `npm start` | Produktionsstart: `NODE_ENV=production node dist/boot.js` |
-| `npm run test` | Vitest (`vitest run`) |
+| `npm run test` | Vitest ohne Datenbank (`vitest run`) |
+| `npm run test:integration` | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`) |
 | `npm run lint` | ESLint (Flat-Config) |
 | `npm run format` | Prettier über das ganze Repo |
 | `npm run db:push` | Drizzle-Schema direkt in die DB synchronisieren |
@@ -158,11 +159,42 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 
 ## Tests
 
+Zwei getrennte Suiten – Unit-Tests laufen immer, Integrationstests nur mit
+Datenbank.
+
+### Unit-Tests (`npm run test`)
+
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`
   und `materialStats`. Alle laufen ohne Datenbank – reine zod- und
   Funktionstests. Bei neuen Backend-Features Tests in `api/` anlegen.
+
+### Integrationstests (`npm run test:integration`)
+
+- `api/mysql.integration.test.ts`, konfiguriert in
+  `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
+  `npm run test` ohne Datenbank lauffähig bleibt.
+- Getestet wird gegen **MySQL 8.4** – dieselbe Version wie in
+  `docker-compose.yml`. MariaDB weicht bei JSON-Spalten (dort nur ein
+  `longtext`-Alias), Kollation (`utf8mb4_0900_ai_ci` ist akzentunempfindlich)
+  und beim `sql_mode` ab; solche Unterschiede fallen nur hier auf.
+- Abgedeckt: Migrationen, Idempotenz des Seedings, Katalog- und
+  Vorschlagsfluss über die tRPC-Router, Unique-Keys, Enums, `$returningId`,
+  die optimistische Sperre über `affectedRows`, Zeitstempel und Strict Mode.
+- Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
+  mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **alle Tabellen** der
+  Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).
+
+```bash
+docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
+  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+
+TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
+  npm run test:integration
+```
+
 - Vor einem Commit mindestens `npm run check` (und `npm run lint`) laufen lassen.
 
 ## Deployment
