@@ -3,7 +3,8 @@
 Web application for managing a 3D-printing filament inventory: filaments with
 spool/packaging types and storage boxes (dryboxes) including tare weight,
 weigh-ins with automatic remaining-quantity calculation, short IDs for quick
-retrieval, and Telegram-only login.
+retrieval, a shared preset catalogue of manufacturers and spools, and
+Telegram-only login.
 
 **Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
 Drizzle ORM + MySQL (database)
@@ -53,6 +54,11 @@ The app applies pending SQL migrations (`db/migrations/`) automatically on
 startup, so a fresh database initializes itself. For local development you
 can alternatively sync the schema directly with `npm run db:push`; after
 schema changes, regenerate the migration files with `npm run db:generate`.
+
+On startup the app also seeds a small preset catalogue of manufacturers and
+spools (Polymaker, Prusament, Bambu Lab, eSUN). Seeding is idempotent and
+never overwrites entries an administrator edited or that came from an
+accepted community suggestion. Locally you can run it with `npm run db:seed`.
 
 ## 4. Run
 
@@ -146,6 +152,38 @@ TLS certificate automatically. nginx + Certbot works too, of course.
 When the whitelist (`TELEGRAM_ALLOWED_IDS`) is active, only the listed IDs
 can sign in. The `OWNER_TELEGRAM_ID` receives the admin role.
 
+## 7. Preset catalogue
+
+Administrators maintain a shared catalogue of manufacturers and spools so
+users can pick a spool instead of looking up and entering its empty weight
+themselves. It has four levels:
+
+**Manufacturer → series → version → size.** A series is a product line
+(e.g. *PolyTerra PLA*), a version is a revision of its spool (e.g. the switch
+from plastic to cardboard, with a validity period), and a size is the spool
+for one net filament weight (500 g / 1 kg / 3 kg) with its empty weight and
+dimensions. A series can be tagged with material types so the right spools
+are offered first for PLA, PETG and so on.
+
+For users, under **Rollentypen**:
+
+- **Preset-Katalog** – browse the catalogue, hide manufacturers, series,
+  versions or single sizes you don't need (hiding only affects your own
+  selection; spools already assigned to a filament stay valid), copy a preset
+  into your own editable spool type, or suggest a correction.
+- **Meine Rollentypen** – your own spool types, with an action to suggest one
+  for the shared catalogue.
+- **Meine Vorschläge** – the status of your suggestions, including the
+  moderator's reason if one was rejected.
+
+For administrators, under **Verwaltung**:
+
+- **Preset-Katalog** (`/verwaltung/presets`) – maintain all four levels.
+  Entries that are still in use can only be deactivated, not deleted.
+- **Vorschläge** (`/verwaltung/vorschlaege`) – accept a suggestion (it is
+  applied to the catalogue and becomes visible to everyone) or reject it with
+  a reason.
+
 ## Useful commands
 
 | Command | Purpose |
@@ -156,6 +194,7 @@ can sign in. The `OWNER_TELEGRAM_ID` receives the admin role.
 | `npm run lint` | ESLint |
 | `npm run test` | Vitest |
 | `npm run db:push` | Sync schema changes to the database |
+| `npm run db:seed` | Seed the preset catalogue (idempotent) |
 
 ## CI / CD
 
