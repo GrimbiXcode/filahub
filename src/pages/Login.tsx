@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { MessageCircleCode, Send, Wrench } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -71,7 +72,11 @@ export default function Login() {
   const botUsername = loginInfo?.botUsername;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4">
+      {/* Farbschema schon vor der Anmeldung umstellbar */}
+      <div className="fixed right-3 top-3">
+        <ThemeToggle />
+      </div>
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <CardTitle>Filament-Lager</CardTitle>

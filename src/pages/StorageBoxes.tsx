@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Archive, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
+import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,7 +66,7 @@ export default function StorageBoxes() {
   };
 
   const assignedCount = (boxId: number) =>
-    (materials ?? []).filter((m) => m.storageBoxId === boxId).length;
+    (materials ?? []).filter(m => m.storageBoxId === boxId).length;
 
   const invalidate = () => {
     utils.storageBox.list.invalidate();
@@ -79,7 +80,7 @@ export default function StorageBoxes() {
       invalidate();
       setDialogOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.storageBox.update.useMutation({
     onSuccess: () => {
@@ -87,7 +88,7 @@ export default function StorageBoxes() {
       invalidate();
       setDialogOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const deleteMutation = trpc.storageBox.delete.useMutation({
     onSuccess: () => {
@@ -95,7 +96,7 @@ export default function StorageBoxes() {
       invalidate();
       setDeleting(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const saving = createMutation.isPending || updateMutation.isPending;
@@ -116,101 +117,171 @@ export default function StorageBoxes() {
     else createMutation.mutate(payload);
   };
 
+  const list = boxes ?? [];
+
   return (
     <AuthLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Lagerboxen</h1>
-            <p className="text-sm text-muted-foreground">
-              Dryboxen und Aufbewahrungsboxen mit Leergewicht – beim Wiegen in der Box
-              wird deren Tara automatisch abgezogen
-            </p>
-          </div>
-          <Button
-            onClick={() => openDialog(null)}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Neue Lagerbox
-          </Button>
-        </div>
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <PageHeader
+          title="Lagerboxen"
+          description="Dryboxen und Aufbewahrungsboxen mit Leergewicht – beim Wiegen in der Box wird deren Tara automatisch abgezogen"
+          actions={
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => openDialog(null)}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Neue Lagerbox
+            </Button>
+          }
+        />
 
-        <Card>
-          <CardContent className="pt-6">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : (boxes ?? []).length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-center">
-                <Archive className="h-10 w-10 text-muted-foreground/50" />
-                <p className="font-medium">Noch keine Lagerboxen angelegt</p>
-                <p className="text-sm text-muted-foreground">
-                  Wiege deine leere Drybox, trage das Leergewicht ein und weise sie
-                  einem Material zu – die App rechnet die Box-Tara automatisch heraus.
-                </p>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Standort</TableHead>
-                    <TableHead>Leergewicht</TableHead>
-                    <TableHead>Belegung</TableHead>
-                    <TableHead>Notizen</TableHead>
-                    <TableHead className="text-right">Aktionen</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {(boxes ?? []).map((b) => {
-                    const count = assignedCount(b.id);
-                    return (
-                      <TableRow key={b.id}>
-                        <TableCell className="font-medium">{b.name}</TableCell>
-                        <TableCell>{b.location ?? "–"}</TableCell>
-                        <TableCell>{formatGrams(b.tareWeight)}</TableCell>
-                        <TableCell>
-                          {count > 0 ? (
-                            <Badge variant="secondary">
-                              {count} Material{count > 1 ? "ien" : ""}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">frei</span>
-                          )}
-                        </TableCell>
-                        <TableCell className="max-w-[240px] truncate text-muted-foreground">
-                          {b.notes ?? "–"}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => openDialog(b)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setDeleting(b)}>
-                              <Trash2 className="h-4 w-4 text-muted-foreground" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl sm:h-12" />
+            ))}
+          </div>
+        ) : list.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Archive className="h-10 w-10 text-muted-foreground/50" />
+              <p className="font-medium">Noch keine Lagerboxen angelegt</p>
+              <p className="max-w-md text-sm text-muted-foreground">
+                Wiege deine leere Drybox, trage das Leergewicht ein und weise sie
+                einem Material zu – die App rechnet die Box-Tara automatisch
+                heraus.
+              </p>
+              <Button onClick={() => openDialog(null)}>
+                <Plus className="mr-2 h-4 w-4" /> Erste Lagerbox anlegen
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Telefon: Karten statt Tabelle */}
+            <div className="flex flex-col gap-3 sm:hidden">
+              {list.map(b => {
+                const count = assignedCount(b.id);
+                return (
+                  <div key={b.id} className="rounded-xl border bg-card p-3 shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{b.name}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatGrams(b.tareWeight)} Tara
+                          {b.location ? ` · ${b.location}` : ""}
+                        </p>
+                      </div>
+                      {count > 0 ? (
+                        <Badge variant="secondary" className="shrink-0">
+                          {count} Material{count > 1 ? "ien" : ""}
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="shrink-0 font-normal">
+                          frei
+                        </Badge>
+                      )}
+                    </div>
+                    {b.notes && (
+                      <p className="mt-2 break-words text-xs text-muted-foreground">
+                        {b.notes}
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2 border-t pt-2">
+                      <Button
+                        variant="ghost"
+                        className="h-10 flex-1"
+                        onClick={() => openDialog(b)}
+                      >
+                        <Pencil className="mr-2 h-4 w-4" /> Bearbeiten
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10"
+                        aria-label="Lagerbox löschen"
+                        onClick={() => setDeleting(b)}
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <Card className="hidden sm:block">
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Standort</TableHead>
+                      <TableHead>Leergewicht</TableHead>
+                      <TableHead>Belegung</TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Notizen
+                      </TableHead>
+                      <TableHead className="text-right">Aktionen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {list.map(b => {
+                      const count = assignedCount(b.id);
+                      return (
+                        <TableRow key={b.id}>
+                          <TableCell className="font-medium">{b.name}</TableCell>
+                          <TableCell>{b.location ?? "–"}</TableCell>
+                          <TableCell>{formatGrams(b.tareWeight)}</TableCell>
+                          <TableCell>
+                            {count > 0 ? (
+                              <Badge variant="secondary">
+                                {count} Material{count > 1 ? "ien" : ""}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">frei</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="hidden max-w-[240px] truncate text-muted-foreground lg:table-cell">
+                            {b.notes ?? "–"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Bearbeiten"
+                                onClick={() => openDialog(b)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label="Löschen"
+                                onClick={() => setDeleting(b)}
+                              >
+                                <Trash2 className="h-4 w-4 text-muted-foreground" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Lagerbox bearbeiten" : "Neue Lagerbox"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Lagerbox bearbeiten" : "Neue Lagerbox"}
+            </DialogTitle>
             <DialogDescription>
               Das Leergewicht der leeren Box (ohne Material) in Gramm.
             </DialogDescription>
@@ -221,7 +292,7 @@ export default function StorageBoxes() {
               <Input
                 id="b-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={e => setName(e.target.value)}
                 placeholder="z. B. Drybox 1"
               />
             </div>
@@ -230,7 +301,7 @@ export default function StorageBoxes() {
               <Input
                 id="b-location"
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={e => setLocation(e.target.value)}
                 placeholder="z. B. Regal links, Werkstatt"
               />
             </div>
@@ -239,9 +310,10 @@ export default function StorageBoxes() {
               <Input
                 id="b-tare"
                 type="number"
+                inputMode="numeric"
                 min={0}
                 value={tareWeight}
-                onChange={(e) => setTareWeight(e.target.value)}
+                onChange={e => setTareWeight(e.target.value)}
                 placeholder="z. B. 850"
               />
             </div>
@@ -250,7 +322,7 @@ export default function StorageBoxes() {
               <Textarea
                 id="b-notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={e => setNotes(e.target.value)}
                 rows={2}
               />
             </div>
@@ -271,7 +343,10 @@ export default function StorageBoxes() {
         </DialogContent>
       </Dialog>
 
-      <AlertDialog open={deleting != null} onOpenChange={(o) => !o && setDeleting(null)}>
+      <AlertDialog
+        open={deleting != null}
+        onOpenChange={o => !o && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Lagerbox löschen?</AlertDialogTitle>

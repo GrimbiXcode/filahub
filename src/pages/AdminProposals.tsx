@@ -59,8 +59,10 @@ function payloadRows(payload: unknown): { label: string; value: string }[] {
   const p = payload as Record<string, unknown>;
   if (p.kind === "new") {
     const manufacturer = p.manufacturer as { name?: string } | undefined;
-    const series = p.series as { name?: string; materialTypes?: string[] } | undefined;
-    const version = p.version as { name?: string; spoolMaterial?: string } | undefined;
+    const series = p.series as
+      { name?: string; materialTypes?: string[] } | undefined;
+    const version = p.version as
+      { name?: string; spoolMaterial?: string } | undefined;
     const variant = (p.variant ?? {}) as Record<string, unknown>;
     return [
       { label: "Hersteller", value: manufacturer?.name ?? "–" },
@@ -111,7 +113,7 @@ export default function AdminProposals() {
       invalidate();
       setDetail(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const reject = trpc.admin.proposal.reject.useMutation({
@@ -121,7 +123,7 @@ export default function AdminProposals() {
       setRejecting(null);
       setDetail(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   return (
@@ -130,12 +132,12 @@ export default function AdminProposals() {
       description="Community-Vorschläge für den Preset-Katalog prüfen"
       actions={
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Alle Vorschläge</SelectItem>
-            {PRESET_PROPOSAL_STATUSES.map((s) => (
+            {PRESET_PROPOSAL_STATUSES.map(s => (
               <SelectItem key={s} value={s}>
                 {PRESET_PROPOSAL_STATUS_LABELS[s]}
               </SelectItem>
@@ -145,7 +147,7 @@ export default function AdminProposals() {
       }
     >
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-4 sm:p-6">
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
@@ -158,86 +160,129 @@ export default function AdminProposals() {
               <p className="font-medium">Keine Vorschläge in dieser Ansicht</p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Eingereicht</TableHead>
-                  <TableHead>Von</TableHead>
-                  <TableHead>Art</TableHead>
-                  <TableHead>Begründung</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Aktionen</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(proposals ?? []).map((p) => (
-                  <TableRow
+            <>
+              {/* Telefon: Karten – die Tabelle hat sechs Spalten */}
+              <div className="flex flex-col gap-3 lg:hidden">
+                {(proposals ?? []).map(p => (
+                  <button
                     key={p.id}
-                    className="cursor-pointer"
+                    type="button"
                     onClick={() => setDetail(p)}
+                    className="rounded-xl border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <TableCell className="whitespace-nowrap">
-                      {formatDate(p.createdAt)}
-                    </TableCell>
-                    <TableCell>{p.submittedBy?.name ?? "–"}</TableCell>
-                    <TableCell>
-                      {p.kind === "new"
-                        ? "Neuer Eintrag"
-                        : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
-                    </TableCell>
-                    <TableCell className="max-w-[260px] truncate text-muted-foreground">
-                      {p.comment ?? "–"}
-                    </TableCell>
-                    <TableCell>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-medium">
+                          {p.kind === "new"
+                            ? "Neuer Eintrag"
+                            : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {formatDate(p.createdAt)} ·{" "}
+                          {p.submittedBy?.name ?? "unbekannt"}
+                        </p>
+                      </div>
                       <Badge
                         variant={STATUS_VARIANT[p.status]}
-                        className="font-normal"
+                        className="shrink-0 font-normal"
                       >
                         {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
                       </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {p.status === "pending" && (
-                        <div
-                          className="flex justify-end gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Übernehmen"
-                            disabled={approve.isPending}
-                            onClick={() => approve.mutate({ id: p.id })}
-                          >
-                            <Check className="h-4 w-4 text-emerald-600" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            title="Ablehnen"
-                            onClick={() => {
-                              setReason("");
-                              setRejecting(p);
-                            }}
-                          >
-                            <X className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      )}
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                    {p.comment && (
+                      <p className="mt-2 break-words text-xs text-muted-foreground">
+                        {p.comment}
+                      </p>
+                    )}
+                  </button>
                 ))}
-              </TableBody>
-            </Table>
+              </div>
+
+              <div className="hidden lg:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Eingereicht</TableHead>
+                      <TableHead>Von</TableHead>
+                      <TableHead>Art</TableHead>
+                      <TableHead>Begründung</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Aktionen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {(proposals ?? []).map(p => (
+                      <TableRow
+                        key={p.id}
+                        className="cursor-pointer"
+                        onClick={() => setDetail(p)}
+                      >
+                        <TableCell className="whitespace-nowrap">
+                          {formatDate(p.createdAt)}
+                        </TableCell>
+                        <TableCell>{p.submittedBy?.name ?? "–"}</TableCell>
+                        <TableCell>
+                          {p.kind === "new"
+                            ? "Neuer Eintrag"
+                            : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
+                        </TableCell>
+                        <TableCell className="max-w-[260px] truncate text-muted-foreground">
+                          {p.comment ?? "–"}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={STATUS_VARIANT[p.status]}
+                            className="font-normal"
+                          >
+                            {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {p.status === "pending" && (
+                            <div
+                              className="flex justify-end gap-1"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Übernehmen"
+                                disabled={approve.isPending}
+                                onClick={() => approve.mutate({ id: p.id })}
+                              >
+                                <Check className="h-4 w-4 text-emerald-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Ablehnen"
+                                onClick={() => {
+                                  setReason("");
+                                  setRejecting(p);
+                                }}
+                              >
+                                <X className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           )}
         </CardContent>
       </Card>
 
-      <Dialog open={detail != null} onOpenChange={(o) => !o && setDetail(null)}>
+      <Dialog open={detail != null} onOpenChange={o => !o && setDetail(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              {detail?.kind === "new" ? "Neuer Katalogeintrag" : "Änderungsvorschlag"}
+              {detail?.kind === "new"
+                ? "Neuer Katalogeintrag"
+                : "Änderungsvorschlag"}
             </DialogTitle>
             <DialogDescription>
               Eingereicht von {detail?.submittedBy?.name ?? "unbekannt"}
@@ -245,7 +290,7 @@ export default function AdminProposals() {
             </DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-2 text-sm">
-            {payloadRows(detail?.payload).map((row) => (
+            {payloadRows(detail?.payload).map(row => (
               <div key={row.label} className="contents">
                 <dt className="text-muted-foreground">{row.label}</dt>
                 <dd className="font-medium">{row.value}</dd>
@@ -281,7 +326,7 @@ export default function AdminProposals() {
 
       <Dialog
         open={rejecting != null}
-        onOpenChange={(o) => !o && setRejecting(null)}
+        onOpenChange={o => !o && setRejecting(null)}
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -297,7 +342,7 @@ export default function AdminProposals() {
               id="ap-reason"
               rows={3}
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
+              onChange={e => setReason(e.target.value)}
               placeholder="z. B. „Leergewicht weicht von der Herstellerangabe ab“"
             />
           </div>
@@ -310,8 +355,11 @@ export default function AdminProposals() {
               disabled={reject.isPending}
               onClick={() => {
                 if (!reason.trim())
-                  return toast.error("Bitte eine Begründung für die Ablehnung angeben");
-                if (rejecting) reject.mutate({ id: rejecting.id, reason: reason.trim() });
+                  return toast.error(
+                    "Bitte eine Begründung für die Ablehnung angeben"
+                  );
+                if (rejecting)
+                  reject.mutate({ id: rejecting.id, reason: reason.trim() });
               }}
             >
               {reject.isPending ? "Wird abgelehnt …" : "Ablehnen"}

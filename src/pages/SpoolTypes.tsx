@@ -3,6 +3,7 @@ import { Calculator, Disc3, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
 import { MyPresetProposals } from "@/components/MyPresetProposals";
+import { PageHeader } from "@/components/PageHeader";
 import { PresetCatalog } from "@/components/PresetCatalog";
 import { ProposePresetDialog } from "@/components/ProposePresetDialog";
 import {
@@ -80,7 +81,12 @@ export default function SpoolTypes() {
   const computeTare = (grossValue: string, nominalValue: string) => {
     const gross = parseInt(grossValue, 10);
     const nominal = parseInt(nominalValue, 10);
-    if (!Number.isFinite(gross) || !Number.isFinite(nominal) || gross <= 0 || nominal <= 0)
+    if (
+      !Number.isFinite(gross) ||
+      !Number.isFinite(nominal) ||
+      gross <= 0 ||
+      nominal <= 0
+    )
       return null;
     return gross - nominal;
   };
@@ -105,7 +111,7 @@ export default function SpoolTypes() {
       invalidate();
       setDialogOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.spoolType.update.useMutation({
     onSuccess: () => {
@@ -113,7 +119,7 @@ export default function SpoolTypes() {
       invalidate();
       setDialogOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const deleteMutation = trpc.spoolType.delete.useMutation({
     onSuccess: () => {
@@ -121,7 +127,7 @@ export default function SpoolTypes() {
       invalidate();
       setDeleting(null);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const saving = createMutation.isPending || updateMutation.isPending;
@@ -142,117 +148,199 @@ export default function SpoolTypes() {
     else createMutation.mutate(payload);
   };
 
+  const list = spoolTypes ?? [];
+
   return (
     <AuthLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Rollentypen</h1>
-            <p className="text-sm text-muted-foreground">
-              Verpackungen und Spulen mit hinterlegtem Leergewicht (Tara)
-            </p>
-          </div>
-          <Button
-            onClick={() => openDialog(null)}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Neuer Rollentyp
-          </Button>
-        </div>
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <PageHeader
+          title="Rollentypen"
+          description="Verpackungen und Spulen mit hinterlegtem Leergewicht (Tara)"
+          actions={
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => openDialog(null)}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Neuer Rollentyp
+            </Button>
+          }
+        />
 
         <Tabs defaultValue="eigene">
-          <TabsList>
-            <TabsTrigger value="eigene">Meine Rollentypen</TabsTrigger>
-            <TabsTrigger value="katalog">Preset-Katalog</TabsTrigger>
-            <TabsTrigger value="vorschlaege">Meine Vorschläge</TabsTrigger>
-          </TabsList>
+          {/* Auf schmalen Geräten scrollen die Reiter, statt die Beschriftung
+              auf zwei Buchstaben zu kürzen. */}
+          <div className="-mx-1 overflow-x-auto px-1 pb-1">
+            <TabsList className="w-max">
+              <TabsTrigger value="eigene">Meine Rollentypen</TabsTrigger>
+              <TabsTrigger value="katalog">Preset-Katalog</TabsTrigger>
+              <TabsTrigger value="vorschlaege">Meine Vorschläge</TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="eigene">
-            <Card>
-              <CardContent className="pt-6">
-                {isLoading ? (
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : (spoolTypes ?? []).length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-12 text-center">
-                    <Disc3 className="h-10 w-10 text-muted-foreground/50" />
-                    <p className="font-medium">Noch keine Rollentypen angelegt</p>
-                    <p className="text-sm text-muted-foreground">
-                      Lege z. B. „Kunststoffspule 1 kg (140 g)“ oder „Pappspule (55 g)“ an –
-                      das Leergewicht wird bei jeder Wägung automatisch abgezogen.
-                    </p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Hersteller</TableHead>
-                        <TableHead>Leergewicht</TableHead>
-                        <TableHead>Notizen</TableHead>
-                        <TableHead className="text-right">Aktionen</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {(spoolTypes ?? []).map((s) => (
-                        <TableRow key={s.id}>
-                          <TableCell className="font-medium">
-                            <div className="flex flex-wrap items-center gap-2">
-                              {s.name}
-                              {s.sourceVariantId != null && (
-                                <Badge variant="secondary" className="font-normal">
-                                  aus Katalog
-                                </Badge>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell>{s.manufacturer ?? "–"}</TableCell>
-                          <TableCell>{formatGrams(s.tareWeight)}</TableCell>
-                          <TableCell className="max-w-[300px] truncate text-muted-foreground">
-                            {s.notes ?? "–"}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Als Preset vorschlagen"
-                                onClick={() => setProposing(s)}
-                              >
-                                <Upload className="h-4 w-4 text-muted-foreground" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Bearbeiten"
-                                onClick={() => openDialog(s)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                title="Löschen"
-                                onClick={() => setDeleting(s)}
-                              >
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                              </Button>
-                            </div>
-                          </TableCell>
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-20 w-full rounded-xl sm:h-12" />
+                ))}
+              </div>
+            ) : list.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                  <Disc3 className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="font-medium">Noch keine Rollentypen angelegt</p>
+                  <p className="max-w-md text-sm text-muted-foreground">
+                    Lege z. B. „Kunststoffspule 1 kg (140 g)“ oder „Pappspule
+                    (55 g)“ an – das Leergewicht wird bei jeder Wägung
+                    automatisch abgezogen. Fertige Rollen findest du im
+                    Preset-Katalog.
+                  </p>
+                  <Button onClick={() => openDialog(null)}>
+                    <Plus className="mr-2 h-4 w-4" /> Ersten Rollentyp anlegen
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Telefon: Karten statt Tabelle */}
+                <div className="flex flex-col gap-3 sm:hidden">
+                  {list.map(s => (
+                    <div
+                      key={s.id}
+                      className="rounded-xl border bg-card p-3 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="break-words font-medium">{s.name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {formatGrams(s.tareWeight)} Tara
+                            {s.manufacturer ? ` · ${s.manufacturer}` : ""}
+                          </p>
+                        </div>
+                        {s.sourceVariantId != null && (
+                          <Badge
+                            variant="secondary"
+                            className="shrink-0 font-normal"
+                          >
+                            aus Katalog
+                          </Badge>
+                        )}
+                      </div>
+                      {s.notes && (
+                        <p className="mt-2 break-words text-xs text-muted-foreground">
+                          {s.notes}
+                        </p>
+                      )}
+                      <div className="mt-3 flex gap-2 border-t pt-2">
+                        <Button
+                          variant="ghost"
+                          className="h-10 flex-1"
+                          onClick={() => openDialog(s)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> Bearbeiten
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10"
+                          aria-label="Als Preset vorschlagen"
+                          onClick={() => setProposing(s)}
+                        >
+                          <Upload className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10"
+                          aria-label="Rollentyp löschen"
+                          onClick={() => setDeleting(s)}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <Card className="hidden sm:block">
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Hersteller</TableHead>
+                          <TableHead>Leergewicht</TableHead>
+                          <TableHead className="hidden lg:table-cell">
+                            Notizen
+                          </TableHead>
+                          <TableHead className="text-right">Aktionen</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </CardContent>
-            </Card>
+                      </TableHeader>
+                      <TableBody>
+                        {list.map(s => (
+                          <TableRow key={s.id}>
+                            <TableCell className="font-medium">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {s.name}
+                                {s.sourceVariantId != null && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="font-normal"
+                                  >
+                                    aus Katalog
+                                  </Badge>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell>{s.manufacturer ?? "–"}</TableCell>
+                            <TableCell>{formatGrams(s.tareWeight)}</TableCell>
+                            <TableCell className="hidden max-w-[300px] truncate text-muted-foreground lg:table-cell">
+                              {s.notes ?? "–"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Als Preset vorschlagen"
+                                  title="Als Preset vorschlagen"
+                                  onClick={() => setProposing(s)}
+                                >
+                                  <Upload className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Bearbeiten"
+                                  title="Bearbeiten"
+                                  onClick={() => openDialog(s)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label="Löschen"
+                                  title="Löschen"
+                                  onClick={() => setDeleting(s)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="katalog">
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="p-4 sm:p-6">
                 <PresetCatalog />
               </CardContent>
             </Card>
@@ -260,7 +348,7 @@ export default function SpoolTypes() {
 
           <TabsContent value="vorschlaege">
             <Card>
-              <CardContent className="pt-6">
+              <CardContent className="p-4 sm:p-6">
                 <MyPresetProposals />
               </CardContent>
             </Card>
@@ -269,9 +357,11 @@ export default function SpoolTypes() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{editing ? "Rollentyp bearbeiten" : "Neuer Rollentyp"}</DialogTitle>
+            <DialogTitle>
+              {editing ? "Rollentyp bearbeiten" : "Neuer Rollentyp"}
+            </DialogTitle>
             <DialogDescription>
               Das Leergewicht der leeren Rolle bzw. Verpackung in Gramm.
             </DialogDescription>
@@ -282,7 +372,7 @@ export default function SpoolTypes() {
               <Input
                 id="s-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={e => setName(e.target.value)}
                 placeholder="z. B. Kunststoffspule 1 kg"
               />
             </div>
@@ -291,7 +381,7 @@ export default function SpoolTypes() {
               <Input
                 id="s-manufacturer"
                 value={manufacturer}
-                onChange={(e) => setManufacturer(e.target.value)}
+                onChange={e => setManufacturer(e.target.value)}
                 placeholder="z. B. eSun, Prusament"
               />
             </div>
@@ -314,9 +404,10 @@ export default function SpoolTypes() {
                   <Input
                     id="s-calc-gross"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     value={calcGross}
-                    onChange={(e) => {
+                    onChange={e => {
                       setCalcGross(e.target.value);
                       applyCalculatedTare(e.target.value, calcNominal);
                     }}
@@ -330,9 +421,10 @@ export default function SpoolTypes() {
                   <Input
                     id="s-calc-nominal"
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     value={calcNominal}
-                    onChange={(e) => {
+                    onChange={e => {
                       setCalcNominal(e.target.value);
                       applyCalculatedTare(calcGross, e.target.value);
                     }}
@@ -360,9 +452,10 @@ export default function SpoolTypes() {
               <Input
                 id="s-tare"
                 type="number"
+                inputMode="numeric"
                 min={0}
                 value={tareWeight}
-                onChange={(e) => setTareWeight(e.target.value)}
+                onChange={e => setTareWeight(e.target.value)}
                 placeholder="z. B. 140"
               />
             </div>
@@ -371,7 +464,7 @@ export default function SpoolTypes() {
               <Textarea
                 id="s-notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={e => setNotes(e.target.value)}
                 rows={2}
               />
             </div>
@@ -396,22 +489,27 @@ export default function SpoolTypes() {
         key={proposing?.id ?? "none"}
         spoolType={proposing}
         open={proposing != null}
-        onOpenChange={(o) => !o && setProposing(null)}
+        onOpenChange={o => !o && setProposing(null)}
       />
 
-      <AlertDialog open={deleting != null} onOpenChange={(o) => !o && setDeleting(null)}>
+      <AlertDialog
+        open={deleting != null}
+        onOpenChange={o => !o && setDeleting(null)}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Rollentyp löschen?</AlertDialogTitle>
             <AlertDialogDescription>
-              „{deleting?.name}“ wird gelöscht. Materialien, die diesen Typ verwenden,
-              müssen vorher umgehängt werden.
+              „{deleting?.name}“ wird gelöscht. Materialien, die diesen Typ
+              verwenden, müssen vorher umgehängt werden.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleting && deleteMutation.mutate({ id: deleting.id })}
+              onClick={() =>
+                deleting && deleteMutation.mutate({ id: deleting.id })
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Löschen

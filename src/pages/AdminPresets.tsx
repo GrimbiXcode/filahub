@@ -314,13 +314,16 @@ export default function AdminPresets() {
       title="Preset-Katalog"
       description="Hersteller, Serien, Ausführungen und Größen für alle Benutzer pflegen"
       actions={
-        <Button onClick={() => setEditor({ level: "manufacturer" })}>
+        <Button
+          className="w-full sm:w-auto"
+          onClick={() => setEditor({ level: "manufacturer" })}
+        >
           <Plus className="mr-2 h-4 w-4" /> Neuer Hersteller
         </Button>
       }
     >
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="p-4 sm:p-6">
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(4)].map((_, i) => (

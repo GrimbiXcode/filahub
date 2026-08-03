@@ -81,19 +81,48 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Scale className="h-5 w-5" /> Material wiegen
           </DialogTitle>
           <DialogDescription>
-            Wiege „{material.name}" komplett – inklusive Rolle
+            Wiege „{material.name}“ komplett – inklusive Rolle
             {material.storageBox ? " und Lagerbox" : ""}. Das Leergewicht wird
             automatisch abgezogen.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="rounded-lg border bg-muted/40 p-3 text-sm space-y-1">
+          {/* Das Gewichtsfeld steht bewusst oben: Wer vor der Waage steht,
+              tippt die Zahl ein und ist fertig. */}
+          <div className="grid gap-2">
+            <Label htmlFor="w-gross">Gemessenes Gesamtgewicht (g) *</Label>
+            <Input
+              id="w-gross"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              autoFocus
+              value={grossWeight}
+              onChange={e => setGrossWeight(e.target.value)}
+              placeholder="z. B. 740"
+              // Die Pfeilchen des Zahlenfelds stören in der großen Anzeige
+              className="h-14 text-center text-2xl font-semibold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            />
+          </div>
+          {preview && (
+            <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
+              <div className="flex justify-between font-medium">
+                <span>Effektiv übrig</span>
+                <span className="tabular-nums">
+                  {formatGrams(preview.remaining)}
+                  {preview.percent != null &&
+                    ` (${formatPercent(preview.percent)})`}
+                </span>
+              </div>
+            </div>
+          )}
+          <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Tara Rolle/Verpackung</span>
               <span>{formatGrams(material.spoolTareWeight)}</span>
@@ -110,37 +139,14 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="w-gross">Gemessenes Gesamtgewicht (g) *</Label>
-            <Input
-              id="w-gross"
-              type="number"
-              min={1}
-              autoFocus
-              value={grossWeight}
-              onChange={(e) => setGrossWeight(e.target.value)}
-              placeholder="z. B. 740"
-            />
-          </div>
-          <div className="grid gap-2">
             <Label htmlFor="w-note">Notiz (optional)</Label>
             <Input
               id="w-note"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={e => setNote(e.target.value)}
               placeholder="z. B. nach Druck von Teil X"
             />
           </div>
-          {preview && (
-            <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
-              <div className="flex justify-between font-medium">
-                <span>Effektiv übrig</span>
-                <span>
-                  {formatGrams(preview.remaining)}
-                  {preview.percent != null && ` (${formatPercent(preview.percent)})`}
-                </span>
-              </div>
-            </div>
-          )}
           <DialogFooter>
             <Button
               type="button"

@@ -21,11 +21,16 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
                 Settings, AdminPresets, AdminProposals, Login, NotFound
-  components/   App-Komponenten + ui/ (shadcn)
+  components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
+                mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
+                (Dialoge + Schnellsuche), ThemeToggle
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
-                format.tsx (bindet die Formatierer an den angemeldeten Benutzer)
+                format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
+                theme.tsx (Farbschema über next-themes)
   hooks/        useAuth, use-mobile
   lib/          formatContext.ts (useFormat), format.ts (Füllstandsfarben),
+                theme.ts (Farbschema-Konstanten + useAppTheme),
+                quickActions.ts (Store der Schnellaktionen),
                 importPrompt.ts, utils.ts (cn-Helfer)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
@@ -187,6 +192,18 @@ die Sandbox ist bewusst wegwerfbar und nie die eigene Entwicklungsdatenbank.
 - ESLint: `js.configs.recommended`, `typescript-eslint`, react-hooks, react-refresh.
 - UI-Komponenten aus shadcn nachnutzen: `import { Button } from "@/components/ui/button"` –
   keine neuen Basis-Komponenten erfinden. Styling über Tailwind + `cn()` aus `src/lib/utils.ts`.
+- **Mobile zuerst denken:** Das Layout gibt den Seitenrand vor (`AuthLayout`),
+  Seiten fangen mit `<PageHeader …>` an und bringen kein eigenes Padding mit.
+  Tabellen sind auf dem Telefon unbedienbar – ab drei Spalten daneben eine
+  Kartenliste stellen (`sm:hidden` / `hidden sm:block`, siehe `Home.tsx`).
+- **Farbschema:** hell/dunkel/System über `useAppTheme()` (`src/lib/theme.ts`).
+  Die Auswahl liegt in `localStorage` unter `theme` und wird zusätzlich vom
+  Inline-Skript in `index.html` vor dem ersten Paint angewendet – Schlüssel und
+  Farbwerte dort und in `src/index.css` müssen zusammenpassen. Keine festen
+  Farben schreiben, sondern die Tokens (`bg-card`, `text-muted-foreground` …).
+- **Häufige Aktionen** hängen am Layout, nicht an einzelnen Seiten: Wiegen,
+  Material anlegen und die Schnellsuche (Strg/⌘ + K) werden über
+  `quickActions` (`src/lib/quickActions.ts`) von überall geöffnet.
 - DB-Schema nur in `db/schema.ts` (+ `relations.ts`) pflegen; Typen über
   `$inferSelect` / `$inferInsert` ableiten, nicht manuell duplizieren.
 - Preise in Cent (`priceCents`), Gewichte in Gramm, Abmessungen in ganzen

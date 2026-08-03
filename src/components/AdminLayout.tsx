@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { ShieldAlert } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/hooks/useAuth";
 
 /**
@@ -22,14 +23,12 @@ export function AdminLayout({
 
   return (
     <AuthLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-            <p className="text-sm text-muted-foreground">{description}</p>
-          </div>
-          {isAdmin && actions}
-        </div>
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <PageHeader
+          title={title}
+          description={description}
+          actions={isAdmin ? actions : undefined}
+        />
 
         {!isLoading && !isAdmin ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">

@@ -1,14 +1,26 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
-import { Package, Plus, Scale, Search, Weight, Archive, Wallet } from "lucide-react";
+import {
+  Archive,
+  ArrowDownUp,
+  ChevronDown,
+  ChevronUp,
+  Package,
+  Plus,
+  Scale,
+  Search,
+  SlidersHorizontal,
+  Wallet,
+  Weight,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
-import { MaterialFormDialog } from "@/components/MaterialFormDialog";
-import { WeighingDialog } from "@/components/WeighingDialog";
+import { PageHeader } from "@/components/PageHeader";
+import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -18,7 +30,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Table,
   TableBody,
@@ -30,14 +50,56 @@ import {
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
+import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
 
 const ALL = "__all__";
+const NO_BOX = "none";
+/** Ab hier gilt ein Material als „niedriger Bestand“ */
+const LOW_STOCK_PERCENT = 25;
+
+const SORT_OPTIONS = [
+  { value: "identifier", label: "Kennung" },
+  { value: "name", label: "Bezeichnung" },
+  { value: "percent", label: "Füllstand" },
+  { value: "remaining", label: "Restmenge" },
+  { value: "purchase", label: "Kaufdatum" },
+] as const;
+
+type SortKey = (typeof SORT_OPTIONS)[number]["value"];
+type SortDir = "asc" | "desc";
+
+/** Vergleich für die gewählte Sortierspalte; leere Werte immer ans Ende. */
+function compareBy(
+  key: SortKey,
+  a: MaterialOverview,
+  b: MaterialOverview
+): number {
+  const text = (x: string | null | undefined, y: string | null | undefined) => {
+    if (!x && !y) return 0;
+    if (!x) return 1;
+    if (!y) return -1;
+    return x.localeCompare(y);
+  };
+  switch (key) {
+    case "identifier":
+      return text(a.identifier, b.identifier);
+    case "name":
+      return text(a.name, b.name);
+    case "percent":
+      return (a.remainingPercent ?? -1) - (b.remainingPercent ?? -1);
+    case "remaining":
+      return a.remainingWeight - b.remainingWeight;
+    case "purchase":
+      return text(a.purchaseDate, b.purchaseDate);
+  }
+}
 
 export default function Home() {
   const navigate = useNavigate();
   const { data: materials, isLoading } = trpc.material.list.useQuery();
   const { formatDate, formatGrams, formatMoney, formatPercent } = useFormat();
+  const { openMaterialForm, openWeighing } = useQuickActions();
 
   const [search, setSearch] = useState("");
   const [identifierLookup, setIdentifierLookup] = useState("");
@@ -45,23 +107,28 @@ export default function Home() {
   const [manufacturerFilter, setManufacturerFilter] = useState(ALL);
   const [boxFilter, setBoxFilter] = useState(ALL);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
-
-  const [formOpen, setFormOpen] = useState(false);
-  const [editing, setEditing] = useState<MaterialOverview | null>(null);
-  const [weighingFor, setWeighingFor] = useState<MaterialOverview | null>(null);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("identifier");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const materialTypes = useMemo(
-    () => [...new Set((materials ?? []).map((m) => m.materialType))].sort(),
-    [materials],
+    () => [...new Set((materials ?? []).map(m => m.materialType))].sort(),
+    [materials]
   );
   const manufacturers = useMemo(
     () =>
-      [...new Set((materials ?? []).map((m) => m.manufacturer).filter((x): x is string => !!x))].sort(),
-    [materials],
+      [
+        ...new Set(
+          (materials ?? [])
+            .map(m => m.manufacturer)
+            .filter((x): x is string => !!x)
+        ),
+      ].sort(),
+    [materials]
   );
   const boxes = useMemo(() => {
     const map = new Map<number, string>();
-    (materials ?? []).forEach((m) => {
+    (materials ?? []).forEach(m => {
       if (m.storageBox) map.set(m.storageBox.id, m.storageBox.name);
     });
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -69,262 +136,527 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (materials ?? []).filter((m) => {
+    return (materials ?? []).filter(m => {
       if (q) {
-        const haystack = [m.name, m.identifier, m.materialType, m.manufacturer, m.color, m.notes]
+        const haystack = [
+          m.name,
+          m.identifier,
+          m.materialType,
+          m.manufacturer,
+          m.color,
+          m.notes,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
       if (typeFilter !== ALL && m.materialType !== typeFilter) return false;
-      if (manufacturerFilter !== ALL && m.manufacturer !== manufacturerFilter) return false;
-      if (boxFilter === "none" && m.storageBoxId != null) return false;
-      if (boxFilter !== ALL && boxFilter !== "none" && m.storageBoxId !== Number(boxFilter))
+      if (manufacturerFilter !== ALL && m.manufacturer !== manufacturerFilter)
         return false;
-      if (onlyLowStock && (m.remainingPercent == null || m.remainingPercent > 25)) return false;
+      if (boxFilter === NO_BOX && m.storageBoxId != null) return false;
+      if (
+        boxFilter !== ALL &&
+        boxFilter !== NO_BOX &&
+        m.storageBoxId !== Number(boxFilter)
+      )
+        return false;
+      if (
+        onlyLowStock &&
+        (m.remainingPercent == null || m.remainingPercent > LOW_STOCK_PERCENT)
+      )
+        return false;
       return true;
     });
-  }, [materials, search, typeFilter, manufacturerFilter, boxFilter, onlyLowStock]);
+  }, [
+    materials,
+    search,
+    typeFilter,
+    manufacturerFilter,
+    boxFilter,
+    onlyLowStock,
+  ]);
+
+  const sorted = useMemo(() => {
+    const factor = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => compareBy(sortKey, a, b) * factor);
+  }, [filtered, sortKey, sortDir]);
 
   const stats = useMemo(() => {
     const list = materials ?? [];
     const totalRemaining = list.reduce((s, m) => s + m.remainingWeight, 0);
     const totalValue = list.reduce((s, m) => {
       if (m.priceCents == null || m.nominalWeight <= 0) return s;
-      return s + Math.round((m.priceCents * m.remainingWeight) / m.nominalWeight);
+      return (
+        s + Math.round((m.priceCents * m.remainingWeight) / m.nominalWeight)
+      );
     }, 0);
-    const lowStock = list.filter((m) => m.remainingPercent != null && m.remainingPercent <= 25).length;
-    return { count: list.length, totalRemaining, totalValue, lowStock };
+    const lowStock = list.filter(
+      m => m.remainingPercent != null && m.remainingPercent <= LOW_STOCK_PERCENT
+    ).length;
+    const inBox = list.filter(m => m.storageBoxId != null).length;
+    return { count: list.length, totalRemaining, totalValue, lowStock, inBox };
   }, [materials]);
 
-  const activeFilters =
-    (typeFilter !== ALL ? 1 : 0) +
-    (manufacturerFilter !== ALL ? 1 : 0) +
-    (boxFilter !== ALL ? 1 : 0) +
-    (onlyLowStock ? 1 : 0);
+  /** Aktive Filter als entfernbare Merkzettel über der Liste */
+  const activeFilters: { key: string; label: string; clear: () => void }[] = [];
+  if (search.trim())
+    activeFilters.push({
+      key: "search",
+      label: `Suche: „${search.trim()}“`,
+      clear: () => setSearch(""),
+    });
+  if (typeFilter !== ALL)
+    activeFilters.push({
+      key: "type",
+      label: typeFilter,
+      clear: () => setTypeFilter(ALL),
+    });
+  if (manufacturerFilter !== ALL)
+    activeFilters.push({
+      key: "manufacturer",
+      label: manufacturerFilter,
+      clear: () => setManufacturerFilter(ALL),
+    });
+  if (boxFilter !== ALL)
+    activeFilters.push({
+      key: "box",
+      label:
+        boxFilter === NO_BOX
+          ? "Ohne Box"
+          : (boxes.find(([id]) => String(id) === boxFilter)?.[1] ?? "Lagerbox"),
+      clear: () => setBoxFilter(ALL),
+    });
+  if (onlyLowStock)
+    activeFilters.push({
+      key: "low",
+      label: `≤ ${LOW_STOCK_PERCENT} % Restbestand`,
+      clear: () => setOnlyLowStock(false),
+    });
+
+  const resetFilters = () => {
+    setSearch("");
+    setTypeFilter(ALL);
+    setManufacturerFilter(ALL);
+    setBoxFilter(ALL);
+    setOnlyLowStock(false);
+  };
+
+  /**
+   * Schnellzugriff: Kennung eintippen und sofort wiegen. Erst exakt suchen,
+   * danach als Teiltreffer – aber nur, wenn genau ein Material passt.
+   */
+  const quickWeigh = (event: React.FormEvent) => {
+    event.preventDefault();
+    const q = identifierLookup.trim().toLowerCase();
+    if (!q) return;
+    const list = materials ?? [];
+    const exact = list.find(m => m.identifier?.toLowerCase() === q);
+    const candidates = exact
+      ? [exact]
+      : list.filter(
+          m =>
+            m.identifier?.toLowerCase().includes(q) ||
+            m.name.toLowerCase().includes(q)
+        );
+    if (candidates.length === 1) {
+      setIdentifierLookup("");
+      openWeighing(candidates[0]);
+      return;
+    }
+    toast.error(
+      candidates.length === 0
+        ? `Kein Material zu „${identifierLookup.trim()}“ gefunden`
+        : `Mehrere Treffer für „${identifierLookup.trim()}“ – bitte die genaue Kennung eingeben`
+    );
+  };
+
+  const toggleSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir(dir => (dir === "asc" ? "desc" : "asc"));
+    else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const filterFields = (
+    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid gap-2">
+        <Label htmlFor="f-type">Materialart</Label>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger id="f-type">
+            <SelectValue placeholder="Materialart" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Alle Materialarten</SelectItem>
+            {materialTypes.map(t => (
+              <SelectItem key={t} value={t}>
+                {t}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="f-manufacturer">Hersteller</Label>
+        <Select
+          value={manufacturerFilter}
+          onValueChange={setManufacturerFilter}
+        >
+          <SelectTrigger id="f-manufacturer">
+            <SelectValue placeholder="Hersteller" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Alle Hersteller</SelectItem>
+            {manufacturers.map(m => (
+              <SelectItem key={m} value={m}>
+                {m}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="f-box">Lagerbox</Label>
+        <Select value={boxFilter} onValueChange={setBoxFilter}>
+          <SelectTrigger id="f-box">
+            <SelectValue placeholder="Lagerbox" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Alle Boxen</SelectItem>
+            <SelectItem value={NO_BOX}>Ohne Box</SelectItem>
+            {boxes.map(([id, name]) => (
+              <SelectItem key={id} value={String(id)}>
+                {name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="grid gap-2">
+        <Label htmlFor="f-sort">Sortierung</Label>
+        <div className="flex gap-2">
+          <Select
+            value={sortKey}
+            onValueChange={value => setSortKey(value as SortKey)}
+          >
+            <SelectTrigger id="f-sort" className="flex-1">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map(option => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label={
+              sortDir === "asc" ? "Aufsteigend sortiert" : "Absteigend sortiert"
+            }
+            onClick={() => setSortDir(dir => (dir === "asc" ? "desc" : "asc"))}
+          >
+            {sortDir === "asc" ? (
+              <ChevronUp className="h-4 w-4" />
+            ) : (
+              <ChevronDown className="h-4 w-4" />
+            )}
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2 md:col-span-4">
+        <Label htmlFor="low-stock" className="font-normal">
+          Nur niedriger Bestand (≤ {LOW_STOCK_PERCENT} %)
+        </Label>
+        <Switch
+          id="low-stock"
+          checked={onlyLowStock}
+          onCheckedChange={setOnlyLowStock}
+        />
+      </div>
+    </div>
+  );
 
   return (
     <AuthLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Materialübersicht</h1>
-            <p className="text-sm text-muted-foreground">
-              Dein 3D-Druck-Materiallager auf einen Blick
-            </p>
-          </div>
-          <Button
-            onClick={() => {
-              setEditing(null);
-              setFormOpen(true);
-            }}
-          >
-            <Plus className="mr-2 h-4 w-4" /> Neues Material
-          </Button>
-        </div>
+      <div className="flex flex-col gap-4 sm:gap-6">
+        <PageHeader
+          title="Materialübersicht"
+          description="Dein 3D-Druck-Materiallager auf einen Blick"
+          actions={
+            <Button
+              className="w-full sm:w-auto"
+              onClick={() => openMaterialForm()}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Neues Material
+            </Button>
+          }
+        />
 
-        {/* Statistik-Karten */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Materialien</CardTitle>
-              <Package className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.count}</div>
-              <p className="text-xs text-muted-foreground">
-                {stats.lowStock > 0 ? `${stats.lowStock} mit niedrigem Bestand` : "alle ausreichend befüllt"}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Restmenge gesamt</CardTitle>
-              <Weight className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatGrams(stats.totalRemaining)}</div>
-              <p className="text-xs text-muted-foreground">effektiv verfügbar (ohne Tara)</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Restwert</CardTitle>
-              <Wallet className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{formatMoney(stats.totalValue)}</div>
-              <p className="text-xs text-muted-foreground">anteilig nach Restmenge</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">In Drybox</CardTitle>
-              <Archive className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {(materials ?? []).filter((m) => m.storageBoxId != null).length}
-              </div>
-              <p className="text-xs text-muted-foreground">Materialien mit Lagerbox</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Suche & Filter */}
+        {/* Schnellzugriff: Kennung von der Rolle ablesen und sofort wiegen */}
         <Card>
-          <CardContent className="pt-6">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-              <div className="relative lg:col-span-2">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  placeholder="Suche nach Kennung, Name, Art, Hersteller, Farbe …"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Materialart" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Alle Materialarten</SelectItem>
-                  {materialTypes.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={manufacturerFilter} onValueChange={setManufacturerFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Hersteller" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Alle Hersteller</SelectItem>
-                  {manufacturers.map((m) => (
-                    <SelectItem key={m} value={m}>
-                      {m}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select value={boxFilter} onValueChange={setBoxFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Lagerbox" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Alle Boxen</SelectItem>
-                  <SelectItem value="none">Ohne Box</SelectItem>
-                  {boxes.map(([id, name]) => (
-                    <SelectItem key={id} value={String(id)}>
-                      {name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="mt-4 flex flex-wrap items-center gap-4">
-              {/* Schnellzugriff per Kennung: Material finden und direkt wiegen */}
-              <form
-                className="flex items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const q = identifierLookup.trim().toLowerCase();
-                  if (!q) return;
-                  const hit = (materials ?? []).find(
-                    (m) => m.identifier?.toLowerCase() === q,
-                  );
-                  if (hit) setWeighingFor(hit);
-                  else toast.error(`Kein Material mit Kennung „${identifierLookup.trim()}“ gefunden`);
-                }}
-              >
-                <Label htmlFor="identifier-lookup" className="text-sm font-normal whitespace-nowrap">
-                  Schnellzugriff:
-                </Label>
+          <CardContent className="p-3 sm:p-4">
+            <form className="flex gap-2" onSubmit={quickWeigh}>
+              <div className="relative min-w-0 flex-1">
+                <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   id="identifier-lookup"
-                  className="w-32"
-                  placeholder="Kennung"
+                  className="h-11 pl-9"
+                  placeholder="Kennung eingeben, z. B. F01"
+                  autoComplete="off"
                   value={identifierLookup}
-                  onChange={(e) => setIdentifierLookup(e.target.value)}
+                  onChange={e => setIdentifierLookup(e.target.value)}
+                  aria-label="Kennung für Schnellzugriff"
                 />
-                <Button type="submit" size="sm" variant="secondary">
-                  <Scale className="mr-1.5 h-3.5 w-3.5" /> Wiegen
-                </Button>
-              </form>
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="low-stock"
-                  checked={onlyLowStock}
-                  onCheckedChange={(v) => setOnlyLowStock(v === true)}
-                />
-                <Label htmlFor="low-stock" className="text-sm font-normal">
-                  Nur niedriger Bestand (≤ 25 %)
-                </Label>
               </div>
-              {activeFilters > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setTypeFilter(ALL);
-                    setManufacturerFilter(ALL);
-                    setBoxFilter(ALL);
-                    setOnlyLowStock(false);
-                    setSearch("");
-                  }}
-                >
-                  Filter zurücksetzen ({activeFilters})
-                </Button>
-              )}
-            </div>
+              <Button type="submit" className="h-11 shrink-0">
+                <Scale className="mr-2 h-4 w-4" /> Wiegen
+              </Button>
+            </form>
           </CardContent>
         </Card>
 
-        {/* Tabelle */}
-        <Card>
-          <CardContent className="pt-6">
-            {isLoading ? (
-              <div className="space-y-3">
-                {[...Array(4)].map((_, i) => (
-                  <Skeleton key={i} className="h-12 w-full" />
-                ))}
-              </div>
-            ) : filtered.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-12 text-center">
-                <Package className="h-10 w-10 text-muted-foreground/50" />
-                <p className="font-medium">
-                  {(materials ?? []).length === 0
-                    ? "Noch keine Materialien im Lager"
-                    : "Keine Treffer für die aktuellen Filter"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {(materials ?? []).length === 0
-                    ? "Lege dein erstes Filament an – mit Rolle, Gewicht und Preis."
-                    : "Passe Suche oder Filter an."}
-                </p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
+        {/* Kennzahlen – zwei Spalten auf dem Telefon, vier ab dem Laptop */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            icon={<Package className="h-4 w-4" />}
+            label="Materialien"
+            value={String(stats.count)}
+            hint={
+              stats.lowStock > 0
+                ? `${stats.lowStock} mit niedrigem Bestand`
+                : "alle ausreichend befüllt"
+            }
+            highlight={stats.lowStock > 0}
+            onClick={
+              stats.lowStock > 0 ? () => setOnlyLowStock(v => !v) : undefined
+            }
+            active={onlyLowStock}
+          />
+          <StatCard
+            icon={<Weight className="h-4 w-4" />}
+            label="Restmenge"
+            value={formatGrams(stats.totalRemaining)}
+            hint="effektiv verfügbar (ohne Tara)"
+          />
+          <StatCard
+            icon={<Wallet className="h-4 w-4" />}
+            label="Restwert"
+            value={formatMoney(stats.totalValue)}
+            hint="anteilig nach Restmenge"
+          />
+          <StatCard
+            icon={<Archive className="h-4 w-4" />}
+            label="In Drybox"
+            value={String(stats.inBox)}
+            hint="Materialien mit Lagerbox"
+          />
+        </div>
+
+        {/* Suche und Filter */}
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="h-10 pl-9"
+                placeholder="Suchen …"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                aria-label="Materialien durchsuchen"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Suche leeren"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {/* Auf dem Telefon liegen die Filter in einer Schublade, sonst
+                bräuchte man vier Bildschirmhöhen bis zur Liste. */}
+            <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="h-10 md:hidden">
+                  <SlidersHorizontal className="mr-2 h-4 w-4" />
+                  Filter
+                  {activeFilters.length > 0 && (
+                    <Badge className="ml-2 h-5 min-w-5 justify-center px-1">
+                      {activeFilters.length}
+                    </Badge>
+                  )}
+                </Button>
+              </SheetTrigger>
+              <SheetContent
+                side="bottom"
+                className="max-h-[85vh] overflow-y-auto rounded-t-xl p-4"
+              >
+                <SheetHeader className="p-0">
+                  <SheetTitle>Filter und Sortierung</SheetTitle>
+                </SheetHeader>
+                {filterFields}
+                <div className="flex gap-2 pb-safe">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={resetFilters}
+                    disabled={activeFilters.length === 0}
+                  >
+                    Zurücksetzen
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={() => setFilterSheetOpen(false)}
+                  >
+                    {sorted.length} anzeigen
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          <div className="hidden md:block">
+            <Card>
+              <CardContent className="p-4">{filterFields}</CardContent>
+            </Card>
+          </div>
+
+          {activeFilters.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {activeFilters.map(filter => (
+                <Badge
+                  key={filter.key}
+                  variant="secondary"
+                  className="gap-1 py-1 pl-2.5 pr-1 font-normal"
+                >
+                  {filter.label}
+                  <button
+                    type="button"
+                    onClick={filter.clear}
+                    aria-label={`Filter „${filter.label}“ entfernen`}
+                    className="rounded-full p-0.5 hover:bg-background/60"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                Alle zurücksetzen
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Liste */}
+        {isLoading ? (
+          <div className="space-y-3">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-20 w-full rounded-xl md:h-12" />
+            ))}
+          </div>
+        ) : sorted.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Package className="h-10 w-10 text-muted-foreground/50" />
+              <p className="font-medium">
+                {(materials ?? []).length === 0
+                  ? "Noch keine Materialien im Lager"
+                  : "Keine Treffer für die aktuellen Filter"}
+              </p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {(materials ?? []).length === 0
+                  ? "Lege dein erstes Filament an – mit Rolle, Gewicht und Preis."
+                  : "Passe Suche oder Filter an."}
+              </p>
+              {(materials ?? []).length === 0 ? (
+                <Button onClick={() => openMaterialForm()}>
+                  <Plus className="mr-2 h-4 w-4" /> Erstes Material anlegen
+                </Button>
+              ) : (
+                <Button variant="outline" onClick={resetFilters}>
+                  Filter zurücksetzen
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Telefon: Karten statt einer neunspaltigen Tabelle */}
+            <div className="flex flex-col gap-3 md:hidden">
+              <p className="text-xs text-muted-foreground">
+                {sorted.length} von {stats.count} Materialien
+              </p>
+              {sorted.map(material => (
+                <MaterialCard
+                  key={material.id}
+                  material={material}
+                  onOpen={() => navigate(`/material/${material.id}`)}
+                  onWeigh={() => openWeighing(material)}
+                />
+              ))}
+            </div>
+
+            {/* Ab dem Tablet: Tabelle mit sortierbaren Spaltenköpfen */}
+            <Card className="hidden md:block">
+              <CardContent className="p-0">
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Kennung</TableHead>
-                      <TableHead>Material</TableHead>
+                      <SortableHead
+                        label="Kennung"
+                        sortKey="identifier"
+                        activeKey={sortKey}
+                        dir={sortDir}
+                        onSort={toggleSort}
+                      />
+                      <SortableHead
+                        label="Material"
+                        sortKey="name"
+                        activeKey={sortKey}
+                        dir={sortDir}
+                        onSort={toggleSort}
+                      />
                       <TableHead>Art</TableHead>
-                      <TableHead>Hersteller</TableHead>
-                      <TableHead className="min-w-[180px]">Restmenge</TableHead>
-                      <TableHead>Rolle / Box</TableHead>
-                      <TableHead>Preis</TableHead>
-                      <TableHead>Kaufdatum</TableHead>
+                      {/* Spalten fallen zuerst weg, die anderswo ohnehin
+                          stehen – sonst rutscht die Aktionsspalte aus dem
+                          Blick und „Wiegen“ ist nur noch scrollbar. */}
+                      <TableHead className="hidden xl:table-cell">
+                        Hersteller
+                      </TableHead>
+                      <SortableHead
+                        label="Restmenge"
+                        sortKey="percent"
+                        activeKey={sortKey}
+                        dir={sortDir}
+                        onSort={toggleSort}
+                        className="min-w-[180px]"
+                      />
+                      <TableHead className="hidden 2xl:table-cell">
+                        Rolle / Box
+                      </TableHead>
+                      <TableHead className="hidden lg:table-cell">
+                        Preis
+                      </TableHead>
+                      <SortableHead
+                        label="Kaufdatum"
+                        sortKey="purchase"
+                        activeKey={sortKey}
+                        dir={sortDir}
+                        onSort={toggleSort}
+                        className="hidden lg:table-cell"
+                      />
                       <TableHead className="text-right">Aktionen</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((m) => (
+                    {sorted.map(m => (
                       <TableRow
                         key={m.id}
                         className="cursor-pointer"
@@ -339,16 +671,20 @@ export default function Home() {
                             <span className="text-muted-foreground">–</span>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <div className="font-medium">{m.name}</div>
+                        <TableCell className="max-w-[260px]">
+                          <div className="truncate font-medium">{m.name}</div>
                           {m.color && (
-                            <div className="text-xs text-muted-foreground">{m.color}</div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {m.color}
+                            </div>
                           )}
                         </TableCell>
                         <TableCell>
                           <Badge variant="secondary">{m.materialType}</Badge>
                         </TableCell>
-                        <TableCell>{m.manufacturer ?? "–"}</TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          {m.manufacturer ?? "–"}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
@@ -358,45 +694,44 @@ export default function Home() {
                               />
                             </div>
                             <span
-                              className={`text-sm font-medium whitespace-nowrap ${fillLevelTextColor(m.remainingPercent)}`}
+                              className={`whitespace-nowrap text-sm font-medium ${fillLevelTextColor(m.remainingPercent)}`}
                             >
                               {formatGrams(m.remainingWeight)}
                               {m.remainingPercent != null && (
-                                <span className="text-muted-foreground font-normal">
-                                  {" "}({formatPercent(m.remainingPercent)})
+                                <span className="font-normal text-muted-foreground">
+                                  {" "}
+                                  ({formatPercent(m.remainingPercent)})
                                 </span>
                               )}
                             </span>
                           </div>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">
+                        <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
                           <div>{m.spoolLabel ?? "–"}</div>
                           {m.storageBox && (
                             <div className="flex items-center gap-1 text-xs">
-                              <Archive className="h-3 w-3" /> {m.storageBox.name}
+                              <Archive className="h-3 w-3" />{" "}
+                              {m.storageBox.name}
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>{formatMoney(m.priceCents)}</TableCell>
-                        <TableCell>{formatDate(m.purchaseDate)}</TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {formatMoney(m.priceCents)}
+                        </TableCell>
+                        <TableCell className="hidden lg:table-cell">
+                          {formatDate(m.purchaseDate)}
+                        </TableCell>
                         <TableCell className="text-right">
                           <div
                             className="flex justify-end gap-1"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={e => e.stopPropagation()}
                           >
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setWeighingFor(m)}
+                              onClick={() => openWeighing(m)}
                             >
                               <Scale className="mr-1 h-3.5 w-3.5" /> Wiegen
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => navigate(`/material/${m.id}`)}
-                            >
-                              Details
                             </Button>
                           </div>
                         </TableCell>
@@ -404,18 +739,184 @@ export default function Home() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
-
-      <MaterialFormDialog open={formOpen} onOpenChange={setFormOpen} material={editing} />
-      <WeighingDialog
-        open={weighingFor != null}
-        onOpenChange={(o) => !o && setWeighingFor(null)}
-        material={weighingFor}
-      />
     </AuthLayout>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  hint,
+  highlight,
+  active,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  hint: string;
+  highlight?: boolean;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-muted-foreground sm:text-sm">
+          {label}
+        </span>
+        <span
+          className={cn(
+            "text-muted-foreground",
+            highlight && "text-orange-600 dark:text-orange-400"
+          )}
+        >
+          {icon}
+        </span>
+      </div>
+      <div className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">
+        {value}
+      </div>
+      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        className={cn(
+          "rounded-xl border bg-card p-3 text-left shadow-sm transition-colors sm:p-4",
+          "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          active && "border-primary bg-accent"
+        )}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border bg-card p-3 shadow-sm sm:p-4">
+      {content}
+    </div>
+  );
+}
+
+function SortableHead({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onSort,
+  className,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  dir: SortDir;
+  onSort: (key: SortKey) => void;
+  className?: string;
+}) {
+  const isActive = sortKey === activeKey;
+  return (
+    <TableHead className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className="-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={`Nach ${label} sortieren`}
+      >
+        {label}
+        {isActive ? (
+          dir === "asc" ? (
+            <ChevronUp className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="h-3.5 w-3.5" />
+          )
+        ) : (
+          <ArrowDownUp className="h-3 w-3 opacity-40" />
+        )}
+      </button>
+    </TableHead>
+  );
+}
+
+function MaterialCard({
+  material,
+  onOpen,
+  onWeigh,
+}: {
+  material: MaterialOverview;
+  onOpen: () => void;
+  onWeigh: () => void;
+}) {
+  const { formatGrams, formatPercent } = useFormat();
+
+  return (
+    <div className="rounded-xl border bg-card shadow-sm">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="w-full rounded-t-xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {material.identifier && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {material.identifier}
+                </Badge>
+              )}
+              <span className="truncate font-medium">{material.name}</span>
+            </div>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {[material.materialType, material.manufacturer, material.color]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          </div>
+          <span
+            className={`shrink-0 text-sm font-semibold tabular-nums ${fillLevelTextColor(material.remainingPercent)}`}
+          >
+            {material.remainingPercent != null
+              ? formatPercent(material.remainingPercent)
+              : "–"}
+          </span>
+        </div>
+
+        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={`h-full ${fillLevelColor(material.remainingPercent)}`}
+            style={{ width: `${material.remainingPercent ?? 0}%` }}
+          />
+        </div>
+
+        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {formatGrams(material.remainingWeight)} übrig
+          </span>
+          {material.storageBox && (
+            <span className="flex min-w-0 items-center gap-1">
+              <Archive className="h-3 w-3 shrink-0" />
+              <span className="truncate">{material.storageBox.name}</span>
+            </span>
+          )}
+        </div>
+      </button>
+      <div className="border-t p-2">
+        <Button variant="ghost" className="h-10 w-full" onClick={onWeigh}>
+          <Scale className="mr-2 h-4 w-4" /> Wiegen
+        </Button>
+      </div>
+    </div>
   );
 }

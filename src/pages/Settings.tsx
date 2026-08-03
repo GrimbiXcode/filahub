@@ -1,5 +1,7 @@
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
+import { PageHeader } from "@/components/PageHeader";
+import { ThemeSegmentedControl } from "@/components/ThemeToggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import {
@@ -15,7 +17,12 @@ import {
   type CurrencyCode,
   type LocaleCode,
 } from "@contracts/locale";
-import { currencySymbol, formatDate, formatGrams, formatMoney } from "@contracts/format";
+import {
+  currencySymbol,
+  formatDate,
+  formatGrams,
+  formatMoney,
+} from "@contracts/format";
 import { browserLocale, useFormat } from "@/lib/formatContext";
 import { trpc } from "@/lib/trpc";
 
@@ -43,20 +50,32 @@ export default function Settings() {
 
   return (
     <AuthLayout>
-      <div className="flex flex-col gap-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Einstellungen</h1>
-          <p className="text-sm text-muted-foreground">
-            Währung und Zahlenformate gelten nur für dein Konto
-          </p>
-        </div>
+      <div className="flex max-w-2xl flex-col gap-4 sm:gap-6">
+        <PageHeader
+          title="Einstellungen"
+          description="Darstellung, Währung und Zahlenformate"
+        />
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Erscheinungsbild</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <ThemeSegmentedControl />
+            <p className="text-xs text-muted-foreground">
+              „System“ folgt der Einstellung deines Geräts. Das Farbschema wird
+              lokal gespeichert und gilt deshalb pro Gerät – am Telefon darf es
+              dunkel sein, während der Rechner hell bleibt.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">Währung</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="grid max-w-sm gap-2">
+            <div className="grid gap-2 sm:max-w-sm">
               <Label htmlFor="s-currency">Anzeigewährung</Label>
               <Select
                 value={currency}
@@ -85,11 +104,11 @@ export default function Settings() {
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-base">Regionalformat</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="grid max-w-sm gap-2">
+            <div className="grid gap-2 sm:max-w-sm">
               <Label htmlFor="s-locale">Zahlen- und Datumsformat</Label>
               <Select
                 value={localeSetting ?? AUTO}
@@ -115,14 +134,18 @@ export default function Settings() {
                 </SelectContent>
               </Select>
             </div>
-            <dl className="grid max-w-sm gap-1 rounded-lg border p-3 text-sm">
+            <dl className="grid gap-1 rounded-lg border p-3 text-sm sm:max-w-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">Datum</dt>
-                <dd className="font-medium">{formatDate(PREVIEW_DATE, locale)}</dd>
+                <dd className="font-medium">
+                  {formatDate(PREVIEW_DATE, locale)}
+                </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">Gewicht</dt>
-                <dd className="font-medium">{formatGrams(PREVIEW_GRAMS, locale)}</dd>
+                <dd className="font-medium">
+                  {formatGrams(PREVIEW_GRAMS, locale)}
+                </dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">Preis</dt>
