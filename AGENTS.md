@@ -74,6 +74,7 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 | `npm run test:integration`           | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`)                                    |
 | `npm run lint`                       | ESLint (Flat-Config)                                                                                     |
 | `npm run format`                     | Prettier über das Repo – ohne generierte und upstream-nahe Dateien, siehe `.prettierignore`              |
+| `npm run format:check`               | Prüft dieselben Dateien, ohne sie zu ändern (läuft in der CI)                                            |
 | `npm run db:push`                    | Drizzle-Schema direkt in die DB synchronisieren                                                          |
 | `npm run db:generate` / `db:migrate` | Migrationen erzeugen / anwenden (Output: `db/migrations/`)                                               |
 | `npm run db:seed`                    | Startkatalog der Presets einspielen (idempotent)                                                         |
@@ -295,7 +296,9 @@ TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
   npm run test:integration
 ```
 
-- Vor einem Commit mindestens `npm run check` (und `npm run lint`) laufen lassen.
+- Vor einem Commit mindestens `npm run check`, `npm run lint` und
+  `npm run format` laufen lassen – die CI prüft alle drei (`format:check`
+  schlägt bei unformatierten Dateien fehl).
 
 ## Deployment
 
