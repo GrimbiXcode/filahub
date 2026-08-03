@@ -18,7 +18,9 @@
     --muted-foreground: 240 3.8% 46.1%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    /* Dunkleres Rot als der shadcn-Standard: mit weißer Schrift bzw. auf
+       weißem Grund erreicht es so den AA-Kontrast. */
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
@@ -37,30 +39,32 @@
   .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
+    /* Karten und Popover liegen bewusst etwas über dem Hintergrund – die App
+       ist kartenlastig, ohne Abstufung verschwimmt alles zu einer Fläche. */
+    --card: 240 8% 7.5%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
+    --popover: 240 8% 8.5%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
     --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
+    --secondary: 240 4% 16%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --muted: 240 4% 16%;
+    --muted-foreground: 240 5% 68%;
+    --accent: 240 4% 18%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
+    --border: 240 4% 20%;
+    --input: 240 4% 22%;
+    --ring: 240 5% 70%;
+    --sidebar-background: 240 8% 6%;
+    --sidebar-foreground: 240 5% 90%;
+    --sidebar-primary: 0 0% 98%;
+    --sidebar-primary-foreground: 240 5.9% 10%;
+    --sidebar-accent: 240 4% 16%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 240 4% 18%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
 }
@@ -69,9 +73,11 @@
   * {
     @apply border-border;
   }
+  /* Fallback: next-themes setzt `color-scheme` selbst, vor dem Hydrieren
+     zählt aber das Inline-Skript aus index.html bzw. diese Regeln. Ohne
+     Angabe erben eingebettete iframes das Systemschema und rendern
+     transparente Flächen schwarz. */
   :root {
-    /* App ist hell; ohne Angabe erben eingebettete iframes den
-       Dark-Mode des Systems und rendern transparente Flaechen schwarz */
     color-scheme: light;
   }
   .dark {
@@ -79,9 +85,29 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Kein graues Aufblitzen beim Antippen auf Android */
+    -webkit-tap-highlight-color: transparent;
   }
   /* Telegram-Login-Widget: Iframe-Canvas explizit hell halten */
   iframe[src*="oauth.telegram.org"] {
     color-scheme: light;
+  }
+}
+
+@layer utilities {
+  /* Platz für die Gestensteuerung am unteren Rand (iPhone, Android-Gesten) */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

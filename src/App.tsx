@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SETTINGS_PATH } from "@/const";
 import { Toaster } from "@/components/ui/sonner";
+import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
 import AdminProposals from "./pages/AdminProposals";
 import Home from "./pages/Home";
@@ -14,6 +15,8 @@ import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 
 export default function App() {
+  const isMobile = useIsMobile();
+
   return (
     <ErrorBoundary>
       <Routes>
@@ -28,7 +31,12 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
-      <Toaster richColors position="bottom-right" />
+      {/* Auf dem Telefon oben: unten rechts würde die Meldung den
+          Aktionsknopf über der Materialliste verdecken. */}
+      <Toaster
+        richColors
+        position={isMobile ? "top-center" : "bottom-right"}
+      />
     </ErrorBoundary>
   );
 }

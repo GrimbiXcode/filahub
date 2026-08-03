@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { decodeSpoolRef, encodeSpoolRef } from "@contracts/presets";
+import {
+  decodeSpoolRef,
+  encodeSpoolRef,
+  formatNominalWeight,
+} from "@contracts/presets";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
 import { NO_SPOOL, SpoolPicker } from "@/components/SpoolPicker";
 import { Button } from "@/components/ui/button";
@@ -34,6 +38,9 @@ type Props = {
 };
 
 const NONE = "__none__";
+
+/** Übliche Netto-Füllmengen einer Spule in Gramm */
+const COMMON_NOMINAL_WEIGHTS = [250, 500, 750, 1000] as const;
 
 /** Baut die Bezeichnung aus Hersteller + Typ + Farbe. */
 function buildAutoName(manufacturer: string, type: string, color: string) {
@@ -208,17 +215,27 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{isEdit ? "Material bearbeiten" : "Neues Material"}</DialogTitle>
+      {/* Kopf und Fußzeile bleiben stehen, nur die Felder scrollen – auf dem
+          Telefon sonst ein weiter Weg zurück zum Speichern-Knopf. */}
+      <DialogContent
+        className="flex max-h-[92vh] flex-col gap-0 p-0 sm:max-w-2xl"
+        // Ohne das legt Radix den Fokus auf das erste Feld – die
+        // Vorschlagsliste klappt sofort auf und verdeckt auf dem Telefon
+        // das halbe Formular, dazu springt die Tastatur hoch.
+        onOpenAutoFocus={event => event.preventDefault()}
+      >
+        <DialogHeader className="border-b p-4 sm:p-6">
+          <DialogTitle>
+            {isEdit ? "Material bearbeiten" : "Neues Material"}
+          </DialogTitle>
           <DialogDescription>
             {isEdit
               ? "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet."
               : "Lege ein neues Filament an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen."}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
             <div className="grid gap-2">
               <Label htmlFor="m-type">Materialart *</Label>
               <AutocompleteInput
@@ -295,11 +312,29 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Input
                 id="m-nominal"
                 type="number"
+                inputMode="numeric"
                 min={1}
                 value={nominalWeight}
                 onChange={(e) => setNominalWeight(e.target.value)}
                 placeholder="z. B. 1000"
               />
+              {/* Die vier üblichen Spulengrößen als Knopf – spart auf dem
+                  Telefon das Eintippen. */}
+              <div className="flex flex-wrap gap-1.5">
+                {COMMON_NOMINAL_WEIGHTS.map((grams) => (
+                  <Button
+                    key={grams}
+                    type="button"
+                    size="sm"
+                    variant={
+                      parseInt(nominalWeight, 10) === grams ? "secondary" : "outline"
+                    }
+                    onClick={() => setNominalWeight(String(grams))}
+                  >
+                    {formatNominalWeight(grams)}
+                  </Button>
+                ))}
+              </div>
             </div>
             <div className="grid gap-2">
               <Label>Rolle / Verpackung</Label>
@@ -364,7 +399,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="border-t bg-background p-4 sm:p-6 sm:py-4">
             <Button
               type="button"
               variant="outline"

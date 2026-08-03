@@ -4,6 +4,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -23,7 +27,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { LOGIN_PATH, SETTINGS_PATH } from "@/const";
-import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Archive,
   Disc3,
@@ -32,12 +35,27 @@ import {
   LayoutDashboard,
   Library,
   LogOut,
+  Monitor,
+  Moon,
   PanelLeft,
+  Scale,
+  Search,
   Settings,
+  Sun,
 } from "lucide-react";
-import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigate } from "react-router";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
+import { QuickActionsHost } from "./QuickActions";
+import { useQuickActions } from "@/lib/quickActions";
+import { ThemeToggle } from "./ThemeToggle";
+import { THEMES, THEME_LABELS, useAppTheme, type Theme } from "@/lib/theme";
 import { Button } from "./ui/button";
 
 const menuItems = [
@@ -53,16 +71,35 @@ const adminMenuItems = [
   { icon: Inbox, label: "Vorschläge", path: "/verwaltung/vorschlaege" },
 ];
 
+const THEME_ICONS: Record<Theme, typeof Sun> = {
+  light: Sun,
+  dark: Moon,
+  system: Monitor,
+};
+
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
 const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 
-export default function AuthLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
+/** Tastenkürzel beschriften – auf dem Mac ⌘, sonst Strg */
+const isMac =
+  typeof navigator !== "undefined" &&
+  /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+const SEARCH_SHORTCUT = isMac ? "⌘K" : "Strg K";
+
+/** Titel für die Kopfzeile auf schmalen Geräten */
+function titleForPath(pathname: string): string {
+  const item = [...menuItems, ...adminMenuItems].find(
+    entry => entry.path === pathname
+  );
+  if (item) return item.label;
+  if (pathname === SETTINGS_PATH) return "Einstellungen";
+  if (pathname.startsWith("/material/")) return "Material";
+  return "Filament-Lager";
+}
+
+export default function AuthLayout({ children }: { children: ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
@@ -79,13 +116,13 @@ export default function AuthLayout({
 
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
-          <div className="flex flex-col items-center gap-6">
-            <h1 className="text-2xl font-semibold tracking-tight text-center">
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <div className="flex w-full max-w-md flex-col items-center gap-8">
+          <div className="flex flex-col items-center gap-4">
+            <h1 className="text-center text-2xl font-semibold tracking-tight">
               Bitte anmelden
             </h1>
-            <p className="text-sm text-muted-foreground text-center max-w-sm">
+            <p className="max-w-sm text-center text-sm text-muted-foreground">
               Für den Zugriff auf dein Materiallager ist eine Anmeldung
               erforderlich.
             </p>
@@ -95,7 +132,7 @@ export default function AuthLayout({
               window.location.href = LOGIN_PATH;
             }}
             size="lg"
-            className="w-full shadow-lg hover:shadow-xl transition-all"
+            className="w-full"
           >
             Anmelden
           </Button>
@@ -131,17 +168,21 @@ function AuthLayoutContent({
   const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpenMobile } = useSidebar();
+  const { openPalette } = useQuickActions();
+  const { theme, setTheme } = useAppTheme();
   const isCollapsed = state === "collapsed";
   const [isDragging, setIsDragging] = useState(false);
   // In der eingeklappten Leiste gibt es nichts zu ziehen – abgeleitet statt
   // per Effekt zurückgesetzt.
   const isResizing = isDragging && !isCollapsed;
   const sidebarRef = useRef<HTMLDivElement>(null);
-  const activeMenuItem = [...menuItems, ...adminMenuItems].find(
-    item => item.path === location.pathname,
-  );
-  const isMobile = useIsMobile();
+
+  /** Navigieren und dabei die ausgefahrene Leiste auf dem Telefon schließen */
+  const go = (path: string) => {
+    setOpenMobile(false);
+    navigate(path);
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -176,31 +217,60 @@ function AuthLayoutContent({
   return (
     <>
       <div className="relative" ref={sidebarRef}>
-        <Sidebar
-          collapsible="icon"
-          className="border-r-0"
-
-        >
+        <Sidebar collapsible="icon" className="border-r-0">
           <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
+            <div className="flex w-full items-center gap-3 px-2 transition-all">
               <button
                 onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                aria-label="Navigation ein-/ausklappen"
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Filament-Lager
-                  </span>
-                </div>
+                <span className="truncate font-semibold tracking-tight">
+                  Filament-Lager
+                </span>
               ) : null}
             </div>
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            {/* Häufigste Aktionen ganz oben: wiegen und suchen */}
+            <SidebarMenu className="px-2 py-1">
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setOpenMobile(false);
+                    openPalette("weigh");
+                  }}
+                  tooltip="Material wiegen"
+                  className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                >
+                  <Scale className="h-4 w-4" />
+                  <span>Wiegen</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => {
+                    setOpenMobile(false);
+                    openPalette();
+                  }}
+                  tooltip={`Suchen (${SEARCH_SHORTCUT})`}
+                  className="h-10 font-normal text-muted-foreground"
+                >
+                  <Search className="h-4 w-4" />
+                  <span>Suchen …</span>
+                  <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
+                    {SEARCH_SHORTCUT}
+                  </kbd>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+
+            <SidebarSeparator className="my-2" />
+
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
                 const isActive = location.pathname === item.path;
@@ -208,9 +278,9 @@ function AuthLayoutContent({
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
-                      onClick={() => navigate(item.path)}
+                      onClick={() => go(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className="h-10 font-normal transition-all"
                     >
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
@@ -234,9 +304,9 @@ function AuthLayoutContent({
                         <SidebarMenuItem key={item.path}>
                           <SidebarMenuButton
                             isActive={isActive}
-                            onClick={() => navigate(item.path)}
+                            onClick={() => go(item.path)}
                             tooltip={item.label}
-                            className={`h-10 transition-all font-normal`}
+                            className="h-10 font-normal transition-all"
                           >
                             <item.icon
                               className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
@@ -257,9 +327,9 @@ function AuthLayoutContent({
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === SETTINGS_PATH}
-                  onClick={() => navigate(SETTINGS_PATH)}
+                  onClick={() => go(SETTINGS_PATH)}
                   tooltip="Einstellungen"
-                  className="h-10 transition-all font-normal"
+                  className="h-10 font-normal transition-all"
                 >
                   <Settings
                     className={`h-4 w-4 ${
@@ -272,8 +342,8 @@ function AuthLayoutContent({
             </SidebarMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                  <Avatar className="h-9 w-9 border shrink-0">
+                <button className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center">
+                  <Avatar className="h-9 w-9 shrink-0 border">
                     {user?.avatar && (
                       <AvatarImage
                         src={user.avatar}
@@ -284,55 +354,97 @@ function AuthLayoutContent({
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
-                    <p className="text-sm font-medium truncate leading-none">
+                  <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                    <p className="truncate text-sm font-medium leading-none">
                       {user?.name || "-"}
                     </p>
-                    <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.telegramUsername ? `@${user.telegramUsername}` : "-"}
+                    <p className="mt-1.5 truncate text-xs text-muted-foreground">
+                      {user?.telegramUsername
+                        ? `@${user.telegramUsername}`
+                        : "-"}
                     </p>
                   </div>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                  Farbschema
+                </DropdownMenuLabel>
+                <DropdownMenuRadioGroup
+                  value={theme}
+                  onValueChange={value => setTheme(value as Theme)}
+                >
+                  {THEMES.map(value => {
+                    const Icon = THEME_ICONS[value];
+                    return (
+                      <DropdownMenuRadioItem key={value} value={value}>
+                        <Icon className="mr-2 h-4 w-4" />
+                        {THEME_LABELS[value]}
+                      </DropdownMenuRadioItem>
+                    );
+                  })}
+                </DropdownMenuRadioGroup>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={logout}
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Sign out</span>
+                  <span>Abmelden</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarFooter>
         </Sidebar>
+        {/* Ziehgriff nur am Zeigergerät – auf dem Telefon liegt die Leiste
+            als Overlay über der Seite und hat nichts zu ziehen. */}
         <div
-          className={`absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-primary/20 transition-colors ${isCollapsed ? "hidden" : ""}`}
+          className={`absolute right-0 top-0 z-50 hidden h-full w-1 cursor-col-resize transition-colors hover:bg-primary/20 md:block ${
+            isCollapsed ? "md:hidden" : ""
+          }`}
           onMouseDown={() => {
             if (isCollapsed) return;
             setIsDragging(true);
           }}
-          style={{ zIndex: 50 }}
         />
       </div>
 
-      <SidebarInset>
-        {isMobile && (
-          <div className="flex border-b h-14 items-center justify-between bg-background/95 px-2 backdrop-blur supports-backdrop-filter:backdrop-blur sticky top-0 z-40">
-            <div className="flex items-center gap-2">
-              <SidebarTrigger className="h-9 w-9 rounded-lg bg-background" />
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="tracking-tight text-foreground">
-                    {activeMenuItem?.label ?? "Menu"}
-                  </span>
-                </div>
-              </div>
-            </div>
+      <SidebarInset className="min-w-0">
+        {/* Kopfzeile nur auf schmalen Geräten – per CSS statt per Hook, damit
+            beim ersten Rendern nichts springt. */}
+        <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+          <SidebarTrigger className="size-10 rounded-lg" />
+          <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
+            {titleForPath(location.pathname)}
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10"
+            aria-label="Material wiegen"
+            onClick={() => openPalette("weigh")}
+          >
+            <Scale className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-10"
+            aria-label="Suchen"
+            onClick={() => openPalette()}
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+          <ThemeToggle className="size-10" />
+        </div>
+        <main className="flex-1">
+          <div className="mx-auto w-full max-w-7xl p-4 pb-[calc(3rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-10">
+            {children}
           </div>
-        )}
-        <main className="flex-1 p-4">{children}</main>
+        </main>
       </SidebarInset>
+
+      <QuickActionsHost />
     </>
   );
 }

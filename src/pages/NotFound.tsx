@@ -4,15 +4,17 @@ import { Link } from "react-router";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
+    <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm text-center">
         <CardHeader>
           <CardTitle className="text-4xl font-bold">404</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-muted-foreground">Page not found</p>
+          <p className="text-muted-foreground">
+            Diese Seite gibt es nicht (mehr).
+          </p>
           <Button asChild className="w-full">
-            <Link to="/">Back to Home</Link>
+            <Link to="/">Zur Materialübersicht</Link>
           </Button>
         </CardContent>
       </Card>
