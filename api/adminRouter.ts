@@ -14,6 +14,17 @@ import {
 import { adminQuery, createRouter } from "./middleware";
 import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
+  countAllTables,
+  getLegacyImportState,
+  retryLegacyImport,
+  type LegacyImportDetail,
+} from "./queries/legacyImport";
+import {
+  getDatabaseInfo,
+  getSchemaMigrations,
+  getSeedInfo,
+} from "./queries/systemStatus";
+import {
   closeProposal,
   countCatalogChildren,
   createVariant,
@@ -47,11 +58,12 @@ const isoDate = z
 /**
  * Wendet einen angenommenen Vorschlag auf den Katalog an.
  *
- * Der Drizzle-Client kennt im planetscale-Modus keine Transaktionen, deshalb
- * ist jeder Schritt über seinen natürlichen Schlüssel idempotent und der
- * Statuswechsel des Vorschlags kommt zuletzt: Bricht die Freigabe mittendrin
- * ab, bleibt der Vorschlag „pending“ und ein erneuter Versuch führt zum
- * selben Endzustand.
+ * Läuft bewusst ohne Transaktion: Jeder Schritt ist über seinen natürlichen
+ * Schlüssel idempotent und der Statuswechsel des Vorschlags kommt zuletzt.
+ * Bricht die Freigabe mittendrin ab, bleibt der Vorschlag „pending“ und ein
+ * erneuter Versuch führt zum selben Endzustand. Postgres könnte hier eine
+ * Transaktion aufspannen – die Idempotenz deckt zusätzlich den Fall ab, dass
+ * zwei Administratoren gleichzeitig freigeben.
  */
 async function applyProposal(
   payload: ProposalPayload,
@@ -443,7 +455,57 @@ const proposalAdminRouter = createRouter({
     }),
 });
 
+/**
+ * Systemzustand für `/verwaltung/system`.
+ *
+ * Zeigt vor allem, wie die Übernahme der Altdaten aus MySQL ausgegangen ist.
+ * Sie läuft beim Serverstart und darf ihn nicht abbrechen – ohne diese Seite
+ * bliebe ein Fehler deshalb unsichtbar.
+ */
+const systemAdminRouter = createRouter({
+  status: adminQuery.query(async () => {
+    const [database, schemaMigrations, legacyImport, tableCounts, seed] =
+      await Promise.all([
+        getDatabaseInfo(),
+        getSchemaMigrations(),
+        getLegacyImportState(),
+        countAllTables(),
+        getSeedInfo(),
+      ]);
+    return {
+      database,
+      schemaMigrations,
+      legacyImport: legacyImport
+        ? {
+            ...legacyImport,
+            detail: (legacyImport.detail as LegacyImportDetail[] | null) ?? [],
+          }
+        : null,
+      tableCounts,
+      seed,
+    };
+  }),
+
+  /**
+   * Wiederholt eine fehlgeschlagene Übernahme. Ohne diesen Knopf wäre der
+   * einzige Weg zurück ein Neustart des Containers.
+   */
+  retryLegacyImport: adminQuery.mutation(async () => {
+    const result = await retryLegacyImport();
+    if (result.status === "failed") {
+      const state = await getLegacyImportState();
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message:
+          state?.error ?? "Die Datenübernahme ist erneut fehlgeschlagen.",
+      });
+    }
+    return { status: result.status, rowsCopied: result.rowsCopied };
+  }),
+});
+
 export const adminRouter = createRouter({
   preset: presetAdminRouter,
   proposal: proposalAdminRouter,
+  system: systemAdminRouter,
 });

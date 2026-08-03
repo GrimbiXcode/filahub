@@ -37,6 +37,18 @@ if (env.isProduction) {
   await migrateDb();
   console.log("Datenbank-Migrationen angewendet.");
 
+  // Altdaten aus MySQL übernehmen, falls LEGACY_MYSQL_URL gesetzt ist.
+  // Muss vor dem Seeding laufen: sonst legt der Startkatalog Einträge an,
+  // die anschließend mit den übernommenen IDs kollidieren. Fehler werden
+  // in `migration_state` festgehalten und auf /verwaltung/system angezeigt –
+  // der Start läuft weiter, sonst käme man an diese Seite nicht heran.
+  const { runLegacyImport } = await import("./queries/legacyImport");
+  const legacy = await runLegacyImport();
+  console.log(
+    `Datenübernahme aus MySQL: ${legacy.status}` +
+      (legacy.status === "completed" ? ` (${legacy.rowsCopied} Zeilen)` : "")
+  );
+
   // Startkatalog nachziehen. Idempotent und bewusst nicht startkritisch:
   // ein Fehler hier darf den Server nicht am Hochfahren hindern.
   try {

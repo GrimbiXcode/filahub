@@ -1,15 +1,14 @@
 /**
- * Integrationstests gegen eine echte MySQL-Datenbank.
+ * Integrationstests gegen eine echte PostgreSQL-Datenbank.
  *
  * Laufen nicht mit `npm run test`, sondern nur mit `npm run test:integration`
  * und gesetzter `TEST_DATABASE_URL` (siehe `api/test/setup-integration.ts`).
  *
  * Sinn: Die übrigen Tests sind reine Funktionstests ohne Datenbank. Alles,
- * was erst der Server entscheidet – Migrationen, Unique-Keys, Enums, die
- * JSON-Spalte, `$returningId`, `affectedRows`, Zeitstempel – fällt sonst
- * niemandem auf, bis es im Deployment kracht. Getestet wird gegen die
- * Version aus `docker-compose.yml` (MySQL 8.4); MariaDB weicht in mehreren
- * dieser Punkte ab.
+ * was erst der Server entscheidet – Migrationen, Unique-Keys, Enum-Typen, die
+ * jsonb-Spalte, `RETURNING`, Zeitstempel – fällt sonst niemandem auf, bis es
+ * im Deployment kracht. Getestet wird gegen dieselbe Version wie in
+ * `docker-compose.yml`.
  *
  * Die Tests bauen aufeinander auf und laufen in Deklarationsreihenfolge.
  */
@@ -20,8 +19,9 @@ import { seedSpoolPresets } from "./queries/presetSeed";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import { createProposal, closeProposal, findProposal } from "./queries/presets";
 import { createSpoolType } from "./queries/filament";
+import { getLegacyImportState, runLegacyImport } from "./queries/legacyImport";
 import * as schema from "@db/schema";
-import type { User } from "@db/schema";
+import { LEGACY_IMPORT_KEY, type User } from "@db/schema";
 import {
   callerFor,
   closeDb,
@@ -49,10 +49,10 @@ afterAll(async () => {
 
 describe("Migrationen", () => {
   it("legt alle Tabellen an", async () => {
-    const [rows] = (await db().execute(
-      sql`SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()`
-    )) as unknown as [{ name: string }[]];
-    const names = rows.map(r => r.name);
+    const result = await db().execute<{ name: string }>(
+      sql`SELECT table_name AS name FROM information_schema.tables WHERE table_schema = current_schema()`
+    );
+    const names = result.rows.map(r => r.name);
 
     for (const table of [
       "users",
@@ -68,28 +68,55 @@ describe("Migrationen", () => {
       "preset_series_material_types",
       "preset_proposals",
       "hidden_spool_presets",
+      "migration_state",
     ]) {
       expect(names).toContain(table);
     }
   });
 
-  it("erzeugt die JSON-Spalte als echten JSON-Typ", async () => {
-    const [rows] = (await db().execute(
-      sql`SELECT DATA_TYPE AS type FROM information_schema.columns
-          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'preset_proposals' AND COLUMN_NAME = 'payload'`
-    )) as unknown as [{ type: string }[]];
-    // MariaDB kennt nur ein longtext-Alias; dort verhält sich das Auslesen anders.
-    expect(rows[0].type).toBe("json");
+  it("erzeugt die Payload-Spalte als jsonb", async () => {
+    // `json` würde den Text unverändert speichern; erst `jsonb` normalisiert
+    // und erlaubt später Indizes.
+    const result = await db().execute<{ type: string }>(
+      sql`SELECT data_type AS type FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'preset_proposals' AND column_name = 'payload'`
+    );
+    expect(result.rows[0].type).toBe("jsonb");
   });
 
-  it("legt alle Tabellen mit utf8mb4 an", async () => {
-    const [rows] = (await db().execute(
-      sql`SELECT TABLE_NAME AS name, TABLE_COLLATION AS collation FROM information_schema.tables
-          WHERE TABLE_SCHEMA = DATABASE()`
-    )) as unknown as [{ name: string; collation: string }[]];
-    for (const row of rows) {
-      expect(row.collation, row.name).toMatch(/^utf8mb4_/);
+  it("führt alle Zeitstempel als timestamptz", async () => {
+    // `timestamp without time zone` würde je nach TimeZone der Verbindung
+    // verschieben – die Anwendung rechnet durchgehend in UTC.
+    const result = await db().execute<{ table: string; column: string }>(
+      sql`SELECT table_name AS "table", column_name AS "column" FROM information_schema.columns
+          WHERE table_schema = current_schema() AND data_type = 'timestamp without time zone'`
+    );
+    expect(result.rows).toEqual([]);
+  });
+
+  it("legt die Enum-Typen an", async () => {
+    const result = await db().execute<{ name: string }>(
+      sql`SELECT typname AS name FROM pg_type WHERE typtype = 'e'`
+    );
+    const names = result.rows.map(r => r.name);
+    for (const type of [
+      "user_role",
+      "preset_source",
+      "preset_scope",
+      "preset_spool_material",
+      "preset_proposal_kind",
+      "preset_proposal_status",
+      "migration_status",
+    ]) {
+      expect(names).toContain(type);
     }
+  });
+
+  it("nutzt UTF-8 als Kodierung", async () => {
+    const result = await db().execute<{ encoding: string }>(
+      sql`SELECT pg_encoding_to_char(encoding) AS encoding FROM pg_database WHERE datname = current_database()`
+    );
+    expect(result.rows[0].encoding).toBe("UTF8");
   });
 
   it("ist wiederholbar", async () => {
@@ -134,7 +161,7 @@ describe("Seeding des Preset-Katalogs", () => {
 });
 
 describe("Benutzer", () => {
-  it("legt Benutzer per onDuplicateKeyUpdate ohne Duplikate an", async () => {
+  it("legt Benutzer per onConflictDoUpdate ohne Duplikate an", async () => {
     await upsertUser({ unionId: "it-admin", name: "IT Admin", role: "admin" });
     await upsertUser({
       unionId: "it-admin",
@@ -275,7 +302,7 @@ describe("Vorschläge", () => {
     proposalId = proposal!.id;
     expect(proposal?.status).toBe("pending");
 
-    // Auf MySQL liefert mysql2 die JSON-Spalte bereits geparst zurück.
+    // node-postgres liefert die jsonb-Spalte bereits geparst zurück.
     const payload = proposal!.payload as {
       manufacturer: { name: string };
       series: { materialTypes: string[] };
@@ -312,7 +339,7 @@ describe("Vorschläge", () => {
   });
 
   it("lässt sich kein zweites Mal freigeben", async () => {
-    // Prüft die optimistische Sperre in `closeProposal` (affectedRows).
+    // Prüft die optimistische Sperre in `closeProposal` (RETURNING).
     await expect(
       asAdmin.admin.proposal.approve({ id: proposalId })
     ).rejects.toThrow();
@@ -486,8 +513,8 @@ describe("Materialien und Wiegungen", () => {
   });
 });
 
-describe("MySQL-Eigenheiten", () => {
-  it("speichert Umlaute und Emoji verlustfrei (utf8mb4)", async () => {
+describe("Postgres-Eigenheiten", () => {
+  it("speichert Umlaute und Emoji verlustfrei", async () => {
     await upsertUser({
       unionId: "it-utf8",
       name: "Jörg Müller-Straße 🧵✨",
@@ -505,9 +532,8 @@ describe("MySQL-Eigenheiten", () => {
   });
 
   it("erzeugt ausschließlich ASCII-Slugs", async () => {
-    // MySQL 8 vergleicht mit utf8mb4_0900_ai_ci akzentunempfindlich
-    // ('müller' = 'muller'), MariaDB nicht. Weil `slugify` transliteriert,
-    // hängt die Eindeutigkeit der Slugs nicht an der Kollation.
+    // Postgres vergleicht Text je nach Kollation unterschiedlich. Weil
+    // `slugify` transliteriert, hängt die Eindeutigkeit der Slugs nicht daran.
     const rows = await db()
       .select({ slug: schema.presetManufacturers.slug })
       .from(schema.presetManufacturers);
@@ -515,7 +541,7 @@ describe("MySQL-Eigenheiten", () => {
     for (const row of rows) expect(row.slug).toMatch(/^[a-z0-9-]+$/);
   });
 
-  it("weist zu lange Werte ab, statt sie zu kürzen (Strict Mode)", async () => {
+  it("weist zu lange Werte ab, statt sie zu kürzen", async () => {
     await expect(
       db()
         .insert(schema.spoolTypes)
@@ -528,9 +554,11 @@ describe("MySQL-Eigenheiten", () => {
   });
 
   it("weist ungültige Enum-Werte ab", async () => {
+    // Spaltennamen in camelCase müssen in rohem SQL gequotet werden – Postgres
+    // würde sie sonst auf Kleinschreibung normalisieren.
     await expect(
       db().execute(
-        sql`INSERT INTO users (unionId, role) VALUES ('it-bad-enum', 'superadmin')`
+        sql`INSERT INTO users ("unionId", role) VALUES ('it-bad-enum', 'superadmin')`
       )
     ).rejects.toThrow();
   });
@@ -568,12 +596,46 @@ describe("MySQL-Eigenheiten", () => {
 
     const closed = await findProposal(proposal!.id);
     const reviewedAt = (closed!.reviewedAt as Date).getTime();
-    // Sekundengenaue Spalte: Toleranz nach unten, harte Grenze nach oben.
-    expect(reviewedAt).toBeGreaterThan(before - 1500);
-    expect(reviewedAt).toBeLessThan(after + 1500);
+    // timestamptz löst auf Mikrosekunden auf – die Grenzen dürfen eng sein.
+    expect(reviewedAt).toBeGreaterThanOrEqual(before);
+    expect(reviewedAt).toBeLessThanOrEqual(after);
 
-    // DEFAULT now() muss dieselbe Zeitbasis haben wie die Anwendung.
+    // DEFAULT now() muss dieselbe Zeitbasis haben wie die Anwendung. Läuft die
+    // Datenbank in einer anderen Zeitzone, fiele das hier auf.
     const createdAt = (closed!.createdAt as Date).getTime();
     expect(Math.abs(createdAt - before)).toBeLessThan(60_000);
+  });
+});
+
+describe("Zustand der Datenübernahme", () => {
+  it("vermerkt ohne LEGACY_MYSQL_URL, dass nichts zu tun war", async () => {
+    // Genau der Aufruf, den api/boot.ts beim Serverstart macht.
+    const result = await runLegacyImport();
+    expect(result.status).toBe("skipped");
+    expect(result.rowsCopied).toBe(0);
+
+    const state = await getLegacyImportState();
+    expect(state?.key).toBe(LEGACY_IMPORT_KEY);
+    expect(state?.status).toBe("skipped");
+    expect(state?.finishedAt).toBeInstanceOf(Date);
+  });
+
+  it("liefert den Systemzustand für die Verwaltungsseite", async () => {
+    const status = await asAdmin.admin.system.status();
+
+    expect(status.database.dialect).toBe("postgresql");
+    expect(status.database.version).toMatch(/^\d+/);
+    expect(status.schemaMigrations.length).toBeGreaterThan(0);
+    expect(status.schemaMigrations.every(m => m.applied)).toBe(true);
+    expect(status.schemaMigrations[0].generatedAt).toBeInstanceOf(Date);
+    expect(status.legacyImport?.status).toBe("skipped");
+    expect(status.seed.seededRows).toBeGreaterThan(0);
+
+    const users = status.tableCounts.find(t => t.table === "users");
+    expect(users?.rows).toBe(await countRows("users"));
+  });
+
+  it("bleibt Nicht-Admins verschlossen", async () => {
+    await expect(asUser.admin.system.status()).rejects.toThrow();
   });
 });

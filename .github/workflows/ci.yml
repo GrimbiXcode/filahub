@@ -9,21 +9,37 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
-    # Dieselbe MySQL-Version wie in docker-compose.yml. MariaDB verhält sich
-    # bei JSON-Spalten, Kollation und sql_mode anders – deshalb wird hier
-    # bewusst gegen MySQL getestet.
     services:
+      # Dieselbe Postgres-Version wie in docker-compose.yml.
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: filahub_test
+          POSTGRES_USER: filahub
+          POSTGRES_PASSWORD: filahub
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U filahub -d filahub_test"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+      # Quelle für den Test der Datenübernahme: Bestandsinstallationen kommen
+      # von MySQL 8.4, also wird auch dagegen geprüft. Ohne diesen Dienst
+      # überspringt sich api/legacyImport.integration.test.ts selbst – dann
+      # wäre die Übernahme ungetestet.
       mysql:
         image: mysql:8.4
         env:
-          MYSQL_DATABASE: filahub_test
+          MYSQL_DATABASE: filahub_legacy
           MYSQL_USER: filahub
           MYSQL_PASSWORD: filahub
           MYSQL_RANDOM_ROOT_PASSWORD: "yes"
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mysql -h 127.0.0.1 -u filahub -pfilahub -e 'SELECT 1' filahub_test"
+          --health-cmd="mysql -h 127.0.0.1 -u filahub -pfilahub -e 'SELECT 1' filahub_legacy"
           --health-interval=5s
           --health-timeout=3s
           --health-retries=20
@@ -55,7 +71,8 @@ jobs:
       - name: Unit tests
         run: npm run test
 
-      - name: Integration tests (MySQL)
+      - name: Integration tests (PostgreSQL)
         run: npm run test:integration
         env:
-          TEST_DATABASE_URL: mysql://filahub:filahub@127.0.0.1:3306/filahub_test
+          TEST_DATABASE_URL: postgres://filahub:filahub@127.0.0.1:5432/filahub_test
+          TEST_LEGACY_MYSQL_URL: mysql://filahub:filahub@127.0.0.1:3306/filahub_legacy

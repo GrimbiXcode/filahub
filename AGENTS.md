@@ -11,7 +11,9 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
   shadcn/ui (Radix-Primitives, siehe `src/components/ui/`), react-router 7,
   TanStack Query, react-hook-form + zod
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
-- **Datenbank:** Drizzle ORM + MySQL (`mysql2`, `drizzle-kit`)
+- **Datenbank:** Drizzle ORM + PostgreSQL (`pg`, `drizzle-kit`). `mysql2` ist
+  nur noch der Lese-Treiber für die einmalige Übernahme von Altdaten
+  (`api/queries/legacyImport.ts`)
 - **Auth:** Telegram Login Widget + Bot-Code-Login, JWT-Session-Cookie (`jose`, HS256)
 - **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
@@ -20,7 +22,8 @@ schnellen Wiederfinden, Login ausschließlich über Telegram.
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
-                Settings, AdminPresets, AdminProposals, Login, NotFound
+                Settings, AdminPresets, AdminProposals, AdminSystem, Login,
+                NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
                 (Dialoge + Schnellsuche), ThemeToggle
@@ -40,14 +43,18 @@ api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, spoolType, storageBox, material, preset, admin
+                (admin: preset, proposal, system)
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login)
-  queries/      connection.ts (getDb, Drizzle-Instanz), users.ts, filament.ts,
-                presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog)
+  queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
+                presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
+                legacyImport.ts (Datenübernahme aus MySQL),
+                systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
-                migrations/ (drizzle-kit-Output)
+                migrations/ (drizzle-kit-Output),
+                legacy/mysql-baseline.sql (archivierter MySQL-Schemastand)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -71,7 +78,7 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 | `npm run build`                      | `vite build` → `dist/public`, dann esbuild-Bundle von `api/boot.ts` → `dist/boot.js`                     |
 | `npm start`                          | Produktionsstart: `NODE_ENV=production node dist/boot.js`                                                |
 | `npm run test`                       | Vitest ohne Datenbank (`vitest run`)                                                                     |
-| `npm run test:integration`           | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`)                                    |
+| `npm run test:integration`           | Vitest gegen eine echte Postgres-Datenbank (braucht `TEST_DATABASE_URL`)                                 |
 | `npm run lint`                       | ESLint (Flat-Config)                                                                                     |
 | `npm run format`                     | Prettier über das Repo – ohne generierte und upstream-nahe Dateien, siehe `.prettierignore`              |
 | `npm run format:check`               | Prüft dieselben Dateien, ohne sie zu ändern (läuft in der CI)                                            |
@@ -137,7 +144,7 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   die Tara verloren. Ansonsten `active: false` setzen.
 - **Vorschläge** (`preset_proposals`) speichern einen vollständigen
   JSON-Schnappschuss, keinen Diff. Das Anwenden in `applyProposal`
-  (`api/adminRouter.ts`) kommt ohne Transaktionen aus (planetscale-Modus):
+  (`api/adminRouter.ts`) kommt bewusst ohne Transaktion aus:
   jeder Schritt ist ein find-or-create über einen Unique-Key, der
   Statuswechsel kommt zuletzt und wirkt über den `pending`-Filter als
   optimistische Sperre.
@@ -174,10 +181,40 @@ Bilder liegen daneben in `images/` und werden über `import.meta.glob` mitgebaut
 
 Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 `.env.example`). Erforderlich: `APP_SECRET` (Session-Signatur),
-`DATABASE_URL` (MySQL), dazu `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
+`DATABASE_URL` (PostgreSQL), dazu `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
 `TELEGRAM_ALLOWED_IDS` (kommagetrennte Whitelist; leer = offene Registrierung),
 `OWNER_TELEGRAM_ID` (Admin). `drizzle.config.ts` benötigt ebenfalls
 `DATABASE_URL`.
+
+Optional für den Umstieg von MySQL: `LEGACY_MYSQL_URL` (siehe „Datenübernahme
+aus MySQL“).
+
+## Datenübernahme aus MySQL
+
+Bis Version 0.7.0 lief die Anwendung auf MySQL. Ist `LEGACY_MYSQL_URL` gesetzt,
+übernimmt der Server beim Start einmalig alle Daten
+(`runLegacyImport` in `api/queries/legacyImport.ts`).
+
+- **Reihenfolge in `api/boot.ts`:** `migrateDb()` → `runLegacyImport()` →
+  `seedSpoolPresets()`. Der Startkatalog kommt zuletzt, damit er übernommene
+  Einträge über ihren Slug wiederfindet, statt Dubletten anzulegen.
+- **IDs bleiben unverändert.** Möglich ist das nur, weil die Datenbank keine
+  Fremdschlüssel führt – es gibt nichts umzuschreiben. Nach jeder Tabelle wird
+  die Sequenz per `setval` nachgezogen, sonst kollidiert der erste neue INSERT.
+- **Idempotent** über `onConflictDoNothing`; ein abgebrochener Lauf wird
+  einfach wiederholt. Kehrseite: Die Übernahme gehört in eine **leere**
+  Zieldatenbank. Kollidiert eine Zeile mit einer vorhandenen ID oder einem
+  vorhandenen Unique-Key, gewinnt das Ziel und die Quellzeile fällt weg – auf
+  der Statusseite steht sie dann unter „Bereits vorhanden“.
+- **Nicht startkritisch.** Ein Fehler landet in `migration_state` und wird auf
+  `/verwaltung/system` angezeigt – bräche der Start ab, käme man an diese Seite
+  nicht heran. Der Statuswechsel auf `running` ist zugleich die optimistische
+  Sperre gegen doppelte Läufe (dasselbe Muster wie `closeProposal`).
+- **Werteumwandlung** (`convertValue`, `mapRow`): `tinyint(1)` → `boolean`,
+  `json` → `jsonb`, `date` → `YYYY-MM-TT`-Zeichenkette. Reine Funktionen,
+  getestet in `api/legacyImport.test.ts`.
+- `db/legacy/mysql-baseline.sql` ist der archivierte MySQL-Schemastand: Referenz
+  für die Struktur der Quelle und Fixture für den Integrationstest.
 
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
 
@@ -201,15 +238,16 @@ Fertige Startkonfigurationen liegen in `.claude/launch.json`:
   `.env`. Voraussetzung ist derselbe Container wie für die Integrationstests:
 
 ```bash
-docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
-  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
-  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+docker run -d --name filahub-test-db -p 127.0.0.1:5433:5432 \
+  -e POSTGRES_DB=filahub_test -e POSTGRES_USER=filahub \
+  -e POSTGRES_PASSWORD=filahub postgres:17-alpine
 
-DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' npm run db:migrate
+DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' npm run db:migrate
 ```
 
-Achtung: `npm run test:integration` löscht **alle Tabellen** dieser Datenbank –
-die Sandbox ist bewusst wegwerfbar und nie die eigene Entwicklungsdatenbank.
+Achtung: `npm run test:integration` löscht **das gesamte Schema** dieser
+Datenbank – die Sandbox ist bewusst wegwerfbar und nie die eigene
+Entwicklungsdatenbank.
 
 ## Code-Stil
 
@@ -273,26 +311,35 @@ Datenbank.
 
 ### Integrationstests (`npm run test:integration`)
 
-- `api/mysql.integration.test.ts`, konfiguriert in
-  `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
-  `npm run test` ohne Datenbank lauffähig bleibt.
-- Getestet wird gegen **MySQL 8.4** – dieselbe Version wie in
-  `docker-compose.yml`. MariaDB weicht bei JSON-Spalten (dort nur ein
-  `longtext`-Alias), Kollation (`utf8mb4_0900_ai_ci` ist akzentunempfindlich)
-  und beim `sql_mode` ab; solche Unterschiede fallen nur hier auf.
-- Abgedeckt: Migrationen, Idempotenz des Seedings, Katalog- und
-  Vorschlagsfluss über die tRPC-Router, Unique-Keys, Enums, `$returningId`,
-  die optimistische Sperre über `affectedRows`, Zeitstempel und Strict Mode.
+- `api/postgres.integration.test.ts` und `api/legacyImport.integration.test.ts`,
+  konfiguriert in `vitest.integration.config.ts`; aus `vitest.config.ts`
+  ausgeschlossen, damit `npm run test` ohne Datenbank lauffähig bleibt.
+- Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in
+  `docker-compose.yml`.
+- Abgedeckt: Migrationen, Enum-Typen, `jsonb`, `timestamptz`, Idempotenz des
+  Seedings, Katalog- und Vorschlagsfluss über die tRPC-Router, Unique-Keys,
+  `RETURNING`, die optimistische Sperre, Zeitstempel und der Systemzustand für
+  `/verwaltung/system`.
+- `api/legacyImport.integration.test.ts` braucht zusätzlich
+  `TEST_LEGACY_MYSQL_URL` und überspringt sich sonst selbst. Es baut die Quelle
+  aus `db/legacy/mysql-baseline.sql` auf und prüft Vollständigkeit, ID-Erhalt,
+  Typumwandlung, Sequenz-Reset, Idempotenz und den Fehlerfall.
 - Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
-  mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **alle Tabellen** der
-  Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).
+  mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **das gesamte Schema**
+  der Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).
 
 ```bash
-docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
-  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
+docker run -d --name filahub-test-db -p 127.0.0.1:5433:5432 \
+  -e POSTGRES_DB=filahub_test -e POSTGRES_USER=filahub \
+  -e POSTGRES_PASSWORD=filahub postgres:17-alpine
+
+# Nur für den Test der Datenübernahme:
+docker run -d --name filahub-legacy-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_legacy -e MYSQL_USER=filahub \
   -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
 
-TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
+TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
+TEST_LEGACY_MYSQL_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_legacy' \
   npm run test:integration
 ```
 
@@ -309,17 +356,20 @@ TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
 - Die App lauscht auf Port 3000; empfohlen ist ein Reverse Proxy mit HTTPS
   (Caddy: `reverse_proxy 127.0.0.1:3000`). Ohne HTTPS funktioniert das
   Session-Cookie in Produktion nicht.
-- `docker-compose.yml` ist eine Deployment-Vorlage (App-Image von GHCR + MySQL 8.4
-  mit Volume); Anleitung im `README.md`. Beim Server-Start (Produktion) werden
-  ausstehende SQL-Migrationen aus `db/migrations/` automatisch angewendet
-  (`migrateDb` in `api/queries/connection.ts`) – frische Datenbanken
-  initialisieren sich selbst. Nach Schema-Änderungen daher immer
+- `docker-compose.yml` ist eine Deployment-Vorlage (App-Image von GHCR +
+  PostgreSQL 17 mit Volume); Anleitung im `README.md`. Beim Server-Start
+  (Produktion) werden ausstehende SQL-Migrationen aus `db/migrations/`
+  automatisch angewendet (`migrateDb` in `api/queries/connection.ts`) – frische
+  Datenbanken initialisieren sich selbst. Nach Schema-Änderungen daher immer
   `npm run db:generate` ausführen und die erzeugten Dateien committen.
 - Healthchecks: `GET /health` (in `api/boot.ts`) liefert `{ "status": "ok" }`;
   das Dockerfile definiert darauf einen `HEALTHCHECK`, die Compose-Vorlage
   ebenfalls.
-- MySQL muss vom Container/Host aus erreichbar sein; Setup siehe `README.md`
-  (Datenbank anlegen, `npm run db:push`).
+- PostgreSQL muss vom Container/Host aus erreichbar sein; Setup siehe
+  `README.md` (Datenbank anlegen, `npm run db:push`).
+- Beim Umstieg einer bestehenden Installation zusätzlich `LEGACY_MYSQL_URL`
+  setzen (siehe „Datenübernahme aus MySQL“) und das Ergebnis unter
+  `/verwaltung/system` prüfen.
 
 ## Sicherheit
 

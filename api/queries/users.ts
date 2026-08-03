@@ -18,8 +18,9 @@ export async function findUserByUnionId(unionId: string) {
  * Merkt sich, bis zu welcher Version der Benutzer die Neuerungen gesehen hat.
  *
  * Bewusst monoton: Ein alter Tab oder ein zurückgerolltes Image darf den Stand
- * nicht zurückdrehen. MySQL kann Versionsnummern nicht sinnvoll vergleichen
- * (`0.10.0` < `0.9.0` als Text), deshalb passiert der Vergleich hier.
+ * nicht zurückdrehen. Die Datenbank kann Versionsnummern nicht sinnvoll
+ * vergleichen (`0.10.0` < `0.9.0` als Text), deshalb passiert der Vergleich
+ * hier.
  */
 export async function markReleaseNotesSeen(userId: number, version: string) {
   const rows = await getDb()
@@ -89,8 +90,10 @@ export async function upsertUser(data: InsertUser) {
     }
   }
 
+  // Postgres braucht die Konfliktspalte explizit; eindeutig ist die
+  // Telegram-ID (`unionId`).
   await getDb()
     .insert(schema.users)
     .values(values)
-    .onDuplicateKeyUpdate({ set: updateSet });
+    .onConflictDoUpdate({ target: schema.users.unionId, set: updateSet });
 }

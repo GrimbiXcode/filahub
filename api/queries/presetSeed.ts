@@ -37,8 +37,8 @@ export function seedAction(row: {
 /**
  * Legt den Startkatalog an. Idempotent: Der Aufruf beim Serverstart darf
  * beliebig oft laufen, ohne Duplikate zu erzeugen oder Änderungen zu
- * überschreiben. Läuft ohne Transaktionen (planetscale-Modus); die
- * Unique-Keys je Ebene sind die eigentliche Absicherung.
+ * überschreiben. Läuft bewusst ohne Transaktion; die Unique-Keys je Ebene
+ * sind die eigentliche Absicherung.
  */
 export async function seedSpoolPresets(
   catalog: SeedManufacturer[] = presetSeedCatalog

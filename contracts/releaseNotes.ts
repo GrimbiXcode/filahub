@@ -11,7 +11,7 @@ import { z } from "zod";
  * nichts aus `@db` oder `api/` zur Laufzeit laden – nur zod und eigene Logik.
  * Insbesondere kein `import.meta.glob`: Das Einlesen der Dateien steckt in
  * `src/lib/releaseNotes.ts`, damit der Server `compareVersions` mitbenutzen
- * kann (MySQL kann Versionsnummern nicht sinnvoll vergleichen).
+ * kann (die Datenbank kann Versionsnummern nicht sinnvoll vergleichen).
  */
 
 // ---------------------------------------------------------------------------

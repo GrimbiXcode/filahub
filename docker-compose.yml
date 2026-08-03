@@ -1,4 +1,4 @@
-# Deployment template for filahub (app + MySQL).
+# Deployment template for filahub (app + PostgreSQL).
 #
 # Usage:
 #   1. cp .env.example .env  and fill in APP_SECRET + Telegram values
@@ -10,35 +10,31 @@
 # (db/migrations) – no manual schema step is needed.
 # Put a reverse proxy with HTTPS (e.g. Caddy) in front of port 3000.
 # The session cookie requires HTTPS outside of localhost.
+#
+# Coming from a MySQL installation? See "Switching from MySQL" in the README:
+# set LEGACY_MYSQL_URL on the app service once, start, check the result under
+# /verwaltung/system, then remove the variable again.
 
 services:
   db:
-    image: mysql:8.4
+    image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: filahub
-      MYSQL_USER: filahub
-      MYSQL_PASSWORD: change-me
-      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      POSTGRES_DB: filahub
+      POSTGRES_USER: filahub
+      POSTGRES_PASSWORD: change-me
     volumes:
-      - db-data:/var/lib/mysql
+      - db-data:/var/lib/postgresql/data
     # Bound to localhost only: lets you run `npm run db:push` from the host
-    # (schema migrations) without exposing MySQL to the network.
+    # (schema migrations) without exposing Postgres to the network.
     ports:
-      - "127.0.0.1:3306:3306"
-    # Echte Abfrage als Anwendungsbenutzer statt `mysqladmin ping`:
-    #   - `ping` liefert auch bei "Access denied" den Exit-Code 0 und
-    #   - erreicht über `-h localhost` den Unix-Socket, den schon der
-    #     temporäre Server während der Initialisierung anlegt.
-    # Beides zusammen meldet "healthy", bevor die App sich anmelden kann.
-    # `-h 127.0.0.1` erzwingt TCP (erst nach der Initialisierung offen) und
-    # prüft zusätzlich Zugangsdaten und Existenz der Datenbank.
+      - "127.0.0.1:5432:5432"
+    # `pg_isready` mit Benutzer und Datenbank statt eines nackten Ports: Der
+    # temporäre Server während der Initialisierung lauscht nur auf dem
+    # Unix-Socket. So meldet der Check erst "healthy", wenn die App sich
+    # tatsächlich anmelden kann.
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          'mysql -h 127.0.0.1 -u "$$MYSQL_USER" -p"$$MYSQL_PASSWORD" -e "SELECT 1" "$$MYSQL_DATABASE" >/dev/null 2>&1',
-        ]
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 5s
       timeout: 3s
       retries: 20
@@ -49,8 +45,13 @@ services:
     env_file: .env
     environment:
       # Points the app at the db service; overrides DATABASE_URL from .env.
-      # The password must match MYSQL_PASSWORD above.
-      DATABASE_URL: mysql://filahub:change-me@db:3306/filahub
+      # The password must match POSTGRES_PASSWORD above.
+      DATABASE_URL: postgres://filahub:change-me@db:5432/filahub
+      # One-time data migration from an existing MySQL database. Uncomment,
+      # point it at the old server and start once – the app copies the data on
+      # startup and reports the result under /verwaltung/system. Remove the
+      # line afterwards.
+      # LEGACY_MYSQL_URL: mysql://filahub:old-password@old-host:3306/filahub
     ports:
       - "3000:3000"
     # The image also ships a Dockerfile HEALTHCHECK; this entry makes the

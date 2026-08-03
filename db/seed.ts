@@ -14,7 +14,7 @@ async function seed() {
   console.log(
     `Fertig: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
   );
-  process.exit(0); // MySQL-Pool schließen
+  process.exit(0); // Verbindungspool schließen
 }
 
 seed().catch(error => {

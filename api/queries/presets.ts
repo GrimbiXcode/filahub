@@ -411,18 +411,18 @@ export async function setSeriesMaterialTypes(
 // ---------------------------------------------------------------------------
 // „find or create“ über den natürlichen Schlüssel
 //
-// Alle Aufrufe sind idempotent: Der Drizzle-Client läuft im
-// planetscale-Modus und kennt keine Transaktionen, deshalb dürfen mehrfache
-// Ausführungen (Retry nach Abbruch, zwei parallele Freigaben) nie Duplikate
-// erzeugen. Die Unique-Keys sind die eigentliche Absicherung.
+// Alle Aufrufe sind idempotent: Es wird bewusst ohne Transaktion gearbeitet,
+// deshalb dürfen mehrfache Ausführungen (Retry nach Abbruch, zwei parallele
+// Freigaben) nie Duplikate erzeugen. Die Unique-Keys sind die eigentliche
+// Absicherung.
 // ---------------------------------------------------------------------------
 
-/** MySQL-Fehlercode für einen Verstoß gegen einen Unique-Key */
+/** SQLSTATE 23505 = unique_violation (Verstoß gegen einen Unique-Key) */
 function isDuplicateKeyError(error: unknown) {
   return (
     typeof error === "object" &&
     error !== null &&
-    (error as { code?: string }).code === "ER_DUP_ENTRY"
+    (error as { code?: string }).code === "23505"
   );
 }
 
@@ -787,7 +787,7 @@ export async function createProposal(data: {
       sourceSpoolTypeId: data.sourceSpoolTypeId ?? null,
       comment: data.comment ?? null,
     })
-    .$returningId();
+    .returning({ id: presetProposals.id });
   return db.query.presetProposals.findFirst({
     where: eq(presetProposals.id, id),
   });
@@ -877,7 +877,7 @@ export async function closeProposal(
     resultId?: number | null;
   }
 ): Promise<boolean> {
-  const result = await getDb()
+  const updated = await getDb()
     .update(presetProposals)
     .set({
       status: data.status,
@@ -888,12 +888,7 @@ export async function closeProposal(
     })
     .where(
       and(eq(presetProposals.id, id), eq(presetProposals.status, "pending"))
-    );
-  const header = result as unknown as { affectedRows?: number };
-  const affected =
-    header.affectedRows ??
-    (Array.isArray(result)
-      ? ((result[0] as { affectedRows?: number })?.affectedRows ?? 0)
-      : 0);
-  return affected > 0;
+    )
+    .returning({ id: presetProposals.id });
+  return updated.length > 0;
 }

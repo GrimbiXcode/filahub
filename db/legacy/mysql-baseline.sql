@@ -1,3 +1,96 @@
+-- Schemastand von filahub unter MySQL 8.4 (Migrationen 0000–0003),
+-- zusammengefasst als eine Datei.
+--
+-- Wird nicht mehr angewendet: die Anwendung läuft auf PostgreSQL
+-- (db/migrations). Diese Datei bleibt aus zwei Gründen erhalten:
+--   1. als Referenz für die Struktur der Altdaten, die
+--      api/queries/legacyImport.ts ausliest,
+--   2. als Fixture für den Integrationstest der Datenübernahme, der
+--      damit eine MySQL-Quelldatenbank aufbaut.
+--
+-- Die Anweisungen sind durch die Breakpoint-Markierung von drizzle-kit
+-- getrennt. Die Markierung selbst steht bewusst nirgends im Klartext in
+-- diesem Kopf: Der Test zerlegt die Datei daran und würde sonst hier
+-- mittendrin trennen.
+
+CREATE TABLE `login_codes` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`code` varchar(6) NOT NULL,
+	`telegramId` varchar(64) NOT NULL,
+	`telegramUsername` varchar(255),
+	`telegramName` varchar(255),
+	`expiresAt` timestamp NOT NULL,
+	`usedAt` timestamp,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `login_codes_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `materials` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`userId` bigint unsigned NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`identifier` varchar(50),
+	`materialType` varchar(100) NOT NULL,
+	`manufacturer` varchar(255),
+	`color` varchar(100),
+	`priceCents` int,
+	`purchaseDate` date,
+	`nominalWeight` int NOT NULL,
+	`spoolTypeId` bigint unsigned,
+	`storageBoxId` bigint unsigned,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `materials_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `spool_types` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`userId` bigint unsigned NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`manufacturer` varchar(255),
+	`tareWeight` int NOT NULL,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `spool_types_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `storage_boxes` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`userId` bigint unsigned NOT NULL,
+	`name` varchar(255) NOT NULL,
+	`location` varchar(255),
+	`tareWeight` int NOT NULL,
+	`notes` text,
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `storage_boxes_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
+CREATE TABLE `users` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`unionId` varchar(255) NOT NULL,
+	`name` varchar(255),
+	`telegramUsername` varchar(255),
+	`email` varchar(320),
+	`avatar` text,
+	`role` enum('user','admin') NOT NULL DEFAULT 'user',
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	`updatedAt` timestamp NOT NULL DEFAULT (now()),
+	`lastSignInAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `users_id` PRIMARY KEY(`id`),
+	CONSTRAINT `users_unionId_unique` UNIQUE(`unionId`)
+);
+--> statement-breakpoint
+CREATE TABLE `weighings` (
+	`id` serial AUTO_INCREMENT NOT NULL,
+	`materialId` bigint unsigned NOT NULL,
+	`grossWeight` int NOT NULL,
+	`weighedAt` timestamp NOT NULL DEFAULT (now()),
+	`note` varchar(500),
+	`createdAt` timestamp NOT NULL DEFAULT (now()),
+	CONSTRAINT `weighings_id` PRIMARY KEY(`id`)
+);
+--> statement-breakpoint
 CREATE TABLE `hidden_spool_presets` (
 	`id` serial AUTO_INCREMENT NOT NULL,
 	`userId` bigint unsigned NOT NULL,
@@ -109,4 +202,7 @@ CREATE INDEX `preset_proposals_status_idx` ON `preset_proposals` (`status`);--> 
 CREATE INDEX `preset_proposals_user_idx` ON `preset_proposals` (`userId`);--> statement-breakpoint
 CREATE INDEX `preset_spool_series_manufacturer_idx` ON `preset_spool_series` (`manufacturerId`);--> statement-breakpoint
 CREATE INDEX `preset_spool_variants_version_idx` ON `preset_spool_variants` (`versionId`);--> statement-breakpoint
-CREATE INDEX `preset_spool_versions_series_idx` ON `preset_spool_versions` (`seriesId`);
+CREATE INDEX `preset_spool_versions_series_idx` ON `preset_spool_versions` (`seriesId`);--> statement-breakpoint
+ALTER TABLE `users` ADD `currency` varchar(3) DEFAULT 'EUR' NOT NULL;--> statement-breakpoint
+ALTER TABLE `users` ADD `locale` varchar(35);--> statement-breakpoint
+ALTER TABLE `users` ADD `lastSeenReleaseVersion` varchar(32);

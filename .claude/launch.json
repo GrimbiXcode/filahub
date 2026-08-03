@@ -13,7 +13,7 @@
       "runtimeArgs": [
         "DEV_LOGIN=1",
         "APP_SECRET=dev-sandbox-secret",
-        "DATABASE_URL=mysql://filahub:filahub@127.0.0.1:3399/filahub_test",
+        "DATABASE_URL=postgres://filahub:filahub@127.0.0.1:5433/filahub_test",
         "npm",
         "run",
         "dev"

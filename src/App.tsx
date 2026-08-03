@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
 import AdminProposals from "./pages/AdminProposals";
+import AdminSystem from "./pages/AdminSystem";
 import Home from "./pages/Home";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
@@ -30,6 +31,7 @@ export default function App() {
         <Route path={SETTINGS_PATH} element={<Settings />} />
         <Route path="/verwaltung/presets" element={<AdminPresets />} />
         <Route path="/verwaltung/vorschlaege" element={<AdminProposals />} />
+        <Route path="/verwaltung/system" element={<AdminSystem />} />
         <Route path="/login" element={<Login />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

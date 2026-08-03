@@ -33,7 +33,10 @@ export async function createSpoolType(data: {
   sourceVariantId?: number | null;
   notes?: string;
 }) {
-  const [{ id }] = await getDb().insert(spoolTypes).values(data).$returningId();
+  const [{ id }] = await getDb()
+    .insert(spoolTypes)
+    .values(data)
+    .returning({ id: spoolTypes.id });
   return getDb().query.spoolTypes.findFirst({ where: eq(spoolTypes.id, id) });
 }
 
@@ -89,7 +92,7 @@ export async function createStorageBox(data: {
   const [{ id }] = await getDb()
     .insert(storageBoxes)
     .values(data)
-    .$returningId();
+    .returning({ id: storageBoxes.id });
   return getDb().query.storageBoxes.findFirst({
     where: eq(storageBoxes.id, id),
   });
@@ -284,7 +287,10 @@ export async function createMaterial(
   initialGrossWeight?: number | null
 ) {
   const db = getDb();
-  const [{ id }] = await db.insert(materials).values(data).$returningId();
+  const [{ id }] = await db
+    .insert(materials)
+    .values(data)
+    .returning({ id: materials.id });
   if (initialGrossWeight != null) {
     await db
       .insert(weighings)
@@ -331,7 +337,10 @@ export async function addWeighing(data: {
   weighedAt?: Date;
   note?: string;
 }) {
-  const [{ id }] = await getDb().insert(weighings).values(data).$returningId();
+  const [{ id }] = await getDb()
+    .insert(weighings)
+    .values(data)
+    .returning({ id: weighings.id });
   return getDb().query.weighings.findFirst({ where: eq(weighings.id, id) });
 }
 

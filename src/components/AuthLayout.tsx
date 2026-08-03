@@ -30,6 +30,7 @@ import {
 import { LOGIN_PATH, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import {
   Archive,
+  Database,
   Disc3,
   FileUp,
   Inbox,
@@ -72,6 +73,7 @@ const menuItems = [
 const adminMenuItems = [
   { icon: Library, label: "Preset-Katalog", path: "/verwaltung/presets" },
   { icon: Inbox, label: "Vorschläge", path: "/verwaltung/vorschlaege" },
+  { icon: Database, label: "System", path: "/verwaltung/system" },
 ];
 
 const THEME_ICONS: Record<Theme, typeof Sun> = {

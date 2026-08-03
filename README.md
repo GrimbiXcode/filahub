@@ -7,7 +7,7 @@ retrieval, a shared preset catalogue of manufacturers and spools, and
 Telegram-only login.
 
 **Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
-Drizzle ORM + MySQL (database)
+Drizzle ORM + PostgreSQL (database)
 
 ---
 
@@ -36,7 +36,7 @@ cp .env.example .env
 | Variable                | Purpose                                                           |
 | ----------------------- | ----------------------------------------------------------------- |
 | `APP_SECRET`            | Random secret for signing session tokens                          |
-| `DATABASE_URL`          | MySQL connection string                                           |
+| `DATABASE_URL`          | PostgreSQL connection string                                      |
 | `TELEGRAM_BOT_TOKEN`    | Token from @BotFather                                             |
 | `TELEGRAM_BOT_USERNAME` | Bot username without @                                            |
 | `TELEGRAM_ALLOWED_IDS`  | Allowed Telegram IDs (comma-separated); empty = open registration |
@@ -44,10 +44,10 @@ cp .env.example .env
 
 ## 3. Set up the database
 
-Create a MySQL database:
+Create a PostgreSQL database:
 
 ```bash
-mysql -u user -p -e "CREATE DATABASE filahub CHARACTER SET utf8mb4;"
+createdb filahub
 ```
 
 The app applies pending SQL migrations (`db/migrations/`) automatically on
@@ -84,13 +84,13 @@ docker run -d --name filahub \
 Prebuilt images are published to the GitHub Container Registry
 (`ghcr.io/grimbixcode/filahub`) whenever a version tag is pushed.
 
-The MySQL database must be reachable from the container (e.g. via
-Docker Compose with a MySQL service or an external database server).
+The PostgreSQL database must be reachable from the container (e.g. via
+Docker Compose with a Postgres service or an external database server).
 
 ### With Docker Compose (deployment template)
 
 `docker-compose.yml` is a ready-to-use deployment template: the app image from GHCR
-plus a MySQL 8.4 service with a persistent volume.
+plus a PostgreSQL 17 service with a persistent volume.
 
 ```bash
 # 1. prepare configuration (see section 2)
@@ -106,11 +106,45 @@ Notes:
 
 - `DATABASE_URL` from `.env` is overridden by `docker-compose.yml` so the app talks
   to the bundled `db` service – you can ignore that variable for Compose.
-- MySQL is published on `127.0.0.1:3306` in case you want to inspect the
+- Postgres is published on `127.0.0.1:5432` in case you want to inspect the
   database or run drizzle commands from the host; remove that port mapping
   if you don't need it.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
+- Coming from an older release that used MySQL? See
+  [Switching from MySQL](#switching-from-mysql) below.
+
+### Switching from MySQL
+
+Releases up to 0.7.0 stored their data in MySQL. The app migrates it for you:
+set `LEGACY_MYSQL_URL` to the old database and start once.
+
+```bash
+# in .env (or in the app service of docker-compose.yml)
+DATABASE_URL=postgres://filahub:...@db:5432/filahub
+LEGACY_MYSQL_URL=mysql://filahub:...@old-host:3306/filahub
+```
+
+On startup the app creates the Postgres schema, copies every table across
+keeping the original IDs, and only then seeds the preset catalogue. The result
+is shown under **Verwaltung → System** (`/verwaltung/system`): the status of
+the transfer, the number of rows per table and, if something went wrong, the
+error message together with a button to try again.
+
+Notes:
+
+- The transfer is **idempotent**. Running it twice copies nothing twice, so an
+  aborted run can simply be repeated.
+- A failure does **not** stop the server from starting – otherwise you could
+  not reach the page that reports it. Fix the cause and either press "Erneut
+  versuchen" on the system page or restart; the failed run is picked up again.
+- The old database is only read, never modified. Keep it until you have
+  checked the result.
+- **Migrate into an empty Postgres database.** Rows whose ID or unique key
+  already exists in the target are kept and the incoming row is skipped – you
+  would end up with a mix. The system page shows this per table under
+  "Bereits vorhanden", so check it if you are unsure.
+- Remove `LEGACY_MYSQL_URL` once the status says "Abgeschlossen".
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 
@@ -186,42 +220,58 @@ For administrators, under **Verwaltung**:
 
 ## Useful commands
 
-| Command                    | Purpose                                          |
-| -------------------------- | ------------------------------------------------ |
-| `npm run dev`              | Dev server with HMR                              |
-| `npm run check`            | TypeScript check                                 |
-| `npm run build`            | Production build to `dist/`                      |
-| `npm run lint`             | ESLint                                           |
-| `npm run test`             | Vitest (no database needed)                      |
-| `npm run test:integration` | Vitest against a real MySQL database (see below) |
-| `npm run db:push`          | Sync schema changes to the database              |
-| `npm run db:seed`          | Seed the preset catalogue (idempotent)           |
+| Command                    | Purpose                                         |
+| -------------------------- | ----------------------------------------------- |
+| `npm run dev`              | Dev server with HMR                             |
+| `npm run check`            | TypeScript check                                |
+| `npm run build`            | Production build to `dist/`                     |
+| `npm run lint`             | ESLint                                          |
+| `npm run test`             | Vitest (no database needed)                     |
+| `npm run test:integration` | Vitest against a real Postgres database (below) |
+| `npm run db:push`          | Sync schema changes to the database             |
+| `npm run db:seed`          | Seed the preset catalogue (idempotent)          |
 
 ## Integration tests
 
 `npm run test` runs the unit tests, which need no database. The integration
 tests run the real chain – migrations, seeding, tRPC routers – against
-**MySQL 8.4**, the same version as in `docker-compose.yml`. This matters:
-MariaDB behaves differently for JSON columns, collation and `sql_mode`, so
-those differences only surface here.
+**PostgreSQL 17**, the same version as in `docker-compose.yml`.
 
 ```bash
-docker run -d --name filahub-test-db -p 127.0.0.1:3399:3306 \
-  -e MYSQL_DATABASE=filahub_test -e MYSQL_USER=filahub \
-  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+docker run -d --name filahub-test-db -p 127.0.0.1:5433:5432 \
+  -e POSTGRES_DB=filahub_test -e POSTGRES_USER=filahub \
+  -e POSTGRES_PASSWORD=filahub postgres:17-alpine
 
-TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' \
+TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
   npm run test:integration
 ```
 
-> Every run **drops all tables** of the target database and re-applies the
-> migrations. The connection therefore comes from `TEST_DATABASE_URL` only and
-> must differ from `DATABASE_URL` – use a dedicated test database.
+> Every run **drops the whole schema** of the target database and re-applies
+> the migrations. The connection therefore comes from `TEST_DATABASE_URL` only
+> and must differ from `DATABASE_URL` – use a dedicated test database.
+
+The MySQL → Postgres transfer has its own suite
+(`api/legacyImport.integration.test.ts`). It needs a MySQL source as well and
+skips itself when `TEST_LEGACY_MYSQL_URL` is missing:
+
+```bash
+docker run -d --name filahub-legacy-db -p 127.0.0.1:3399:3306 \
+  -e MYSQL_DATABASE=filahub_legacy -e MYSQL_USER=filahub \
+  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
+
+TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
+TEST_LEGACY_MYSQL_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_legacy' \
+  npm run test:integration
+```
+
+The source schema is rebuilt from `db/legacy/mysql-baseline.sql`, the archived
+MySQL schema – the same structure existing installations actually come from.
 
 ## CI / CD
 
 - **Push to `main` and pull requests:** TypeScript check, unit tests and the
-  integration tests against a `mysql:8.4` service container.
+  integration tests against a `postgres:17-alpine` service container, plus a
+  `mysql:8.4` container as the source for the data-transfer suite.
 - **Push to `main`:** the Docker image is built (without pushing) to verify
   the build works.
 - **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with
