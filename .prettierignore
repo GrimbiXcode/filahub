@@ -10,6 +10,15 @@ build/
 # Generated files
 *.tsbuildinfo
 coverage/
+.backend-features.json
+# drizzle-kit schreibt die Snapshots bei jedem `db:generate` neu und klappt
+# Arrays auf – formatiert gäbe es bei jeder Migration Diffs ohne Inhalt.
+db/migrations/
+
+# shadcn-Basiskomponenten bleiben nah am Upstream (siehe eslint.config.js).
+# Upstream liefert sie ohne Semikolons; formatiert würde jede neu hinzugefügte
+# Komponente wieder aus der Reihe tanzen.
+src/components/ui/
 
 # Package files
 package-lock.json

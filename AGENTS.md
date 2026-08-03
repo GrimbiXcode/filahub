@@ -73,7 +73,7 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 | `npm run test` | Vitest ohne Datenbank (`vitest run`) |
 | `npm run test:integration` | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`) |
 | `npm run lint` | ESLint (Flat-Config) |
-| `npm run format` | Prettier über das ganze Repo |
+| `npm run format` | Prettier über das Repo – ohne generierte und upstream-nahe Dateien, siehe `.prettierignore` |
 | `npm run db:push` | Drizzle-Schema direkt in die DB synchronisieren |
 | `npm run db:generate` / `db:migrate` | Migrationen erzeugen / anwenden (Output: `db/migrations/`) |
 | `npm run db:seed` | Startkatalog der Presets einspielen (idempotent) |
