@@ -22,7 +22,12 @@ import { createProposal, closeProposal, findProposal } from "./queries/presets";
 import { createSpoolType } from "./queries/filament";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { callerFor, closeDb, countRows, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  countRows,
+  resetSchema,
+} from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -45,9 +50,9 @@ afterAll(async () => {
 describe("Migrationen", () => {
   it("legt alle Tabellen an", async () => {
     const [rows] = (await db().execute(
-      sql`SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()`,
+      sql`SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()`
     )) as unknown as [{ name: string }[]];
-    const names = rows.map((r) => r.name);
+    const names = rows.map(r => r.name);
 
     for (const table of [
       "users",
@@ -71,7 +76,7 @@ describe("Migrationen", () => {
   it("erzeugt die JSON-Spalte als echten JSON-Typ", async () => {
     const [rows] = (await db().execute(
       sql`SELECT DATA_TYPE AS type FROM information_schema.columns
-          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'preset_proposals' AND COLUMN_NAME = 'payload'`,
+          WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'preset_proposals' AND COLUMN_NAME = 'payload'`
     )) as unknown as [{ type: string }[]];
     // MariaDB kennt nur ein longtext-Alias; dort verhält sich das Auslesen anders.
     expect(rows[0].type).toBe("json");
@@ -80,7 +85,7 @@ describe("Migrationen", () => {
   it("legt alle Tabellen mit utf8mb4 an", async () => {
     const [rows] = (await db().execute(
       sql`SELECT TABLE_NAME AS name, TABLE_COLLATION AS collation FROM information_schema.tables
-          WHERE TABLE_SCHEMA = DATABASE()`,
+          WHERE TABLE_SCHEMA = DATABASE()`
     )) as unknown as [{ name: string; collation: string }[]];
     for (const row of rows) {
       expect(row.collation, row.name).toMatch(/^utf8mb4_/);
@@ -131,7 +136,11 @@ describe("Seeding des Preset-Katalogs", () => {
 describe("Benutzer", () => {
   it("legt Benutzer per onDuplicateKeyUpdate ohne Duplikate an", async () => {
     await upsertUser({ unionId: "it-admin", name: "IT Admin", role: "admin" });
-    await upsertUser({ unionId: "it-admin", name: "IT Admin (neu)", role: "admin" });
+    await upsertUser({
+      unionId: "it-admin",
+      name: "IT Admin (neu)",
+      role: "admin",
+    });
     await upsertUser({ unionId: "it-user", name: "IT User", role: "user" });
 
     admin = (await findUserByUnionId("it-admin"))!;
@@ -160,24 +169,28 @@ describe("Katalog lesen", () => {
     const tree = await asUser.preset.tree();
     expect(tree).toHaveLength(seedCounts.manufacturers);
 
-    const variants = tree.flatMap((m) =>
-      m.series.flatMap((s) => s.versions.flatMap((v) => v.variants)),
+    const variants = tree.flatMap(m =>
+      m.series.flatMap(s => s.versions.flatMap(v => v.variants))
     );
     expect(variants).toHaveLength(seedCounts.variants);
-    expect(variants.every((v) => v.displayName.length > 0)).toBe(true);
+    expect(variants.every(v => v.displayName.length > 0)).toBe(true);
   });
 
   it("gibt boolean, date und die Materialarten korrekt zurück", async () => {
     const tree = await asUser.preset.tree();
-    const versions = tree.flatMap((m) => m.series.flatMap((s) => s.versions));
+    const versions = tree.flatMap(m => m.series.flatMap(s => s.versions));
 
-    expect(tree.every((m) => m.active === true)).toBe(true);
-    expect(versions.some((v) => v.isCurrent)).toBe(true);
+    expect(tree.every(m => m.active === true)).toBe(true);
+    expect(versions.some(v => v.isCurrent)).toBe(true);
     for (const version of versions) {
-      if (version.validFrom != null) expect(version.validFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-      if (version.validTo != null) expect(version.validTo).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      if (version.validFrom != null)
+        expect(version.validFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      if (version.validTo != null)
+        expect(version.validTo).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     }
-    expect(tree.flatMap((m) => m.series).some((s) => s.materialTypes.length > 0)).toBe(true);
+    expect(
+      tree.flatMap(m => m.series).some(s => s.materialTypes.length > 0)
+    ).toBe(true);
   });
 
   it("liefert die flache Auswahlliste passend zum Baum", async () => {
@@ -191,16 +204,30 @@ describe("Presets ausblenden", () => {
     const [target] = await asUser.preset.tree();
     const before = await asUser.preset.options();
 
-    await asUser.preset.setHidden({ scope: "manufacturer", refId: target.id, hidden: true });
+    await asUser.preset.setHidden({
+      scope: "manufacturer",
+      refId: target.id,
+      hidden: true,
+    });
     // Zweiter Aufruf darf keine zweite Zeile erzeugen (Unique-Key + Vorabprüfung).
-    await asUser.preset.setHidden({ scope: "manufacturer", refId: target.id, hidden: true });
+    await asUser.preset.setHidden({
+      scope: "manufacturer",
+      refId: target.id,
+      hidden: true,
+    });
 
     expect(await countRows("hidden_spool_presets")).toBe(1);
-    expect((await asUser.preset.tree()).find((m) => m.id === target.id)?.hidden).toBe(true);
+    expect(
+      (await asUser.preset.tree()).find(m => m.id === target.id)?.hidden
+    ).toBe(true);
     expect((await asUser.preset.options()).length).toBeLessThan(before.length);
     expect(await asAdmin.preset.options()).toHaveLength(before.length);
 
-    await asUser.preset.setHidden({ scope: "manufacturer", refId: target.id, hidden: false });
+    await asUser.preset.setHidden({
+      scope: "manufacturer",
+      refId: target.id,
+      hidden: false,
+    });
     expect(await asUser.preset.options()).toHaveLength(before.length);
     expect(await countRows("hidden_spool_presets")).toBe(0);
   });
@@ -226,10 +253,21 @@ describe("Vorschläge", () => {
     const proposal = await asUser.preset.proposals.submitNew({
       payload: {
         kind: "new",
-        manufacturer: { name: "IT Testhersteller", website: "https://example.org" },
+        manufacturer: {
+          name: "IT Testhersteller",
+          website: "https://example.org",
+        },
         series: { name: "IT Serie", materialTypes: ["PLA", "PETG"] },
-        version: { name: "v1", spoolMaterial: "kunststoff", validFrom: "2024-01-01" },
-        variant: { nominalWeight: 1000, tareWeight: 215, notes: "aus dem Integrationstest" },
+        version: {
+          name: "v1",
+          spoolMaterial: "kunststoff",
+          validFrom: "2024-01-01",
+        },
+        variant: {
+          nominalWeight: 1000,
+          tareWeight: 215,
+          notes: "aus dem Integrationstest",
+        },
       },
       comment: "Integrationstest",
     });
@@ -275,7 +313,9 @@ describe("Vorschläge", () => {
 
   it("lässt sich kein zweites Mal freigeben", async () => {
     // Prüft die optimistische Sperre in `closeProposal` (affectedRows).
-    await expect(asAdmin.admin.proposal.approve({ id: proposalId })).rejects.toThrow();
+    await expect(
+      asAdmin.admin.proposal.approve({ id: proposalId })
+    ).rejects.toThrow();
   });
 
   it("lässt sich nur einmal zurückziehen", async () => {
@@ -286,7 +326,9 @@ describe("Vorschläge", () => {
     });
 
     await asUser.preset.proposals.withdraw({ id: proposal!.id });
-    await expect(asUser.preset.proposals.withdraw({ id: proposal!.id })).rejects.toThrow();
+    await expect(
+      asUser.preset.proposals.withdraw({ id: proposal!.id })
+    ).rejects.toThrow();
   });
 
   it("weist Vorschläge auf nicht existierende Einträge ab", async () => {
@@ -294,8 +336,12 @@ describe("Vorschläge", () => {
       asUser.preset.proposals.submitChange({
         targetType: "manufacturer",
         targetId: 999_999,
-        payload: { kind: "change", scope: "manufacturer", patch: { name: "Nicht da" } },
-      }),
+        payload: {
+          kind: "change",
+          scope: "manufacturer",
+          patch: { name: "Nicht da" },
+        },
+      })
     ).rejects.toThrow();
   });
 });
@@ -307,8 +353,12 @@ describe("Katalogpflege durch Administratoren", () => {
   let variantId: number;
 
   it("ist beim Anlegen idempotent (natürlicher Schlüssel)", async () => {
-    const first = await asAdmin.admin.preset.createManufacturer({ name: "IT CRUD GmbH" });
-    const again = await asAdmin.admin.preset.createManufacturer({ name: "IT CRUD GmbH" });
+    const first = await asAdmin.admin.preset.createManufacturer({
+      name: "IT CRUD GmbH",
+    });
+    const again = await asAdmin.admin.preset.createManufacturer({
+      name: "IT CRUD GmbH",
+    });
     expect(again.id).toBe(first.id);
     manufacturerId = first.id;
 
@@ -336,12 +386,19 @@ describe("Katalogpflege durch Administratoren", () => {
 
   it("verhindert eine zweite Variante mit demselben Nenngewicht", async () => {
     await expect(
-      asAdmin.admin.preset.createVariant({ versionId, nominalWeight: 750, tareWeight: 141 }),
+      asAdmin.admin.preset.createVariant({
+        versionId,
+        nominalWeight: 750,
+        tareWeight: 141,
+      })
     ).rejects.toThrow();
   });
 
   it("zieht die Anzeigenamen beim Umbenennen nach", async () => {
-    await asAdmin.admin.preset.updateManufacturer({ id: manufacturerId, name: "IT CRUD AG" });
+    await asAdmin.admin.preset.updateManufacturer({
+      id: manufacturerId,
+      name: "IT CRUD AG",
+    });
 
     const variant = await db().query.presetSpoolVariants.findFirst({
       where: eq(schema.presetSpoolVariants.id, variantId),
@@ -350,18 +407,28 @@ describe("Katalogpflege durch Administratoren", () => {
   });
 
   it("blendet deaktivierte Einträge nur für Benutzer aus", async () => {
-    await asAdmin.admin.preset.updateManufacturer({ id: manufacturerId, active: false });
+    await asAdmin.admin.preset.updateManufacturer({
+      id: manufacturerId,
+      active: false,
+    });
 
-    expect((await asUser.preset.tree()).some((m) => m.id === manufacturerId)).toBe(false);
-    const adminEntry = (await asAdmin.admin.preset.tree()).find((m) => m.id === manufacturerId);
+    expect(
+      (await asUser.preset.tree()).some(m => m.id === manufacturerId)
+    ).toBe(false);
+    const adminEntry = (await asAdmin.admin.preset.tree()).find(
+      m => m.id === manufacturerId
+    );
     expect(adminEntry?.active).toBe(false);
 
-    await asAdmin.admin.preset.updateManufacturer({ id: manufacturerId, active: true });
+    await asAdmin.admin.preset.updateManufacturer({
+      id: manufacturerId,
+      active: true,
+    });
   });
 
   it("schützt Einträge mit Kindern vor dem Löschen", async () => {
     await expect(
-      asAdmin.admin.preset.deleteManufacturer({ id: manufacturerId }),
+      asAdmin.admin.preset.deleteManufacturer({ id: manufacturerId })
     ).rejects.toThrow();
   });
 
@@ -381,7 +448,10 @@ describe("Katalogpflege durch Administratoren", () => {
 describe("Materialien und Wiegungen", () => {
   it("legt Material mit Preset-Bezug an und berechnet die Restmenge", async () => {
     const [option] = await asUser.preset.options();
-    const box = await asUser.storageBox.create({ name: "IT Box", tareWeight: 50 });
+    const box = await asUser.storageBox.create({
+      name: "IT Box",
+      tareWeight: 50,
+    });
     expect(box?.id).toBeTypeOf("number");
 
     const material = await asUser.material.create({
@@ -392,10 +462,18 @@ describe("Materialien und Wiegungen", () => {
       spoolPresetVariantId: option.id,
     });
 
-    await asUser.material.addWeighing({ materialId: material.id, grossWeight: 1180 });
-    await asUser.material.addWeighing({ materialId: material.id, grossWeight: 1100 });
+    await asUser.material.addWeighing({
+      materialId: material.id,
+      grossWeight: 1180,
+    });
+    await asUser.material.addWeighing({
+      materialId: material.id,
+      grossWeight: 1100,
+    });
 
-    const listed = (await asUser.material.list()).find((m) => m.id === material.id);
+    const listed = (await asUser.material.list()).find(
+      m => m.id === material.id
+    );
     expect(listed?.remainingWeight).toBeTypeOf("number");
 
     const detail = await asUser.material.byId({ id: material.id });
@@ -410,7 +488,11 @@ describe("Materialien und Wiegungen", () => {
 
 describe("MySQL-Eigenheiten", () => {
   it("speichert Umlaute und Emoji verlustfrei (utf8mb4)", async () => {
-    await upsertUser({ unionId: "it-utf8", name: "Jörg Müller-Straße 🧵✨", role: "user" });
+    await upsertUser({
+      unionId: "it-utf8",
+      name: "Jörg Müller-Straße 🧵✨",
+      role: "user",
+    });
     const found = await findUserByUnionId("it-utf8");
     expect(found?.name).toBe("Jörg Müller-Straße 🧵✨");
 
@@ -426,26 +508,30 @@ describe("MySQL-Eigenheiten", () => {
     // MySQL 8 vergleicht mit utf8mb4_0900_ai_ci akzentunempfindlich
     // ('müller' = 'muller'), MariaDB nicht. Weil `slugify` transliteriert,
     // hängt die Eindeutigkeit der Slugs nicht an der Kollation.
-    const rows = await db().select({ slug: schema.presetManufacturers.slug }).from(
-      schema.presetManufacturers,
-    );
+    const rows = await db()
+      .select({ slug: schema.presetManufacturers.slug })
+      .from(schema.presetManufacturers);
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) expect(row.slug).toMatch(/^[a-z0-9-]+$/);
   });
 
   it("weist zu lange Werte ab, statt sie zu kürzen (Strict Mode)", async () => {
     await expect(
-      db().insert(schema.spoolTypes).values({
-        userId: admin.id,
-        name: "x".repeat(300),
-        tareWeight: 1,
-      }),
+      db()
+        .insert(schema.spoolTypes)
+        .values({
+          userId: admin.id,
+          name: "x".repeat(300),
+          tareWeight: 1,
+        })
     ).rejects.toThrow();
   });
 
   it("weist ungültige Enum-Werte ab", async () => {
     await expect(
-      db().execute(sql`INSERT INTO users (unionId, role) VALUES ('it-bad-enum', 'superadmin')`),
+      db().execute(
+        sql`INSERT INTO users (unionId, role) VALUES ('it-bad-enum', 'superadmin')`
+      )
     ).rejects.toThrow();
   });
 
@@ -456,7 +542,7 @@ describe("MySQL-Eigenheiten", () => {
         name: "Überlauf",
         materialType: "PLA",
         nominalWeight: 2_147_483_648,
-      }),
+      })
     ).rejects.toThrow();
   });
 
@@ -466,11 +552,18 @@ describe("MySQL-Eigenheiten", () => {
       kind: "change",
       targetType: "manufacturer",
       targetId: 1,
-      payload: { kind: "change", scope: "manufacturer", patch: { name: "Zeitzonentest" } },
+      payload: {
+        kind: "change",
+        scope: "manufacturer",
+        patch: { name: "Zeitzonentest" },
+      },
     });
 
     const before = Date.now();
-    await closeProposal(proposal!.id, { status: "rejected", reviewedBy: admin.id });
+    await closeProposal(proposal!.id, {
+      status: "rejected",
+      reviewedBy: admin.id,
+    });
     const after = Date.now();
 
     const closed = await findProposal(proposal!.id);

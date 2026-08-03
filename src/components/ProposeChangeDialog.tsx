@@ -39,26 +39,28 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
   // Der Aufrufer gibt der Komponente einen key je Variante – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [tareWeight, setTareWeight] = useState(() =>
-    variant ? String(variant.tareWeight) : "",
+    variant ? String(variant.tareWeight) : ""
   );
   const [outerDiameterMm, setOuterDiameterMm] = useState(() =>
-    variant?.outerDiameterMm ? String(variant.outerDiameterMm) : "",
+    variant?.outerDiameterMm ? String(variant.outerDiameterMm) : ""
   );
   const [widthMm, setWidthMm] = useState(() =>
-    variant?.widthMm ? String(variant.widthMm) : "",
+    variant?.widthMm ? String(variant.widthMm) : ""
   );
   const [boreDiameterMm, setBoreDiameterMm] = useState(() =>
-    variant?.boreDiameterMm ? String(variant.boreDiameterMm) : "",
+    variant?.boreDiameterMm ? String(variant.boreDiameterMm) : ""
   );
   const [comment, setComment] = useState("");
 
   const submit = trpc.preset.proposals.submitChange.useMutation({
     onSuccess: () => {
-      toast.success("Vorschlag eingereicht – er wird von der Moderation geprüft.");
+      toast.success(
+        "Vorschlag eingereicht – er wird von der Moderation geprüft."
+      );
       utils.preset.proposals.mine.invalidate();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -113,7 +115,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
               type="number"
               min={0}
               value={tareWeight}
-              onChange={(e) => setTareWeight(e.target.value)}
+              onChange={e => setTareWeight(e.target.value)}
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
@@ -125,7 +127,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
                 id="pc-outer"
                 type="number"
                 value={outerDiameterMm}
-                onChange={(e) => setOuterDiameterMm(e.target.value)}
+                onChange={e => setOuterDiameterMm(e.target.value)}
               />
             </div>
             <div className="grid gap-1.5">
@@ -136,7 +138,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
                 id="pc-width"
                 type="number"
                 value={widthMm}
-                onChange={(e) => setWidthMm(e.target.value)}
+                onChange={e => setWidthMm(e.target.value)}
               />
             </div>
             <div className="grid gap-1.5">
@@ -147,7 +149,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
                 id="pc-bore"
                 type="number"
                 value={boreDiameterMm}
-                onChange={(e) => setBoreDiameterMm(e.target.value)}
+                onChange={e => setBoreDiameterMm(e.target.value)}
               />
             </div>
           </div>
@@ -157,7 +159,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
               id="pc-comment"
               rows={2}
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={e => setComment(e.target.value)}
               placeholder="z. B. „Leere Spule dreimal gewogen, im Mittel 138 g“"
             />
           </div>

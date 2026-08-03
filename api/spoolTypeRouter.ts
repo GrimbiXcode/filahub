@@ -19,16 +19,22 @@ const spoolTypeInput = z.object({
 export const spoolTypeRouter = createRouter({
   list: authedQuery.query(({ ctx }) => findSpoolTypesByUser(ctx.user.id)),
 
-  create: authedQuery.input(spoolTypeInput).mutation(({ ctx, input }) =>
-    createSpoolType({ ...input, userId: ctx.user.id }),
-  ),
+  create: authedQuery
+    .input(spoolTypeInput)
+    .mutation(({ ctx, input }) =>
+      createSpoolType({ ...input, userId: ctx.user.id })
+    ),
 
   update: authedQuery
     .input(spoolTypeInput.partial().extend({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       const updated = await updateSpoolType(ctx.user.id, id, data);
-      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Rollentyp nicht gefunden" });
+      if (!updated)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Rollentyp nicht gefunden",
+        });
       return updated;
     }),
 

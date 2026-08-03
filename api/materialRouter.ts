@@ -49,7 +49,7 @@ async function validateForeignKeys(
   userId: number,
   spoolTypeId?: number | null,
   spoolPresetVariantId?: number | null,
-  storageBoxId?: number | null,
+  storageBoxId?: number | null
 ) {
   if (spoolTypeId != null && spoolPresetVariantId != null) {
     throw new TRPCError({
@@ -58,8 +58,14 @@ async function validateForeignKeys(
         "Bitte entweder einen eigenen Rollentyp oder eine Rolle aus dem Katalog wählen.",
     });
   }
-  if (spoolTypeId != null && !(await spoolTypeBelongsToUser(userId, spoolTypeId))) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiger Rollentyp" });
+  if (
+    spoolTypeId != null &&
+    !(await spoolTypeBelongsToUser(userId, spoolTypeId))
+  ) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Ungültiger Rollentyp",
+    });
   }
   if (
     spoolPresetVariantId != null &&
@@ -70,7 +76,10 @@ async function validateForeignKeys(
       message: "Ungültige Rolle aus dem Katalog",
     });
   }
-  if (storageBoxId != null && !(await storageBoxBelongsToUser(userId, storageBoxId))) {
+  if (
+    storageBoxId != null &&
+    !(await storageBoxBelongsToUser(userId, storageBoxId))
+  ) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültige Lagerbox" });
   }
 }
@@ -82,18 +91,24 @@ export const materialRouter = createRouter({
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
       const material = await findMaterialById(ctx.user.id, input.id);
-      if (!material) throw new TRPCError({ code: "NOT_FOUND", message: "Material nicht gefunden" });
+      if (!material)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
       return material;
     }),
 
-  recentWeighings: authedQuery.query(({ ctx }) => findRecentWeighings(ctx.user.id, 10)),
+  recentWeighings: authedQuery.query(({ ctx }) =>
+    findRecentWeighings(ctx.user.id, 10)
+  ),
 
   create: authedQuery
     .input(
       materialInput.extend({
         /** Optionale Erstwägung (Bruttogewicht inkl. Rolle/Box) beim Kauf */
         initialGrossWeight: z.number().int().positive().nullable().optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const { initialGrossWeight, ...data } = input;
@@ -101,7 +116,7 @@ export const materialRouter = createRouter({
         ctx.user.id,
         data.spoolTypeId,
         data.spoolPresetVariantId,
-        data.storageBoxId,
+        data.storageBoxId
       );
       const id = await createMaterial(
         {
@@ -112,7 +127,7 @@ export const materialRouter = createRouter({
           notes: data.notes ?? undefined,
           userId: ctx.user.id,
         },
-        initialGrossWeight,
+        initialGrossWeight
       );
       return { id };
     }),
@@ -123,11 +138,16 @@ export const materialRouter = createRouter({
       const { id, ...data } = input;
       const existing = await findMaterialById(ctx.user.id, id);
       if (!existing) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Material nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
       }
       // Effektiven Zustand nach dem Patch prüfen, nicht nur die gesendeten Felder
       const nextSpoolTypeId =
-        data.spoolTypeId !== undefined ? data.spoolTypeId : existing.spoolTypeId;
+        data.spoolTypeId !== undefined
+          ? data.spoolTypeId
+          : existing.spoolTypeId;
       const nextPresetVariantId =
         data.spoolPresetVariantId !== undefined
           ? data.spoolPresetVariantId
@@ -136,7 +156,7 @@ export const materialRouter = createRouter({
         ctx.user.id,
         nextSpoolTypeId,
         nextPresetVariantId,
-        data.storageBoxId,
+        data.storageBoxId
       );
       await updateMaterial(ctx.user.id, id, data);
       return { ok: true };
@@ -146,7 +166,10 @@ export const materialRouter = createRouter({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       if (!(await materialBelongsToUser(ctx.user.id, input.id))) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Material nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
       }
       await deleteMaterial(ctx.user.id, input.id);
       return { ok: true };
@@ -158,7 +181,7 @@ export const materialRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const gesamt = input.items.reduce(
         (summe, item) => summe + item.anzahl,
-        0,
+        0
       );
       if (gesamt > 200) {
         throw new TRPCError({
@@ -170,7 +193,7 @@ export const materialRouter = createRouter({
       for (const item of input.items) {
         // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
         const name = [item.hersteller, item.typ, item.farbe]
-          .map((s) => s?.trim())
+          .map(s => s?.trim())
           .filter(Boolean)
           .join(" ");
         for (let i = 0; i < item.anzahl; i++) {
@@ -198,11 +221,14 @@ export const materialRouter = createRouter({
         grossWeight: z.number().int().positive("Gewicht muss > 0 sein"),
         weighedAt: z.date().optional(),
         note: z.string().max(500).optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       if (!(await materialBelongsToUser(ctx.user.id, input.materialId))) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Material nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
       }
       return addWeighing(input);
     }),
@@ -211,8 +237,14 @@ export const materialRouter = createRouter({
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
       const weighing = await findWeighing(input.id);
-      if (!weighing || !(await materialBelongsToUser(ctx.user.id, weighing.materialId))) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Wägung nicht gefunden" });
+      if (
+        !weighing ||
+        !(await materialBelongsToUser(ctx.user.id, weighing.materialId))
+      ) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Wägung nicht gefunden",
+        });
       }
       await deleteWeighing(input.id);
       return { ok: true };

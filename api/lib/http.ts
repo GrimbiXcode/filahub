@@ -31,7 +31,7 @@ export class HttpClient {
     const url = new URL(`${this.baseUrl}${endpoint}`);
     if (params) {
       Object.entries(params).forEach(([key, value]) =>
-        url.searchParams.append(key, value.toString()),
+        url.searchParams.append(key, value.toString())
       );
     }
 
@@ -50,9 +50,10 @@ export class HttpClient {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        const errorData = (await response
-          .json()
-          .catch(() => ({}))) as Record<string, string>;
+        const errorData = (await response.json().catch(() => ({}))) as Record<
+          string,
+          string
+        >;
         throw new Error(errorData.message || `HTTP Error: ${response.status}`);
       }
 
@@ -68,7 +69,7 @@ export class HttpClient {
   get<T>(
     url: string,
     params?: RequestConfig["params"],
-    config?: RequestConfig,
+    config?: RequestConfig
   ) {
     return this.request<T>(url, { ...config, method: "GET", params });
   }

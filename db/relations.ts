@@ -22,10 +22,13 @@ export const spoolTypesRelations = relations(spoolTypes, ({ one, many }) => ({
   materials: many(materials),
 }));
 
-export const storageBoxesRelations = relations(storageBoxes, ({ one, many }) => ({
-  user: one(users, { fields: [storageBoxes.userId], references: [users.id] }),
-  materials: many(materials),
-}));
+export const storageBoxesRelations = relations(
+  storageBoxes,
+  ({ one, many }) => ({
+    user: one(users, { fields: [storageBoxes.userId], references: [users.id] }),
+    materials: many(materials),
+  })
+);
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({
   user: one(users, { fields: [materials.userId], references: [users.id] }),
@@ -65,7 +68,7 @@ export const presetManufacturersRelations = relations(
   presetManufacturers,
   ({ many }) => ({
     series: many(presetSpoolSeries),
-  }),
+  })
 );
 
 export const presetSpoolSeriesRelations = relations(
@@ -76,7 +79,7 @@ export const presetSpoolSeriesRelations = relations(
       references: [presetManufacturers.id],
     }),
     versions: many(presetSpoolVersions),
-  }),
+  })
 );
 
 export const presetSpoolVersionsRelations = relations(
@@ -87,7 +90,7 @@ export const presetSpoolVersionsRelations = relations(
       references: [presetSpoolSeries.id],
     }),
     variants: many(presetSpoolVariants),
-  }),
+  })
 );
 
 export const presetSpoolVariantsRelations = relations(
@@ -98,5 +101,5 @@ export const presetSpoolVariantsRelations = relations(
       references: [presetSpoolVersions.id],
     }),
     materials: many(materials),
-  }),
+  })
 );

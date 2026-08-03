@@ -44,7 +44,10 @@ const COMMON_NOMINAL_WEIGHTS = [250, 500, 750, 1000] as const;
 
 /** Baut die Bezeichnung aus Hersteller + Typ + Farbe. */
 function buildAutoName(manufacturer: string, type: string, color: string) {
-  return [manufacturer, type, color].map((s) => s.trim()).filter(Boolean).join(" ");
+  return [manufacturer, type, color]
+    .map(s => s.trim())
+    .filter(Boolean)
+    .join(" ");
 }
 
 export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
@@ -99,9 +102,11 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
           ? encodeSpoolRef("preset", material.spoolPresetVariantId)
           : material?.spoolTypeId
             ? encodeSpoolRef("own", material.spoolTypeId)
-            : NO_SPOOL,
+            : NO_SPOOL
       );
-      setStorageBoxId(material?.storageBoxId ? String(material.storageBoxId) : NONE);
+      setStorageBoxId(
+        material?.storageBoxId ? String(material.storageBoxId) : NONE
+      );
       setInitialGrossWeight("");
       setNotes(material?.notes ?? "");
     }
@@ -117,21 +122,25 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   // beim nächsten Mal automatisch in der Auswahl)
   const typeSuggestions = useMemo(() => {
     const set = new Set<string>(COMMON_MATERIAL_TYPES);
-    (allMaterials ?? []).forEach((m) => m.materialType && set.add(m.materialType));
+    (allMaterials ?? []).forEach(
+      m => m.materialType && set.add(m.materialType)
+    );
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
 
   const manufacturerSuggestions = useMemo(() => {
     const set = new Set<string>();
-    (allMaterials ?? []).forEach((m) => m.manufacturer && set.add(m.manufacturer));
-    spoolTypes?.forEach((s) => s.manufacturer && set.add(s.manufacturer));
-    presetOptions?.forEach((p) => set.add(p.manufacturer));
+    (allMaterials ?? []).forEach(
+      m => m.manufacturer && set.add(m.manufacturer)
+    );
+    spoolTypes?.forEach(s => s.manufacturer && set.add(s.manufacturer));
+    presetOptions?.forEach(p => set.add(p.manufacturer));
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials, spoolTypes, presetOptions]);
 
   const colorSuggestions = useMemo(() => {
     const set = new Set<string>();
-    (allMaterials ?? []).forEach((m) => m.color && set.add(m.color));
+    (allMaterials ?? []).forEach(m => m.color && set.add(m.color));
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
 
@@ -140,12 +149,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     const ref = decodeSpoolRef(spoolRef);
     if (!ref) return 0;
     if (ref.kind === "own")
-      return spoolTypes?.find((s) => s.id === ref.id)?.tareWeight ?? 0;
-    return presetOptions?.find((p) => p.id === ref.id)?.tareWeight ?? 0;
+      return spoolTypes?.find(s => s.id === ref.id)?.tareWeight ?? 0;
+    return presetOptions?.find(p => p.id === ref.id)?.tareWeight ?? 0;
   }, [spoolRef, spoolTypes, presetOptions]);
   const selectedBox = useMemo(
-    () => storageBoxes?.find((b) => String(b.id) === storageBoxId) ?? null,
-    [storageBoxes, storageBoxId],
+    () => storageBoxes?.find(b => String(b.id) === storageBoxId) ?? null,
+    [storageBoxes, storageBoxId]
   );
   const totalTare = selectedSpoolTare + (selectedBox?.tareWeight ?? 0);
 
@@ -161,7 +170,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       invalidate();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const updateMutation = trpc.material.update.useMutation({
     onSuccess: () => {
@@ -169,7 +178,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       invalidate();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const saving = createMutation.isPending || updateMutation.isPending;
@@ -178,8 +187,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     e.preventDefault();
     const nominal = parseInt(nominalWeight, 10);
     const finalName = effectiveName.trim() || autoName;
-    if (!finalName) return toast.error("Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)");
-    if (!materialType.trim()) return toast.error("Bitte eine Materialart angeben");
+    if (!finalName)
+      return toast.error(
+        "Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)"
+      );
+    if (!materialType.trim())
+      return toast.error("Bitte eine Materialart angeben");
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error("Bitte eine gültige Nennmenge in Gramm angeben");
 
@@ -271,7 +284,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Input
                 id="m-identifier"
                 value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
+                onChange={e => setIdentifier(e.target.value)}
                 placeholder="z. B. F01 – zum Beschriften & Suchen"
                 maxLength={50}
               />
@@ -281,7 +294,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Input
                 id="m-name"
                 value={effectiveName}
-                onChange={(e) => {
+                onChange={e => {
                   setNameTouched(true);
                   setName(e.target.value);
                 }}
@@ -294,7 +307,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 id="m-price"
                 inputMode="decimal"
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onChange={e => setPrice(e.target.value)}
                 placeholder={`z. B. ${centsToInput(2499)}`}
               />
             </div>
@@ -304,7 +317,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 id="m-date"
                 type="date"
                 value={purchaseDate}
-                onChange={(e) => setPurchaseDate(e.target.value)}
+                onChange={e => setPurchaseDate(e.target.value)}
               />
             </div>
             <div className="grid gap-2">
@@ -315,19 +328,21 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 inputMode="numeric"
                 min={1}
                 value={nominalWeight}
-                onChange={(e) => setNominalWeight(e.target.value)}
+                onChange={e => setNominalWeight(e.target.value)}
                 placeholder="z. B. 1000"
               />
               {/* Die vier üblichen Spulengrößen als Knopf – spart auf dem
                   Telefon das Eintippen. */}
               <div className="flex flex-wrap gap-1.5">
-                {COMMON_NOMINAL_WEIGHTS.map((grams) => (
+                {COMMON_NOMINAL_WEIGHTS.map(grams => (
                   <Button
                     key={grams}
                     type="button"
                     size="sm"
                     variant={
-                      parseInt(nominalWeight, 10) === grams ? "secondary" : "outline"
+                      parseInt(nominalWeight, 10) === grams
+                        ? "secondary"
+                        : "outline"
                     }
                     onClick={() => setNominalWeight(String(grams))}
                   >
@@ -355,7 +370,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={NONE}>Keine Box</SelectItem>
-                  {storageBoxes?.map((b) => (
+                  {storageBoxes?.map(b => (
                     <SelectItem key={b.id} value={String(b.id)}>
                       {b.name} ({formatGrams(b.tareWeight)})
                     </SelectItem>
@@ -364,27 +379,32 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               </Select>
               {storageBoxes?.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Noch keine Lagerboxen angelegt – unter „Lagerboxen“ hinzufügen.
+                  Noch keine Lagerboxen angelegt – unter „Lagerboxen“
+                  hinzufügen.
                 </p>
               )}
             </div>
             {!isEdit && (
               <div className="grid gap-2 sm:col-span-2">
                 <Label htmlFor="m-initial">
-                  Erstwägung inkl. Rolle{selectedBox ? " + Box" : ""} (g, optional)
+                  Erstwägung inkl. Rolle{selectedBox ? " + Box" : ""} (g,
+                  optional)
                 </Label>
                 <Input
                   id="m-initial"
                   type="number"
                   min={1}
                   value={initialGrossWeight}
-                  onChange={(e) => setInitialGrossWeight(e.target.value)}
+                  onChange={e => setInitialGrossWeight(e.target.value)}
                   placeholder="Gemessenes Gesamtgewicht beim Kauf"
                 />
                 <p className="text-xs text-muted-foreground">
                   Tara gesamt: {formatGrams(totalTare)} (Rolle{" "}
                   {formatGrams(selectedSpoolTare)}
-                  {selectedBox ? ` + Box ${formatGrams(selectedBox.tareWeight)}` : ""})
+                  {selectedBox
+                    ? ` + Box ${formatGrams(selectedBox.tareWeight)}`
+                    : ""}
+                  )
                 </p>
               </div>
             )}
@@ -393,7 +413,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Textarea
                 id="m-notes"
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={e => setNotes(e.target.value)}
                 placeholder="Drucktemperatur, Besonderheiten …"
                 rows={2}
               />

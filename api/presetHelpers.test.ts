@@ -15,7 +15,9 @@ import {
 
 describe("slugify", () => {
   it("löst Umlaute und Sonderzeichen auf", () => {
-    expect(slugify("Polymaker PolyTerra™ Grün")).toBe("polymaker-polyterra-gruen");
+    expect(slugify("Polymaker PolyTerra™ Grün")).toBe(
+      "polymaker-polyterra-gruen"
+    );
     expect(slugify("Weiß & Schwarz")).toBe("weiss-schwarz");
     expect(slugify("eSUN")).toBe("esun");
   });
@@ -78,14 +80,17 @@ describe("formatNominalWeight / buildVariantDisplayName", () => {
         series: "PolyTerra PLA",
         version: "Kartonspule (ab 2021)",
         nominalWeight: 1000,
-      }),
+      })
     ).toBe("Polymaker · PolyTerra PLA · Kartonspule (ab 2021) · 1 kg");
   });
 });
 
 describe("encodeSpoolRef / decodeSpoolRef", () => {
   it("kodiert und dekodiert verlustfrei", () => {
-    expect(decodeSpoolRef(encodeSpoolRef("own", 12))).toEqual({ kind: "own", id: 12 });
+    expect(decodeSpoolRef(encodeSpoolRef("own", 12))).toEqual({
+      kind: "own",
+      id: 12,
+    });
     expect(decodeSpoolRef(encodeSpoolRef("preset", 34))).toEqual({
       kind: "preset",
       id: 34,
@@ -107,7 +112,7 @@ describe("resolveSpoolTare", () => {
       resolveSpoolTare({
         spoolType: { tareWeight: 220 },
         spoolPresetVariant: { tareWeight: 140 },
-      }),
+      })
     ).toBe(140);
   });
 
@@ -117,7 +122,9 @@ describe("resolveSpoolTare", () => {
 
   it("liefert ohne Rolle 0", () => {
     expect(resolveSpoolTare({})).toBe(0);
-    expect(resolveSpoolTare({ spoolType: null, spoolPresetVariant: null })).toBe(0);
+    expect(
+      resolveSpoolTare({ spoolType: null, spoolPresetVariant: null })
+    ).toBe(0);
   });
 });
 
@@ -130,20 +137,26 @@ describe("isPresetHidden", () => {
   };
 
   it("blendet kaskadierend nach unten aus", () => {
-    expect(isPresetHidden(new Set([hiddenKey("manufacturer", 1)]), path)).toBe(true);
+    expect(isPresetHidden(new Set([hiddenKey("manufacturer", 1)]), path)).toBe(
+      true
+    );
     expect(isPresetHidden(new Set([hiddenKey("series", 2)]), path)).toBe(true);
     expect(isPresetHidden(new Set([hiddenKey("version", 3)]), path)).toBe(true);
     expect(isPresetHidden(new Set([hiddenKey("variant", 4)]), path)).toBe(true);
   });
 
   it("wirkt nicht auf Geschwister", () => {
-    expect(isPresetHidden(new Set([hiddenKey("series", 99)]), path)).toBe(false);
-    expect(isPresetHidden(new Set([hiddenKey("manufacturer", 2)]), path)).toBe(false);
+    expect(isPresetHidden(new Set([hiddenKey("series", 99)]), path)).toBe(
+      false
+    );
+    expect(isPresetHidden(new Set([hiddenKey("manufacturer", 2)]), path)).toBe(
+      false
+    );
   });
 
   it("bewertet auch Teilpfade", () => {
     expect(
-      isPresetHidden(new Set([hiddenKey("variant", 4)]), { manufacturerId: 1 }),
+      isPresetHidden(new Set([hiddenKey("variant", 4)]), { manufacturerId: 1 })
     ).toBe(false);
   });
 });

@@ -57,7 +57,7 @@ function stripCodeFences(text: string): string {
 /** Liefert die Validierungsfehler einer Zeile (leer = gültig). */
 function zeilenFehler(
   zeile: ImportZeile,
-  parseMoney: (value: string) => number | null,
+  parseMoney: (value: string) => number | null
 ): string[] {
   const fehler: string[] = [];
   if (!zeile.typ.trim()) fehler.push("Typ fehlt");
@@ -121,7 +121,7 @@ export default function Import() {
       parsed = JSON.parse(stripCodeFences(jsonText));
     } catch {
       setPruefFehler(
-        "Das ist kein gültiges JSON. Bitte die Ausgabe des LLM prüfen.",
+        "Das ist kein gültiges JSON. Bitte die Ausgabe des LLM prüfen."
       );
       return;
     }
@@ -129,8 +129,10 @@ export default function Import() {
     if (!ergebnis.success) {
       setPruefFehler(
         ergebnis.error.issues
-          .map(issue => `${issue.path.join(".") || "Payload"}: ${issue.message}`)
-          .join("\n"),
+          .map(
+            issue => `${issue.path.join(".") || "Payload"}: ${issue.message}`
+          )
+          .join("\n")
       );
       return;
     }
@@ -143,17 +145,18 @@ export default function Import() {
         nenngewicht: String(p.nenngewicht),
         preis: p.preis != null ? centsToInput(Math.round(p.preis * 100)) : "",
         anzahl: String(p.anzahl),
-      })),
+      }))
     );
   };
 
   const zeileAendern = (
     index: number,
     feld: keyof ImportZeile,
-    wert: string,
+    wert: string
   ) => {
     setZeilen(
-      prev => prev?.map((z, i) => (i === index ? { ...z, [feld]: wert } : z)) ?? null,
+      prev =>
+        prev?.map((z, i) => (i === index ? { ...z, [feld]: wert } : z)) ?? null
     );
   };
 
@@ -328,7 +331,8 @@ export default function Import() {
                           key={index}
                           className={cn(
                             "rounded-xl border p-3",
-                            fehler.length > 0 && "border-destructive/50 bg-destructive/5",
+                            fehler.length > 0 &&
+                              "border-destructive/50 bg-destructive/5"
                           )}
                         >
                           <div className="mb-3 flex items-center justify-between">
@@ -374,7 +378,7 @@ export default function Import() {
                                   zeileAendern(
                                     index,
                                     "hersteller",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                               />
@@ -409,7 +413,7 @@ export default function Import() {
                                   zeileAendern(
                                     index,
                                     "nenngewicht",
-                                    e.target.value,
+                                    e.target.value
                                   )
                                 }
                               />
@@ -465,7 +469,9 @@ export default function Import() {
                           <TableHead>Hersteller</TableHead>
                           <TableHead>Typ</TableHead>
                           <TableHead>Farbe</TableHead>
-                          <TableHead className="w-28">Nenngewicht (g)</TableHead>
+                          <TableHead className="w-28">
+                            Nenngewicht (g)
+                          </TableHead>
                           <TableHead className="w-28">
                             Preis ({currencySymbol})
                           </TableHead>
@@ -480,7 +486,7 @@ export default function Import() {
                             <TableRow
                               key={index}
                               className={cn(
-                                fehler.length > 0 && "bg-destructive/10",
+                                fehler.length > 0 && "bg-destructive/10"
                               )}
                             >
                               <TableCell>
@@ -491,7 +497,7 @@ export default function Import() {
                                     zeileAendern(
                                       index,
                                       "hersteller",
-                                      e.target.value,
+                                      e.target.value
                                     )
                                   }
                                 />
@@ -523,7 +529,7 @@ export default function Import() {
                                     zeileAendern(
                                       index,
                                       "nenngewicht",
-                                      e.target.value,
+                                      e.target.value
                                     )
                                   }
                                 />
@@ -545,7 +551,11 @@ export default function Import() {
                                   inputMode="numeric"
                                   aria-label={`Anzahl Position ${index + 1}`}
                                   onChange={e =>
-                                    zeileAendern(index, "anzahl", e.target.value)
+                                    zeileAendern(
+                                      index,
+                                      "anzahl",
+                                      e.target.value
+                                    )
                                   }
                                 />
                               </TableCell>
@@ -575,7 +585,7 @@ export default function Import() {
                       <p key={index} className="text-sm text-destructive">
                         Position {index + 1}: {fehlerProZeile[index].join(", ")}
                       </p>
-                    ) : null,
+                    ) : null
                   )}
                 </div>
               )}

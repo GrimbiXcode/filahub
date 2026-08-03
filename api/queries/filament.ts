@@ -45,7 +45,7 @@ export async function updateSpoolType(
     manufacturer: string | null;
     tareWeight: number;
     notes: string | null;
-  }>,
+  }>
 ) {
   await getDb()
     .update(spoolTypes)
@@ -86,8 +86,13 @@ export async function createStorageBox(data: {
   tareWeight: number;
   notes?: string;
 }) {
-  const [{ id }] = await getDb().insert(storageBoxes).values(data).$returningId();
-  return getDb().query.storageBoxes.findFirst({ where: eq(storageBoxes.id, id) });
+  const [{ id }] = await getDb()
+    .insert(storageBoxes)
+    .values(data)
+    .$returningId();
+  return getDb().query.storageBoxes.findFirst({
+    where: eq(storageBoxes.id, id),
+  });
 }
 
 export async function updateStorageBox(
@@ -98,13 +103,15 @@ export async function updateStorageBox(
     location: string | null;
     tareWeight: number;
     notes: string | null;
-  }>,
+  }>
 ) {
   await getDb()
     .update(storageBoxes)
     .set(data)
     .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)));
-  return getDb().query.storageBoxes.findFirst({ where: eq(storageBoxes.id, id) });
+  return getDb().query.storageBoxes.findFirst({
+    where: eq(storageBoxes.id, id),
+  });
 }
 
 export async function countMaterialsWithStorageBox(id: number) {
@@ -154,7 +161,7 @@ export type MaterialOverview = MaterialWithRelations & {
  * null-Feldern statt null zurück. Normalisiert solche Relationen zu null.
  */
 function normalizeRelation<T extends { id: number | null } | null>(
-  relation: T,
+  relation: T
 ): T extends { id: number } ? T : null {
   return (relation != null && relation.id != null ? relation : null) as never;
 }
@@ -163,11 +170,13 @@ function normalizeRelation<T extends { id: number | null } | null>(
 export function computeMaterialStats(
   material: MaterialWithRelations,
   lastWeighing: Weighing | null,
-  weighingCount: number,
+  weighingCount: number
 ): MaterialOverview {
   const spoolTareWeight = resolveSpoolTare(material);
   const spoolLabel =
-    material.spoolPresetVariant?.displayName ?? material.spoolType?.name ?? null;
+    material.spoolPresetVariant?.displayName ??
+    material.spoolType?.name ??
+    null;
   const tareWeight = spoolTareWeight + (material.storageBox?.tareWeight ?? 0);
   const remainingWeight =
     lastWeighing != null
@@ -175,7 +184,13 @@ export function computeMaterialStats(
       : material.nominalWeight;
   const remainingPercent =
     material.nominalWeight > 0
-      ? Math.min(100, Math.max(0, Math.round((remainingWeight / material.nominalWeight) * 100)))
+      ? Math.min(
+          100,
+          Math.max(
+            0,
+            Math.round((remainingWeight / material.nominalWeight) * 100)
+          )
+        )
       : null;
   return {
     ...material,
@@ -189,7 +204,9 @@ export function computeMaterialStats(
   };
 }
 
-export async function findMaterialsByUser(userId: number): Promise<MaterialOverview[]> {
+export async function findMaterialsByUser(
+  userId: number
+): Promise<MaterialOverview[]> {
   const db = getDb();
   const rows = await db.query.materials.findMany({
     where: eq(materials.userId, userId),
@@ -201,9 +218,9 @@ export async function findMaterialsByUser(userId: number): Promise<MaterialOverv
     },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
   });
-  return rows.map((row) => {
+  return rows.map(row => {
     const sorted = [...row.weighings].sort(
-      (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id,
+      (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id
     );
     const last = sorted[0] ?? null;
     const { weighings: _omit, ...rest } = row;
@@ -215,7 +232,7 @@ export async function findMaterialsByUser(userId: number): Promise<MaterialOverv
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
-      row.weighings.length,
+      row.weighings.length
     );
   });
 }
@@ -242,7 +259,7 @@ export async function findMaterialById(userId: number, id: number) {
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
-      list.length,
+      list.length
     ),
     weighings: list,
   };
@@ -264,12 +281,14 @@ export async function createMaterial(
     storageBoxId?: number | null;
     notes?: string;
   },
-  initialGrossWeight?: number | null,
+  initialGrossWeight?: number | null
 ) {
   const db = getDb();
   const [{ id }] = await db.insert(materials).values(data).$returningId();
   if (initialGrossWeight != null) {
-    await db.insert(weighings).values({ materialId: id, grossWeight: initialGrossWeight });
+    await db
+      .insert(weighings)
+      .values({ materialId: id, grossWeight: initialGrossWeight });
   }
   return id;
 }
@@ -290,7 +309,7 @@ export async function updateMaterial(
     spoolPresetVariantId: number | null;
     storageBoxId: number | null;
     notes: string | null;
-  }>,
+  }>
 ) {
   await getDb()
     .update(materials)
@@ -301,7 +320,9 @@ export async function updateMaterial(
 export async function deleteMaterial(userId: number, id: number) {
   const db = getDb();
   await db.delete(weighings).where(eq(weighings.materialId, id));
-  await db.delete(materials).where(and(eq(materials.id, id), eq(materials.userId, userId)));
+  await db
+    .delete(materials)
+    .where(and(eq(materials.id, id), eq(materials.userId, userId)));
 }
 
 export async function addWeighing(data: {
@@ -323,7 +344,10 @@ export async function deleteWeighing(id: number) {
 }
 
 /** Prüft, ob ein Material dem Benutzer gehört. */
-export async function materialBelongsToUser(userId: number, materialId: number) {
+export async function materialBelongsToUser(
+  userId: number,
+  materialId: number
+) {
   const row = await getDb()
     .select({ id: materials.id })
     .from(materials)
@@ -360,7 +384,9 @@ export async function presetVariantIsSelectable(id: number) {
   const row = await getDb()
     .select({ id: presetSpoolVariants.id })
     .from(presetSpoolVariants)
-    .where(and(eq(presetSpoolVariants.id, id), eq(presetSpoolVariants.active, true)))
+    .where(
+      and(eq(presetSpoolVariants.id, id), eq(presetSpoolVariants.active, true))
+    )
     .limit(1);
   return row.length > 0;
 }
@@ -381,7 +407,7 @@ export async function findRecentWeighings(userId: number, limit = 10) {
     .select({ id: materials.id })
     .from(materials)
     .where(eq(materials.userId, userId));
-  const ids = mats.map((m) => m.id);
+  const ids = mats.map(m => m.id);
   if (ids.length === 0) return [];
   const rows = await db.query.weighings.findMany({
     where: (t, { inArray }) => inArray(t.materialId, ids),

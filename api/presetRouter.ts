@@ -46,7 +46,11 @@ const proposeNewInput = z.object({
 /** Vorschlag direkt aus einem eigenen Rollentyp heraus */
 const proposeFromSpoolTypeInput = z.object({
   spoolTypeId: z.number().int().positive(),
-  manufacturer: z.string().trim().min(1, "Herstellername ist erforderlich").max(255),
+  manufacturer: z
+    .string()
+    .trim()
+    .min(1, "Herstellername ist erforderlich")
+    .max(255),
   series: z.string().trim().min(1, "Name der Serie ist erforderlich").max(255),
   version: z
     .string()
@@ -75,7 +79,7 @@ async function assertProposalQuota(userId: number) {
 /** Prüft, ob der Katalogeintrag existiert, auf den sich ein Vorschlag bezieht. */
 async function assertTargetExists(
   targetType: (typeof PRESET_SCOPES)[number],
-  targetId: number,
+  targetId: number
 ) {
   const found =
     targetType === "manufacturer"
@@ -98,7 +102,9 @@ export const presetRouter = createRouter({
   tree: authedQuery.query(({ ctx }) => findCatalogTree(ctx.user.id)),
 
   /** Flache Auswahlliste für das Materialformular (ohne Ausgeblendete) */
-  options: authedQuery.query(({ ctx }) => findPresetOptionsForUser(ctx.user.id)),
+  options: authedQuery.query(({ ctx }) =>
+    findPresetOptionsForUser(ctx.user.id)
+  ),
 
   setHidden: authedQuery
     .input(
@@ -106,10 +112,15 @@ export const presetRouter = createRouter({
         scope: scopeSchema,
         refId: z.number().int().positive(),
         hidden: z.boolean(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
-      await setHiddenPreset(ctx.user.id, input.scope, input.refId, input.hidden);
+      await setHiddenPreset(
+        ctx.user.id,
+        input.scope,
+        input.refId,
+        input.hidden
+      );
       return { ok: true };
     }),
 
@@ -119,7 +130,7 @@ export const presetRouter = createRouter({
       z.object({
         variantId: z.number().int().positive(),
         name: z.string().trim().max(255).optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const path = await findPresetVariantWithPath(input.variantId);
@@ -166,7 +177,7 @@ export const presetRouter = createRouter({
       .mutation(async ({ ctx, input }) => {
         await assertProposalQuota(ctx.user.id);
         const own = (await findSpoolTypesByUser(ctx.user.id)).find(
-          (s) => s.id === input.spoolTypeId,
+          s => s.id === input.spoolTypeId
         );
         if (!own) {
           throw new TRPCError({
@@ -178,7 +189,10 @@ export const presetRouter = createRouter({
           kind: "new",
           manufacturer: { name: input.manufacturer },
           series: { name: input.series, materialTypes: input.materialTypes },
-          version: { name: input.version, spoolMaterial: input.spoolMaterial ?? null },
+          version: {
+            name: input.version,
+            spoolMaterial: input.spoolMaterial ?? null,
+          },
           variant: {
             nominalWeight: input.nominalWeight,
             tareWeight: own.tareWeight,
@@ -189,7 +203,8 @@ export const presetRouter = createRouter({
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              payload.error.issues[0]?.message ?? "Der Vorschlag ist unvollständig.",
+              payload.error.issues[0]?.message ??
+              "Der Vorschlag ist unvollständig.",
           });
         }
         return createProposal({

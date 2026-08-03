@@ -19,16 +19,24 @@ const storageBoxInput = z.object({
 export const storageBoxRouter = createRouter({
   list: authedQuery.query(({ ctx }) => findStorageBoxesByUser(ctx.user.id)),
 
-  create: authedQuery.input(storageBoxInput).mutation(({ ctx, input }) =>
-    createStorageBox({ ...input, userId: ctx.user.id }),
-  ),
+  create: authedQuery
+    .input(storageBoxInput)
+    .mutation(({ ctx, input }) =>
+      createStorageBox({ ...input, userId: ctx.user.id })
+    ),
 
   update: authedQuery
-    .input(storageBoxInput.partial().extend({ id: z.number().int().positive() }))
+    .input(
+      storageBoxInput.partial().extend({ id: z.number().int().positive() })
+    )
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
       const updated = await updateStorageBox(ctx.user.id, id, data);
-      if (!updated) throw new TRPCError({ code: "NOT_FOUND", message: "Lagerbox nicht gefunden" });
+      if (!updated)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Lagerbox nicht gefunden",
+        });
       return updated;
     }),
 

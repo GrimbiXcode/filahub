@@ -64,19 +64,19 @@ In Vite, allen tsconfigs und vitest konfiguriert:
 
 ## Befehle
 
-| Befehl | Zweck |
-|---|---|
-| `npm run dev` | Vite-Dev-Server mit HMR auf Port 3000; das Backend läuft via `@hono/vite-dev-server` mit (`api/boot.ts`) |
-| `npm run check` | TypeScript-Prüfung (`tsc -b`, Projekt-Referenzen) |
-| `npm run build` | `vite build` → `dist/public`, dann esbuild-Bundle von `api/boot.ts` → `dist/boot.js` |
-| `npm start` | Produktionsstart: `NODE_ENV=production node dist/boot.js` |
-| `npm run test` | Vitest ohne Datenbank (`vitest run`) |
-| `npm run test:integration` | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`) |
-| `npm run lint` | ESLint (Flat-Config) |
-| `npm run format` | Prettier über das Repo – ohne generierte und upstream-nahe Dateien, siehe `.prettierignore` |
-| `npm run db:push` | Drizzle-Schema direkt in die DB synchronisieren |
-| `npm run db:generate` / `db:migrate` | Migrationen erzeugen / anwenden (Output: `db/migrations/`) |
-| `npm run db:seed` | Startkatalog der Presets einspielen (idempotent) |
+| Befehl                               | Zweck                                                                                                    |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                        | Vite-Dev-Server mit HMR auf Port 3000; das Backend läuft via `@hono/vite-dev-server` mit (`api/boot.ts`) |
+| `npm run check`                      | TypeScript-Prüfung (`tsc -b`, Projekt-Referenzen)                                                        |
+| `npm run build`                      | `vite build` → `dist/public`, dann esbuild-Bundle von `api/boot.ts` → `dist/boot.js`                     |
+| `npm start`                          | Produktionsstart: `NODE_ENV=production node dist/boot.js`                                                |
+| `npm run test`                       | Vitest ohne Datenbank (`vitest run`)                                                                     |
+| `npm run test:integration`           | Vitest gegen eine echte MySQL-Datenbank (braucht `TEST_DATABASE_URL`)                                    |
+| `npm run lint`                       | ESLint (Flat-Config)                                                                                     |
+| `npm run format`                     | Prettier über das Repo – ohne generierte und upstream-nahe Dateien, siehe `.prettierignore`              |
+| `npm run db:push`                    | Drizzle-Schema direkt in die DB synchronisieren                                                          |
+| `npm run db:generate` / `db:migrate` | Migrationen erzeugen / anwenden (Output: `db/migrations/`)                                               |
+| `npm run db:seed`                    | Startkatalog der Presets einspielen (idempotent)                                                         |
 
 TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
 `tsconfig.app.json` (`src/`), `tsconfig.server.json` (`api/`, `contracts/`,
@@ -118,7 +118,7 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
 - **Rollenwahl am Material:** entweder `materials.spoolTypeId` (eigener
   Rollentyp) **oder** `materials.spoolPresetVariantId` – nie beides. Geprüft
   wird das an genau einer Stelle (`validateForeignKeys` in
-  `api/materialRouter.ts`), und zwar immer der Zustand *nach* dem Patch. Die
+  `api/materialRouter.ts`), und zwar immer der Zustand _nach_ dem Patch. Die
   Priorität beim Auflösen der Tara steht in `resolveSpoolTare`
   (`contracts/presets.ts`) und wird von Server und Client gemeinsam genutzt.
 - **`displayName` auf der Variante** ist denormalisiert. Nach jeder Umbenennung

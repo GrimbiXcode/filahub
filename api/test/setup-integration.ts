@@ -25,14 +25,14 @@ if (!testUrl) {
       "",
       "Tests ausführen:",
       "  TEST_DATABASE_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_test' npm run test:integration",
-    ].join("\n"),
+    ].join("\n")
   );
 }
 
 if (process.env.DATABASE_URL && process.env.DATABASE_URL === testUrl) {
   throw new Error(
     "TEST_DATABASE_URL zeigt auf dieselbe Datenbank wie DATABASE_URL. " +
-      "Die Integrationstests löschen alle Tabellen – bitte eine eigene Testdatenbank verwenden.",
+      "Die Integrationstests löschen alle Tabellen – bitte eine eigene Testdatenbank verwenden."
   );
 }
 

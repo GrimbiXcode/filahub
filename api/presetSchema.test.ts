@@ -36,7 +36,9 @@ describe("materialTypesSchema", () => {
   });
 
   it("erlaubt höchstens 20 Einträge", () => {
-    expect(materialTypesSchema.safeParse(Array(21).fill("PLA")).success).toBe(false);
+    expect(materialTypesSchema.safeParse(Array(21).fill("PLA")).success).toBe(
+      false
+    );
   });
 });
 
@@ -44,7 +46,9 @@ describe("manufacturerFieldsSchema", () => {
   it("verlangt einen Namen", () => {
     const result = manufacturerFieldsSchema.safeParse({ name: "" });
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toBe("Herstellername ist erforderlich");
+    expect(result.error?.issues[0]?.message).toBe(
+      "Herstellername ist erforderlich"
+    );
   });
 
   it("lehnt eine ungültige URL ab", () => {
@@ -53,7 +57,9 @@ describe("manufacturerFieldsSchema", () => {
       website: "keine-url",
     });
     expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toBe("Bitte eine gültige URL angeben");
+    expect(result.error?.issues[0]?.message).toBe(
+      "Bitte eine gültige URL angeben"
+    );
   });
 });
 
@@ -71,7 +77,7 @@ describe("versionFieldsSchema", () => {
         name: "Kartonspule",
         validFrom: "2021-01-01",
         validTo: "2023-12-31",
-      }).success,
+      }).success
     ).toBe(true);
   });
 
@@ -83,14 +89,15 @@ describe("versionFieldsSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe(
-      "„Gültig ab“ muss vor „Gültig bis“ liegen",
+      "„Gültig ab“ muss vor „Gültig bis“ liegen"
     );
     expect(result.error?.issues[0]?.path).toEqual(["validTo"]);
   });
 
   it("lehnt ein falsches Datumsformat ab", () => {
     expect(
-      versionFieldsSchema.safeParse({ name: "X", validFrom: "01.01.2021" }).success,
+      versionFieldsSchema.safeParse({ name: "X", validFrom: "01.01.2021" })
+        .success
     ).toBe(false);
   });
 });
@@ -101,7 +108,10 @@ describe("variantFieldsSchema", () => {
   });
 
   it("lehnt ein Nenngewicht <= 0 ab", () => {
-    const result = variantFieldsSchema.safeParse({ ...validVariant, nominalWeight: 0 });
+    const result = variantFieldsSchema.safeParse({
+      ...validVariant,
+      nominalWeight: 0,
+    });
     expect(result.success).toBe(false);
   });
 
@@ -112,7 +122,7 @@ describe("variantFieldsSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe(
-      "Das Leergewicht muss kleiner als das Nenngewicht sein",
+      "Das Leergewicht muss kleiner als das Nenngewicht sein"
     );
   });
 
@@ -123,13 +133,14 @@ describe("variantFieldsSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe(
-      "Die Bohrung muss kleiner als der Außendurchmesser sein",
+      "Die Bohrung muss kleiner als der Außendurchmesser sein"
     );
   });
 
   it("erlaubt fehlende Abmessungen", () => {
     expect(
-      variantFieldsSchema.safeParse({ nominalWeight: 1000, tareWeight: 140 }).success,
+      variantFieldsSchema.safeParse({ nominalWeight: 1000, tareWeight: 140 })
+        .success
     ).toBe(true);
   });
 });
@@ -172,14 +183,14 @@ describe("proposalChangePayloadSchema", () => {
         kind: "change",
         scope: "variant",
         patch: { tareWeight: 138 },
-      }).success,
+      }).success
     ).toBe(true);
     expect(
       proposalChangePayloadSchema.safeParse({
         kind: "change",
         scope: "manufacturer",
         patch: { name: "Polymaker Ltd." },
-      }).success,
+      }).success
     ).toBe(true);
   });
 
@@ -191,7 +202,7 @@ describe("proposalChangePayloadSchema", () => {
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toBe(
-      "Der Vorschlag enthält keine Änderungen",
+      "Der Vorschlag enthält keine Änderungen"
     );
   });
 
@@ -201,7 +212,7 @@ describe("proposalChangePayloadSchema", () => {
         kind: "change",
         scope: "farbe",
         patch: { name: "X" },
-      }).success,
+      }).success
     ).toBe(false);
   });
 });

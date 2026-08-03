@@ -12,12 +12,12 @@ async function seed() {
   console.log("Preset-Katalog wird eingespielt …");
   const stats = await seedSpoolPresets();
   console.log(
-    `Fertig: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`,
+    `Fertig: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
   );
   process.exit(0); // MySQL-Pool schließen
 }
 
-seed().catch((error) => {
+seed().catch(error => {
   console.error("Seeding fehlgeschlagen:", error);
   process.exit(1);
 });

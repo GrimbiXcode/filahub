@@ -5,7 +5,7 @@ import {
 } from "./queries/filament";
 
 function material(
-  overrides: Partial<MaterialWithRelations> = {},
+  overrides: Partial<MaterialWithRelations> = {}
 ): MaterialWithRelations {
   return {
     id: 1,
@@ -73,8 +73,15 @@ describe("computeMaterialStats", () => {
   it("verhält sich ohne Preset-Variante exakt wie bisher", () => {
     const stats = computeMaterialStats(
       material({ spoolType: ownSpool, storageBox: box }),
-      { id: 1, materialId: 1, grossWeight: 1500, weighedAt: new Date(), note: null, createdAt: new Date() },
-      1,
+      {
+        id: 1,
+        materialId: 1,
+        grossWeight: 1500,
+        weighedAt: new Date(),
+        note: null,
+        createdAt: new Date(),
+      },
+      1
     );
     expect(stats.tareWeight).toBe(720);
     expect(stats.spoolTareWeight).toBe(220);
@@ -85,8 +92,15 @@ describe("computeMaterialStats", () => {
   it("nutzt das Leergewicht der Preset-Variante", () => {
     const stats = computeMaterialStats(
       material({ spoolPresetVariant: presetVariant }),
-      { id: 1, materialId: 1, grossWeight: 1130, weighedAt: new Date(), note: null, createdAt: new Date() },
-      1,
+      {
+        id: 1,
+        materialId: 1,
+        grossWeight: 1130,
+        weighedAt: new Date(),
+        note: null,
+        createdAt: new Date(),
+      },
+      1
     );
     expect(stats.spoolTareWeight).toBe(130);
     expect(stats.tareWeight).toBe(130);
@@ -99,7 +113,7 @@ describe("computeMaterialStats", () => {
     const stats = computeMaterialStats(
       material({ spoolType: ownSpool, spoolPresetVariant: presetVariant }),
       null,
-      0,
+      0
     );
     expect(stats.spoolTareWeight).toBe(130);
     expect(stats.spoolLabel).toBe(presetVariant.displayName);
@@ -116,8 +130,15 @@ describe("computeMaterialStats", () => {
   it("begrenzt die Restmenge nach unten auf 0", () => {
     const stats = computeMaterialStats(
       material({ spoolPresetVariant: presetVariant }),
-      { id: 1, materialId: 1, grossWeight: 100, weighedAt: new Date(), note: null, createdAt: new Date() },
-      1,
+      {
+        id: 1,
+        materialId: 1,
+        grossWeight: 100,
+        weighedAt: new Date(),
+        note: null,
+        createdAt: new Date(),
+      },
+      1
     );
     expect(stats.remainingWeight).toBe(0);
     expect(stats.remainingPercent).toBe(0);

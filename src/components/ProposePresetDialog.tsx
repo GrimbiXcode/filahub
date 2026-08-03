@@ -41,7 +41,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
   // Der Aufrufer gibt der Komponente einen key je Rollentyp – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [manufacturer, setManufacturer] = useState(
-    () => spoolType?.manufacturer ?? "",
+    () => spoolType?.manufacturer ?? ""
   );
   const [series, setSeries] = useState("");
   const [version, setVersion] = useState("");
@@ -52,24 +52,29 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
 
   const submit = trpc.preset.proposals.submitFromSpoolType.useMutation({
     onSuccess: () => {
-      toast.success("Vorschlag eingereicht – er wird von der Moderation geprüft.");
+      toast.success(
+        "Vorschlag eingereicht – er wird von der Moderation geprüft."
+      );
       utils.preset.proposals.mine.invalidate();
       onOpenChange(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!spoolType) return;
     const nominal = parseInt(nominalWeight, 10);
-    if (!manufacturer.trim()) return toast.error("Bitte einen Hersteller angeben");
+    if (!manufacturer.trim())
+      return toast.error("Bitte einen Hersteller angeben");
     if (!series.trim()) return toast.error("Bitte eine Serie angeben");
     if (!version.trim()) return toast.error("Bitte eine Ausführung angeben");
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error("Bitte ein gültiges Nenngewicht in Gramm angeben");
     if (spoolType.tareWeight >= nominal)
-      return toast.error("Das Leergewicht muss kleiner als das Nenngewicht sein");
+      return toast.error(
+        "Das Leergewicht muss kleiner als das Nenngewicht sein"
+      );
 
     submit.mutate({
       spoolTypeId: spoolType.id,
@@ -100,7 +105,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
             <Input
               id="pp-manufacturer"
               value={manufacturer}
-              onChange={(e) => setManufacturer(e.target.value)}
+              onChange={e => setManufacturer(e.target.value)}
               placeholder="z. B. Polymaker"
             />
           </div>
@@ -109,7 +114,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
             <Input
               id="pp-series"
               value={series}
-              onChange={(e) => setSeries(e.target.value)}
+              onChange={e => setSeries(e.target.value)}
               placeholder="z. B. PolyTerra PLA"
             />
           </div>
@@ -118,7 +123,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
             <Input
               id="pp-version"
               value={version}
-              onChange={(e) => setVersion(e.target.value)}
+              onChange={e => setVersion(e.target.value)}
               placeholder="z. B. Kartonspule (ab 2023)"
             />
           </div>
@@ -130,7 +135,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SPOOL_MATERIALS.map((m) => (
+                  {SPOOL_MATERIALS.map(m => (
                     <SelectItem key={m} value={m}>
                       {SPOOL_MATERIAL_LABELS[m]}
                     </SelectItem>
@@ -145,7 +150,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
                 type="number"
                 min={1}
                 value={nominalWeight}
-                onChange={(e) => setNominalWeight(e.target.value)}
+                onChange={e => setNominalWeight(e.target.value)}
               />
             </div>
           </div>
@@ -155,11 +160,11 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
               id="pp-materialtype"
               list="pp-materialtype-options"
               value={materialType}
-              onChange={(e) => setMaterialType(e.target.value)}
+              onChange={e => setMaterialType(e.target.value)}
               placeholder="leer lassen, wenn die Serie für alle Arten gilt"
             />
             <datalist id="pp-materialtype-options">
-              {COMMON_MATERIAL_TYPES.map((t) => (
+              {COMMON_MATERIAL_TYPES.map(t => (
                 <option key={t} value={t} />
               ))}
             </datalist>
@@ -170,7 +175,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
               id="pp-comment"
               rows={2}
               value={comment}
-              onChange={(e) => setComment(e.target.value)}
+              onChange={e => setComment(e.target.value)}
               placeholder="Woher stammt das Leergewicht?"
             />
           </div>

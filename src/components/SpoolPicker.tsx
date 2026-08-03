@@ -65,12 +65,18 @@ export function SpoolPicker({
     const ref = decodeSpoolRef(value);
     if (!ref) return null;
     if (ref.kind === "own") {
-      const own = ownSpoolTypes.find((s) => s.id === ref.id);
-      return own ? { label: own.name, tareWeight: own.tareWeight, preset: false } : null;
+      const own = ownSpoolTypes.find(s => s.id === ref.id);
+      return own
+        ? { label: own.name, tareWeight: own.tareWeight, preset: false }
+        : null;
     }
-    const preset = presets.find((p) => p.id === ref.id);
+    const preset = presets.find(p => p.id === ref.id);
     return preset
-      ? { label: preset.displayName, tareWeight: preset.tareWeight, preset: true }
+      ? {
+          label: preset.displayName,
+          tareWeight: preset.tareWeight,
+          preset: true,
+        }
       : null;
   }, [value, ownSpoolTypes, presets]);
 
@@ -88,12 +94,16 @@ export function SpoolPicker({
       return a.displayName.localeCompare(b.displayName);
     };
     if (!materialType?.trim()) {
-      return { matching: [] as PresetOption[], others: [...presets].sort(sort) };
+      return {
+        matching: [] as PresetOption[],
+        others: [...presets].sort(sort),
+      };
     }
     const matching: PresetOption[] = [];
     const others: PresetOption[] = [];
     for (const preset of presets) {
-      if (materialTypeMatches(preset.materialTypes, materialType)) matching.push(preset);
+      if (materialTypeMatches(preset.materialTypes, materialType))
+        matching.push(preset);
       else others.push(preset);
     }
     return { matching: matching.sort(sort), others: others.sort(sort) };
@@ -111,7 +121,9 @@ export function SpoolPicker({
       <Check
         className={cn(
           "mr-2 h-4 w-4",
-          value === encodeSpoolRef("preset", preset.id) ? "opacity-100" : "opacity-0",
+          value === encodeSpoolRef("preset", preset.id)
+            ? "opacity-100"
+            : "opacity-0"
         )}
       />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -170,7 +182,7 @@ export function SpoolPicker({
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    value === NO_SPOOL ? "opacity-100" : "opacity-0",
+                    value === NO_SPOOL ? "opacity-100" : "opacity-0"
                   )}
                 />
                 Keine / unbekannt
@@ -179,7 +191,7 @@ export function SpoolPicker({
 
             {ownSpoolTypes.length > 0 && (
               <CommandGroup heading="Eigene Rollentypen">
-                {ownSpoolTypes.map((own) => (
+                {ownSpoolTypes.map(own => (
                   <CommandItem
                     key={`own-${own.id}`}
                     value={`${own.name} ${own.manufacturer ?? ""}`}
@@ -193,7 +205,7 @@ export function SpoolPicker({
                         "mr-2 h-4 w-4",
                         value === encodeSpoolRef("own", own.id)
                           ? "opacity-100"
-                          : "opacity-0",
+                          : "opacity-0"
                       )}
                     />
                     <div className="flex min-w-0 flex-1 flex-col">
@@ -215,7 +227,11 @@ export function SpoolPicker({
 
             {others.length > 0 && (
               <CommandGroup
-                heading={matching.length > 0 ? "Weitere Katalog-Rollen" : "Katalog-Rollen"}
+                heading={
+                  matching.length > 0
+                    ? "Weitere Katalog-Rollen"
+                    : "Katalog-Rollen"
+                }
               >
                 {others.map(renderPreset)}
               </CommandGroup>

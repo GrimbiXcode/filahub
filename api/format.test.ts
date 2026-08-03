@@ -70,9 +70,9 @@ describe("centsToInputString", () => {
   it("ist mit parseMoneyToCents rundlaufsicher", () => {
     for (const locale of ["de-DE", "en-US", "de-CH", "fr-FR"]) {
       for (const cents of [0, 5, 999, 2499, 123456]) {
-        expect(parseMoneyToCents(centsToInputString(cents, locale), locale)).toBe(
-          cents,
-        );
+        expect(
+          parseMoneyToCents(centsToInputString(cents, locale), locale)
+        ).toBe(cents);
       }
     }
   });

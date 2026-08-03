@@ -23,7 +23,7 @@ const MAX_AUTH_AGE_SECONDS = 24 * 60 * 60;
  */
 export function verifyTelegramWidgetData(
   botToken: string,
-  data: TelegramWidgetAuthData,
+  data: TelegramWidgetAuthData
 ): boolean {
   if (!botToken || !data.hash || !data.id || !data.auth_date) return false;
 
@@ -41,12 +41,14 @@ export function verifyTelegramWidgetData(
 
   const dataCheckString = Object.keys(fields)
     .sort()
-    .filter((key) => fields[key] !== "")
-    .map((key) => `${key}=${fields[key]}`)
+    .filter(key => fields[key] !== "")
+    .map(key => `${key}=${fields[key]}`)
     .join("\n");
 
   const secret = createHash("sha256").update(botToken).digest();
-  const computed = createHmac("sha256", secret).update(dataCheckString).digest("hex");
+  const computed = createHmac("sha256", secret)
+    .update(dataCheckString)
+    .digest("hex");
 
   const a = Buffer.from(computed, "utf8");
   const b = Buffer.from(data.hash, "utf8");

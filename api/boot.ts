@@ -12,10 +12,10 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 // Health-Endpunkt für Docker-Healthchecks und Reverse Proxies
-app.get("/health", (c) => c.json({ status: "ok" }));
+app.get("/health", c => c.json({ status: "ok" }));
 // Nur lokal und nur mit DEV_LOGIN=1; sonst wird nichts registriert
 registerDevLogin(app);
-app.use("/api/trpc/*", async (c) => {
+app.use("/api/trpc/*", async c => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
     req: c.req.raw,
@@ -23,7 +23,7 @@ app.use("/api/trpc/*", async (c) => {
     createContext,
   });
 });
-app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
+app.all("/api/*", c => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
@@ -43,7 +43,7 @@ if (env.isProduction) {
     const { seedSpoolPresets } = await import("./queries/presetSeed");
     const stats = await seedSpoolPresets();
     console.log(
-      `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`,
+      `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
     );
   } catch (error) {
     console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);

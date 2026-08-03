@@ -18,5 +18,5 @@ createRoot(document.getElementById("root")!).render(
         </TRPCProvider>
       </ThemeProvider>
     </BrowserRouter>
-  </StrictMode>,
+  </StrictMode>
 );

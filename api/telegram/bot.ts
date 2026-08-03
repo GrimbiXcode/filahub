@@ -21,11 +21,14 @@ type TelegramUpdate = {
 /** Antwortet auf eine Bot-Nachricht (Fehler werden nur geloggt). */
 async function sendMessage(chatId: number, text: string) {
   try {
-    await fetch(`https://api.telegram.org/bot${env.telegramBotToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    });
+    await fetch(
+      `https://api.telegram.org/bot${env.telegramBotToken}/sendMessage`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      }
+    );
   } catch (e) {
     console.warn("[telegram] sendMessage fehlgeschlagen:", e);
   }
@@ -37,10 +40,15 @@ async function issueLoginCode(user: TelegramUser): Promise<string> {
   // Alte, unbenutzte Codes dieses Nutzers verwerfen
   await db
     .delete(loginCodes)
-    .where(and(eq(loginCodes.telegramId, String(user.id)), isNull(loginCodes.usedAt)));
+    .where(
+      and(eq(loginCodes.telegramId, String(user.id)), isNull(loginCodes.usedAt))
+    );
 
   const code = String(Math.floor(100000 + Math.random() * 900000));
-  const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username || null;
+  const name =
+    [user.first_name, user.last_name].filter(Boolean).join(" ") ||
+    user.username ||
+    null;
   await db.insert(loginCodes).values({
     code,
     telegramId: String(user.id),
@@ -61,7 +69,7 @@ async function handleUpdate(update: TelegramUpdate) {
     const code = await issueLoginCode(from);
     await sendMessage(
       from.id,
-      `Dein Login-Code für das Filament-Lager:\n\n${code}\n\nDer Code ist 10 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.`,
+      `Dein Login-Code für das Filament-Lager:\n\n${code}\n\nDer Code ist 10 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.`
     );
   } else if (text === "/id") {
     await sendMessage(from.id, `Deine Telegram-ID: ${from.id}`);
@@ -74,7 +82,9 @@ async function handleUpdate(update: TelegramUpdate) {
  */
 export function startTelegramBot() {
   if (!env.telegramBotToken) {
-    console.log("[telegram] Kein TELEGRAM_BOT_TOKEN gesetzt – Bot-Polling deaktiviert.");
+    console.log(
+      "[telegram] Kein TELEGRAM_BOT_TOKEN gesetzt – Bot-Polling deaktiviert."
+    );
     return;
   }
 
@@ -82,27 +92,34 @@ export function startTelegramBot() {
   const poll = async () => {
     try {
       const resp = await fetch(
-        `https://api.telegram.org/bot${env.telegramBotToken}/getUpdates?offset=${offset}&timeout=25`,
+        `https://api.telegram.org/bot${env.telegramBotToken}/getUpdates?offset=${offset}&timeout=25`
       );
       if (resp.ok) {
-        const data = (await resp.json()) as { ok: boolean; result?: TelegramUpdate[] };
+        const data = (await resp.json()) as {
+          ok: boolean;
+          result?: TelegramUpdate[];
+        };
         for (const update of data.result ?? []) {
           offset = update.update_id + 1;
           await handleUpdate(update);
         }
       } else {
         const body = await resp.text();
-        console.warn(`[telegram] getUpdates ${resp.status}: ${body.slice(0, 200)}`);
-        await new Promise((r) => setTimeout(r, 10000));
+        console.warn(
+          `[telegram] getUpdates ${resp.status}: ${body.slice(0, 200)}`
+        );
+        await new Promise(r => setTimeout(r, 10000));
       }
     } catch (e) {
       console.warn("[telegram] Polling-Fehler:", e);
-      await new Promise((r) => setTimeout(r, 10000));
+      await new Promise(r => setTimeout(r, 10000));
     }
     setTimeout(poll, 0);
   };
   void poll();
-  console.log(`[telegram] Bot-Polling gestartet (@${env.telegramBotUsername || "?"})`);
+  console.log(
+    `[telegram] Bot-Polling gestartet (@${env.telegramBotUsername || "?"})`
+  );
 }
 
 /** Prüft einen eingegebenen Code und markiert ihn als verwendet. */
@@ -115,12 +132,15 @@ export async function redeemLoginCode(code: string) {
       and(
         eq(loginCodes.code, code),
         isNull(loginCodes.usedAt),
-        gt(loginCodes.expiresAt, new Date()),
-      ),
+        gt(loginCodes.expiresAt, new Date())
+      )
     )
     .limit(1);
   const entry = rows.at(0);
   if (!entry) return null;
-  await db.update(loginCodes).set({ usedAt: new Date() }).where(eq(loginCodes.id, entry.id));
+  await db
+    .update(loginCodes)
+    .set({ usedAt: new Date() })
+    .where(eq(loginCodes.id, entry.id));
   return entry;
 }

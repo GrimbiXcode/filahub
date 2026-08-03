@@ -181,7 +181,10 @@ export default function SpoolTypes() {
             {isLoading ? (
               <div className="space-y-3">
                 {[...Array(3)].map((_, i) => (
-                  <Skeleton key={i} className="h-20 w-full rounded-xl sm:h-12" />
+                  <Skeleton
+                    key={i}
+                    className="h-20 w-full rounded-xl sm:h-12"
+                  />
                 ))}
               </div>
             ) : list.length === 0 ? (

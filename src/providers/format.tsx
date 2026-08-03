@@ -35,7 +35,8 @@ export function FormatProvider({ children }: { children: ReactNode }) {
   });
 
   const localeSetting = (user?.locale as LocaleCode | null | undefined) ?? null;
-  const currency = (user?.currency as CurrencyCode | undefined) ?? DEFAULT_CURRENCY;
+  const currency =
+    (user?.currency as CurrencyCode | undefined) ?? DEFAULT_CURRENCY;
   const locale = localeSetting ?? browserLocale();
 
   useEffect(() => {
@@ -57,7 +58,7 @@ export function FormatProvider({ children }: { children: ReactNode }) {
       parseMoney: input => parseMoneyToCents(input, locale),
       centsToInput: cents => centsToInputString(cents, locale),
     }),
-    [locale, localeSetting, currency],
+    [locale, localeSetting, currency]
   );
 
   return (

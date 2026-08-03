@@ -17,8 +17,10 @@ export type PresetVariantNode = PresetVersionNode["variants"][number];
 export type PresetOption = RouterOutputs["preset"]["options"][number];
 
 /** Vorschläge – eigene Sicht und Moderationssicht */
-export type PresetProposalItem = RouterOutputs["preset"]["proposals"]["mine"][number];
-export type AdminProposalItem = RouterOutputs["admin"]["proposal"]["list"][number];
+export type PresetProposalItem =
+  RouterOutputs["preset"]["proposals"]["mine"][number];
+export type AdminProposalItem =
+  RouterOutputs["admin"]["proposal"]["list"][number];
 
 /** Gängige 3D-Druck-Materialarten für Vorschläge */
 export const COMMON_MATERIAL_TYPES = [

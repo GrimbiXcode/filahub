@@ -80,31 +80,33 @@ export function CatalogEditorDialog({
 
   // Der Aufrufer remountet den Dialog je Ziel, deshalb reichen Initialwerte.
   const [name, setName] = useState(
-    () => (manufacturerNode ?? seriesNode ?? versionNode)?.name ?? "",
+    () => (manufacturerNode ?? seriesNode ?? versionNode)?.name ?? ""
   );
   const [website, setWebsite] = useState(() => manufacturerNode?.website ?? "");
   const [materialTypes, setMaterialTypes] = useState(() =>
-    (seriesNode?.materialTypes ?? []).join(", "),
+    (seriesNode?.materialTypes ?? []).join(", ")
   );
   const [spoolMaterial, setSpoolMaterial] = useState<string>(
-    () => versionNode?.spoolMaterial ?? NO_MATERIAL,
+    () => versionNode?.spoolMaterial ?? NO_MATERIAL
   );
-  const [validFrom, setValidFrom] = useState(() => versionNode?.validFrom ?? "");
+  const [validFrom, setValidFrom] = useState(
+    () => versionNode?.validFrom ?? ""
+  );
   const [validTo, setValidTo] = useState(() => versionNode?.validTo ?? "");
   const [nominalWeight, setNominalWeight] = useState(() =>
-    variantNode ? String(variantNode.nominalWeight) : "1000",
+    variantNode ? String(variantNode.nominalWeight) : "1000"
   );
   const [tareWeight, setTareWeight] = useState(() =>
-    variantNode ? String(variantNode.tareWeight) : "",
+    variantNode ? String(variantNode.tareWeight) : ""
   );
   const [outerDiameterMm, setOuterDiameterMm] = useState(() =>
-    variantNode?.outerDiameterMm ? String(variantNode.outerDiameterMm) : "",
+    variantNode?.outerDiameterMm ? String(variantNode.outerDiameterMm) : ""
   );
   const [widthMm, setWidthMm] = useState(() =>
-    variantNode?.widthMm ? String(variantNode.widthMm) : "",
+    variantNode?.widthMm ? String(variantNode.widthMm) : ""
   );
   const [boreDiameterMm, setBoreDiameterMm] = useState(() =>
-    variantNode?.boreDiameterMm ? String(variantNode.boreDiameterMm) : "",
+    variantNode?.boreDiameterMm ? String(variantNode.boreDiameterMm) : ""
   );
   const [notes, setNotes] = useState(() => existing?.notes ?? "");
   const [active, setActive] = useState(() => existing?.active ?? true);
@@ -120,29 +122,37 @@ export function CatalogEditorDialog({
 
   const m = {
     createManufacturer: trpc.admin.preset.createManufacturer.useMutation(
-      done("Hersteller angelegt"),
+      done("Hersteller angelegt")
     ),
     updateManufacturer: trpc.admin.preset.updateManufacturer.useMutation(
-      done("Hersteller gespeichert"),
+      done("Hersteller gespeichert")
     ),
-    createSeries: trpc.admin.preset.createSeries.useMutation(done("Serie angelegt")),
-    updateSeries: trpc.admin.preset.updateSeries.useMutation(done("Serie gespeichert")),
+    createSeries: trpc.admin.preset.createSeries.useMutation(
+      done("Serie angelegt")
+    ),
+    updateSeries: trpc.admin.preset.updateSeries.useMutation(
+      done("Serie gespeichert")
+    ),
     createVersion: trpc.admin.preset.createVersion.useMutation(
-      done("Ausführung angelegt"),
+      done("Ausführung angelegt")
     ),
     updateVersion: trpc.admin.preset.updateVersion.useMutation(
-      done("Ausführung gespeichert"),
+      done("Ausführung gespeichert")
     ),
-    createVariant: trpc.admin.preset.createVariant.useMutation(done("Größe angelegt")),
-    updateVariant: trpc.admin.preset.updateVariant.useMutation(done("Größe gespeichert")),
+    createVariant: trpc.admin.preset.createVariant.useMutation(
+      done("Größe angelegt")
+    ),
+    updateVariant: trpc.admin.preset.updateVariant.useMutation(
+      done("Größe gespeichert")
+    ),
   };
 
-  const saving = Object.values(m).some((mutation) => mutation.isPending);
+  const saving = Object.values(m).some(mutation => mutation.isPending);
 
   const parseMaterialTypes = () =>
     materialTypes
       .split(",")
-      .map((t) => t.trim())
+      .map(t => t.trim())
       .filter(Boolean);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -159,7 +169,11 @@ export function CatalogEditorDialog({
         notes: notes.trim() || null,
       };
       if (target.manufacturer)
-        m.updateManufacturer.mutate({ id: target.manufacturer.id, ...payload, active });
+        m.updateManufacturer.mutate({
+          id: target.manufacturer.id,
+          ...payload,
+          active,
+        });
       else m.createManufacturer.mutate(payload);
       return;
     }
@@ -218,7 +232,9 @@ export function CatalogEditorDialog({
     if (!Number.isFinite(tare) || tare < 0)
       return toast.error("Bitte ein gültiges Leergewicht in Gramm angeben");
     if (tare >= nominal)
-      return toast.error("Das Leergewicht muss kleiner als das Nenngewicht sein");
+      return toast.error(
+        "Das Leergewicht muss kleiner als das Nenngewicht sein"
+      );
 
     const outer = optionalInt(outerDiameterMm);
     const width = optionalInt(widthMm);
@@ -254,7 +270,7 @@ export function CatalogEditorDialog({
   const [createTitle, editTitle] = TITLES[target.level];
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
+    <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? editTitle : createTitle}</DialogTitle>
@@ -271,7 +287,7 @@ export function CatalogEditorDialog({
               <Input
                 id="ce-name"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={e => setName(e.target.value)}
                 placeholder={
                   target.level === "manufacturer"
                     ? "z. B. Polymaker"
@@ -289,7 +305,7 @@ export function CatalogEditorDialog({
               <Input
                 id="ce-website"
                 value={website}
-                onChange={(e) => setWebsite(e.target.value)}
+                onChange={e => setWebsite(e.target.value)}
                 placeholder="https://…"
               />
             </div>
@@ -301,7 +317,7 @@ export function CatalogEditorDialog({
               <Input
                 id="ce-types"
                 value={materialTypes}
-                onChange={(e) => setMaterialTypes(e.target.value)}
+                onChange={e => setMaterialTypes(e.target.value)}
                 placeholder="z. B. PLA, PETG – leer = gilt für alle"
               />
               <p className="text-xs text-muted-foreground">
@@ -321,7 +337,7 @@ export function CatalogEditorDialog({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={NO_MATERIAL}>Unbekannt</SelectItem>
-                    {SPOOL_MATERIALS.map((material) => (
+                    {SPOOL_MATERIALS.map(material => (
                       <SelectItem key={material} value={material}>
                         {SPOOL_MATERIAL_LABELS[material]}
                       </SelectItem>
@@ -336,7 +352,7 @@ export function CatalogEditorDialog({
                     id="ce-from"
                     type="date"
                     value={validFrom}
-                    onChange={(e) => setValidFrom(e.target.value)}
+                    onChange={e => setValidFrom(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -345,7 +361,7 @@ export function CatalogEditorDialog({
                     id="ce-to"
                     type="date"
                     value={validTo}
-                    onChange={(e) => setValidTo(e.target.value)}
+                    onChange={e => setValidTo(e.target.value)}
                   />
                 </div>
               </div>
@@ -365,7 +381,7 @@ export function CatalogEditorDialog({
                     type="number"
                     min={1}
                     value={nominalWeight}
-                    onChange={(e) => setNominalWeight(e.target.value)}
+                    onChange={e => setNominalWeight(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-2">
@@ -375,7 +391,7 @@ export function CatalogEditorDialog({
                     type="number"
                     min={0}
                     value={tareWeight}
-                    onChange={(e) => setTareWeight(e.target.value)}
+                    onChange={e => setTareWeight(e.target.value)}
                     placeholder="z. B. 140"
                   />
                 </div>
@@ -389,7 +405,7 @@ export function CatalogEditorDialog({
                     id="ce-outer"
                     type="number"
                     value={outerDiameterMm}
-                    onChange={(e) => setOuterDiameterMm(e.target.value)}
+                    onChange={e => setOuterDiameterMm(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-1.5">
@@ -400,7 +416,7 @@ export function CatalogEditorDialog({
                     id="ce-width"
                     type="number"
                     value={widthMm}
-                    onChange={(e) => setWidthMm(e.target.value)}
+                    onChange={e => setWidthMm(e.target.value)}
                   />
                 </div>
                 <div className="grid gap-1.5">
@@ -411,7 +427,7 @@ export function CatalogEditorDialog({
                     id="ce-bore"
                     type="number"
                     value={boreDiameterMm}
-                    onChange={(e) => setBoreDiameterMm(e.target.value)}
+                    onChange={e => setBoreDiameterMm(e.target.value)}
                   />
                 </div>
               </div>
@@ -424,7 +440,7 @@ export function CatalogEditorDialog({
               id="ce-notes"
               rows={2}
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={e => setNotes(e.target.value)}
             />
           </div>
 
@@ -433,7 +449,7 @@ export function CatalogEditorDialog({
               <Checkbox
                 id="ce-active"
                 checked={active}
-                onCheckedChange={(checked) => setActive(checked === true)}
+                onCheckedChange={checked => setActive(checked === true)}
               />
               <Label htmlFor="ce-active" className="font-normal">
                 Aktiv (wählbar für alle Benutzer)

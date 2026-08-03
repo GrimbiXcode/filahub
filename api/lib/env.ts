@@ -20,7 +20,7 @@ export const env = {
   /** Kommagetrennte Liste erlaubter Telegram-User-IDs; leer = jeder darf sich registrieren */
   telegramAllowedIds: (process.env.TELEGRAM_ALLOWED_IDS ?? "")
     .split(",")
-    .map((s) => s.trim())
+    .map(s => s.trim())
     .filter(Boolean),
   /** Telegram-User-ID des ersten Admins (optional, sonst: erster registrierte Nutzer) */
   ownerTelegramId: process.env.OWNER_TELEGRAM_ID ?? "",

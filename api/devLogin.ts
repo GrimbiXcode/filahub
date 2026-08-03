@@ -21,10 +21,12 @@ export const DEV_LOGIN_UNION_ID = "dev-login";
  * sein **und** `DEV_LOGIN=1` muss gesetzt sein. Ist eine davon zu, wird die
  * Route gar nicht erst registriert und läuft in den 404 von `/api/*`.
  */
-export function registerDevLogin(app: Hono<{ Bindings: HttpBindings }>): boolean {
+export function registerDevLogin(
+  app: Hono<{ Bindings: HttpBindings }>
+): boolean {
   if (env.isProduction || !env.devLogin) return false;
 
-  app.get("/api/dev-login", async (c) => {
+  app.get("/api/dev-login", async c => {
     await upsertUser({
       unionId: DEV_LOGIN_UNION_ID,
       name: env.devLoginName,
@@ -43,13 +45,13 @@ export function registerDevLogin(app: Hono<{ Bindings: HttpBindings }>): boolean
         sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
         secure: opts.secure,
         maxAge: Session.maxAgeMs / 1000,
-      }),
+      })
     );
     return c.redirect("/");
   });
 
   console.warn(
-    "DEV_LOGIN ist aktiv: /api/dev-login meldet ohne Telegram als Admin an.",
+    "DEV_LOGIN ist aktiv: /api/dev-login meldet ohne Telegram als Admin an."
   );
   return true;
 }

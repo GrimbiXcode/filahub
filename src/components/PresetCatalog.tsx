@@ -23,7 +23,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useFormat } from "@/lib/formatContext";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
@@ -47,7 +51,7 @@ function HideToggle({
           variant="ghost"
           size="icon"
           className="h-8 w-8 shrink-0"
-          onClick={(e) => {
+          onClick={e => {
             e.stopPropagation();
             onToggle();
           }}
@@ -69,10 +73,11 @@ function HideToggle({
 
 function versionSubtitle(
   version: PresetVersionNode,
-  formatDate: (value: string | Date | null | undefined) => string,
+  formatDate: (value: string | Date | null | undefined) => string
 ) {
   const parts: string[] = [];
-  if (version.spoolMaterial) parts.push(SPOOL_MATERIAL_LABELS[version.spoolMaterial]);
+  if (version.spoolMaterial)
+    parts.push(SPOOL_MATERIAL_LABELS[version.spoolMaterial]);
   if (version.validFrom) parts.push(`ab ${formatDate(version.validFrom)}`);
   if (version.validTo) parts.push(`bis ${formatDate(version.validTo)}`);
   return parts.join(" · ");
@@ -89,15 +94,15 @@ export function PresetCatalog() {
       utils.preset.tree.invalidate();
       utils.preset.options.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const copyToOwn = trpc.preset.copyToOwn.useMutation({
-    onSuccess: (created) => {
+    onSuccess: created => {
       toast.success(`„${created?.name}“ als eigener Rollentyp übernommen`);
       utils.spoolType.list.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const toggle = (scope: PresetScope, refId: number, hidden: boolean) =>
@@ -129,14 +134,14 @@ export function PresetCatalog() {
   return (
     <>
       <p className="mb-4 text-sm text-muted-foreground">
-        Vorkonfigurierte Rollen. Was du hier ausblendest, verschwindet aus deiner
-        Auswahl beim Material – bereits zugewiesene Rollen bleiben erhalten.
-        Über „Übernehmen“ wird aus einem Preset ein eigener, frei
+        Vorkonfigurierte Rollen. Was du hier ausblendest, verschwindet aus
+        deiner Auswahl beim Material – bereits zugewiesene Rollen bleiben
+        erhalten. Über „Übernehmen“ wird aus einem Preset ein eigener, frei
         bearbeitbarer Rollentyp.
       </p>
 
       <Accordion type="multiple" className="w-full">
-        {(tree ?? []).map((manufacturer) => (
+        {(tree ?? []).map(manufacturer => (
           <AccordionItem
             key={manufacturer.id}
             value={`m-${manufacturer.id}`}
@@ -165,19 +170,23 @@ export function PresetCatalog() {
               />
             </div>
             <AccordionContent className="space-y-4 pl-2">
-              {manufacturer.series.map((series) => (
+              {manufacturer.series.map(series => (
                 <div
                   key={series.id}
                   className={cn(
                     "rounded-lg border p-3",
-                    series.hidden && !manufacturer.hidden && "opacity-50",
+                    series.hidden && !manufacturer.hidden && "opacity-50"
                   )}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{series.name}</span>
-                      {series.materialTypes.map((type) => (
-                        <Badge key={type} variant="secondary" className="font-normal">
+                      {series.materialTypes.map(type => (
+                        <Badge
+                          key={type}
+                          variant="secondary"
+                          className="font-normal"
+                        >
                           {type}
                         </Badge>
                       ))}
@@ -190,11 +199,13 @@ export function PresetCatalog() {
                     <HideToggle
                       hidden={series.hidden}
                       label={series.name}
-                      onToggle={() => toggle("series", series.id, series.hidden)}
+                      onToggle={() =>
+                        toggle("series", series.id, series.hidden)
+                      }
                     />
                   </div>
 
-                  {series.versions.map((version) => (
+                  {series.versions.map(version => (
                     <div key={version.id} className="mt-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -211,7 +222,9 @@ export function PresetCatalog() {
                         <HideToggle
                           hidden={version.hidden}
                           label={version.name}
-                          onToggle={() => toggle("version", version.id, version.hidden)}
+                          onToggle={() =>
+                            toggle("version", version.id, version.hidden)
+                          }
                         />
                       </div>
 
@@ -223,11 +236,13 @@ export function PresetCatalog() {
                             <TableHead className="hidden sm:table-cell">
                               Abmessungen (Ø × Breite × Bohrung)
                             </TableHead>
-                            <TableHead className="text-right">Aktionen</TableHead>
+                            <TableHead className="text-right">
+                              Aktionen
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {version.variants.map((variant) => (
+                          {version.variants.map(variant => (
                             <TableRow
                               key={variant.id}
                               className={cn(variant.hidden && "opacity-50")}
@@ -235,7 +250,9 @@ export function PresetCatalog() {
                               <TableCell className="font-medium">
                                 {formatNominalWeight(variant.nominalWeight)}
                               </TableCell>
-                              <TableCell>{formatGrams(variant.tareWeight)}</TableCell>
+                              <TableCell>
+                                {formatGrams(variant.tareWeight)}
+                              </TableCell>
                               <TableCell className="hidden text-muted-foreground sm:table-cell">
                                 {variant.outerDiameterMm
                                   ? `${variant.outerDiameterMm} × ${variant.widthMm ?? "?"} × ${variant.boreDiameterMm ?? "?"} mm`
@@ -250,7 +267,9 @@ export function PresetCatalog() {
                                         size="icon"
                                         disabled={copyToOwn.isPending}
                                         onClick={() =>
-                                          copyToOwn.mutate({ variantId: variant.id })
+                                          copyToOwn.mutate({
+                                            variantId: variant.id,
+                                          })
                                         }
                                       >
                                         <Copy className="h-4 w-4" />
@@ -270,13 +289,21 @@ export function PresetCatalog() {
                                         <PencilLine className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
-                                    <TooltipContent>Änderung vorschlagen</TooltipContent>
+                                    <TooltipContent>
+                                      Änderung vorschlagen
+                                    </TooltipContent>
                                   </Tooltip>
                                   <HideToggle
                                     hidden={variant.hidden}
-                                    label={formatNominalWeight(variant.nominalWeight)}
+                                    label={formatNominalWeight(
+                                      variant.nominalWeight
+                                    )}
                                     onToggle={() =>
-                                      toggle("variant", variant.id, variant.hidden)
+                                      toggle(
+                                        "variant",
+                                        variant.id,
+                                        variant.hidden
+                                      )
                                     }
                                   />
                                 </div>
@@ -289,7 +316,8 @@ export function PresetCatalog() {
                                 colSpan={4}
                                 className="text-sm text-muted-foreground"
                               >
-                                Für diese Ausführung ist noch keine Größe hinterlegt.
+                                Für diese Ausführung ist noch keine Größe
+                                hinterlegt.
                               </TableCell>
                             </TableRow>
                           )}
@@ -308,7 +336,7 @@ export function PresetCatalog() {
         key={changeFor?.id ?? "none"}
         variant={changeFor}
         open={changeFor != null}
-        onOpenChange={(open) => !open && setChangeFor(null)}
+        onOpenChange={open => !open && setChangeFor(null)}
       />
     </>
   );

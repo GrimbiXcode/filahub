@@ -55,7 +55,7 @@ export function MyPresetProposals() {
       toast.success("Vorschlag zurückgezogen");
       utils.preset.proposals.mine.invalidate();
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   if (isLoading) {
@@ -94,7 +94,7 @@ export function MyPresetProposals() {
         </TableRow>
       </TableHeader>
       <TableBody>
-        {(proposals ?? []).map((p) => (
+        {(proposals ?? []).map(p => (
           <TableRow key={p.id}>
             <TableCell className="whitespace-nowrap">
               {formatDate(p.createdAt)}
@@ -109,11 +109,16 @@ export function MyPresetProposals() {
             </TableCell>
             <TableCell>
               <div className="flex flex-col gap-1">
-                <Badge variant={STATUS_VARIANT[p.status]} className="w-fit font-normal">
+                <Badge
+                  variant={STATUS_VARIANT[p.status]}
+                  className="w-fit font-normal"
+                >
                   {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
                 </Badge>
                 {p.reviewNote && (
-                  <span className="text-xs text-muted-foreground">{p.reviewNote}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {p.reviewNote}
+                  </span>
                 )}
               </div>
             </TableCell>

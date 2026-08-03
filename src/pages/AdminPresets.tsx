@@ -123,7 +123,9 @@ export default function AdminPresets() {
                 ? `${variant.outerDiameterMm} × ${variant.widthMm ?? "?"} × ${variant.boreDiameterMm ?? "?"} mm`
                 : "–"}
             </TableCell>
-            <TableCell className="text-muted-foreground">{variant.source}</TableCell>
+            <TableCell className="text-muted-foreground">
+              {variant.source}
+            </TableCell>
             <TableCell className="text-right">
               <div className="flex justify-end gap-1">
                 <Button
@@ -184,7 +186,9 @@ export default function AdminPresets() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setEditor({ level: "variant", versionId: version.id })}
+            onClick={() =>
+              setEditor({ level: "variant", versionId: version.id })
+            }
           >
             <Plus className="mr-1 h-3.5 w-3.5" /> Größe
           </Button>
@@ -201,7 +205,11 @@ export default function AdminPresets() {
             size="icon"
             title="Löschen"
             onClick={() =>
-              setDeleting({ level: "version", id: version.id, label: version.name })
+              setDeleting({
+                level: "version",
+                id: version.id,
+                label: version.name,
+              })
             }
           >
             <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -217,13 +225,15 @@ export default function AdminPresets() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium">{series.name}</span>
-          {series.materialTypes.map((type) => (
+          {series.materialTypes.map(type => (
             <Badge key={type} variant="secondary" className="font-normal">
               {type}
             </Badge>
           ))}
           {series.materialTypes.length === 0 && (
-            <span className="text-xs text-muted-foreground">alle Materialarten</span>
+            <span className="text-xs text-muted-foreground">
+              alle Materialarten
+            </span>
           )}
           {inactive(series.active)}
         </div>
@@ -248,7 +258,11 @@ export default function AdminPresets() {
             size="icon"
             title="Löschen"
             onClick={() =>
-              setDeleting({ level: "series", id: series.id, label: series.name })
+              setDeleting({
+                level: "series",
+                id: series.id,
+                label: series.name,
+              })
             }
           >
             <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -356,7 +370,7 @@ export default function AdminPresets() {
 
       <AlertDialog
         open={deleting != null}
-        onOpenChange={(o) => !o && setDeleting(null)}
+        onOpenChange={o => !o && setDeleting(null)}
       >
         <AlertDialogContent>
           <AlertDialogHeader>

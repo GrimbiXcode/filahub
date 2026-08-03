@@ -10,10 +10,17 @@ import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
-import { markReleaseNotesSeen, updateUserSettings, upsertUser } from "./queries/users";
+import {
+  markReleaseNotesSeen,
+  updateUserSettings,
+  upsertUser,
+} from "./queries/users";
 
 function assertAllowed(telegramId: string) {
-  if (env.telegramAllowedIds.length > 0 && !env.telegramAllowedIds.includes(telegramId)) {
+  if (
+    env.telegramAllowedIds.length > 0 &&
+    !env.telegramAllowedIds.includes(telegramId)
+  ) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Dieses Konto ist für den Zugriff nicht freigeschaltet.",
@@ -33,7 +40,7 @@ function sessionCookie(token: string, headers: Headers) {
 }
 
 export const authRouter = createRouter({
-  me: authedQuery.query((opts) => opts.ctx.user),
+  me: authedQuery.query(opts => opts.ctx.user),
 
   /** Anzeige-Einstellungen des angemeldeten Benutzers ändern */
   updateSettings: authedQuery
@@ -41,7 +48,7 @@ export const authRouter = createRouter({
       z.object({
         currency: currencySchema.optional(),
         locale: localeSchema.optional(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       await updateUserSettings(ctx.user.id, input);
@@ -71,13 +78,21 @@ export const authRouter = createRouter({
 
   /** Code vom Telegram-Bot einlösen und Session setzen */
   login: publicQuery
-    .input(z.object({ code: z.string().trim().regex(/^\d{6}$/, "Der Code besteht aus 6 Ziffern") }))
+    .input(
+      z.object({
+        code: z
+          .string()
+          .trim()
+          .regex(/^\d{6}$/, "Der Code besteht aus 6 Ziffern"),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
       const entry = await redeemLoginCode(input.code);
       if (!entry) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
-          message: "Code ungültig oder abgelaufen. Fordere beim Bot mit /login einen neuen an.",
+          message:
+            "Code ungültig oder abgelaufen. Fordere beim Bot mit /login einen neuen an.",
         });
       }
 
@@ -91,8 +106,14 @@ export const authRouter = createRouter({
       });
 
       const token = await signSessionToken({ unionId: entry.telegramId });
-      ctx.resHeaders.append("set-cookie", sessionCookie(token, ctx.req.headers));
-      return { success: true, name: entry.telegramName ?? entry.telegramUsername };
+      ctx.resHeaders.append(
+        "set-cookie",
+        sessionCookie(token, ctx.req.headers)
+      );
+      return {
+        success: true,
+        name: entry.telegramName ?? entry.telegramUsername,
+      };
     }),
 
   /**
@@ -110,7 +131,7 @@ export const authRouter = createRouter({
         photo_url: z.string().optional(),
         auth_date: z.number(),
         hash: z.string(),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       if (!env.telegramBotToken) {
@@ -143,7 +164,10 @@ export const authRouter = createRouter({
       });
 
       const token = await signSessionToken({ unionId: telegramId });
-      ctx.resHeaders.append("set-cookie", sessionCookie(token, ctx.req.headers));
+      ctx.resHeaders.append(
+        "set-cookie",
+        sessionCookie(token, ctx.req.headers)
+      );
       return { success: true, name };
     }),
 
@@ -157,7 +181,7 @@ export const authRouter = createRouter({
         sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
         secure: opts.secure,
         maxAge: 0,
-      }),
+      })
     );
     return { success: true };
   }),

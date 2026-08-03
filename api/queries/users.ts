@@ -43,7 +43,7 @@ export async function markReleaseNotesSeen(userId: number, version: string) {
  */
 export async function updateUserSettings(
   userId: number,
-  patch: { currency?: string; locale?: string | null },
+  patch: { currency?: string; locale?: string | null }
 ) {
   const values: Partial<InsertUser> = {};
   if (patch.currency !== undefined) values.currency = patch.currency;
@@ -71,13 +71,17 @@ export async function upsertUser(data: InsertUser) {
   };
 
   if (values.role === undefined) {
-    const isOwner = !!env.ownerTelegramId && values.unionId === env.ownerTelegramId;
+    const isOwner =
+      !!env.ownerTelegramId && values.unionId === env.ownerTelegramId;
     const existing = await findUserByUnionId(values.unionId!);
     if (isOwner) {
       values.role = "admin";
       updateSet.role = "admin";
     } else if (!existing) {
-      const all = await getDb().select({ id: schema.users.id }).from(schema.users).limit(1);
+      const all = await getDb()
+        .select({ id: schema.users.id })
+        .from(schema.users)
+        .limit(1);
       if (all.length === 0) {
         values.role = "admin";
         updateSet.role = "admin";

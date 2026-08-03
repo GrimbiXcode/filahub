@@ -147,8 +147,8 @@ export default function StorageBoxes() {
               <Archive className="h-10 w-10 text-muted-foreground/50" />
               <p className="font-medium">Noch keine Lagerboxen angelegt</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Wiege deine leere Drybox, trage das Leergewicht ein und weise sie
-                einem Material zu – die App rechnet die Box-Tara automatisch
+                Wiege deine leere Drybox, trage das Leergewicht ein und weise
+                sie einem Material zu – die App rechnet die Box-Tara automatisch
                 heraus.
               </p>
               <Button onClick={() => openDialog(null)}>
@@ -163,7 +163,10 @@ export default function StorageBoxes() {
               {list.map(b => {
                 const count = assignedCount(b.id);
                 return (
-                  <div key={b.id} className="rounded-xl border bg-card p-3 shadow-sm">
+                  <div
+                    key={b.id}
+                    className="rounded-xl border bg-card p-3 shadow-sm"
+                  >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-medium">{b.name}</p>
@@ -177,7 +180,10 @@ export default function StorageBoxes() {
                           {count} Material{count > 1 ? "ien" : ""}
                         </Badge>
                       ) : (
-                        <Badge variant="outline" className="shrink-0 font-normal">
+                        <Badge
+                          variant="outline"
+                          className="shrink-0 font-normal"
+                        >
                           frei
                         </Badge>
                       )}
@@ -230,7 +236,9 @@ export default function StorageBoxes() {
                       const count = assignedCount(b.id);
                       return (
                         <TableRow key={b.id}>
-                          <TableCell className="font-medium">{b.name}</TableCell>
+                          <TableCell className="font-medium">
+                            {b.name}
+                          </TableCell>
                           <TableCell>{b.location ?? "–"}</TableCell>
                           <TableCell>{formatGrams(b.tareWeight)}</TableCell>
                           <TableCell>
@@ -239,7 +247,9 @@ export default function StorageBoxes() {
                                 {count} Material{count > 1 ? "ien" : ""}
                               </Badge>
                             ) : (
-                              <span className="text-muted-foreground">frei</span>
+                              <span className="text-muted-foreground">
+                                frei
+                              </span>
                             )}
                           </TableCell>
                           <TableCell className="hidden max-w-[240px] truncate text-muted-foreground lg:table-cell">
@@ -358,7 +368,9 @@ export default function StorageBoxes() {
           <AlertDialogFooter>
             <AlertDialogCancel>Abbrechen</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleting && deleteMutation.mutate({ id: deleting.id })}
+              onClick={() =>
+                deleting && deleteMutation.mutate({ id: deleting.id })
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Löschen

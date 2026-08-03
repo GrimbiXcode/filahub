@@ -41,7 +41,7 @@ export function seedAction(row: {
  * Unique-Keys je Ebene sind die eigentliche Absicherung.
  */
 export async function seedSpoolPresets(
-  catalog: SeedManufacturer[] = presetSeedCatalog,
+  catalog: SeedManufacturer[] = presetSeedCatalog
 ): Promise<SeedStats> {
   const db = getDb();
   const stats: SeedStats = { created: 0, updated: 0, skipped: 0 };
@@ -87,7 +87,7 @@ export async function seedSpoolPresets(
       const existingSeries = await db.query.presetSpoolSeries.findFirst({
         where: and(
           eq(presetSpoolSeries.manufacturerId, manufacturerId),
-          eq(presetSpoolSeries.slug, series.slug),
+          eq(presetSpoolSeries.slug, series.slug)
         ),
       });
 
@@ -103,7 +103,7 @@ export async function seedSpoolPresets(
         const created = await db.query.presetSpoolSeries.findFirst({
           where: and(
             eq(presetSpoolSeries.manufacturerId, manufacturerId),
-            eq(presetSpoolSeries.slug, series.slug),
+            eq(presetSpoolSeries.slug, series.slug)
           ),
         });
         if (!created) continue;
@@ -128,7 +128,7 @@ export async function seedSpoolPresets(
         const existingVersion = await db.query.presetSpoolVersions.findFirst({
           where: and(
             eq(presetSpoolVersions.seriesId, seriesId),
-            eq(presetSpoolVersions.slug, version.slug),
+            eq(presetSpoolVersions.slug, version.slug)
           ),
         });
 
@@ -147,7 +147,7 @@ export async function seedSpoolPresets(
           const created = await db.query.presetSpoolVersions.findFirst({
             where: and(
               eq(presetSpoolVersions.seriesId, seriesId),
-              eq(presetSpoolVersions.slug, version.slug),
+              eq(presetSpoolVersions.slug, version.slug)
             ),
           });
           if (!created) continue;
@@ -182,7 +182,7 @@ export async function seedSpoolPresets(
           const existingVariant = await db.query.presetSpoolVariants.findFirst({
             where: and(
               eq(presetSpoolVariants.versionId, versionId),
-              eq(presetSpoolVariants.nominalWeight, variant.nominalWeight),
+              eq(presetSpoolVariants.nominalWeight, variant.nominalWeight)
             ),
           });
 
@@ -231,12 +231,10 @@ async function replaceMaterialTypes(seriesId: number, materialTypes: string[]) {
     .delete(presetSeriesMaterialTypes)
     .where(eq(presetSeriesMaterialTypes.seriesId, seriesId));
   if (materialTypes.length === 0) return;
-  await db
-    .insert(presetSeriesMaterialTypes)
-    .values(
-      [...new Set(materialTypes)].map((materialType) => ({
-        seriesId,
-        materialType,
-      })),
-    );
+  await db.insert(presetSeriesMaterialTypes).values(
+    [...new Set(materialTypes)].map(materialType => ({
+      seriesId,
+      materialType,
+    }))
+  );
 }

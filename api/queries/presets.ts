@@ -44,7 +44,9 @@ async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
   const [manufacturers, series, materialTypes, versions, variants] =
     await Promise.all([
       db.query.presetManufacturers.findMany({
-        where: includeInactive ? undefined : eq(presetManufacturers.active, true),
+        where: includeInactive
+          ? undefined
+          : eq(presetManufacturers.active, true),
         orderBy: (t, { asc }) => [asc(t.name)],
       }),
       db.query.presetSpoolSeries.findMany({
@@ -58,11 +60,15 @@ async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
         })
         .from(presetSeriesMaterialTypes),
       db.query.presetSpoolVersions.findMany({
-        where: includeInactive ? undefined : eq(presetSpoolVersions.active, true),
+        where: includeInactive
+          ? undefined
+          : eq(presetSpoolVersions.active, true),
         orderBy: (t, { asc, desc }) => [desc(t.validTo), asc(t.name)],
       }),
       db.query.presetSpoolVariants.findMany({
-        where: includeInactive ? undefined : eq(presetSpoolVariants.active, true),
+        where: includeInactive
+          ? undefined
+          : eq(presetSpoolVariants.active, true),
         orderBy: (t, { asc }) => [asc(t.nominalWeight)],
       }),
     ]);
@@ -78,7 +84,7 @@ export async function findHiddenPresetKeys(userId: number) {
     })
     .from(hiddenSpoolPresets)
     .where(eq(hiddenSpoolPresets.userId, userId));
-  return new Set(rows.map((r) => hiddenKey(r.scope, r.refId)));
+  return new Set(rows.map(r => hiddenKey(r.scope, r.refId)));
 }
 
 export type CatalogVariantNode = PresetSpoolVariant & { hidden: boolean };
@@ -104,7 +110,7 @@ export type CatalogManufacturerNode = PresetManufacturer & {
  */
 export async function findCatalogTree(
   userId: number,
-  options: { includeInactive?: boolean } = {},
+  options: { includeInactive?: boolean } = {}
 ): Promise<CatalogManufacturerNode[]> {
   const [rows, hidden] = await Promise.all([
     loadCatalogRows(options.includeInactive ?? false),
@@ -139,17 +145,17 @@ export async function findCatalogTree(
     seriesByManufacturer.set(series.manufacturerId, list);
   }
 
-  return rows.manufacturers.map((manufacturer) => ({
+  return rows.manufacturers.map(manufacturer => ({
     ...manufacturer,
     hidden: isPresetHidden(hidden, { manufacturerId: manufacturer.id }),
-    series: (seriesByManufacturer.get(manufacturer.id) ?? []).map((series) => ({
+    series: (seriesByManufacturer.get(manufacturer.id) ?? []).map(series => ({
       ...series,
       materialTypes: (typesBySeries.get(series.id) ?? []).sort(),
       hidden: isPresetHidden(hidden, {
         manufacturerId: manufacturer.id,
         seriesId: series.id,
       }),
-      versions: (versionsBySeries.get(series.id) ?? []).map((version) => ({
+      versions: (versionsBySeries.get(series.id) ?? []).map(version => ({
         ...version,
         isCurrent: isCurrentVersion(version),
         hidden: isPresetHidden(hidden, {
@@ -157,7 +163,7 @@ export async function findCatalogTree(
           seriesId: series.id,
           versionId: version.id,
         }),
-        variants: (variantsByVersion.get(version.id) ?? []).map((variant) => ({
+        variants: (variantsByVersion.get(version.id) ?? []).map(variant => ({
           ...variant,
           hidden: isPresetHidden(hidden, {
             manufacturerId: manufacturer.id,
@@ -193,7 +199,7 @@ export type PresetSpoolOption = {
  * Ausgeblendete Zweige fallen hier – anders als im Baum – heraus.
  */
 export async function findPresetOptionsForUser(
-  userId: number,
+  userId: number
 ): Promise<PresetSpoolOption[]> {
   const tree = await findCatalogTree(userId);
   const options: PresetSpoolOption[] = [];
@@ -229,13 +235,13 @@ export async function setHiddenPreset(
   userId: number,
   scope: PresetScope,
   refId: number,
-  hidden: boolean,
+  hidden: boolean
 ) {
   const db = getDb();
   const where = and(
     eq(hiddenSpoolPresets.userId, userId),
     eq(hiddenSpoolPresets.scope, scope),
-    eq(hiddenSpoolPresets.refId, refId),
+    eq(hiddenSpoolPresets.refId, refId)
   );
   if (!hidden) {
     await db.delete(hiddenSpoolPresets).where(where);
@@ -263,7 +269,7 @@ export type PresetVariantWithPath = {
 
 /** Lädt eine Variante samt ihres vollständigen Katalogpfads. */
 export async function findPresetVariantWithPath(
-  id: number,
+  id: number
 ): Promise<PresetVariantWithPath | null> {
   const db = getDb();
   const variant = await db.query.presetSpoolVariants.findFirst({
@@ -288,7 +294,7 @@ export async function findPresetVariantWithPath(
 /** Anzeigename für eine neue Variante unterhalb der angegebenen Ausführung. */
 export async function buildDisplayNameForVersion(
   versionId: number,
-  nominalWeight: number,
+  nominalWeight: number
 ): Promise<string> {
   const db = getDb();
   const version = await db.query.presetSpoolVersions.findFirst({
@@ -317,7 +323,7 @@ export async function buildDisplayNameForVersion(
  */
 export async function refreshVariantDisplayNames(
   scope: "manufacturer" | "series" | "version",
-  entryId: number,
+  entryId: number
 ): Promise<void> {
   const db = getDb();
 
@@ -349,7 +355,7 @@ export async function refreshVariantDisplayNames(
       : await db.query.presetSpoolVersions.findMany({
           where: inArray(
             presetSpoolVersions.seriesId,
-            seriesRows.map((s) => s.id),
+            seriesRows.map(s => s.id)
           ),
         });
   if (versionRows.length === 0) return;
@@ -357,13 +363,13 @@ export async function refreshVariantDisplayNames(
   const variantRows = await db.query.presetSpoolVariants.findMany({
     where: inArray(
       presetSpoolVariants.versionId,
-      versionRows.map((v) => v.id),
+      versionRows.map(v => v.id)
     ),
   });
 
-  const manufacturerById = new Map(manufacturers.map((m) => [m.id, m]));
-  const seriesById = new Map(seriesRows.map((s) => [s.id, s]));
-  const versionById = new Map(versionRows.map((v) => [v.id, v]));
+  const manufacturerById = new Map(manufacturers.map(m => [m.id, m]));
+  const seriesById = new Map(seriesRows.map(s => [s.id, s]));
+  const versionById = new Map(versionRows.map(v => [v.id, v]));
 
   for (const variant of variantRows) {
     const version = versionById.get(variant.versionId);
@@ -389,7 +395,7 @@ export async function refreshVariantDisplayNames(
 /** Ersetzt die Materialarten einer Serie vollständig. */
 export async function setSeriesMaterialTypes(
   seriesId: number,
-  materialTypes: string[],
+  materialTypes: string[]
 ) {
   const db = getDb();
   await db
@@ -399,7 +405,7 @@ export async function setSeriesMaterialTypes(
   if (unique.length === 0) return;
   await db
     .insert(presetSeriesMaterialTypes)
-    .values(unique.map((materialType) => ({ seriesId, materialType })));
+    .values(unique.map(materialType => ({ seriesId, materialType })));
 }
 
 // ---------------------------------------------------------------------------
@@ -462,7 +468,7 @@ export async function findOrCreateSeries(data: {
     db.query.presetSpoolSeries.findFirst({
       where: and(
         eq(presetSpoolSeries.manufacturerId, data.manufacturerId),
-        eq(presetSpoolSeries.slug, data.slug),
+        eq(presetSpoolSeries.slug, data.slug)
       ),
     });
   const existing = await find();
@@ -498,7 +504,7 @@ export async function findOrCreateVersion(data: {
     db.query.presetSpoolVersions.findFirst({
       where: and(
         eq(presetSpoolVersions.seriesId, data.seriesId),
-        eq(presetSpoolVersions.slug, data.slug),
+        eq(presetSpoolVersions.slug, data.slug)
       ),
     });
   const existing = await find();
@@ -524,12 +530,12 @@ export async function findOrCreateVersion(data: {
 
 export async function findVariantByNominalWeight(
   versionId: number,
-  nominalWeight: number,
+  nominalWeight: number
 ) {
   return getDb().query.presetSpoolVariants.findFirst({
     where: and(
       eq(presetSpoolVariants.versionId, versionId),
-      eq(presetSpoolVariants.nominalWeight, nominalWeight),
+      eq(presetSpoolVariants.nominalWeight, nominalWeight)
     ),
   });
 }
@@ -548,7 +554,7 @@ export async function createVariant(data: {
   const db = getDb();
   const displayName = await buildDisplayNameForVersion(
     data.versionId,
-    data.nominalWeight,
+    data.nominalWeight
   );
   try {
     await db.insert(presetSpoolVariants).values({
@@ -568,7 +574,7 @@ export async function createVariant(data: {
   }
   const created = await findVariantByNominalWeight(
     data.versionId,
-    data.nominalWeight,
+    data.nominalWeight
   );
   if (!created) throw new Error("Variante konnte nicht angelegt werden");
   return created;
@@ -590,13 +596,14 @@ export async function updateManufacturer(
     notes: string | null;
     active: boolean;
   }>,
-  source: "admin" | "community" = "admin",
+  source: "admin" | "community" = "admin"
 ) {
   await getDb()
     .update(presetManufacturers)
     .set({ ...data, source })
     .where(eq(presetManufacturers.id, id));
-  if (data.name !== undefined) await refreshVariantDisplayNames("manufacturer", id);
+  if (data.name !== undefined)
+    await refreshVariantDisplayNames("manufacturer", id);
   return getDb().query.presetManufacturers.findFirst({
     where: eq(presetManufacturers.id, id),
   });
@@ -605,7 +612,7 @@ export async function updateManufacturer(
 export async function updateSeries(
   id: number,
   data: Partial<{ name: string; notes: string | null; active: boolean }>,
-  source: "admin" | "community" = "admin",
+  source: "admin" | "community" = "admin"
 ) {
   await getDb()
     .update(presetSpoolSeries)
@@ -627,7 +634,7 @@ export async function updateVersion(
     notes: string | null;
     active: boolean;
   }>,
-  source: "admin" | "community" = "admin",
+  source: "admin" | "community" = "admin"
 ) {
   await getDb()
     .update(presetSpoolVersions)
@@ -650,7 +657,7 @@ export async function updateVariant(
     notes: string | null;
     active: boolean;
   }>,
-  source: "admin" | "community" = "admin",
+  source: "admin" | "community" = "admin"
 ) {
   const db = getDb();
   const current = await db.query.presetSpoolVariants.findFirst({
@@ -674,7 +681,7 @@ export async function updateVariant(
 /** Zählt die direkten Kinder einer Katalogebene (Löschschutz). */
 export async function countCatalogChildren(
   scope: "manufacturer" | "series" | "version",
-  id: number,
+  id: number
 ) {
   const db = getDb();
   if (scope === "manufacturer") {
@@ -699,7 +706,9 @@ export async function countCatalogChildren(
 }
 
 export async function deleteManufacturer(id: number) {
-  await getDb().delete(presetManufacturers).where(eq(presetManufacturers.id, id));
+  await getDb()
+    .delete(presetManufacturers)
+    .where(eq(presetManufacturers.id, id));
 }
 
 export async function deleteSeries(id: number) {
@@ -711,7 +720,9 @@ export async function deleteSeries(id: number) {
 }
 
 export async function deleteVersion(id: number) {
-  await getDb().delete(presetSpoolVersions).where(eq(presetSpoolVersions.id, id));
+  await getDb()
+    .delete(presetSpoolVersions)
+    .where(eq(presetSpoolVersions.id, id));
 }
 
 export async function deleteVariant(id: number) {
@@ -721,8 +732,8 @@ export async function deleteVariant(id: number) {
     .where(
       and(
         eq(hiddenSpoolPresets.scope, "variant"),
-        eq(hiddenSpoolPresets.refId, id),
-      ),
+        eq(hiddenSpoolPresets.refId, id)
+      )
     );
   await db.delete(presetSpoolVariants).where(eq(presetSpoolVariants.id, id));
 }
@@ -803,8 +814,8 @@ export async function countOpenProposals(userId: number) {
     .where(
       and(
         eq(presetProposals.userId, userId),
-        eq(presetProposals.status, "pending"),
-      ),
+        eq(presetProposals.status, "pending")
+      )
     );
   return rows.length;
 }
@@ -821,7 +832,7 @@ export type ProposalWithUsers = PresetProposal & {
  */
 export async function findProposalsForReview(
   status: PresetProposal["status"] | undefined,
-  limit = 100,
+  limit = 100
 ): Promise<ProposalWithUsers[]> {
   const db = getDb();
   const proposals = await db.query.presetProposals.findMany({
@@ -833,19 +844,22 @@ export async function findProposalsForReview(
 
   const userIds = [
     ...new Set(
-      proposals.flatMap((p) => [p.userId, p.reviewedBy].filter((x): x is number => x != null)),
+      proposals.flatMap(p =>
+        [p.userId, p.reviewedBy].filter((x): x is number => x != null)
+      )
     ),
   ];
   const users = await db.query.users.findMany({
     where: (t, { inArray: within }) => within(t.id, userIds),
     columns: { id: true, name: true },
   });
-  const byId = new Map(users.map((u) => [u.id, u]));
+  const byId = new Map(users.map(u => [u.id, u]));
 
-  return proposals.map((p) => ({
+  return proposals.map(p => ({
     ...p,
     submittedBy: byId.get(p.userId) ?? null,
-    reviewedByUser: p.reviewedBy != null ? (byId.get(p.reviewedBy) ?? null) : null,
+    reviewedByUser:
+      p.reviewedBy != null ? (byId.get(p.reviewedBy) ?? null) : null,
   }));
 }
 
@@ -861,7 +875,7 @@ export async function closeProposal(
     reviewedBy?: number | null;
     reviewNote?: string | null;
     resultId?: number | null;
-  },
+  }
 ): Promise<boolean> {
   const result = await getDb()
     .update(presetProposals)
@@ -873,7 +887,7 @@ export async function closeProposal(
       resultId: data.resultId ?? null,
     })
     .where(
-      and(eq(presetProposals.id, id), eq(presetProposals.status, "pending")),
+      and(eq(presetProposals.id, id), eq(presetProposals.status, "pending"))
     );
   const header = result as unknown as { affectedRows?: number };
   const affected =

@@ -77,7 +77,10 @@ export const spoolTypes = mysqlTable("spool_types", {
    * „Kopieren & anpassen“ entstanden ist (nur zur Nachverfolgung –
    * spätere Änderungen am Preset wirken sich nicht mehr aus).
    */
-  sourceVariantId: bigint("sourceVariantId", { mode: "number", unsigned: true }),
+  sourceVariantId: bigint("sourceVariantId", {
+    mode: "number",
+    unsigned: true,
+  }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -143,7 +146,10 @@ export type InsertMaterial = typeof materials.$inferInsert;
 /** Wägung eines Materials: gemessenes Bruttogewicht inkl. Rolle (+ Box) */
 export const weighings = mysqlTable("weighings", {
   id: serial("id").primaryKey(),
-  materialId: bigint("materialId", { mode: "number", unsigned: true }).notNull(),
+  materialId: bigint("materialId", {
+    mode: "number",
+    unsigned: true,
+  }).notNull(),
   /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
   grossWeight: int("grossWeight").notNull(),
   weighedAt: timestamp("weighedAt").defaultNow().notNull(),
@@ -221,10 +227,10 @@ export const presetSpoolSeries = mysqlTable(
     slug: varchar("slug", { length: 255 }).notNull(),
     ...presetMeta(),
   },
-  (t) => [
+  t => [
     unique("preset_spool_series_slug_unique").on(t.manufacturerId, t.slug),
     index("preset_spool_series_manufacturer_idx").on(t.manufacturerId),
-  ],
+  ]
 );
 
 export type PresetSpoolSeries = typeof presetSpoolSeries.$inferSelect;
@@ -242,9 +248,12 @@ export const presetSeriesMaterialTypes = mysqlTable(
     seriesId: bigint("seriesId", { mode: "number", unsigned: true }).notNull(),
     materialType: varchar("materialType", { length: 100 }).notNull(),
   },
-  (t) => [
-    unique("preset_series_material_types_unique").on(t.seriesId, t.materialType),
-  ],
+  t => [
+    unique("preset_series_material_types_unique").on(
+      t.seriesId,
+      t.materialType
+    ),
+  ]
 );
 
 export type PresetSeriesMaterialType =
@@ -274,10 +283,10 @@ export const presetSpoolVersions = mysqlTable(
     validTo: date("validTo", { mode: "string" }),
     ...presetMeta(),
   },
-  (t) => [
+  t => [
     unique("preset_spool_versions_slug_unique").on(t.seriesId, t.slug),
     index("preset_spool_versions_series_idx").on(t.seriesId),
-  ],
+  ]
 );
 
 export type PresetSpoolVersion = typeof presetSpoolVersions.$inferSelect;
@@ -288,7 +297,10 @@ export const presetSpoolVariants = mysqlTable(
   "preset_spool_variants",
   {
     id: serial("id").primaryKey(),
-    versionId: bigint("versionId", { mode: "number", unsigned: true }).notNull(),
+    versionId: bigint("versionId", {
+      mode: "number",
+      unsigned: true,
+    }).notNull(),
     /** Netto-Materialgewicht laut Hersteller in Gramm (z. B. 1000) */
     nominalWeight: int("nominalWeight").notNull(),
     /** Leergewicht der leeren Spule in Gramm */
@@ -309,10 +321,10 @@ export const presetSpoolVariants = mysqlTable(
     displayName: varchar("displayName", { length: 500 }).notNull(),
     ...presetMeta(),
   },
-  (t) => [
+  t => [
     unique("preset_spool_variants_unique").on(t.versionId, t.nominalWeight),
     index("preset_spool_variants_version_idx").on(t.versionId),
-  ],
+  ]
 );
 
 export type PresetSpoolVariant = typeof presetSpoolVariants.$inferSelect;
@@ -340,10 +352,10 @@ export const hiddenSpoolPresets = mysqlTable(
     refId: bigint("refId", { mode: "number", unsigned: true }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
-  (t) => [
+  t => [
     unique("hidden_spool_presets_unique").on(t.userId, t.scope, t.refId),
     index("hidden_spool_presets_user_idx").on(t.userId),
-  ],
+  ]
 );
 
 export type HiddenSpoolPreset = typeof hiddenSpoolPresets.$inferSelect;
@@ -396,10 +408,10 @@ export const presetProposals = mysqlTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  (t) => [
+  t => [
     index("preset_proposals_status_idx").on(t.status),
     index("preset_proposals_user_idx").on(t.userId),
-  ],
+  ]
 );
 
 export type PresetProposal = typeof presetProposals.$inferSelect;

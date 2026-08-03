@@ -44,7 +44,10 @@ export const PRESET_PROPOSAL_STATUSES = [
 export type PresetProposalStatus = (typeof PRESET_PROPOSAL_STATUSES)[number];
 
 /** Beschriftung des Vorschlagsstatus für die Oberfläche */
-export const PRESET_PROPOSAL_STATUS_LABELS: Record<PresetProposalStatus, string> = {
+export const PRESET_PROPOSAL_STATUS_LABELS: Record<
+  PresetProposalStatus,
+  string
+> = {
   pending: "Offen",
   approved: "Übernommen",
   rejected: "Abgelehnt",
@@ -77,7 +80,7 @@ const UMLAUT_MAP: Record<string, string> = {
 export function slugify(input: string): string {
   return input
     .toLowerCase()
-    .replace(/[äöüß]/g, (c) => UMLAUT_MAP[c] ?? c)
+    .replace(/[äöüß]/g, c => UMLAUT_MAP[c] ?? c)
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
@@ -98,14 +101,16 @@ export function normalizeMaterialType(input: string): string {
  */
 export function materialTypeMatches(
   tags: readonly string[],
-  materialType: string | null | undefined,
+  materialType: string | null | undefined
 ): boolean {
   if (tags.length === 0) return true;
   if (!materialType?.trim()) return false;
   const needle = normalizeMaterialType(materialType);
-  return tags.some((tag) => {
+  return tags.some(tag => {
     const t = normalizeMaterialType(tag);
-    return needle === t || needle.startsWith(`${t}+`) || needle.startsWith(`${t} `);
+    return (
+      needle === t || needle.startsWith(`${t}+`) || needle.startsWith(`${t} `)
+    );
   });
 }
 
@@ -130,7 +135,7 @@ export function buildVariantDisplayName(parts: {
     parts.version,
     formatNominalWeight(parts.nominalWeight),
   ]
-    .map((s) => String(s).trim())
+    .map(s => String(s).trim())
     .filter(Boolean)
     .join(" · ");
 }
@@ -147,7 +152,7 @@ export function encodeSpoolRef(kind: SpoolRefKind, id: number): string {
 }
 
 export function decodeSpoolRef(
-  ref: string | null | undefined,
+  ref: string | null | undefined
 ): { kind: SpoolRefKind; id: number } | null {
   if (!ref) return null;
   const match = /^(own|preset):(\d+)$/.exec(ref);
@@ -168,7 +173,9 @@ export function resolveSpoolTare(material: {
   spoolPresetVariant?: { tareWeight: number } | null;
 }): number {
   return (
-    material.spoolPresetVariant?.tareWeight ?? material.spoolType?.tareWeight ?? 0
+    material.spoolPresetVariant?.tareWeight ??
+    material.spoolType?.tareWeight ??
+    0
   );
 }
 
@@ -188,14 +195,20 @@ export function isPresetHidden(
     seriesId?: number;
     versionId?: number;
     variantId?: number;
-  },
+  }
 ): boolean {
   if (hidden.has(hiddenKey("manufacturer", path.manufacturerId))) return true;
   if (path.seriesId != null && hidden.has(hiddenKey("series", path.seriesId)))
     return true;
-  if (path.versionId != null && hidden.has(hiddenKey("version", path.versionId)))
+  if (
+    path.versionId != null &&
+    hidden.has(hiddenKey("version", path.versionId))
+  )
     return true;
-  if (path.variantId != null && hidden.has(hiddenKey("variant", path.variantId)))
+  if (
+    path.variantId != null &&
+    hidden.has(hiddenKey("variant", path.variantId))
+  )
     return true;
   return false;
 }
@@ -216,7 +229,7 @@ export const slugSchema = z
   .max(100, "Schlüssel darf höchstens 100 Zeichen haben")
   .regex(
     /^[a-z0-9-]+$/,
-    "Schlüssel darf nur Kleinbuchstaben, Ziffern und Bindestriche enthalten",
+    "Schlüssel darf nur Kleinbuchstaben, Ziffern und Bindestriche enthalten"
   );
 
 export const materialTypeTagSchema = z
@@ -285,7 +298,7 @@ export const versionFieldsSchema = z
     validTo: isoDate,
     notes: optionalNotes,
   })
-  .refine((v) => !v.validFrom || !v.validTo || v.validFrom <= v.validTo, {
+  .refine(v => !v.validFrom || !v.validTo || v.validFrom <= v.validTo, {
     message: "„Gültig ab“ muss vor „Gültig bis“ liegen",
     path: ["validTo"],
   });
@@ -325,19 +338,19 @@ export const variantFieldsSchema = z
       .optional(),
     notes: optionalNotes,
   })
-  .refine((v) => v.tareWeight < v.nominalWeight, {
+  .refine(v => v.tareWeight < v.nominalWeight, {
     message: "Das Leergewicht muss kleiner als das Nenngewicht sein",
     path: ["tareWeight"],
   })
   .refine(
-    (v) =>
+    v =>
       v.boreDiameterMm == null ||
       v.outerDiameterMm == null ||
       v.boreDiameterMm < v.outerDiameterMm,
     {
       message: "Die Bohrung muss kleiner als der Außendurchmesser sein",
       path: ["boreDiameterMm"],
-    },
+    }
   );
 
 export type ManufacturerFields = z.infer<typeof manufacturerFieldsSchema>;
@@ -392,8 +405,11 @@ export const proposalNewPayloadSchema = z.object({
 
 const nonEmptyPatch = <T extends z.ZodTypeAny>(schema: T) =>
   schema.refine(
-    (patch) => Object.values(patch as Record<string, unknown>).some((v) => v !== undefined),
-    { message: "Der Vorschlag enthält keine Änderungen" },
+    patch =>
+      Object.values(patch as Record<string, unknown>).some(
+        v => v !== undefined
+      ),
+    { message: "Der Vorschlag enthält keine Änderungen" }
   );
 
 export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
@@ -419,10 +435,10 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
           validTo: isoDate,
           notes: optionalNotes,
         })
-        .refine((v) => !v.validFrom || !v.validTo || v.validFrom <= v.validTo, {
+        .refine(v => !v.validFrom || !v.validTo || v.validFrom <= v.validTo, {
           message: "„Gültig ab“ muss vor „Gültig bis“ liegen",
           path: ["validTo"],
-        }),
+        })
     ),
   }),
   z.object({
@@ -432,11 +448,17 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
       z.object({
         nominalWeight: z.number().int().positive().max(20000).optional(),
         tareWeight: z.number().int().min(0).max(5000).optional(),
-        outerDiameterMm: z.number().int().min(50).max(400).nullable().optional(),
+        outerDiameterMm: z
+          .number()
+          .int()
+          .min(50)
+          .max(400)
+          .nullable()
+          .optional(),
         widthMm: z.number().int().min(10).max(200).nullable().optional(),
         boreDiameterMm: z.number().int().min(10).max(200).nullable().optional(),
         notes: optionalNotes,
-      }),
+      })
     ),
   }),
 ]);

@@ -55,7 +55,7 @@ const isoDate = z
  */
 async function applyProposal(
   payload: ProposalPayload,
-  targetId: number | null,
+  targetId: number | null
 ): Promise<number> {
   if (payload.kind === "new") {
     const manufacturer = await findOrCreateManufacturer({
@@ -84,7 +84,7 @@ async function applyProposal(
     });
     const existing = await findVariantByNominalWeight(
       version.id,
-      payload.variant.nominalWeight,
+      payload.variant.nominalWeight
     );
     if (existing) {
       throw new TRPCError({
@@ -135,7 +135,7 @@ async function applyProposal(
 const presetAdminRouter = createRouter({
   /** Kompletter Katalog inkl. deaktivierter Einträge */
   tree: adminQuery.query(({ ctx }) =>
-    findCatalogTree(ctx.user.id, { includeInactive: true }),
+    findCatalogTree(ctx.user.id, { includeInactive: true })
   ),
 
   createManufacturer: adminQuery
@@ -145,18 +145,23 @@ const presetAdminRouter = createRouter({
         slug: slugify(input.name),
         name: input.name,
         website: input.website ?? null,
-      }),
+      })
     ),
 
   updateManufacturer: adminQuery
-    .input(manufacturerFieldsSchema.partial().extend(idInput.shape).extend({
-      active: z.boolean().optional(),
-    }))
+    .input(
+      manufacturerFieldsSchema.partial().extend(idInput.shape).extend({
+        active: z.boolean().optional(),
+      })
+    )
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
       const updated = await updateManufacturer(id, data);
       if (!updated)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Hersteller nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Hersteller nicht gefunden",
+        });
       return updated;
     }),
 
@@ -173,7 +178,9 @@ const presetAdminRouter = createRouter({
   }),
 
   createSeries: adminQuery
-    .input(seriesFieldsSchema.extend({ manufacturerId: z.number().int().positive() }))
+    .input(
+      seriesFieldsSchema.extend({ manufacturerId: z.number().int().positive() })
+    )
     .mutation(async ({ input }) => {
       const series = await findOrCreateSeries({
         manufacturerId: input.manufacturerId,
@@ -189,13 +196,16 @@ const presetAdminRouter = createRouter({
       seriesFieldsSchema
         .partial()
         .extend(idInput.shape)
-        .extend({ active: z.boolean().optional() }),
+        .extend({ active: z.boolean().optional() })
     )
     .mutation(async ({ input }) => {
       const { id, materialTypes, ...data } = input;
       const updated = await updateSeries(id, data);
       if (!updated)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Serie nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Serie nicht gefunden",
+        });
       if (materialTypes) await setSeriesMaterialTypes(id, materialTypes);
       return updated;
     }),
@@ -217,7 +227,7 @@ const presetAdminRouter = createRouter({
       z.object({
         seriesId: z.number().int().positive(),
         materialTypes: materialTypesSchema,
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       await setSeriesMaterialTypes(input.seriesId, input.materialTypes);
@@ -232,7 +242,7 @@ const presetAdminRouter = createRouter({
         spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,
-      }),
+      })
     )
     .mutation(({ input }) =>
       findOrCreateVersion({
@@ -242,7 +252,7 @@ const presetAdminRouter = createRouter({
         spoolMaterial: input.spoolMaterial ?? null,
         validFrom: input.validFrom ?? null,
         validTo: input.validTo ?? null,
-      }),
+      })
     ),
 
   updateVersion: adminQuery
@@ -255,13 +265,16 @@ const presetAdminRouter = createRouter({
         validTo: isoDate,
         notes: z.string().max(2000).nullable().optional(),
         active: z.boolean().optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
       const updated = await updateVersion(id, data);
       if (!updated)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Ausführung nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Ausführung nicht gefunden",
+        });
       return updated;
     }),
 
@@ -278,16 +291,21 @@ const presetAdminRouter = createRouter({
   }),
 
   createVariant: adminQuery
-    .input(variantFieldsSchema.and(z.object({ versionId: z.number().int().positive() })))
+    .input(
+      variantFieldsSchema.and(
+        z.object({ versionId: z.number().int().positive() })
+      )
+    )
     .mutation(async ({ input }) => {
       const existing = await findVariantByNominalWeight(
         input.versionId,
-        input.nominalWeight,
+        input.nominalWeight
       );
       if (existing) {
         throw new TRPCError({
           code: "CONFLICT",
-          message: "Für dieses Nenngewicht gibt es in dieser Ausführung bereits eine Variante.",
+          message:
+            "Für dieses Nenngewicht gibt es in dieser Ausführung bereits eine Variante.",
         });
       }
       return createVariant(input);
@@ -299,18 +317,27 @@ const presetAdminRouter = createRouter({
         id: z.number().int().positive(),
         nominalWeight: z.number().int().positive().max(20000).optional(),
         tareWeight: z.number().int().min(0).max(5000).optional(),
-        outerDiameterMm: z.number().int().min(50).max(400).nullable().optional(),
+        outerDiameterMm: z
+          .number()
+          .int()
+          .min(50)
+          .max(400)
+          .nullable()
+          .optional(),
         widthMm: z.number().int().min(10).max(200).nullable().optional(),
         boreDiameterMm: z.number().int().min(10).max(200).nullable().optional(),
         notes: z.string().max(2000).nullable().optional(),
         active: z.boolean().optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       const { id, ...data } = input;
       const current = await findVariantById(id);
       if (!current)
-        throw new TRPCError({ code: "NOT_FOUND", message: "Variante nicht gefunden" });
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Variante nicht gefunden",
+        });
       const nominalWeight = data.nominalWeight ?? current.nominalWeight;
       const tareWeight = data.tareWeight ?? current.tareWeight;
       if (tareWeight >= nominalWeight) {
@@ -348,14 +375,17 @@ const proposalAdminRouter = createRouter({
           status: z.enum(PRESET_PROPOSAL_STATUSES).optional(),
           limit: z.number().int().min(1).max(200).default(100),
         })
-        .default({ limit: 100 }),
+        .default({ limit: 100 })
     )
     .query(({ input }) => findProposalsForReview(input.status, input.limit)),
 
   approve: adminQuery.input(idInput).mutation(async ({ ctx, input }) => {
     const proposal = await findProposal(input.id);
     if (!proposal) {
-      throw new TRPCError({ code: "NOT_FOUND", message: "Vorschlag nicht gefunden" });
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Vorschlag nicht gefunden",
+      });
     }
     if (proposal.status !== "pending") {
       throw new TRPCError({
@@ -395,7 +425,7 @@ const proposalAdminRouter = createRouter({
           .trim()
           .min(1, "Bitte eine Begründung für die Ablehnung angeben")
           .max(1000, "Begründung darf höchstens 1000 Zeichen haben"),
-      }),
+      })
     )
     .mutation(async ({ ctx, input }) => {
       const closed = await closeProposal(input.id, {

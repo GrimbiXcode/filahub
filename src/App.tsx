@@ -35,10 +35,7 @@ export default function App() {
       </Routes>
       {/* Auf dem Telefon oben: unten rechts würde die Meldung den
           Aktionsknopf über der Materialliste verdecken. */}
-      <Toaster
-        richColors
-        position={isMobile ? "top-center" : "bottom-right"}
-      />
+      <Toaster richColors position={isMobile ? "top-center" : "bottom-right"} />
     </ErrorBoundary>
   );
 }

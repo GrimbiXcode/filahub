@@ -12,11 +12,11 @@ import type { User } from "@db/schema";
 export async function resetSchema() {
   const db = getDb();
   const [rows] = (await db.execute(
-    sql`SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()`,
+    sql`SELECT TABLE_NAME AS name FROM information_schema.tables WHERE TABLE_SCHEMA = DATABASE()`
   )) as unknown as [{ name: string }[]];
 
   if (rows.length > 0) {
-    const list = rows.map((r) => `\`${r.name}\``).join(", ");
+    const list = rows.map(r => `\`${r.name}\``).join(", ");
     await db.execute(sql.raw("SET FOREIGN_KEY_CHECKS = 0"));
     await db.execute(sql.raw(`DROP TABLE IF EXISTS ${list}`));
     await db.execute(sql.raw("SET FOREIGN_KEY_CHECKS = 1"));
@@ -27,8 +27,9 @@ export async function resetSchema() {
 
 /** Schließt den mysql2-Pool, sonst endet der Vitest-Prozess nicht. */
 export async function closeDb() {
-  const client = (getDb() as unknown as { $client?: { end?: () => Promise<void> } })
-    .$client;
+  const client = (
+    getDb() as unknown as { $client?: { end?: () => Promise<void> } }
+  ).$client;
   await client?.end?.();
 }
 
@@ -44,7 +45,7 @@ export function callerFor(user: User) {
 /** Zeilenanzahl einer Tabelle. */
 export async function countRows(table: string) {
   const [rows] = (await getDb().execute(
-    sql.raw(`SELECT COUNT(*) AS c FROM \`${table}\``),
+    sql.raw(`SELECT COUNT(*) AS c FROM \`${table}\``)
   )) as unknown as [{ c: number }[]];
   return Number(rows[0].c);
 }

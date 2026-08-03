@@ -44,13 +44,24 @@ export function useAuth(options?: UseAuthOptions) {
   const isUnauthenticated = error?.data?.code === "UNAUTHORIZED";
 
   useEffect(() => {
-    if (redirectOnUnauthenticated && !isLoading && (!user || isUnauthenticated)) {
+    if (
+      redirectOnUnauthenticated &&
+      !isLoading &&
+      (!user || isUnauthenticated)
+    ) {
       const currentPath = window.location.pathname;
       if (currentPath !== redirectPath) {
         navigate(redirectPath);
       }
     }
-  }, [redirectOnUnauthenticated, isLoading, user, isUnauthenticated, navigate, redirectPath]);
+  }, [
+    redirectOnUnauthenticated,
+    isLoading,
+    user,
+    isUnauthenticated,
+    navigate,
+    redirectPath,
+  ]);
 
   return useMemo(
     () => ({
@@ -62,6 +73,14 @@ export function useAuth(options?: UseAuthOptions) {
       logout,
       refresh: refetch,
     }),
-    [user, isUnauthenticated, isLoading, logoutMutation.isPending, error, logout, refetch],
+    [
+      user,
+      isUnauthenticated,
+      isLoading,
+      logoutMutation.isPending,
+      error,
+      logout,
+      refetch,
+    ]
   );
 }

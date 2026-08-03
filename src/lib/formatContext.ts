@@ -44,7 +44,9 @@ export function browserLocale(): string {
   const candidate = navigator.languages?.at(0) ?? navigator.language;
   if (!candidate) return FALLBACK_LOCALE;
   try {
-    return Intl.NumberFormat.supportedLocalesOf(candidate).at(0) ?? FALLBACK_LOCALE;
+    return (
+      Intl.NumberFormat.supportedLocalesOf(candidate).at(0) ?? FALLBACK_LOCALE
+    );
   } catch {
     return FALLBACK_LOCALE;
   }
@@ -53,7 +55,9 @@ export function browserLocale(): string {
 export function useFormat(): FormatHelpers {
   const value = useContext(FormatContext);
   if (!value) {
-    throw new Error("useFormat muss innerhalb von <FormatProvider> genutzt werden");
+    throw new Error(
+      "useFormat muss innerhalb von <FormatProvider> genutzt werden"
+    );
   }
   return value;
 }

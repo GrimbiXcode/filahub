@@ -33,14 +33,14 @@ cp .env.example .env
 # TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_ALLOWED_IDS, OWNER_TELEGRAM_ID
 ```
 
-| Variable | Purpose |
-|---|---|
-| `APP_SECRET` | Random secret for signing session tokens |
-| `DATABASE_URL` | MySQL connection string |
-| `TELEGRAM_BOT_TOKEN` | Token from @BotFather |
-| `TELEGRAM_BOT_USERNAME` | Bot username without @ |
-| `TELEGRAM_ALLOWED_IDS` | Allowed Telegram IDs (comma-separated); empty = open registration |
-| `OWNER_TELEGRAM_ID` | Telegram ID of the admin |
+| Variable                | Purpose                                                           |
+| ----------------------- | ----------------------------------------------------------------- |
+| `APP_SECRET`            | Random secret for signing session tokens                          |
+| `DATABASE_URL`          | MySQL connection string                                           |
+| `TELEGRAM_BOT_TOKEN`    | Token from @BotFather                                             |
+| `TELEGRAM_BOT_USERNAME` | Bot username without @                                            |
+| `TELEGRAM_ALLOWED_IDS`  | Allowed Telegram IDs (comma-separated); empty = open registration |
+| `OWNER_TELEGRAM_ID`     | Telegram ID of the admin                                          |
 
 ## 3. Set up the database
 
@@ -159,7 +159,7 @@ users can pick a spool instead of looking up and entering its empty weight
 themselves. It has four levels:
 
 **Manufacturer → series → version → size.** A series is a product line
-(e.g. *PolyTerra PLA*), a version is a revision of its spool (e.g. the switch
+(e.g. _PolyTerra PLA_), a version is a revision of its spool (e.g. the switch
 from plastic to cardboard, with a validity period), and a size is the spool
 for one net filament weight (500 g / 1 kg / 3 kg) with its empty weight and
 dimensions. A series can be tagged with material types so the right spools
@@ -186,16 +186,16 @@ For administrators, under **Verwaltung**:
 
 ## Useful commands
 
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Dev server with HMR |
-| `npm run check` | TypeScript check |
-| `npm run build` | Production build to `dist/` |
-| `npm run lint` | ESLint |
-| `npm run test` | Vitest (no database needed) |
+| Command                    | Purpose                                          |
+| -------------------------- | ------------------------------------------------ |
+| `npm run dev`              | Dev server with HMR                              |
+| `npm run check`            | TypeScript check                                 |
+| `npm run build`            | Production build to `dist/`                      |
+| `npm run lint`             | ESLint                                           |
+| `npm run test`             | Vitest (no database needed)                      |
 | `npm run test:integration` | Vitest against a real MySQL database (see below) |
-| `npm run db:push` | Sync schema changes to the database |
-| `npm run db:seed` | Seed the preset catalogue (idempotent) |
+| `npm run db:push`          | Sync schema changes to the database              |
+| `npm run db:seed`          | Seed the preset catalogue (idempotent)           |
 
 ## Integration tests
 

@@ -38,21 +38,25 @@ export default function Login() {
       await utils.invalidate();
       navigate("/");
     },
-    onError: (e) => setError(e.message),
+    onError: e => setError(e.message),
   });
   const loginWithCode = trpc.auth.login.useMutation({
     onSuccess: async () => {
       await utils.invalidate();
       navigate("/");
     },
-    onError: (e) => setError(e.message),
+    onError: e => setError(e.message),
   });
 
   // Offizielles Telegram Login Widget laden
   useEffect(() => {
-    if (!loginInfo?.botConfigured || !loginInfo.botUsername || !widgetRef.current)
+    if (
+      !loginInfo?.botConfigured ||
+      !loginInfo.botUsername ||
+      !widgetRef.current
+    )
       return;
-    window.onTelegramAuth = (user) => loginWithWidget.mutate(user);
+    window.onTelegramAuth = user => loginWithWidget.mutate(user);
     const script = document.createElement("script");
     script.src = "https://telegram.org/js/telegram-widget.js?22";
     script.async = true;
@@ -101,12 +105,14 @@ export default function Login() {
 
               <div className="flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">oder per Code</span>
+                <span className="text-xs text-muted-foreground">
+                  oder per Code
+                </span>
                 <Separator className="flex-1" />
               </div>
 
               <form
-                onSubmit={(e) => {
+                onSubmit={e => {
                   e.preventDefault();
                   setError(null);
                   loginWithCode.mutate({ code: code.trim() });
@@ -135,7 +141,7 @@ export default function Login() {
                     maxLength={6}
                     placeholder="6-stelliger Code"
                     value={code}
-                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
                   />
                 </div>
                 <Button
@@ -165,7 +171,9 @@ export default function Login() {
             <>
               <div className="flex items-center gap-3">
                 <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">Entwicklung</span>
+                <span className="text-xs text-muted-foreground">
+                  Entwicklung
+                </span>
                 <Separator className="flex-1" />
               </div>
               <Button

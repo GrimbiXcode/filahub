@@ -30,13 +30,13 @@ export function AutocompleteInput({
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();
     const list = q
-      ? suggestions.filter((s) => s.toLowerCase().includes(q))
+      ? suggestions.filter(s => s.toLowerCase().includes(q))
       : suggestions;
     return list.slice(0, 8);
   }, [suggestions, value]);
 
   const exactMatch = suggestions.some(
-    (s) => s.toLowerCase() === value.trim().toLowerCase(),
+    s => s.toLowerCase() === value.trim().toLowerCase()
   );
 
   return (
@@ -47,7 +47,7 @@ export function AutocompleteInput({
           value={value}
           placeholder={placeholder}
           autoComplete="off"
-          onChange={(e) => {
+          onChange={e => {
             onChange(e.target.value);
             setOpen(true);
           }}
@@ -63,20 +63,22 @@ export function AutocompleteInput({
           tabIndex={-1}
           aria-label="Vorschläge anzeigen"
           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setOpen((o) => !o)}
+          onMouseDown={e => e.preventDefault()}
+          onClick={() => setOpen(o => !o)}
         >
-          <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+          <ChevronDown
+            className={cn("h-4 w-4 transition-transform", open && "rotate-180")}
+          />
         </button>
       </div>
       {open && filtered.length > 0 && (
         <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-popover py-1 shadow-md">
-          {filtered.map((s) => (
+          {filtered.map(s => (
             <li key={s}>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-accent"
-                onMouseDown={(e) => {
+                onMouseDown={e => {
                   e.preventDefault();
                   onChange(s);
                   setOpen(false);
@@ -87,7 +89,7 @@ export function AutocompleteInput({
                     "h-3.5 w-3.5 shrink-0",
                     s.toLowerCase() === value.trim().toLowerCase()
                       ? "opacity-100"
-                      : "opacity-0",
+                      : "opacity-0"
                   )}
                 />
                 {s}

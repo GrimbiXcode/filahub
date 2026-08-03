@@ -80,7 +80,7 @@ export function currencySymbol(locale: string, currency: string): string {
 
 export function formatNumber(
   value: number | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   if (value == null || !Number.isFinite(value)) return "–";
   return numberFormat(locale).format(value);
@@ -88,7 +88,7 @@ export function formatNumber(
 
 export function formatGrams(
   grams: number | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   if (grams == null || !Number.isFinite(grams)) return "–";
   return `${numberFormat(locale).format(grams)} g`;
@@ -97,7 +97,7 @@ export function formatGrams(
 /** Prozentwert von 0–100 (nicht 0–1) */
 export function formatPercent(
   percent: number | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   if (percent == null || !Number.isFinite(percent)) return "–";
   return numberFormat(locale, {
@@ -109,11 +109,11 @@ export function formatPercent(
 export function formatMoney(
   cents: number | null | undefined,
   locale: string,
-  currency: string,
+  currency: string
 ): string {
   if (cents == null || !Number.isFinite(cents)) return "–";
   return numberFormat(locale, { style: "currency", currency }).format(
-    cents / 100,
+    cents / 100
   );
 }
 
@@ -127,7 +127,7 @@ function toDate(value: string | Date | null | undefined): Date | null {
 
 export function formatDate(
   value: string | Date | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   const d = toDate(value);
   if (!d) return "–";
@@ -140,7 +140,7 @@ export function formatDate(
 
 export function formatDateTime(
   value: string | Date | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   const d = toDate(value);
   if (!d) return "–";
@@ -205,7 +205,7 @@ function normalizeDecimalInput(raw: string, locale: string): string {
 /** Geld-Eingabe nach Cent, null bei leer/ungültig/negativ */
 export function parseMoneyToCents(
   value: string,
-  locale: string,
+  locale: string
 ): number | null {
   const normalized = normalizeDecimalInput(value.trim(), locale);
   if (!normalized) return null;
@@ -220,7 +220,7 @@ export function parseMoneyToCents(
  */
 export function centsToInputString(
   cents: number | null | undefined,
-  locale: string,
+  locale: string
 ): string {
   if (cents == null || !Number.isFinite(cents)) return "";
   return (cents / 100).toFixed(2).replace(".", decimalSeparator(locale));
