@@ -22,6 +22,13 @@
       "when": 1785692041295,
       "tag": "0002_colossal_beyonder",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1785786374670,
+      "tag": "0003_known_tigra",
+      "breakpoints": true
     }
   ]
 }

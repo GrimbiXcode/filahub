@@ -3,13 +3,14 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { Session } from "@contracts/constants";
 import { currencySchema, localeSchema } from "@contracts/locale";
+import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { getSessionCookieOptions } from "./lib/cookies";
 import { env } from "./lib/env";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
-import { updateUserSettings, upsertUser } from "./queries/users";
+import { markReleaseNotesSeen, updateUserSettings, upsertUser } from "./queries/users";
 
 function assertAllowed(telegramId: string) {
   if (env.telegramAllowedIds.length > 0 && !env.telegramAllowedIds.includes(telegramId)) {
@@ -44,6 +45,18 @@ export const authRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       await updateUserSettings(ctx.user.id, input);
+      return { success: true };
+    }),
+
+  /**
+   * Merkt sich, bis zu welcher Version der Benutzer die Neuerungen kennt.
+   * Bewusst keine Anzeige-Einstellung: der Wert wird nur nach vorne gesetzt
+   * (siehe `markReleaseNotesSeen`).
+   */
+  markReleaseNotesSeen: authedQuery
+    .input(z.object({ version: releaseVersionSchema }))
+    .mutation(async ({ ctx, input }) => {
+      await markReleaseNotesSeen(ctx.user.id, input.version);
       return { success: true };
     }),
 

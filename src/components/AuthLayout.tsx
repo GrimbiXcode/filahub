@@ -19,6 +19,7 @@ import {
   SidebarHeader,
   SidebarInset,
   SidebarMenu,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
@@ -26,7 +27,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LOGIN_PATH, SETTINGS_PATH } from "@/const";
+import { LOGIN_PATH, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import {
   Archive,
   Disc3,
@@ -41,6 +42,7 @@ import {
   Scale,
   Search,
   Settings,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import {
@@ -54,6 +56,7 @@ import { useLocation, useNavigate } from "react-router";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
 import { QuickActionsHost } from "./QuickActions";
 import { useQuickActions } from "@/lib/quickActions";
+import { useReleaseNotes } from "@/hooks/useReleaseNotes";
 import { ThemeToggle } from "./ThemeToggle";
 import { THEMES, THEME_LABELS, useAppTheme, type Theme } from "@/lib/theme";
 import { Button } from "./ui/button";
@@ -94,6 +97,7 @@ function titleForPath(pathname: string): string {
     entry => entry.path === pathname
   );
   if (item) return item.label;
+  if (pathname === RELEASE_NOTES_PATH) return "Neuerungen";
   if (pathname === SETTINGS_PATH) return "Einstellungen";
   if (pathname.startsWith("/material/")) return "Material";
   return "Filament-Lager";
@@ -171,6 +175,7 @@ function AuthLayoutContent({
   const { state, toggleSidebar, setOpenMobile } = useSidebar();
   const { openPalette } = useQuickActions();
   const { theme, setTheme } = useAppTheme();
+  const { unreadCount } = useReleaseNotes();
   const isCollapsed = state === "collapsed";
   const [isDragging, setIsDragging] = useState(false);
   // In der eingeklappten Leiste gibt es nichts zu ziehen – abgeleitet statt
@@ -324,6 +329,42 @@ function AuthLayoutContent({
 
           <SidebarFooter className="p-3">
             <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={location.pathname === RELEASE_NOTES_PATH}
+                  onClick={() => go(RELEASE_NOTES_PATH)}
+                  tooltip={
+                    unreadCount > 0
+                      ? `Neuerungen (${unreadCount} ungelesen)`
+                      : "Neuerungen"
+                  }
+                  className="h-10 font-normal transition-all"
+                >
+                  <span className="relative flex shrink-0 items-center justify-center">
+                    <Sparkles
+                      className={`h-4 w-4 ${
+                        location.pathname === RELEASE_NOTES_PATH
+                          ? "text-primary"
+                          : ""
+                      }`}
+                    />
+                    {/* In der eingeklappten Leiste blendet SidebarMenuBadge aus –
+                        dort bleibt nur dieser Punkt am Symbol. */}
+                    {unreadCount > 0 && (
+                      <span
+                        aria-hidden
+                        className="absolute -right-1 -top-1 hidden h-2 w-2 rounded-full bg-primary group-data-[collapsible=icon]:block"
+                      />
+                    )}
+                  </span>
+                  <span>Neuerungen</span>
+                </SidebarMenuButton>
+                {unreadCount > 0 && (
+                  <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground">
+                    {unreadCount}
+                  </SidebarMenuBadge>
+                )}
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === SETTINGS_PATH}

@@ -12,6 +12,7 @@ import {
   Plus,
   Scale,
   Settings as SettingsIcon,
+  Sparkles,
   Sun,
 } from "lucide-react";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
@@ -27,7 +28,7 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
-import { SETTINGS_PATH } from "@/const";
+import { RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useFormat } from "@/lib/formatContext";
 import {
@@ -98,6 +99,7 @@ const NAV_TARGETS = [
   { icon: Disc3, label: "Rollentypen", path: "/rollentypen" },
   { icon: Archive, label: "Lagerboxen", path: "/lagerboxen" },
   { icon: FileUp, label: "Massenimport", path: "/import" },
+  { icon: Sparkles, label: "Neuerungen", path: RELEASE_NOTES_PATH },
   { icon: SettingsIcon, label: "Einstellungen", path: SETTINGS_PATH },
 ];
 

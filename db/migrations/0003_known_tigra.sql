@@ -1,0 +1,1 @@
+ALTER TABLE `users` ADD `lastSeenReleaseVersion` varchar(32);

@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
+import { compareVersions } from "@contracts/releaseNotes";
 import { getDb } from "./connection";
 import { env } from "../lib/env";
 
@@ -14,8 +15,31 @@ export async function findUserByUnionId(unionId: string) {
 }
 
 /**
+ * Merkt sich, bis zu welcher Version der Benutzer die Neuerungen gesehen hat.
+ *
+ * Bewusst monoton: Ein alter Tab oder ein zurückgerolltes Image darf den Stand
+ * nicht zurückdrehen. MySQL kann Versionsnummern nicht sinnvoll vergleichen
+ * (`0.10.0` < `0.9.0` als Text), deshalb passiert der Vergleich hier.
+ */
+export async function markReleaseNotesSeen(userId: number, version: string) {
+  const rows = await getDb()
+    .select({ lastSeen: schema.users.lastSeenReleaseVersion })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  const current = rows.at(0)?.lastSeen;
+  if (current != null && compareVersions(version, current) <= 0) return;
+
+  await getDb()
+    .update(schema.users)
+    .set({ lastSeenReleaseVersion: version })
+    .where(eq(schema.users.id, userId));
+}
+
+/**
  * Anzeige-Einstellungen eines Benutzers ändern (Währung, Regionalformat).
- * `locale: null` bedeutet „Locale des Browsers verwenden“.
+ * `locale: null` bedeutet „Locale des Browsers verwenden”.
  */
 export async function updateUserSettings(
   userId: number,

@@ -27,6 +27,11 @@ export const users = mysqlTable("users", {
   currency: varchar("currency", { length: 3 }).default("EUR").notNull(),
   /** BCP-47-Locale für Zahlen- und Datumsformate; NULL = Locale des Browsers */
   locale: varchar("locale", { length: 35 }),
+  /**
+   * Höchste Release-Note-Version, die der Benutzer gesehen hat (`0.7.0`).
+   * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
+   */
+  lastSeenReleaseVersion: varchar("lastSeenReleaseVersion", { length: 32 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt")
     .defaultNow()

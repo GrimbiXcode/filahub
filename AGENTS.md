@@ -27,11 +27,15 @@ src/            React-Frontend
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
-  hooks/        useAuth, use-mobile
+  hooks/        useAuth, use-mobile, useReleaseNotes
   lib/          formatContext.ts (useFormat), format.ts (Füllstandsfarben),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
-                importPrompt.ts, utils.ts (cn-Helfer)
+                releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
+                appVersion.ts, importPrompt.ts, utils.ts (cn-Helfer)
+  release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
+                **Englisch**, eigene AGENTS.md im Verzeichnis
+  types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
@@ -46,7 +50,8 @@ db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatal
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen),
-                locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer)
+                locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
+                releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik)
 ```
 
 ## Pfad-Aliase
@@ -143,6 +148,27 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   dauerhaft unangetastet. Für inhaltliche Korrekturen am Startkatalog
   `PRESET_SEED_REVISION` erhöhen.
 
+## Release Notes
+
+Was sich pro Version geändert hat, steht als Markdown in `src/release-notes/`
+(`release_vX.Y.Z.md`) und wird unter „Neuerungen" (`/neuerungen`) angezeigt.
+Bilder liegen daneben in `images/` und werden über `import.meta.glob` mitgebaut.
+
+- **Der Inhalt ist immer englisch** – die einzige Ausnahme von der
+  Deutsch-Regel unter „Code-Stil". Die Oberfläche drumherum bleibt deutsch. Die
+  genauen Regeln stehen in `src/release-notes/AGENTS.md`; wer dort Dateien
+  anlegt, liest zuerst diese Datei.
+- Die Version kommt aus dem **Dateinamen**. Beim Versionssprung gehören die
+  Version in `package.json` und die neue Release Note in dieselbe Änderung.
+- Der Ungelesen-Stand hängt am Benutzer (`users.lastSeenReleaseVersion`,
+  NULL = noch nichts gelesen) und wird nur nach vorne gesetzt
+  (`markReleaseNotesSeen` in `api/queries/users.ts`).
+- Reine Logik in `contracts/releaseNotes.ts`, das Einlesen in
+  `src/lib/releaseNotes.ts` – nur dort steckt Vite-spezifischer Code.
+- `vite.config.ts` reicht die Version aus `package.json` als `__APP_VERSION__`
+  ins Frontend; benutzt wird sie ausschließlich über `APP_VERSION` aus
+  `src/lib/appVersion.ts`. In `api/` und `contracts/` gibt es den Wert nicht.
+
 ## Konfiguration / Umgebungsvariablen
 
 Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
@@ -187,7 +213,9 @@ die Sandbox ist bewusst wegwerfbar und nie die eigene Entwicklungsdatenbank.
 ## Code-Stil
 
 - Sprache im Code, in Fehlermeldungen, Kommentaren und UI-Texten: **Deutsch**
-  (z. B. zod-Validierungsmeldungen). Bitte beibehalten.
+  (z. B. zod-Validierungsmeldungen). Bitte beibehalten. Einzige Ausnahme: die
+  Release Notes in `src/release-notes/` sind immer englisch und werden nie
+  übersetzt (siehe Abschnitt „Release Notes").
 - Prettier: doppelte Anführungszeichen, Semikolons, 2 Leerzeichen, `printWidth: 80`.
 - ESLint: `js.configs.recommended`, `typescript-eslint`, react-hooks, react-refresh.
 - UI-Komponenten aus shadcn nachnutzen: `import { Button } from "@/components/ui/button"` –
@@ -231,8 +259,13 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats` und `format`. Alle laufen ohne Datenbank – reine zod- und
-  Funktionstests. Bei neuen Backend-Features Tests in `api/` anlegen.
+  `materialStats`, `format` und `releaseNotes`. Alle laufen ohne Datenbank –
+  reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
+  anlegen.
+- `api/releaseNotes.test.ts` prüft zusätzlich die echten Dateien in
+  `src/release-notes/` (Namen, Frontmatter, Bildverweise, Alternativtexte).
+  Das ist Absicht: `vite build` führt die Module nicht aus, eine kaputte
+  Release Note fiele sonst erst im Browser auf.
 - `api/format.test.ts` testet die gemeinsamen Formatierer aus
   `contracts/format.ts` – Tests unterhalb von `src/` würde vitest nicht
   einsammeln.

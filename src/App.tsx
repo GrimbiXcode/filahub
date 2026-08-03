@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { SETTINGS_PATH } from "@/const";
+import { RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
@@ -12,6 +12,7 @@ import SpoolTypes from "./pages/SpoolTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import ReleaseNotes from "./pages/ReleaseNotes";
 import Settings from "./pages/Settings";
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
         <Route path="/lagerboxen" element={<StorageBoxes />} />
+        <Route path={RELEASE_NOTES_PATH} element={<ReleaseNotes />} />
         <Route path={SETTINGS_PATH} element={<Settings />} />
         <Route path="/verwaltung/presets" element={<AdminPresets />} />
         <Route path="/verwaltung/vorschlaege" element={<AdminProposals />} />
