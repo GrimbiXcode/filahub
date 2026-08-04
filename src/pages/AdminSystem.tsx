@@ -131,10 +131,12 @@ function MigrationsCard({
 
 function LegacyImportCard({
   data,
+  kannWiederholen,
   onRetry,
   isRetrying,
 }: {
   data: AdminSystemStatus["legacyImport"];
+  kannWiederholen: boolean;
   onRetry: () => void;
   isRetrying: boolean;
 }) {
@@ -149,8 +151,6 @@ function LegacyImportCard({
       </SectionCard>
     );
   }
-
-  const kannWiederholen = data.status === "failed" || data.status === "skipped";
 
   return (
     <SectionCard
@@ -183,7 +183,13 @@ function LegacyImportCard({
         <p className="py-2 text-sm text-muted-foreground">
           Es ist keine Altdatenbank hinterlegt. Um Daten aus einer bestehenden
           MySQL-Installation zu übernehmen, <code>LEGACY_MYSQL_URL</code> setzen
-          und den Server neu starten.
+          und den Server neu starten. Die Zieldatenbank muss dafür leer sein.
+        </p>
+      )}
+
+      {data.status === "running" && (
+        <p className="py-2 text-sm text-muted-foreground">
+          Die Übernahme läuft. Der Fortschritt aktualisiert sich von selbst.
         </p>
       )}
 
@@ -304,7 +310,10 @@ export default function AdminSystem() {
     onSuccess: result => {
       toast.success(
         result.status === "completed"
-          ? `Datenübernahme abgeschlossen – ${result.rowsCopied} Zeilen übernommen.`
+          ? `Datenübernahme abgeschlossen – ${result.rowsCopied} Zeilen übernommen.` +
+              (result.seeded
+                ? ` Preset-Katalog: ${result.seeded.created} neu.`
+                : "")
           : `Datenübernahme: ${IMPORT_STATUS_LABELS[result.status]}`
       );
       void utils.admin.system.status.invalidate();
@@ -331,6 +340,7 @@ export default function AdminSystem() {
           <DatabaseCard data={data.database} />
           <LegacyImportCard
             data={data.legacyImport}
+            kannWiederholen={data.canRetryImport}
             onRetry={() => retry.mutate()}
             isRetrying={retry.isPending}
           />

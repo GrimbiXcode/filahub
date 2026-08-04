@@ -119,6 +119,12 @@ Notes:
 Releases up to 0.7.0 stored their data in MySQL. The app migrates it for you:
 set `LEGACY_MYSQL_URL` to the old database and start once.
 
+> **Set it before the very first start.** The transfer copies the old IDs
+> unchanged, so it needs an empty Postgres database. A first start without the
+> variable already writes the preset catalogue and takes the IDs the old rows
+> need – the app then refuses the transfer instead of silently mixing the two.
+> If that happened, drop and recreate the Postgres database and start again.
+
 ```bash
 # in .env (or in the app service of docker-compose.yml)
 DATABASE_URL=postgres://filahub:...@db:5432/filahub
@@ -138,12 +144,13 @@ Notes:
 - A failure does **not** stop the server from starting – otherwise you could
   not reach the page that reports it. Fix the cause and either press "Erneut
   versuchen" on the system page or restart; the failed run is picked up again.
+  A run that died mid-way (status stuck on "Läuft") is resumed automatically
+  after 30 minutes without a sign of life.
+- While a transfer is unfinished, the app does **not** write the preset
+  catalogue. It would take the IDs the remaining old rows still need. The
+  catalogue is written as soon as the transfer completes.
 - The old database is only read, never modified. Keep it until you have
   checked the result.
-- **Migrate into an empty Postgres database.** Rows whose ID or unique key
-  already exists in the target are kept and the incoming row is skipped – you
-  would end up with a mix. The system page shows this per table under
-  "Bereits vorhanden", so check it if you are unsure.
 - Remove `LEGACY_MYSQL_URL` once the status says "Abgeschlossen".
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)

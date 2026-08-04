@@ -45,6 +45,16 @@ import { getDb } from "./connection";
 const BATCH_SIZE = 500;
 
 /**
+ * Ab wann ein Lauf im Zustand `running` als abgestürzt gilt.
+ *
+ * Ein laufender Import schreibt nach jeder Tabelle seinen Fortschritt und
+ * frischt dabei `updatedAt` auf. Bleibt das aus, lebt der Prozess nicht mehr –
+ * ohne diese Schwelle bliebe die Übernahme nach einem Absturz für immer
+ * blockiert, weil `claimRun` einen `running`-Zustand nie wieder übernimmt.
+ */
+const STALE_RUN_MS = 30 * 60 * 1000;
+
+/**
  * Übernahmereihenfolge: Eltern vor Kindern. Fachlich erzwingt das nichts (es
  * gibt keine Fremdschlüssel), aber bei einem Abbruch mittendrin ist der
  * Zwischenstand so leichter zu lesen.
@@ -188,9 +198,38 @@ export function getLegacyImportState() {
 }
 
 /**
+ * Bedingung, unter der ein Lauf übernommen werden darf.
+ *
+ * `completed` fehlt bewusst: Eine abgeschlossene Übernahme wird nie von selbst
+ * wiederholt. `skipped` ist dabei, weil sonst jede Installation, die einmal
+ * ohne `LEGACY_MYSQL_URL` gestartet wurde, die Übernahme nie mehr anstoßen
+ * könnte. Ein `running`-Zustand ohne Lebenszeichen gilt als abgestürzt.
+ */
+const claimable = sql`(
+  ${migrationState.status} IN ('pending', 'failed', 'skipped')
+  OR (
+    ${migrationState.status} = 'running'
+    AND ${migrationState.updatedAt} < now() - ${sql.raw(`interval '${STALE_RUN_MS} milliseconds'`)}
+  )
+)`;
+
+/** Gilt der Lauf gerade als übernehmbar? Steuert den Knopf in der Verwaltung. */
+export async function canClaimRun(): Promise<boolean> {
+  const rows = await getDb()
+    .select({ id: migrationState.id })
+    .from(migrationState)
+    .where(sql`${migrationState.key} = ${LEGACY_IMPORT_KEY} AND ${claimable}`);
+  return rows.length > 0;
+}
+
+/**
  * Beansprucht den Lauf. Der Statuswechsel wirkt als optimistische Sperre –
  * dasselbe Muster wie in `closeProposal`: Starten zwei Instanzen gleichzeitig,
  * bekommt genau eine die Zeile und die andere `false`.
+ *
+ * `rowsCopied` und `detail` bleiben stehen: Bei einer Wiederaufnahme nach
+ * Absturz ist die bisherige Bilanz die einzige Auskunft darüber, ob schon
+ * Zeilen geschrieben wurden – davon hängt die Prüfung in `ensureSafeTarget` ab.
  */
 async function claimRun(source: string): Promise<boolean> {
   const claimed = await getDb()
@@ -199,25 +238,60 @@ async function claimRun(source: string): Promise<boolean> {
       status: "running",
       source,
       startedAt: new Date(),
+      updatedAt: new Date(),
       finishedAt: null,
       error: null,
       tablesTotal: LEGACY_TABLES.length,
       tablesDone: 0,
-      rowsCopied: 0,
-      detail: null,
     })
-    .where(
-      sql`${migrationState.key} = ${LEGACY_IMPORT_KEY} AND ${migrationState.status} IN ('pending', 'failed')`
-    )
+    .where(sql`${migrationState.key} = ${LEGACY_IMPORT_KEY} AND ${claimable}`)
     .returning({ id: migrationState.id });
   return claimed.length > 0;
 }
 
+/**
+ * Schreibt den Fortschritt. `updatedAt` wird ausdrücklich mitgesetzt – es ist
+ * das Lebenszeichen, an dem `claimable` einen abgestürzten Lauf erkennt.
+ */
 async function updateState(data: Partial<MigrationState>) {
   await getDb()
     .update(migrationState)
-    .set(data)
+    .set({ ...data, updatedAt: new Date() })
     .where(eq(migrationState.key, LEGACY_IMPORT_KEY));
+}
+
+/**
+ * Prüft, ob die Übernahme in eine bereits befüllte Datenbank liefe, und gibt
+ * in dem Fall die Begründung zurück (sonst null).
+ *
+ * Geschrieben wird mit `onConflictDoNothing`, damit ein abgebrochener Lauf
+ * wiederholbar bleibt. Die Kehrseite: Trifft eine Altzeile auf eine vorhandene
+ * ID, gewinnt das Ziel und die Altzeile fällt still weg. Bei Preset-Einträgen
+ * wäre das besonders tückisch – Materialien zeigten dann über ihre
+ * unveränderte `spoolPresetVariantId` auf eine fremde Spule mit anderem
+ * Leergewicht.
+ *
+ * Geprüft wird, solange noch nie ein Lauf begonnen hat. Deshalb läuft die
+ * Prüfung **vor** `claimRun`: Würde erst beansprucht und dann geprüft, setzte
+ * schon der abgewiesene Versuch `startedAt` und schaltete die Prüfung für
+ * alle weiteren Versuche ab. Sobald ein Lauf begonnen hat, können vorhandene
+ * Zeilen von ihm stammen und eine Wiederaufnahme muss möglich bleiben.
+ */
+async function findBlockingRows(state: MigrationState): Promise<string | null> {
+  if (state.startedAt !== null) return null;
+
+  const belegt = (await countAllTables()).filter(c => c.rows > 0);
+  if (belegt.length === 0) return null;
+
+  const summe = belegt.reduce((n, c) => n + c.rows, 0);
+  return (
+    `Die Zieldatenbank ist nicht leer (${summe} Zeilen in: ` +
+    `${belegt.map(c => `${c.table}=${c.rows}`).join(", ")}). ` +
+    "Die Übernahme schreibt die alten IDs unverändert weiter und würde " +
+    "vorhandene Einträge stillschweigend überspringen. Bitte eine leere " +
+    "Datenbank verwenden: LEGACY_MYSQL_URL vor dem ersten Start setzen " +
+    "oder die Zieldatenbank neu anlegen."
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -255,7 +329,14 @@ type LegacyConnection = {
 
 async function copyTable(
   connection: LegacyConnection,
-  entry: { name: string; table: PgTable }
+  entry: { name: string; table: PgTable },
+  /**
+   * Wird nach jedem geschriebenen Stapel aufgerufen und schreibt den Zähler
+   * fort. Zwei Aufgaben: Lebenszeichen gegen die Absturzerkennung (eine sehr
+   * große Tabelle gälte sonst nach `STALE_RUN_MS` als tot) und Beleg dafür,
+   * dass bereits Zeilen im Ziel stehen – daran hängt `ensureSafeTarget`.
+   */
+  onBatch: (copied: number) => Promise<void>
 ): Promise<LegacyImportDetail> {
   const startedAt = Date.now();
   const db = getDb();
@@ -304,6 +385,7 @@ async function copyTable(
       .onConflictDoNothing()
       .returning({ n: sql<number>`1` });
     copied += inserted.length;
+    await onBatch(inserted.length);
 
     if (rows.length < BATCH_SIZE) break;
   }
@@ -329,9 +411,29 @@ export type LegacyImportResult = {
  * Übernimmt die Altdaten, sofern `LEGACY_MYSQL_URL` gesetzt ist.
  *
  * Wirft nicht: Der Serverstart darf daran nicht scheitern, sonst käme man
- * nicht mehr an die Verwaltungsseite, auf der der Fehler steht.
+ * nicht mehr an die Verwaltungsseite, auf der der Fehler steht. Die Zusicherung
+ * gilt auch für die Vorbereitung (Zustandszeile lesen, Ziel prüfen, Lauf
+ * beanspruchen) – sie liegt vor dem eigentlichen `try` und würde sonst
+ * durchschlagen.
  */
 export async function runLegacyImport(): Promise<LegacyImportResult> {
+  try {
+    return await importLegacyData();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Datenübernahme aus MySQL fehlgeschlagen:", error);
+    // Bestmöglich festhalten; ist die Datenbank selbst das Problem, geht auch
+    // das nicht mehr – dann bleibt nur das Protokoll.
+    await updateState({
+      status: "failed",
+      error: message,
+      finishedAt: new Date(),
+    }).catch(() => undefined);
+    return { status: "failed", detail: [], rowsCopied: 0 };
+  }
+}
+
+async function importLegacyData(): Promise<LegacyImportResult> {
   const state = await ensureState();
 
   if (!env.legacyMysqlUrl) {
@@ -349,6 +451,20 @@ export async function runLegacyImport(): Promise<LegacyImportResult> {
   }
 
   const source = redactUrl(env.legacyMysqlUrl);
+
+  // Vor dem Beanspruchen: Ein abgewiesener Versuch darf `startedAt` nicht
+  // setzen, sonst gälte die Datenbank beim nächsten Mal als „schon angefasst“.
+  const blockade = await findBlockingRows(state);
+  if (blockade) {
+    await updateState({
+      status: "failed",
+      source,
+      error: blockade,
+      finishedAt: new Date(),
+    });
+    return { status: "failed", detail: [], rowsCopied: 0 };
+  }
+
   if (!(await claimRun(source))) {
     // Bereits erledigt oder eine andere Instanz ist gerade dran.
     const current = await getLegacyImportState();
@@ -377,14 +493,12 @@ export async function runLegacyImport(): Promise<LegacyImportResult> {
     await connection.query("SET time_zone = '+00:00'");
 
     for (const entry of LEGACY_TABLES) {
-      const result = await copyTable(connection, entry);
-      detail.push(result);
-      rowsCopied += result.copied;
-      await updateState({
-        tablesDone: detail.length,
-        rowsCopied,
-        detail,
+      const result = await copyTable(connection, entry, async copied => {
+        rowsCopied += copied;
+        await updateState({ rowsCopied });
       });
+      detail.push(result);
+      await updateState({ tablesDone: detail.length, rowsCopied, detail });
     }
 
     await updateState({
@@ -412,16 +526,14 @@ export async function runLegacyImport(): Promise<LegacyImportResult> {
 }
 
 /**
- * Setzt einen fehlgeschlagenen Lauf zurück und startet ihn erneut.
- * Aufgerufen vom Knopf „Erneut versuchen“ auf `/verwaltung/system`.
+ * Startet einen nicht abgeschlossenen Lauf erneut – der Knopf „Erneut
+ * versuchen“ auf `/verwaltung/system`.
+ *
+ * Braucht keine eigene Vorbereitung mehr: `claimable` entscheidet, ob der
+ * Zustand übernommen werden darf. Eine abgeschlossene Übernahme bleibt damit
+ * auch hier unangetastet.
  */
-export async function retryLegacyImport(): Promise<LegacyImportResult> {
-  await getDb()
-    .update(migrationState)
-    .set({ status: "pending" })
-    .where(
-      sql`${migrationState.key} = ${LEGACY_IMPORT_KEY} AND ${migrationState.status} IN ('failed', 'skipped')`
-    );
+export function retryLegacyImport(): Promise<LegacyImportResult> {
   return runLegacyImport();
 }
 

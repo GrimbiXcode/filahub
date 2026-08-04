@@ -15,6 +15,7 @@ import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "./queries/connection";
 import {
+  canClaimRun,
   getLegacyImportState,
   legacyTableNames,
   retryLegacyImport,
@@ -320,4 +321,96 @@ describe.skipIf(!legacyUrl)("Datenübernahme aus MySQL", () => {
 
     (env as { legacyMysqlUrl: string }).legacyMysqlUrl = original;
   }, 60_000);
+
+  // -------------------------------------------------------------------------
+  // Zustandsübernahme
+  //
+  // Diese vier Fälle sind bei der Durchsicht als echte Fehler aufgefallen und
+  // hier festgenagelt: Ohne sie bliebe die Übernahme entweder blockiert oder
+  // sie liefe in eine befüllte Datenbank und verlöre still Altdaten.
+  // -------------------------------------------------------------------------
+
+  it("nimmt einen abgestürzten Lauf wieder auf", async () => {
+    // Nach einem Absturz bleibt `running` stehen. Ohne Verfallszeit wäre die
+    // Übernahme damit für immer blockiert – kein Neustart, kein Knopf.
+    await db()
+      .update(migrationState)
+      .set({
+        status: "running",
+        updatedAt: new Date(Date.now() - 3 * 60 * 60 * 1000),
+      })
+      .where(eq(migrationState.key, LEGACY_IMPORT_KEY));
+
+    expect(await canClaimRun()).toBe(true);
+    expect((await runLegacyImport()).status).toBe("completed");
+  }, 120_000);
+
+  it("fasst einen frisch laufenden Lauf nicht an", async () => {
+    await db()
+      .update(migrationState)
+      .set({ status: "running", updatedAt: new Date() })
+      .where(eq(migrationState.key, LEGACY_IMPORT_KEY));
+
+    expect(await canClaimRun()).toBe(false);
+    // Eine zweite Instanz darf nicht mitten hineinlaufen.
+    expect((await runLegacyImport()).status).toBe("running");
+
+    await db()
+      .update(migrationState)
+      .set({ status: "completed" })
+      .where(eq(migrationState.key, LEGACY_IMPORT_KEY));
+  });
+
+  it("bietet einen abgeschlossenen Lauf nicht zur Wiederholung an", async () => {
+    expect(await canClaimRun()).toBe(false);
+  });
+});
+
+describe.skipIf(!legacyUrl)("Schutz der Zieldatenbank", () => {
+  beforeAll(async () => {
+    await buildLegacyDatabase(legacyUrl!);
+    await resetSchema();
+    const { env } = await import("./lib/env");
+    (env as { legacyMysqlUrl: string }).legacyMysqlUrl = legacyUrl!;
+  }, 120_000);
+
+  afterAll(async () => {
+    const { env } = await import("./lib/env");
+    (env as { legacyMysqlUrl: string }).legacyMysqlUrl = "";
+    await closeDb();
+  });
+
+  it("verweigert die Übernahme in eine bereits befüllte Datenbank", async () => {
+    // Der wahrscheinlichste Fehlgriff: einmal ohne LEGACY_MYSQL_URL gestartet,
+    // dabei den Startkatalog angelegt, danach die Variable gesetzt. Die
+    // Preset-IDs 1..n sind dann vergeben – die Altzeilen fielen unter
+    // `onConflictDoNothing` weg und Materialien zeigten über ihre unveränderte
+    // `spoolPresetVariantId` auf eine fremde Spule mit anderem Leergewicht.
+    const seeded = await seedSpoolPresets();
+    expect(seeded.created).toBeGreaterThan(0);
+    const vorher = await countRows("preset_manufacturers");
+
+    const result = await runLegacyImport();
+    expect(result.status).toBe("failed");
+    expect(result.rowsCopied).toBe(0);
+
+    const state = await getLegacyImportState();
+    expect(state?.error).toContain("nicht leer");
+    // Der vorhandene Bestand bleibt unangetastet.
+    expect(await countRows("preset_manufacturers")).toBe(vorher);
+    expect(await countRows("users")).toBe(0);
+  }, 120_000);
+
+  it("bleibt bei der Verweigerung, statt beim zweiten Versuch nachzugeben", async () => {
+    const result = await retryLegacyImport();
+    expect(result.status).toBe("failed");
+    expect(result.rowsCopied).toBe(0);
+  }, 120_000);
+
+  it("läuft in eine leere Datenbank durch", async () => {
+    await resetSchema();
+    const result = await runLegacyImport();
+    expect(result.status).toBe("completed");
+    expect(result.rowsCopied).toBe(TOTAL_SOURCE_ROWS);
+  }, 120_000);
 });

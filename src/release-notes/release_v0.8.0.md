@@ -17,6 +17,11 @@ copies everything across: materials, weigh-ins, spool types, storage boxes, the
 preset catalogue and every suggestion — all with their original IDs, so nothing
 loses its connection.
 
+Set the variable **before the first start**, and point it at an empty Postgres
+database. Because the old IDs are kept as they are, anything already in the new
+database would collide with them. filahub checks this and refuses the transfer
+rather than quietly mixing the two.
+
 The transfer only reads from the old database, never writes to it. It is safe
 to repeat: running it a second time copies nothing twice, so an interrupted
 transfer can simply be started again. Once it is done, remove the variable.

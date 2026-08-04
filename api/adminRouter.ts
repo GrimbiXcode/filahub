@@ -14,11 +14,13 @@ import {
 import { adminQuery, createRouter } from "./middleware";
 import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
+  canClaimRun,
   countAllTables,
   getLegacyImportState,
   retryLegacyImport,
   type LegacyImportDetail,
 } from "./queries/legacyImport";
+import { seedSpoolPresets, type SeedStats } from "./queries/presetSeed";
 import {
   getDatabaseInfo,
   getSchemaMigrations,
@@ -464,14 +466,21 @@ const proposalAdminRouter = createRouter({
  */
 const systemAdminRouter = createRouter({
   status: adminQuery.query(async () => {
-    const [database, schemaMigrations, legacyImport, tableCounts, seed] =
-      await Promise.all([
-        getDatabaseInfo(),
-        getSchemaMigrations(),
-        getLegacyImportState(),
-        countAllTables(),
-        getSeedInfo(),
-      ]);
+    const [
+      database,
+      schemaMigrations,
+      legacyImport,
+      canRetryImport,
+      tableCounts,
+      seed,
+    ] = await Promise.all([
+      getDatabaseInfo(),
+      getSchemaMigrations(),
+      getLegacyImportState(),
+      canClaimRun(),
+      countAllTables(),
+      getSeedInfo(),
+    ]);
     return {
       database,
       schemaMigrations,
@@ -481,13 +490,19 @@ const systemAdminRouter = createRouter({
             detail: (legacyImport.detail as LegacyImportDetail[] | null) ?? [],
           }
         : null,
+      /**
+       * Ob ein Wiederholungslauf gerade möglich ist. Kommt vom Server, weil
+       * dazu auch gehört, ob ein `running`-Zustand schon als abgestürzt gilt –
+       * das soll nicht an der Uhr des Browsers hängen.
+       */
+      canRetryImport,
       tableCounts,
       seed,
     };
   }),
 
   /**
-   * Wiederholt eine fehlgeschlagene Übernahme. Ohne diesen Knopf wäre der
+   * Wiederholt eine nicht abgeschlossene Übernahme. Ohne diesen Knopf wäre der
    * einzige Weg zurück ein Neustart des Containers.
    */
   retryLegacyImport: adminQuery.mutation(async () => {
@@ -500,7 +515,20 @@ const systemAdminRouter = createRouter({
           state?.error ?? "Die Datenübernahme ist erneut fehlgeschlagen.",
       });
     }
-    return { status: result.status, rowsCopied: result.rowsCopied };
+
+    // Der Startkatalog wird beim Serverstart ausgelassen, solange eine
+    // Übernahme offen ist (siehe api/boot.ts). Jetzt ist der Weg frei – sonst
+    // fehlte er bis zum nächsten Neustart.
+    let seeded: SeedStats | null = null;
+    if (result.status === "completed") {
+      try {
+        seeded = await seedSpoolPresets();
+      } catch (error) {
+        console.error("Seeding nach der Datenübernahme fehlgeschlagen:", error);
+      }
+    }
+
+    return { status: result.status, rowsCopied: result.rowsCopied, seeded };
   }),
 });
 

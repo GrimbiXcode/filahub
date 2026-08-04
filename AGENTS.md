@@ -202,10 +202,26 @@ Bis Version 0.7.0 lief die Anwendung auf MySQL. Ist `LEGACY_MYSQL_URL` gesetzt,
   Fremdschlüssel führt – es gibt nichts umzuschreiben. Nach jeder Tabelle wird
   die Sequenz per `setval` nachgezogen, sonst kollidiert der erste neue INSERT.
 - **Idempotent** über `onConflictDoNothing`; ein abgebrochener Lauf wird
-  einfach wiederholt. Kehrseite: Die Übernahme gehört in eine **leere**
-  Zieldatenbank. Kollidiert eine Zeile mit einer vorhandenen ID oder einem
-  vorhandenen Unique-Key, gewinnt das Ziel und die Quellzeile fällt weg – auf
-  der Statusseite steht sie dann unter „Bereits vorhanden“.
+  einfach wiederholt.
+- **Nur in eine leere Zieldatenbank.** Kehrseite der Idempotenz: Kollidiert
+  eine Altzeile mit einer vorhandenen ID, gewinnt das Ziel und die Altzeile
+  fällt still weg. `findBlockingRows` weist den ersten Lauf deshalb ab, wenn
+  schon Zeilen da sind. Die Prüfung läuft **vor** `claimRun` – sonst setzte
+  der abgewiesene Versuch selbst `startedAt` und schaltete sie für alle
+  weiteren Versuche ab.
+- **Das Seeding pausiert**, solange die Übernahme nicht `completed` oder
+  `skipped` ist (`api/boot.ts`). Der Startkatalog vergäbe sonst genau die IDs,
+  die der Wiederholungslauf für die Altdaten braucht; Materialien zeigten
+  danach über ihre unveränderte `spoolPresetVariantId` auf eine fremde Spule.
+  Nach einer erfolgreichen Wiederholung über die Verwaltungsseite zieht
+  `admin.system.retryLegacyImport` das Seeding selbst nach.
+- **Abgestürzte Läufe** bleiben auf `running` stehen. `claimable` übernimmt
+  einen solchen Zustand nach `STALE_RUN_MS` ohne Lebenszeichen; jeder Stapel
+  frischt `updatedAt` auf, damit eine große Tabelle nicht fälschlich als tot
+  gilt. Ohne das wäre die Übernahme nach einem Absturz dauerhaft blockiert.
+- `claimable` schließt `skipped` mit ein: Sonst könnte eine Installation, die
+  einmal ohne `LEGACY_MYSQL_URL` gestartet wurde, die Übernahme nie mehr
+  anstoßen. `completed` fehlt bewusst.
 - **Nicht startkritisch.** Ein Fehler landet in `migration_state` und wird auf
   `/verwaltung/system` angezeigt – bräche der Start ab, käme man an diese Seite
   nicht heran. Der Statuswechsel auf `running` ist zugleich die optimistische

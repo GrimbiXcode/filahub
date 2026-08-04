@@ -51,14 +51,28 @@ if (env.isProduction) {
 
   // Startkatalog nachziehen. Idempotent und bewusst nicht startkritisch:
   // ein Fehler hier darf den Server nicht am Hochfahren hindern.
-  try {
-    const { seedSpoolPresets } = await import("./queries/presetSeed");
-    const stats = await seedSpoolPresets();
-    console.log(
-      `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
+  //
+  // Ausgesetzt, solange eine Übernahme offen ist: Das Seeding vergibt neue IDs
+  // aus derselben Sequenz und würde genau die Nummern belegen, die der
+  // Wiederholungslauf für die Altdaten braucht. Die Altzeilen fielen dann
+  // stillschweigend unter `onConflictDoNothing` – und Materialien zeigten über
+  // ihre unveränderte `spoolPresetVariantId` plötzlich auf eine fremde Spule.
+  if (legacy.status === "completed" || legacy.status === "skipped") {
+    try {
+      const { seedSpoolPresets } = await import("./queries/presetSeed");
+      const stats = await seedSpoolPresets();
+      console.log(
+        `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
+      );
+    } catch (error) {
+      console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);
+    }
+  } else {
+    console.warn(
+      `Preset-Katalog übersprungen: Die Datenübernahme ist "${legacy.status}". ` +
+        "Der Startkatalog würde IDs belegen, die für die Altdaten gebraucht " +
+        "werden. Zustand und Wiederholung unter /verwaltung/system."
     );
-  } catch (error) {
-    console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);
   }
 
   const port = parseInt(process.env.PORT || "3000");
