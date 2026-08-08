@@ -98,7 +98,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{t.proposePreset.title}</DialogTitle>
           <DialogDescription>

@@ -293,7 +293,7 @@ export default function AdminProposals() {
       </Card>
 
       <Dialog open={detail != null} onOpenChange={o => !o && setDetail(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {detail?.kind === "new"
@@ -350,7 +350,7 @@ export default function AdminProposals() {
         open={rejecting != null}
         onOpenChange={o => !o && setRejecting(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t.adminProposals.rejectTitle}</DialogTitle>
             <DialogDescription>
