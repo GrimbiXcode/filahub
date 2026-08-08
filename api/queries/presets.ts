@@ -1,12 +1,15 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   hiddenKey,
   isCurrentVersion,
   isPresetHidden,
+  resolveName,
+  type NameI18n,
   type PresetScope,
   type SpoolMaterial,
 } from "@contracts/presets";
+import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
   hiddenSpoolPresets,
   presetManufacturers,
@@ -199,7 +202,8 @@ export type PresetSpoolOption = {
  * Ausgeblendete Zweige fallen hier – anders als im Baum – heraus.
  */
 export async function findPresetOptionsForUser(
-  userId: number
+  userId: number,
+  language: LanguageCode = FALLBACK_LANGUAGE
 ): Promise<PresetSpoolOption[]> {
   const tree = await findCatalogTree(userId);
   const options: PresetSpoolOption[] = [];
@@ -211,14 +215,21 @@ export async function findPresetOptionsForUser(
         if (version.hidden) continue;
         for (const variant of version.variants) {
           if (variant.hidden) continue;
+          const seriesName = resolveName(series, language);
+          const versionName = resolveName(version, language);
           options.push({
             id: variant.id,
-            displayName: variant.displayName,
+            displayName: buildVariantDisplayName({
+              manufacturer: manufacturer.name,
+              series: seriesName,
+              version: versionName,
+              nominalWeight: variant.nominalWeight,
+            }),
             tareWeight: variant.tareWeight,
             nominalWeight: variant.nominalWeight,
             manufacturer: manufacturer.name,
-            series: series.name,
-            version: version.name,
+            series: seriesName,
+            version: versionName,
             spoolMaterial: version.spoolMaterial,
             isCurrent: version.isCurrent,
             materialTypes: series.materialTypes,
@@ -291,106 +302,14 @@ export async function findPresetVariantWithPath(
   return { variant, version, series, manufacturer };
 }
 
-/** Anzeigename für eine neue Variante unterhalb der angegebenen Ausführung. */
-export async function buildDisplayNameForVersion(
-  versionId: number,
-  nominalWeight: number
-): Promise<string> {
-  const db = getDb();
-  const version = await db.query.presetSpoolVersions.findFirst({
-    where: eq(presetSpoolVersions.id, versionId),
-  });
-  if (!version) return String(nominalWeight);
-  const series = await db.query.presetSpoolSeries.findFirst({
-    where: eq(presetSpoolSeries.id, version.seriesId),
-  });
-  if (!series) return String(nominalWeight);
-  const manufacturer = await db.query.presetManufacturers.findFirst({
-    where: eq(presetManufacturers.id, series.manufacturerId),
-  });
-  return buildVariantDisplayName({
-    manufacturer: manufacturer?.name ?? "",
-    series: series.name,
-    version: version.name,
-    nominalWeight,
-  });
-}
-
-/**
- * Erzeugt die Anzeigenamen aller betroffenen Varianten neu. Muss nach jeder
- * Umbenennung auf Hersteller-, Serien- oder Versionsebene laufen, sonst
- * driften die vorberechneten Namen von den Stammdaten ab.
+/*
+ * Die früheren Helfer `buildDisplayNameForVersion` und
+ * `refreshVariantDisplayNames` sind entfallen: Der Anzeigename einer Variante
+ * wird nicht mehr gespeichert, sondern beim Lesen aus den drei Ebenen darüber
+ * erzeugt (siehe `findPresetOptionsForUser` und `computeMaterialStats`).
+ * Damit kann er nicht mehr von den Stammdaten abweichen – und er kommt in der
+ * Sprache des Aufrufers heraus statt in der, die beim Anlegen galt.
  */
-export async function refreshVariantDisplayNames(
-  scope: "manufacturer" | "series" | "version",
-  entryId: number
-): Promise<void> {
-  const db = getDb();
-
-  const manufacturers =
-    scope === "manufacturer"
-      ? await db.query.presetManufacturers.findMany({
-          where: eq(presetManufacturers.id, entryId),
-        })
-      : await db.query.presetManufacturers.findMany();
-  if (manufacturers.length === 0) return;
-
-  const seriesRows =
-    scope === "series"
-      ? await db.query.presetSpoolSeries.findMany({
-          where: eq(presetSpoolSeries.id, entryId),
-        })
-      : scope === "manufacturer"
-        ? await db.query.presetSpoolSeries.findMany({
-            where: eq(presetSpoolSeries.manufacturerId, entryId),
-          })
-        : await db.query.presetSpoolSeries.findMany();
-  if (seriesRows.length === 0) return;
-
-  const versionRows =
-    scope === "version"
-      ? await db.query.presetSpoolVersions.findMany({
-          where: eq(presetSpoolVersions.id, entryId),
-        })
-      : await db.query.presetSpoolVersions.findMany({
-          where: inArray(
-            presetSpoolVersions.seriesId,
-            seriesRows.map(s => s.id)
-          ),
-        });
-  if (versionRows.length === 0) return;
-
-  const variantRows = await db.query.presetSpoolVariants.findMany({
-    where: inArray(
-      presetSpoolVariants.versionId,
-      versionRows.map(v => v.id)
-    ),
-  });
-
-  const manufacturerById = new Map(manufacturers.map(m => [m.id, m]));
-  const seriesById = new Map(seriesRows.map(s => [s.id, s]));
-  const versionById = new Map(versionRows.map(v => [v.id, v]));
-
-  for (const variant of variantRows) {
-    const version = versionById.get(variant.versionId);
-    const series = version ? seriesById.get(version.seriesId) : undefined;
-    const manufacturer = series
-      ? manufacturerById.get(series.manufacturerId)
-      : undefined;
-    if (!version || !series || !manufacturer) continue;
-    const displayName = buildVariantDisplayName({
-      manufacturer: manufacturer.name,
-      series: series.name,
-      version: version.name,
-      nominalWeight: variant.nominalWeight,
-    });
-    if (displayName === variant.displayName) continue;
-    await db
-      .update(presetSpoolVariants)
-      .set({ displayName })
-      .where(eq(presetSpoolVariants.id, variant.id));
-  }
-}
 
 /** Ersetzt die Materialarten einer Serie vollständig. */
 export async function setSeriesMaterialTypes(
@@ -460,6 +379,7 @@ export async function findOrCreateSeries(data: {
   manufacturerId: number;
   slug: string;
   name: string;
+  nameI18n?: NameI18n | null;
   source?: "seed" | "admin" | "community";
   seedRevision?: number;
 }) {
@@ -478,6 +398,7 @@ export async function findOrCreateSeries(data: {
       manufacturerId: data.manufacturerId,
       slug: data.slug,
       name: data.name,
+      nameI18n: data.nameI18n ?? null,
       source: data.source ?? "admin",
       seedRevision: data.seedRevision ?? 0,
     });
@@ -493,6 +414,7 @@ export async function findOrCreateVersion(data: {
   seriesId: number;
   slug: string;
   name: string;
+  nameI18n?: NameI18n | null;
   spoolMaterial?: SpoolMaterial | null;
   validFrom?: string | null;
   validTo?: string | null;
@@ -514,6 +436,7 @@ export async function findOrCreateVersion(data: {
       seriesId: data.seriesId,
       slug: data.slug,
       name: data.name,
+      nameI18n: data.nameI18n ?? null,
       spoolMaterial: data.spoolMaterial ?? null,
       validFrom: data.validFrom ?? null,
       validTo: data.validTo ?? null,
@@ -552,10 +475,6 @@ export async function createVariant(data: {
   seedRevision?: number;
 }) {
   const db = getDb();
-  const displayName = await buildDisplayNameForVersion(
-    data.versionId,
-    data.nominalWeight
-  );
   try {
     await db.insert(presetSpoolVariants).values({
       versionId: data.versionId,
@@ -565,7 +484,6 @@ export async function createVariant(data: {
       widthMm: data.widthMm ?? null,
       boreDiameterMm: data.boreDiameterMm ?? null,
       notes: data.notes ?? null,
-      displayName,
       source: data.source ?? "admin",
       seedRevision: data.seedRevision ?? 0,
     });
@@ -602,8 +520,6 @@ export async function updateManufacturer(
     .update(presetManufacturers)
     .set({ ...data, source })
     .where(eq(presetManufacturers.id, id));
-  if (data.name !== undefined)
-    await refreshVariantDisplayNames("manufacturer", id);
   return getDb().query.presetManufacturers.findFirst({
     where: eq(presetManufacturers.id, id),
   });
@@ -611,14 +527,18 @@ export async function updateManufacturer(
 
 export async function updateSeries(
   id: number,
-  data: Partial<{ name: string; notes: string | null; active: boolean }>,
+  data: Partial<{
+    name: string;
+    nameI18n: NameI18n | null;
+    notes: string | null;
+    active: boolean;
+  }>,
   source: "admin" | "community" = "admin"
 ) {
   await getDb()
     .update(presetSpoolSeries)
     .set({ ...data, source })
     .where(eq(presetSpoolSeries.id, id));
-  if (data.name !== undefined) await refreshVariantDisplayNames("series", id);
   return getDb().query.presetSpoolSeries.findFirst({
     where: eq(presetSpoolSeries.id, id),
   });
@@ -628,6 +548,7 @@ export async function updateVersion(
   id: number,
   data: Partial<{
     name: string;
+    nameI18n: NameI18n | null;
     spoolMaterial: SpoolMaterial | null;
     validFrom: string | null;
     validTo: string | null;
@@ -640,7 +561,6 @@ export async function updateVersion(
     .update(presetSpoolVersions)
     .set({ ...data, source })
     .where(eq(presetSpoolVersions.id, id));
-  if (data.name !== undefined) await refreshVariantDisplayNames("version", id);
   return getDb().query.presetSpoolVersions.findFirst({
     where: eq(presetSpoolVersions.id, id),
   });
@@ -660,18 +580,9 @@ export async function updateVariant(
   source: "admin" | "community" = "admin"
 ) {
   const db = getDb();
-  const current = await db.query.presetSpoolVariants.findFirst({
-    where: eq(presetSpoolVariants.id, id),
-  });
-  if (!current) return undefined;
-  const nominalWeight = data.nominalWeight ?? current.nominalWeight;
-  const displayName =
-    data.nominalWeight !== undefined
-      ? await buildDisplayNameForVersion(current.versionId, nominalWeight)
-      : current.displayName;
   await db
     .update(presetSpoolVariants)
-    .set({ ...data, displayName, source })
+    .set({ ...data, source })
     .where(eq(presetSpoolVariants.id, id));
   return db.query.presetSpoolVariants.findFirst({
     where: eq(presetSpoolVariants.id, id),

@@ -8,6 +8,20 @@
       "when": 1785792971864,
       "tag": "0000_pretty_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786140289541,
+      "tag": "0001_add_user_language",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786145293891,
+      "tag": "0002_preset_name_i18n",
+      "breakpoints": true
     }
   ]
 }

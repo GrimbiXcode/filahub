@@ -42,6 +42,19 @@ const ownSpool = {
   createdAt: new Date("2026-01-01"),
 };
 
+const meta = {
+  source: "seed" as const,
+  seedRevision: 1,
+  active: true,
+  notes: null,
+  createdAt: new Date("2026-01-01"),
+  updatedAt: new Date("2026-01-01"),
+};
+
+/**
+ * Der Anzeigename wird nicht mehr gespeichert, sondern beim Lesen aus dem
+ * Katalogpfad erzeugt – die Variante bringt ihn deshalb mit.
+ */
 const presetVariant = {
   id: 42,
   versionId: 5,
@@ -50,13 +63,33 @@ const presetVariant = {
   outerDiameterMm: 200,
   widthMm: 68,
   boreDiameterMm: 55,
-  displayName: "Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg",
-  source: "seed" as const,
-  seedRevision: 1,
-  active: true,
-  notes: null,
-  createdAt: new Date("2026-01-01"),
-  updatedAt: new Date("2026-01-01"),
+  ...meta,
+  version: {
+    id: 5,
+    seriesId: 3,
+    name: "Kartonspule (ab 2023)",
+    nameI18n: { en: "Cardboard spool (from 2023)" },
+    spoolMaterial: "karton" as const,
+    validFrom: null,
+    validTo: null,
+    ...meta,
+    series: {
+      id: 3,
+      manufacturerId: 2,
+      name: "PolyTerra PLA",
+      nameI18n: null,
+      slug: "polyterra-pla",
+      ...meta,
+      manufacturer: {
+        id: 2,
+        name: "Polymaker",
+        slug: "polymaker",
+        website: null,
+        ...meta,
+      },
+    },
+    slug: "kartonspule-ab-2023",
+  },
 };
 
 const box = {
@@ -106,7 +139,9 @@ describe("computeMaterialStats", () => {
     expect(stats.tareWeight).toBe(130);
     expect(stats.remainingWeight).toBe(1000);
     expect(stats.remainingPercent).toBe(100);
-    expect(stats.spoolLabel).toBe(presetVariant.displayName);
+    expect(stats.spoolLabel).toBe(
+      "Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg"
+    );
   });
 
   it("bevorzugt die Preset-Variante, falls doch einmal beides gesetzt ist", () => {
@@ -116,7 +151,23 @@ describe("computeMaterialStats", () => {
       0
     );
     expect(stats.spoolTareWeight).toBe(130);
-    expect(stats.spoolLabel).toBe(presetVariant.displayName);
+    expect(stats.spoolLabel).toBe(
+      "Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg"
+    );
+  });
+
+  it("baut das Etikett der Preset-Variante in der gewünschten Sprache", () => {
+    const stats = computeMaterialStats(
+      material({ spoolPresetVariant: presetVariant }),
+      null,
+      0,
+      "en"
+    );
+    // Der Hersteller bleibt gleich, die Ausführung ist übersetzt, die Serie
+    // hat keine Übersetzung und fällt deshalb auf den Grundnamen zurück.
+    expect(stats.spoolLabel).toBe(
+      "Polymaker · PolyTerra PLA · Cardboard spool (from 2023) · 1 kg"
+    );
   });
 
   it("liefert ohne Rolle Tara 0 und kein Etikett", () => {

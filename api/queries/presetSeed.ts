@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import { buildVariantDisplayName } from "@contracts/presets";
 import {
   PRESET_SEED_REVISION,
   presetSeedCatalog,
@@ -97,6 +96,7 @@ export async function seedSpoolPresets(
           manufacturerId,
           slug: series.slug,
           name: series.name,
+          nameI18n: series.nameI18n ?? null,
           source: "seed",
           seedRevision: PRESET_SEED_REVISION,
         });
@@ -115,7 +115,11 @@ export async function seedSpoolPresets(
         if (seedAction(existingSeries) === "update") {
           await db
             .update(presetSpoolSeries)
-            .set({ name: series.name, seedRevision: PRESET_SEED_REVISION })
+            .set({
+              name: series.name,
+              nameI18n: series.nameI18n ?? null,
+              seedRevision: PRESET_SEED_REVISION,
+            })
             .where(eq(presetSpoolSeries.id, seriesId));
           await replaceMaterialTypes(seriesId, series.materialTypes);
           stats.updated++;
@@ -138,6 +142,7 @@ export async function seedSpoolPresets(
             seriesId,
             slug: version.slug,
             name: version.name,
+            nameI18n: version.nameI18n ?? null,
             spoolMaterial: version.spoolMaterial,
             validFrom: version.validFrom ?? null,
             validTo: version.validTo ?? null,
@@ -160,6 +165,7 @@ export async function seedSpoolPresets(
               .update(presetSpoolVersions)
               .set({
                 name: version.name,
+                nameI18n: version.nameI18n ?? null,
                 spoolMaterial: version.spoolMaterial,
                 validFrom: version.validFrom ?? null,
                 validTo: version.validTo ?? null,
@@ -173,12 +179,6 @@ export async function seedSpoolPresets(
         }
 
         for (const variant of version.variants) {
-          const displayName = buildVariantDisplayName({
-            manufacturer: manufacturer.name,
-            series: series.name,
-            version: version.name,
-            nominalWeight: variant.nominalWeight,
-          });
           const existingVariant = await db.query.presetSpoolVariants.findFirst({
             where: and(
               eq(presetSpoolVariants.versionId, versionId),
@@ -195,7 +195,6 @@ export async function seedSpoolPresets(
               widthMm: variant.widthMm ?? null,
               boreDiameterMm: variant.boreDiameterMm ?? null,
               notes: variant.notes ?? null,
-              displayName,
               source: "seed",
               seedRevision: PRESET_SEED_REVISION,
             });
@@ -209,7 +208,6 @@ export async function seedSpoolPresets(
                 widthMm: variant.widthMm ?? null,
                 boreDiameterMm: variant.boreDiameterMm ?? null,
                 notes: variant.notes ?? null,
-                displayName,
                 seedRevision: PRESET_SEED_REVISION,
               })
               .where(eq(presetSpoolVariants.id, existingVariant.id));

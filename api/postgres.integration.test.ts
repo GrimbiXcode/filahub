@@ -200,7 +200,11 @@ describe("Katalog lesen", () => {
       m.series.flatMap(s => s.versions.flatMap(v => v.variants))
     );
     expect(variants).toHaveLength(seedCounts.variants);
-    expect(variants.every(v => v.displayName.length > 0)).toBe(true);
+    // Der Anzeigename steckt nicht mehr in der Variante, sondern entsteht in
+    // der flachen Auswahlliste aus dem Katalogpfad.
+    const options = await asUser.preset.options();
+    expect(options).toHaveLength(seedCounts.variants);
+    expect(options.every(o => o.displayName.length > 0)).toBe(true);
   });
 
   it("gibt boolean, date und die Materialarten korrekt zurück", async () => {
@@ -335,7 +339,10 @@ describe("Vorschläge", () => {
       where: eq(schema.presetSpoolVariants.id, resultVariantId),
     });
     expect(variant?.source).toBe("community");
-    expect(variant?.displayName).toContain("IT Testhersteller");
+    const option = (await asUser.preset.options()).find(
+      o => o.id === resultVariantId
+    );
+    expect(option?.displayName).toContain("IT Testhersteller");
   });
 
   it("lässt sich kein zweites Mal freigeben", async () => {
@@ -427,10 +434,12 @@ describe("Katalogpflege durch Administratoren", () => {
       name: "IT CRUD AG",
     });
 
-    const variant = await db().query.presetSpoolVariants.findFirst({
-      where: eq(schema.presetSpoolVariants.id, variantId),
-    });
-    expect(variant?.displayName).toContain("IT CRUD AG");
+    // Früher musste die Umbenennung die vorberechneten Namen nachziehen; heute
+    // entsteht der Name beim Lesen und kann gar nicht erst veralten.
+    const option = (await asUser.preset.options()).find(
+      o => o.id === variantId
+    );
+    expect(option?.displayName).toContain("IT CRUD AG");
   });
 
   it("blendet deaktivierte Einträge nur für Benutzer aus", async () => {

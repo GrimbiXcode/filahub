@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Library, Pencil, Plus, Trash2 } from "lucide-react";
+import { Languages, Library, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { SPOOL_MATERIAL_LABELS, formatNominalWeight } from "@contracts/presets";
+import { formatNominalWeight } from "@contracts/presets";
 import { AdminLayout } from "@/components/AdminLayout";
 import {
   Accordion,
@@ -32,6 +32,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
+import { usePresetNames } from "@/lib/presetNames";
+import { SUPPORTED_LANGUAGES, type LanguageCode } from "@contracts/i18n";
+import { missingTranslations, type NameI18n } from "@contracts/presets";
 import { trpc } from "@/lib/trpc";
 import type {
   PresetManufacturerNode,
@@ -50,9 +54,35 @@ type DeleteTarget = {
   label: string;
 };
 
+/** Sprachcodes und ihre Autonyme – für die Lücken-Abzeichen */
+const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map(
+  l => l.code
+) as readonly LanguageCode[];
+const LANGUAGE_LABELS = Object.fromEntries(
+  SUPPORTED_LANGUAGES.map(l => [l.code, l.label])
+) as Record<LanguageCode, string>;
+
 export default function AdminPresets() {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
+  const t = useT();
+  const presetNames = usePresetNames();
+  const [onlyMissing, setOnlyMissing] = useState(false);
+
+  /**
+   * Bei aktivem Filter bleiben nur Serien übrig, denen selbst oder deren
+   * Ausführungen eine Übersetzung fehlt – sonst müsste man den ganzen Katalog
+   * aufklappen, um die Lücken zu finden.
+   */
+  const hasGap = (entry: { name: string; nameI18n?: NameI18n | null }) =>
+    missingTranslations(entry, LANGUAGE_CODES).length > 0;
+
+  const visibleSeries = (manufacturer: PresetManufacturerNode) =>
+    onlyMissing
+      ? manufacturer.series.filter(
+          series => hasGap(series) || series.versions.some(hasGap)
+        )
+      : manufacturer.series;
   const { data: tree, isLoading } = trpc.admin.preset.tree.useQuery(undefined, {
     retry: false,
   });
@@ -67,7 +97,7 @@ export default function AdminPresets() {
 
   const onDeleted = {
     onSuccess: () => {
-      toast.success("Eintrag gelöscht");
+      toast.success(t.adminPresets.deleted);
       invalidate();
       setDeleting(null);
     },
@@ -91,21 +121,47 @@ export default function AdminPresets() {
   const inactive = (active: boolean) =>
     !active ? (
       <Badge variant="outline" className="font-normal">
-        deaktiviert
+        {t.adminPresets.disabled}
       </Badge>
     ) : null;
 
-  const renderVariants = (version: PresetVersionNode) => (
+  /**
+   * Abzeichen für jede Sprache ohne Übersetzung. Der Grundname greift zwar als
+   * Rückfallebene, aber ohne Hinweis findet man die Lücken nie.
+   */
+  const translationGaps = (entry: {
+    name: string;
+    nameI18n?: NameI18n | null;
+  }) =>
+    missingTranslations(entry, LANGUAGE_CODES).map(code => {
+      const label = LANGUAGE_LABELS[code];
+      return (
+        <Badge
+          key={code}
+          variant="outline"
+          className="border-dashed font-normal text-muted-foreground"
+          title={t.adminPresets.missingTranslationTitle({ language: label })}
+        >
+          <Languages className="mr-1 h-3 w-3" />
+          {t.adminPresets.missingTranslation({ language: label })}
+        </Badge>
+      );
+    });
+
+  const renderVariants = (
+    version: PresetVersionNode,
+    path: { manufacturer: PresetManufacturerNode; series: PresetSeriesNode }
+  ) => (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Nenngewicht</TableHead>
-          <TableHead>Leergewicht</TableHead>
+          <TableHead>{t.adminPresets.nominalWeight}</TableHead>
+          <TableHead>{t.common.tare}</TableHead>
           <TableHead className="hidden sm:table-cell">
-            Ø × Breite × Bohrung
+            {t.adminPresets.dimensions}
           </TableHead>
-          <TableHead>Herkunft</TableHead>
-          <TableHead className="text-right">Aktionen</TableHead>
+          <TableHead>{t.adminPresets.origin}</TableHead>
+          <TableHead className="text-right">{t.common.actions}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -131,7 +187,7 @@ export default function AdminPresets() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  title="Bearbeiten"
+                  title={t.common.edit}
                   onClick={() => setEditor({ level: "variant", variant })}
                 >
                   <Pencil className="h-4 w-4" />
@@ -139,12 +195,17 @@ export default function AdminPresets() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  title="Löschen"
+                  title={t.common.delete}
                   onClick={() =>
                     setDeleting({
                       level: "variant",
                       id: variant.id,
-                      label: variant.displayName,
+                      label: presetNames.variantLabel({
+                        manufacturer: path.manufacturer,
+                        series: path.series,
+                        version,
+                        nominalWeight: variant.nominalWeight,
+                      }),
                     })
                   }
                 >
@@ -157,7 +218,7 @@ export default function AdminPresets() {
         {version.variants.length === 0 && (
           <TableRow>
             <TableCell colSpan={5} className="text-sm text-muted-foreground">
-              Noch keine Größe hinterlegt.
+              {t.adminPresets.noVariants}
             </TableCell>
           </TableRow>
         )}
@@ -165,19 +226,23 @@ export default function AdminPresets() {
     </Table>
   );
 
-  const renderVersion = (version: PresetVersionNode) => (
+  const renderVersion = (
+    version: PresetVersionNode,
+    path: { manufacturer: PresetManufacturerNode; series: PresetSeriesNode }
+  ) => (
     <div key={version.id} className="mt-3 rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-medium">{version.name}</span>
+          <span className="font-medium">{presetNames.name(version)}</span>
+          {translationGaps(version)}
           {version.spoolMaterial && (
             <Badge variant="secondary" className="font-normal">
-              {SPOOL_MATERIAL_LABELS[version.spoolMaterial]}
+              {t.preset.spoolMaterial[version.spoolMaterial]}
             </Badge>
           )}
           {!version.isCurrent && (
             <Badge variant="outline" className="font-normal">
-              ausgelaufen
+              {t.adminPresets.discontinued}
             </Badge>
           )}
           {inactive(version.active)}
@@ -190,12 +255,12 @@ export default function AdminPresets() {
               setEditor({ level: "variant", versionId: version.id })
             }
           >
-            <Plus className="mr-1 h-3.5 w-3.5" /> Größe
+            <Plus className="mr-1 h-3.5 w-3.5" /> {t.adminPresets.addSize}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            title="Bearbeiten"
+            title={t.common.edit}
             onClick={() => setEditor({ level: "version", version })}
           >
             <Pencil className="h-4 w-4" />
@@ -203,12 +268,12 @@ export default function AdminPresets() {
           <Button
             variant="ghost"
             size="icon"
-            title="Löschen"
+            title={t.common.delete}
             onClick={() =>
               setDeleting({
                 level: "version",
                 id: version.id,
-                label: version.name,
+                label: presetNames.name(version),
               })
             }
           >
@@ -216,15 +281,19 @@ export default function AdminPresets() {
           </Button>
         </div>
       </div>
-      {renderVariants(version)}
+      {renderVariants(version, path)}
     </div>
   );
 
-  const renderSeries = (series: PresetSeriesNode) => (
+  const renderSeries = (
+    series: PresetSeriesNode,
+    manufacturer: PresetManufacturerNode
+  ) => (
     <div key={series.id} className="rounded-lg border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-medium">{series.name}</span>
+          <span className="font-medium">{presetNames.name(series)}</span>
+          {translationGaps(series)}
           {series.materialTypes.map(type => (
             <Badge key={type} variant="secondary" className="font-normal">
               {type}
@@ -243,12 +312,12 @@ export default function AdminPresets() {
             size="sm"
             onClick={() => setEditor({ level: "version", seriesId: series.id })}
           >
-            <Plus className="mr-1 h-3.5 w-3.5" /> Ausführung
+            <Plus className="mr-1 h-3.5 w-3.5" /> {t.adminPresets.addVersion}
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            title="Bearbeiten"
+            title={t.common.edit}
             onClick={() => setEditor({ level: "series", series })}
           >
             <Pencil className="h-4 w-4" />
@@ -256,12 +325,12 @@ export default function AdminPresets() {
           <Button
             variant="ghost"
             size="icon"
-            title="Löschen"
+            title={t.common.delete}
             onClick={() =>
               setDeleting({
                 level: "series",
                 id: series.id,
-                label: series.name,
+                label: presetNames.name(series),
               })
             }
           >
@@ -269,7 +338,9 @@ export default function AdminPresets() {
           </Button>
         </div>
       </div>
-      {series.versions.map(renderVersion)}
+      {series.versions.map(version =>
+        renderVersion(version, { manufacturer, series })
+      )}
     </div>
   );
 
@@ -280,7 +351,9 @@ export default function AdminPresets() {
           <span className="flex items-center gap-2">
             {manufacturer.name}
             <span className="text-xs font-normal text-muted-foreground">
-              {manufacturer.series.length} Serie(n)
+              {t.presetCatalog.seriesCount({
+                count: manufacturer.series.length,
+              })}
             </span>
             {inactive(manufacturer.active)}
           </span>
@@ -288,7 +361,7 @@ export default function AdminPresets() {
         <Button
           variant="ghost"
           size="icon"
-          title="Bearbeiten"
+          title={t.common.edit}
           onClick={() => setEditor({ level: "manufacturer", manufacturer })}
         >
           <Pencil className="h-4 w-4" />
@@ -296,7 +369,7 @@ export default function AdminPresets() {
         <Button
           variant="ghost"
           size="icon"
-          title="Löschen"
+          title={t.common.delete}
           onClick={() =>
             setDeleting({
               level: "manufacturer",
@@ -316,24 +389,36 @@ export default function AdminPresets() {
             setEditor({ level: "series", manufacturerId: manufacturer.id })
           }
         >
-          <Plus className="mr-1 h-3.5 w-3.5" /> Neue Serie
+          <Plus className="mr-1 h-3.5 w-3.5" /> {t.adminPresets.newSeries}
         </Button>
-        {manufacturer.series.map(renderSeries)}
+        {visibleSeries(manufacturer).map(series =>
+          renderSeries(series, manufacturer)
+        )}
       </AccordionContent>
     </AccordionItem>
   );
 
   return (
     <AdminLayout
-      title="Preset-Katalog"
-      description="Hersteller, Serien, Ausführungen und Größen für alle Benutzer pflegen"
+      title={t.adminPresets.title}
+      description={t.adminPresets.description}
       actions={
-        <Button
-          className="w-full sm:w-auto"
-          onClick={() => setEditor({ level: "manufacturer" })}
-        >
-          <Plus className="mr-2 h-4 w-4" /> Neuer Hersteller
-        </Button>
+        <>
+          <Button
+            variant={onlyMissing ? "secondary" : "outline"}
+            className="w-full sm:w-auto"
+            aria-pressed={onlyMissing}
+            onClick={() => setOnlyMissing(v => !v)}
+          >
+            <Languages className="mr-2 h-4 w-4" /> {t.adminPresets.onlyMissing}
+          </Button>
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => setEditor({ level: "manufacturer" })}
+          >
+            <Plus className="mr-2 h-4 w-4" /> {t.adminPresets.newManufacturer}
+          </Button>
+        </>
       }
     >
       <Card>
@@ -347,10 +432,9 @@ export default function AdminPresets() {
           ) : (tree ?? []).length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Library className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium">Noch keine Presets im Katalog</p>
+              <p className="font-medium">{t.adminPresets.emptyTitle}</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Lege einen Hersteller an, darunter eine Serie, eine Ausführung
-                und schließlich die Größen mit ihrem Leergewicht.
+                {t.adminPresets.emptyDescription}
               </p>
             </div>
           ) : (
@@ -374,20 +458,20 @@ export default function AdminPresets() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Eintrag löschen?</AlertDialogTitle>
+            <AlertDialogTitle>{t.adminPresets.deleteTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              „{deleting?.label}“ wird endgültig entfernt. Einträge mit
-              Untereinträgen oder mit Materialien, die sie verwenden, lassen
-              sich nicht löschen – deaktiviere sie in dem Fall stattdessen.
+              {t.adminPresets.deleteDescription({
+                label: deleting?.label ?? "",
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Löschen
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

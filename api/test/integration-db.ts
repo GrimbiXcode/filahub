@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { closePool, getDb, migrateDb } from "../queries/connection";
 import { appRouter } from "../router";
 import type { User } from "@db/schema";
+import type { LanguageCode } from "@contracts/i18n";
 
 /**
  * Leert die Testdatenbank und spielt anschließend alle Migrationen ein.
@@ -27,11 +28,12 @@ export async function closeDb() {
 }
 
 /** tRPC-Aufrufer im Namen eines Benutzers – prüft Middleware und Rollen mit. */
-export function callerFor(user: User) {
+export function callerFor(user: User, language: LanguageCode = "de") {
   return appRouter.createCaller({
     req: new Request("http://localhost/api/trpc"),
     resHeaders: new Headers(),
     user,
+    language,
   });
 }
 

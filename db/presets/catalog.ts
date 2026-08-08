@@ -1,4 +1,4 @@
-import type { SpoolMaterial } from "@contracts/presets";
+import type { NameI18n, SpoolMaterial } from "@contracts/presets";
 
 /**
  * Startkatalog für Hersteller und Spulen.
@@ -33,7 +33,9 @@ export type SeedVariant = {
 
 export type SeedVersion = {
   slug: string;
+  /** Grundname (deutsch); Übersetzungen stehen in `nameI18n` */
   name: string;
+  nameI18n?: NameI18n;
   spoolMaterial: SpoolMaterial;
   validFrom?: string;
   validTo?: string;
@@ -42,7 +44,13 @@ export type SeedVersion = {
 
 export type SeedSeries = {
   slug: string;
+  /** Grundname (deutsch); Übersetzungen stehen in `nameI18n` */
   name: string;
+  /**
+   * Nur nötig, wo der Name beschreibend ist. Produktnamen wie „PolyTerra PLA“
+   * sind Eigennamen und bleiben in jeder Sprache gleich.
+   */
+  nameI18n?: NameI18n;
   materialTypes: string[];
   versions: SeedVersion[];
 };
@@ -59,7 +67,7 @@ export type SeedManufacturer = {
  * bereits geseedete Einträge überschrieben – von Administratoren oder aus
  * der Community geänderte Einträge bleiben davon immer unberührt.
  */
-export const PRESET_SEED_REVISION = 1;
+export const PRESET_SEED_REVISION = 2;
 
 export const presetSeedCatalog: SeedManufacturer[] = [
   {
@@ -75,6 +83,7 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "karton-ab-2021",
             name: "Kartonspule (ab 2021)",
+            nameI18n: { en: "Cardboard spool (from 2021)" },
             spoolMaterial: "karton",
             validFrom: "2021-01-01",
             variants: [
@@ -90,6 +99,7 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoff-bis-2020",
             name: "Kunststoffspule (bis 2020)",
+            nameI18n: { en: "Plastic spool (until 2020)" },
             spoolMaterial: "kunststoff",
             validTo: "2020-12-31",
             variants: [{ nominalWeight: 1000, tareWeight: 215 }],
@@ -104,6 +114,7 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
+            nameI18n: { en: "Plastic spool" },
             spoolMaterial: "kunststoff",
             variants: [
               { nominalWeight: 1000, tareWeight: 215 },
@@ -133,6 +144,7 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
+            nameI18n: { en: "Plastic spool" },
             spoolMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 201 }],
           },
@@ -148,11 +160,13 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "filament-mit-spule",
         name: "Filament mit Spule",
+        nameI18n: { en: "Filament with spool" },
         materialTypes: [],
         versions: [
           {
             slug: "wiederverwendbare-spule",
             name: "Wiederverwendbare Kunststoffspule",
+            nameI18n: { en: "Reusable plastic spool" },
             spoolMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 250 }],
           },
@@ -168,11 +182,13 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ABS"],
         versions: [
           {
             slug: "kunststoffspule-aktuell",
             name: "Kunststoffspule (aktuell)",
+            nameI18n: { en: "Plastic spool (current)" },
             spoolMaterial: "kunststoff",
             variants: [
               {
@@ -186,6 +202,7 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule-aelter",
             name: "Kunststoffspule (ältere Serie)",
+            nameI18n: { en: "Plastic spool (older series)" },
             spoolMaterial: "kunststoff",
             validTo: "2020-12-31",
             variants: [{ nominalWeight: 1000, tareWeight: 224 }],

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
 
 /**
  * Gemeinsame Schemas und reine Hilfsfunktionen für den Preset-Katalog.
@@ -19,14 +20,6 @@ export const SPOOL_MATERIALS = [
 ] as const;
 export type SpoolMaterial = (typeof SPOOL_MATERIALS)[number];
 
-/** Beschriftung des Spulenmaterials für die Oberfläche */
-export const SPOOL_MATERIAL_LABELS: Record<SpoolMaterial, string> = {
-  kunststoff: "Kunststoff",
-  karton: "Karton",
-  metall: "Metall",
-  sonstiges: "Sonstiges",
-};
-
 export const PRESET_SCOPES = [
   "manufacturer",
   "series",
@@ -42,25 +35,6 @@ export const PRESET_PROPOSAL_STATUSES = [
   "withdrawn",
 ] as const;
 export type PresetProposalStatus = (typeof PRESET_PROPOSAL_STATUSES)[number];
-
-/** Beschriftung des Vorschlagsstatus für die Oberfläche */
-export const PRESET_PROPOSAL_STATUS_LABELS: Record<
-  PresetProposalStatus,
-  string
-> = {
-  pending: "Offen",
-  approved: "Übernommen",
-  rejected: "Abgelehnt",
-  withdrawn: "Zurückgezogen",
-};
-
-/** Beschriftung der Katalogebene für die Oberfläche */
-export const PRESET_SCOPE_LABELS: Record<PresetScope, string> = {
-  manufacturer: "Hersteller",
-  series: "Serie",
-  version: "Ausführung",
-  variant: "Variante",
-};
 
 // ---------------------------------------------------------------------------
 // Reine Hilfsfunktionen
@@ -119,9 +93,66 @@ export function formatNominalWeight(grams: number): string {
   return grams % 1000 === 0 ? `${grams / 1000} kg` : `${grams} g`;
 }
 
+// ---------------------------------------------------------------------------
+// Mehrsprachige Katalognamen
+// ---------------------------------------------------------------------------
+
+/**
+ * Übersetzungen eines Katalognamens, nach Sprachcode.
+ *
+ * Die Basissprache steht weiterhin in der Spalte `name`: Sie ist Pflicht,
+ * speist den Slug und dient als Rückfallebene. `nameI18n` enthält nur die
+ * Abweichungen davon – für `de` steht dort deshalb im Normalfall nichts.
+ *
+ * Übersetzt werden Serien und Ausführungen, nicht Hersteller: „Polymaker“ und
+ * „eSUN“ sind Eigennamen und in jeder Sprache dieselben.
+ *
+ * Kommt in `contracts/i18n.ts` eine Sprache dazu, gehört sie auch hierher.
+ */
+export const nameI18nSchema = z.object({
+  de: z.string().trim().max(255).optional(),
+  en: z.string().trim().max(255).optional(),
+});
+
+export type NameI18n = z.infer<typeof nameI18nSchema>;
+
+/** Eingabefeld: leere Zeichenketten zählen als „keine Übersetzung“ */
+export const nameI18nInputSchema = nameI18nSchema
+  .transform(value =>
+    Object.fromEntries(
+      Object.entries(value).filter(([, name]) => (name ?? "").length > 0)
+    )
+  )
+  .optional();
+
+/**
+ * Name in der gewünschten Sprache. Fehlt die Übersetzung, gilt der Grundname –
+ * ein halb gepflegter Katalog zeigt also deutsche statt leerer Einträge.
+ */
+export function resolveName(
+  entry: { name: string; nameI18n?: NameI18n | null },
+  language: LanguageCode
+): string {
+  return entry.nameI18n?.[language]?.trim() || entry.name;
+}
+
+/** Sprachen, für die noch keine Übersetzung hinterlegt ist. */
+export function missingTranslations(
+  entry: { nameI18n?: NameI18n | null },
+  languages: readonly LanguageCode[]
+): LanguageCode[] {
+  return languages.filter(
+    language =>
+      language !== FALLBACK_LANGUAGE && !entry.nameI18n?.[language]?.trim()
+  );
+}
+
 /**
  * Anzeigename einer Variante:
  * „Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg“
+ *
+ * Wird beim Lesen erzeugt, nicht gespeichert – die Namensteile kommen bereits
+ * in der gewünschten Sprache herein (siehe `resolveName`).
  */
 export function buildVariantDisplayName(parts: {
   manufacturer: string;
@@ -282,6 +313,7 @@ export const seriesFieldsSchema = z.object({
     .trim()
     .min(1, "Name der Serie ist erforderlich")
     .max(255, "Name der Serie darf höchstens 255 Zeichen haben"),
+  nameI18n: nameI18nInputSchema,
   materialTypes: materialTypesSchema,
   notes: optionalNotes,
 });
@@ -293,6 +325,7 @@ export const versionFieldsSchema = z
       .trim()
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
+    nameI18n: nameI18nInputSchema,
     spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
@@ -388,6 +421,7 @@ export const proposalNewPayloadSchema = z.object({
       .trim()
       .min(1, "Name der Serie ist erforderlich")
       .max(255, "Name der Serie darf höchstens 255 Zeichen haben"),
+    nameI18n: nameI18nInputSchema,
     materialTypes: materialTypesSchema,
   }),
   version: z.object({
@@ -396,6 +430,7 @@ export const proposalNewPayloadSchema = z.object({
       .trim()
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
+    nameI18n: nameI18nInputSchema,
     spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
@@ -430,6 +465,7 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
       z
         .object({
           name: z.string().trim().min(1).max(255).optional(),
+          nameI18n: nameI18nInputSchema,
           spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
           validFrom: isoDate,
           validTo: isoDate,

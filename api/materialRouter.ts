@@ -85,12 +85,18 @@ async function validateForeignKeys(
 }
 
 export const materialRouter = createRouter({
-  list: authedQuery.query(({ ctx }) => findMaterialsByUser(ctx.user.id)),
+  list: authedQuery.query(({ ctx }) =>
+    findMaterialsByUser(ctx.user.id, ctx.language)
+  ),
 
   byId: authedQuery
     .input(z.object({ id: z.number().int().positive() }))
     .query(async ({ ctx, input }) => {
-      const material = await findMaterialById(ctx.user.id, input.id);
+      const material = await findMaterialById(
+        ctx.user.id,
+        input.id,
+        ctx.language
+      );
       if (!material)
         throw new TRPCError({
           code: "NOT_FOUND",

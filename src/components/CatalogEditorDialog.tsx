@@ -2,9 +2,10 @@ import { useState } from "react";
 import { toast } from "sonner";
 import {
   SPOOL_MATERIALS,
-  SPOOL_MATERIAL_LABELS,
+  type NameI18n,
   type SpoolMaterial,
 } from "@contracts/presets";
+import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -25,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useT, type TextKey } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type {
   PresetManufacturerNode,
@@ -43,14 +45,28 @@ export type EditorTarget =
   | { level: "version"; seriesId?: number; version?: PresetVersionNode }
   | { level: "variant"; versionId?: number; variant?: PresetVariantNode };
 
-const TITLES: Record<EditorTarget["level"], [string, string]> = {
-  manufacturer: ["Neuer Hersteller", "Hersteller bearbeiten"],
-  series: ["Neue Serie", "Serie bearbeiten"],
-  version: ["Neue Ausführung", "Ausführung bearbeiten"],
-  variant: ["Neue Größe", "Größe bearbeiten"],
+/** Schlüssel in `t.catalogEditor` für [anlegen, bearbeiten] je Ebene */
+const TITLES: Record<
+  EditorTarget["level"],
+  [TextKey<"catalogEditor">, TextKey<"catalogEditor">]
+> = {
+  manufacturer: ["createManufacturer", "editManufacturer"],
+  series: ["createSeries", "editSeries"],
+  version: ["createVersion", "editVersion"],
+  variant: ["createVariant", "editVariant"],
 };
 
 const NO_MATERIAL = "__none__";
+
+/** Grundsprache – ihr Feld schreibt in `name`, nicht in `nameI18n` */
+const BASE_LANGUAGE_LABEL =
+  SUPPORTED_LANGUAGES.find(l => l.code === FALLBACK_LANGUAGE)?.label ??
+  FALLBACK_LANGUAGE;
+
+/** Sprachen, für die ein eigenes Übersetzungsfeld erscheint */
+const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(
+  l => l.code !== FALLBACK_LANGUAGE
+);
 
 /** Leeres Feld → null, ungültige Zahl → undefined (Eingabefehler) */
 function optionalInt(value: string): number | null | undefined {
@@ -68,6 +84,7 @@ export function CatalogEditorDialog({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const t = useT();
   // Vorhandenen Knoten je Ebene herausziehen – die Union lässt sich sonst in
   // den Initialwerten unten nicht einengen.
   const manufacturerNode =
@@ -77,8 +94,19 @@ export function CatalogEditorDialog({
   const variantNode = target?.level === "variant" ? target.variant : undefined;
   const existing = manufacturerNode ?? seriesNode ?? versionNode ?? variantNode;
   const isEdit = existing != null;
+  /** Nur Serien und Ausführungen sind beschreibend genug für Übersetzungen */
+  const translatable =
+    target?.level === "series" || target?.level === "version";
 
   // Der Aufrufer remountet den Dialog je Ziel, deshalb reichen Initialwerte.
+  /**
+   * Übersetzungen abseits der Grundsprache. Das Feld für Deutsch schreibt
+   * weiter in `name` – dort hängen Slug und Rückfallebene.
+   */
+  const [translations, setTranslations] = useState<NameI18n>(
+    () => (seriesNode ?? versionNode)?.nameI18n ?? {}
+  );
+
   const [name, setName] = useState(
     () => (manufacturerNode ?? seriesNode ?? versionNode)?.name ?? ""
   );
@@ -122,28 +150,28 @@ export function CatalogEditorDialog({
 
   const m = {
     createManufacturer: trpc.admin.preset.createManufacturer.useMutation(
-      done("Hersteller angelegt")
+      done(t.catalogEditor.savedManufacturerNew)
     ),
     updateManufacturer: trpc.admin.preset.updateManufacturer.useMutation(
-      done("Hersteller gespeichert")
+      done(t.catalogEditor.savedManufacturer)
     ),
     createSeries: trpc.admin.preset.createSeries.useMutation(
-      done("Serie angelegt")
+      done(t.catalogEditor.savedSeriesNew)
     ),
     updateSeries: trpc.admin.preset.updateSeries.useMutation(
-      done("Serie gespeichert")
+      done(t.catalogEditor.savedSeries)
     ),
     createVersion: trpc.admin.preset.createVersion.useMutation(
-      done("Ausführung angelegt")
+      done(t.catalogEditor.savedVersionNew)
     ),
     updateVersion: trpc.admin.preset.updateVersion.useMutation(
-      done("Ausführung gespeichert")
+      done(t.catalogEditor.savedVersion)
     ),
     createVariant: trpc.admin.preset.createVariant.useMutation(
-      done("Größe angelegt")
+      done(t.catalogEditor.savedVariantNew)
     ),
     updateVariant: trpc.admin.preset.updateVariant.useMutation(
-      done("Größe gespeichert")
+      done(t.catalogEditor.savedVariant)
     ),
   };
 
@@ -160,7 +188,7 @@ export function CatalogEditorDialog({
     if (!target) return;
 
     if (target.level !== "variant" && !name.trim())
-      return toast.error("Bitte einen Namen angeben");
+      return toast.error(t.common.nameRequired);
 
     if (target.level === "manufacturer") {
       const payload = {
@@ -183,6 +211,7 @@ export function CatalogEditorDialog({
         m.updateSeries.mutate({
           id: target.series.id,
           name: name.trim(),
+          nameI18n: translations,
           materialTypes: parseMaterialTypes(),
           notes: notes.trim() || null,
           active,
@@ -191,6 +220,7 @@ export function CatalogEditorDialog({
         m.createSeries.mutate({
           manufacturerId: target.manufacturerId,
           name: name.trim(),
+          nameI18n: translations,
           materialTypes: parseMaterialTypes(),
           notes: notes.trim() || null,
         });
@@ -202,11 +232,12 @@ export function CatalogEditorDialog({
       const material =
         spoolMaterial === NO_MATERIAL ? null : (spoolMaterial as SpoolMaterial);
       if (validFrom && validTo && validFrom > validTo)
-        return toast.error("„Gültig ab“ muss vor „Gültig bis“ liegen");
+        return toast.error(t.catalogEditor.validRangeInvalid);
       if (target.version) {
         m.updateVersion.mutate({
           id: target.version.id,
           name: name.trim(),
+          nameI18n: translations,
           spoolMaterial: material,
           validFrom: validFrom || null,
           validTo: validTo || null,
@@ -228,19 +259,16 @@ export function CatalogEditorDialog({
     const nominal = parseInt(nominalWeight, 10);
     const tare = parseInt(tareWeight, 10);
     if (!Number.isFinite(nominal) || nominal <= 0)
-      return toast.error("Bitte ein gültiges Nenngewicht in Gramm angeben");
+      return toast.error(t.catalogEditor.nominalInvalid);
     if (!Number.isFinite(tare) || tare < 0)
-      return toast.error("Bitte ein gültiges Leergewicht in Gramm angeben");
-    if (tare >= nominal)
-      return toast.error(
-        "Das Leergewicht muss kleiner als das Nenngewicht sein"
-      );
+      return toast.error(t.common.invalidTare);
+    if (tare >= nominal) return toast.error(t.catalogEditor.tareTooLarge);
 
     const outer = optionalInt(outerDiameterMm);
     const width = optionalInt(widthMm);
     const bore = optionalInt(boreDiameterMm);
     if (outer === undefined || width === undefined || bore === undefined)
-      return toast.error("Bitte gültige Abmessungen in Millimetern angeben");
+      return toast.error(t.catalogEditor.dimensionsInvalid);
 
     const dims = {
       outerDiameterMm: outer,
@@ -267,41 +295,93 @@ export function CatalogEditorDialog({
   };
 
   if (!target) return null;
-  const [createTitle, editTitle] = TITLES[target.level];
+  const [createKey, editKey] = TITLES[target.level];
 
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{isEdit ? editTitle : createTitle}</DialogTitle>
-          <DialogDescription>
-            Änderungen wirken sofort für alle Benutzer. Bearbeitete Einträge
-            werden vom automatischen Startkatalog künftig nicht mehr
-            überschrieben.
-          </DialogDescription>
+          <DialogTitle>
+            {isEdit ? t.catalogEditor[editKey] : t.catalogEditor[createKey]}
+          </DialogTitle>
+          <DialogDescription>{t.catalogEditor.description}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           {target.level !== "variant" && (
             <div className="grid gap-2">
-              <Label htmlFor="ce-name">Name *</Label>
+              <Label htmlFor="ce-name">
+                {translatable
+                  ? `${t.catalogEditor.nameInLanguage({
+                      language: BASE_LANGUAGE_LABEL,
+                    })} *`
+                  : t.common.nameRequiredLabel}
+              </Label>
               <Input
                 id="ce-name"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder={
                   target.level === "manufacturer"
-                    ? "z. B. Polymaker"
+                    ? t.catalogEditor.manufacturerPlaceholder
                     : target.level === "series"
-                      ? "z. B. PolyTerra PLA"
-                      : "z. B. Kartonspule (ab 2023)"
+                      ? t.catalogEditor.seriesPlaceholder
+                      : t.catalogEditor.versionPlaceholder
                 }
               />
             </div>
           )}
 
+          {/* Übersetzungen stehen direkt beim Grundnamen, nicht hinter einem
+              Reiter: So sieht man beim Tippen, was noch fehlt. */}
+          {translatable &&
+            TRANSLATION_LANGUAGES.map(lang => (
+              <div key={lang.code} className="grid gap-2">
+                <Label htmlFor={`ce-name-${lang.code}`}>
+                  {t.catalogEditor.nameInLanguage({ language: lang.label })}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id={`ce-name-${lang.code}`}
+                    value={translations[lang.code] ?? ""}
+                    onChange={e =>
+                      setTranslations(prev => ({
+                        ...prev,
+                        [lang.code]: e.target.value,
+                      }))
+                    }
+                    placeholder={name.trim() || t.catalogEditor.translationHint}
+                  />
+                  {/* Eigennamen wie „PolyTerra PLA“ heißen überall gleich –
+                      ohne diesen Knopf müsste man sie abtippen, nur damit die
+                      Verwaltung sie nicht länger als Lücke meldet. */}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0"
+                    disabled={!name.trim()}
+                    title={t.catalogEditor.sameAsBaseTitle}
+                    onClick={() =>
+                      setTranslations(prev => ({
+                        ...prev,
+                        [lang.code]: name.trim(),
+                      }))
+                    }
+                  >
+                    {t.catalogEditor.sameAsBase}
+                  </Button>
+                </div>
+              </div>
+            ))}
+
+          {translatable && (
+            <p className="-mt-2 text-xs text-muted-foreground">
+              {t.catalogEditor.translationNote}
+            </p>
+          )}
+
           {target.level === "manufacturer" && (
             <div className="grid gap-2">
-              <Label htmlFor="ce-website">Website</Label>
+              <Label htmlFor="ce-website">{t.catalogEditor.website}</Label>
               <Input
                 id="ce-website"
                 value={website}
@@ -313,12 +393,12 @@ export function CatalogEditorDialog({
 
           {target.level === "series" && (
             <div className="grid gap-2">
-              <Label htmlFor="ce-types">Materialarten</Label>
+              <Label htmlFor="ce-types">{t.catalogEditor.materialTypes}</Label>
               <Input
                 id="ce-types"
                 value={materialTypes}
                 onChange={e => setMaterialTypes(e.target.value)}
-                placeholder="z. B. PLA, PETG – leer = gilt für alle"
+                placeholder={t.catalogEditor.materialTypesPlaceholder}
               />
               <p className="text-xs text-muted-foreground">
                 Kommagetrennt. Steuert nur die Vorsortierung in der Auswahl,
@@ -330,16 +410,18 @@ export function CatalogEditorDialog({
           {target.level === "version" && (
             <>
               <div className="grid gap-2">
-                <Label>Spulenmaterial</Label>
+                <Label>{t.catalogEditor.spoolMaterial}</Label>
                 <Select value={spoolMaterial} onValueChange={setSpoolMaterial}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_MATERIAL}>Unbekannt</SelectItem>
+                    <SelectItem value={NO_MATERIAL}>
+                      {t.catalogEditor.unknown}
+                    </SelectItem>
                     {SPOOL_MATERIALS.map(material => (
                       <SelectItem key={material} value={material}>
-                        {SPOOL_MATERIAL_LABELS[material]}
+                        {t.preset.spoolMaterial[material]}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -347,7 +429,7 @@ export function CatalogEditorDialog({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="ce-from">Gültig ab</Label>
+                  <Label htmlFor="ce-from">{t.catalogEditor.validFrom}</Label>
                   <Input
                     id="ce-from"
                     type="date"
@@ -356,7 +438,7 @@ export function CatalogEditorDialog({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ce-to">Gültig bis</Label>
+                  <Label htmlFor="ce-to">{t.catalogEditor.validTo}</Label>
                   <Input
                     id="ce-to"
                     type="date"
@@ -366,7 +448,7 @@ export function CatalogEditorDialog({
                 </div>
               </div>
               <p className="-mt-2 text-xs text-muted-foreground">
-                Ohne „Gültig bis“ gilt die Ausführung als aktuell im Handel.
+                {t.catalogEditor.validHint}
               </p>
             </>
           )}
@@ -375,7 +457,9 @@ export function CatalogEditorDialog({
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-2">
-                  <Label htmlFor="ce-nominal">Nenngewicht (g) *</Label>
+                  <Label htmlFor="ce-nominal">
+                    {t.catalogEditor.nominalLabel}
+                  </Label>
                   <Input
                     id="ce-nominal"
                     type="number"
@@ -385,21 +469,21 @@ export function CatalogEditorDialog({
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="ce-tare">Leergewicht (g) *</Label>
+                  <Label htmlFor="ce-tare">{t.catalogEditor.tareLabel}</Label>
                   <Input
                     id="ce-tare"
                     type="number"
                     min={0}
                     value={tareWeight}
                     onChange={e => setTareWeight(e.target.value)}
-                    placeholder="z. B. 140"
+                    placeholder={t.catalogEditor.tarePlaceholder}
                   />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="ce-outer" className="text-xs">
-                    Außen-Ø (mm)
+                    {t.catalogEditor.outerDiameter}
                   </Label>
                   <Input
                     id="ce-outer"
@@ -410,7 +494,7 @@ export function CatalogEditorDialog({
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ce-width" className="text-xs">
-                    Breite (mm)
+                    {t.catalogEditor.width}
                   </Label>
                   <Input
                     id="ce-width"
@@ -421,7 +505,7 @@ export function CatalogEditorDialog({
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="ce-bore" className="text-xs">
-                    Bohrung (mm)
+                    {t.catalogEditor.bore}
                   </Label>
                   <Input
                     id="ce-bore"
@@ -435,7 +519,7 @@ export function CatalogEditorDialog({
           )}
 
           <div className="grid gap-2">
-            <Label htmlFor="ce-notes">Notizen</Label>
+            <Label htmlFor="ce-notes">{t.common.notes}</Label>
             <Textarea
               id="ce-notes"
               rows={2}
@@ -452,7 +536,7 @@ export function CatalogEditorDialog({
                 onCheckedChange={checked => setActive(checked === true)}
               />
               <Label htmlFor="ce-active" className="font-normal">
-                Aktiv (wählbar für alle Benutzer)
+                {t.catalogEditor.active}
               </Label>
             </div>
           )}
@@ -464,10 +548,14 @@ export function CatalogEditorDialog({
               onClick={onClose}
               disabled={saving}
             >
-              Abbrechen
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Speichern …" : isEdit ? "Speichern" : "Anlegen"}
+              {saving
+                ? t.common.saving
+                : isEdit
+                  ? t.common.save
+                  : t.common.create}
             </Button>
           </DialogFooter>
         </form>

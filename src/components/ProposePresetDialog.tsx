@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { SPOOL_MATERIALS, SPOOL_MATERIAL_LABELS } from "@contracts/presets";
+import { SPOOL_MATERIALS } from "@contracts/presets";
+import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
+
+/** Sprachen, für die ein zusätzliches Namensfeld erscheint */
+const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(
+  l => l.code !== FALLBACK_LANGUAGE
+);
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type SpoolTypeItem } from "@/types";
 
@@ -38,13 +45,16 @@ type Props = {
 export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
+  const t = useT();
   // Der Aufrufer gibt der Komponente einen key je Rollentyp – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [manufacturer, setManufacturer] = useState(
     () => spoolType?.manufacturer ?? ""
   );
   const [series, setSeries] = useState("");
+  const [seriesEn, setSeriesEn] = useState("");
   const [version, setVersion] = useState("");
+  const [versionEn, setVersionEn] = useState("");
   const [spoolMaterial, setSpoolMaterial] = useState<string>("kunststoff");
   const [materialType, setMaterialType] = useState<string>("");
   const [nominalWeight, setNominalWeight] = useState("1000");
@@ -52,9 +62,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
 
   const submit = trpc.preset.proposals.submitFromSpoolType.useMutation({
     onSuccess: () => {
-      toast.success(
-        "Vorschlag eingereicht – er wird von der Moderation geprüft."
-      );
+      toast.success(t.proposeChange.submitted);
       utils.preset.proposals.mine.invalidate();
       onOpenChange(false);
     },
@@ -66,21 +74,21 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
     if (!spoolType) return;
     const nominal = parseInt(nominalWeight, 10);
     if (!manufacturer.trim())
-      return toast.error("Bitte einen Hersteller angeben");
-    if (!series.trim()) return toast.error("Bitte eine Serie angeben");
-    if (!version.trim()) return toast.error("Bitte eine Ausführung angeben");
+      return toast.error(t.proposePreset.manufacturerRequired);
+    if (!series.trim()) return toast.error(t.proposePreset.seriesRequired);
+    if (!version.trim()) return toast.error(t.proposePreset.versionRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
-      return toast.error("Bitte ein gültiges Nenngewicht in Gramm angeben");
+      return toast.error(t.proposePreset.nominalInvalid);
     if (spoolType.tareWeight >= nominal)
-      return toast.error(
-        "Das Leergewicht muss kleiner als das Nenngewicht sein"
-      );
+      return toast.error(t.proposePreset.tareTooLarge);
 
     submit.mutate({
       spoolTypeId: spoolType.id,
       manufacturer: manufacturer.trim(),
       series: series.trim(),
+      seriesI18n: seriesEn.trim() ? { en: seriesEn.trim() } : undefined,
       version: version.trim(),
+      versionI18n: versionEn.trim() ? { en: versionEn.trim() } : undefined,
       spoolMaterial: spoolMaterial as (typeof SPOOL_MATERIALS)[number],
       materialTypes: materialType.trim() ? [materialType.trim()] : [],
       nominalWeight: nominal,
@@ -92,44 +100,74 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Als Preset vorschlagen</DialogTitle>
+          <DialogTitle>{t.proposePreset.title}</DialogTitle>
           <DialogDescription>
-            „{spoolType?.name}“ ({formatGrams(spoolType?.tareWeight ?? 0)} Tara)
-            für alle vorschlagen. Ordne die Rolle bitte einem Hersteller, einer
-            Serie und einer Ausführung zu.
+            {t.proposePreset.description({
+              name: spoolType?.name ?? "",
+              tare: formatGrams(spoolType?.tareWeight ?? 0),
+            })}{" "}
+            {t.proposePreset.descriptionSuffix}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="pp-manufacturer">Hersteller *</Label>
+            <Label htmlFor="pp-manufacturer">
+              {t.proposePreset.manufacturerLabel}
+            </Label>
             <Input
               id="pp-manufacturer"
               value={manufacturer}
               onChange={e => setManufacturer(e.target.value)}
-              placeholder="z. B. Polymaker"
+              placeholder={t.catalogEditor.manufacturerPlaceholder}
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="pp-series">Serie / Produktlinie *</Label>
+            <Label htmlFor="pp-series">{t.proposePreset.seriesLabel}</Label>
             <Input
               id="pp-series"
               value={series}
               onChange={e => setSeries(e.target.value)}
-              placeholder="z. B. PolyTerra PLA"
+              placeholder={t.catalogEditor.seriesPlaceholder}
             />
           </div>
+          {TRANSLATION_LANGUAGES.map(lang => (
+            <div key={`series-${lang.code}`} className="grid gap-2">
+              <Label htmlFor={`pp-series-${lang.code}`}>
+                {t.proposePreset.seriesInLanguage({ language: lang.label })}
+              </Label>
+              <Input
+                id={`pp-series-${lang.code}`}
+                value={seriesEn}
+                onChange={e => setSeriesEn(e.target.value)}
+                placeholder={series.trim() || t.catalogEditor.translationHint}
+              />
+            </div>
+          ))}
           <div className="grid gap-2">
-            <Label htmlFor="pp-version">Ausführung *</Label>
+            <Label htmlFor="pp-version">{t.proposePreset.versionLabel}</Label>
             <Input
               id="pp-version"
               value={version}
               onChange={e => setVersion(e.target.value)}
-              placeholder="z. B. Kartonspule (ab 2023)"
+              placeholder={t.catalogEditor.versionPlaceholder}
             />
           </div>
+          {TRANSLATION_LANGUAGES.map(lang => (
+            <div key={`version-${lang.code}`} className="grid gap-2">
+              <Label htmlFor={`pp-version-${lang.code}`}>
+                {t.proposePreset.versionInLanguage({ language: lang.label })}
+              </Label>
+              <Input
+                id={`pp-version-${lang.code}`}
+                value={versionEn}
+                onChange={e => setVersionEn(e.target.value)}
+                placeholder={version.trim() || t.catalogEditor.translationHint}
+              />
+            </div>
+          ))}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label>Spulenmaterial</Label>
+              <Label>{t.proposePreset.spoolMaterialLabel}</Label>
               <Select value={spoolMaterial} onValueChange={setSpoolMaterial}>
                 <SelectTrigger>
                   <SelectValue />
@@ -137,14 +175,14 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
                 <SelectContent>
                   {SPOOL_MATERIALS.map(m => (
                     <SelectItem key={m} value={m}>
-                      {SPOOL_MATERIAL_LABELS[m]}
+                      {t.preset.spoolMaterial[m]}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="pp-nominal">Nenngewicht (g) *</Label>
+              <Label htmlFor="pp-nominal">{t.proposePreset.nominalLabel}</Label>
               <Input
                 id="pp-nominal"
                 type="number"
@@ -155,7 +193,9 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="pp-materialtype">Materialart</Label>
+            <Label htmlFor="pp-materialtype">
+              {t.proposePreset.materialTypeLabel}
+            </Label>
             <Input
               id="pp-materialtype"
               list="pp-materialtype-options"
@@ -170,13 +210,13 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
             </datalist>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="pp-comment">Anmerkung</Label>
+            <Label htmlFor="pp-comment">{t.proposePreset.commentLabel}</Label>
             <Textarea
               id="pp-comment"
               rows={2}
               value={comment}
               onChange={e => setComment(e.target.value)}
-              placeholder="Woher stammt das Leergewicht?"
+              placeholder={t.proposePreset.commentPlaceholder}
             />
           </div>
           <DialogFooter>
@@ -186,10 +226,12 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
               onClick={() => onOpenChange(false)}
               disabled={submit.isPending}
             >
-              Abbrechen
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={submit.isPending}>
-              {submit.isPending ? "Wird gesendet …" : "Vorschlag einreichen"}
+              {submit.isPending
+                ? t.proposeChange.submitting
+                : t.proposeChange.submit}
             </Button>
           </DialogFooter>
         </form>

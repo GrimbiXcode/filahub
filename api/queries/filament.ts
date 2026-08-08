@@ -1,5 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
-import { resolveSpoolTare } from "@contracts/presets";
+import {
+  buildVariantDisplayName,
+  resolveName,
+  resolveSpoolTare,
+} from "@contracts/presets";
+import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
   materials,
   presetSpoolVariants,
@@ -7,7 +12,10 @@ import {
   storageBoxes,
   weighings,
   type Material,
+  type PresetManufacturer,
+  type PresetSpoolSeries,
   type PresetSpoolVariant,
+  type PresetSpoolVersion,
   type SpoolType,
   type StorageBox,
   type Weighing,
@@ -138,9 +146,27 @@ export async function deleteStorageBox(userId: number, id: number) {
 export type MaterialWithRelations = Material & {
   spoolType: SpoolType | null;
   storageBox: StorageBox | null;
-  /** Referenzierte Variante aus dem Preset-Katalog (Alternative zu spoolType) */
-  spoolPresetVariant: PresetSpoolVariant | null;
+  /**
+   * Referenzierte Variante aus dem Preset-Katalog (Alternative zu spoolType),
+   * mitsamt ihres Pfads: Der Anzeigename wird daraus in der Sprache des
+   * Aufrufers erzeugt, statt wie früher vorberechnet in der Spalte zu liegen.
+   */
+  spoolPresetVariant: PresetVariantWithPath | null;
 };
+
+/** Preset-Variante samt der drei Ebenen über ihr */
+export type PresetVariantWithPath = PresetSpoolVariant & {
+  version: PresetSpoolVersion & {
+    series: PresetSpoolSeries & { manufacturer: PresetManufacturer };
+  };
+};
+
+/** Lade-Vorschrift für den Katalogpfad einer Variante */
+const withPresetPath = {
+  with: {
+    version: { with: { series: { with: { manufacturer: true } } } },
+  },
+} as const;
 
 export type MaterialOverview = MaterialWithRelations & {
   /** Summe der Leergewichte (Rolle + Box) in Gramm */
@@ -173,13 +199,19 @@ function normalizeRelation<T extends { id: number | null } | null>(
 export function computeMaterialStats(
   material: MaterialWithRelations,
   lastWeighing: Weighing | null,
-  weighingCount: number
+  weighingCount: number,
+  language: LanguageCode = FALLBACK_LANGUAGE
 ): MaterialOverview {
   const spoolTareWeight = resolveSpoolTare(material);
-  const spoolLabel =
-    material.spoolPresetVariant?.displayName ??
-    material.spoolType?.name ??
-    null;
+  const preset = material.spoolPresetVariant;
+  const spoolLabel = preset
+    ? buildVariantDisplayName({
+        manufacturer: preset.version.series.manufacturer.name,
+        series: resolveName(preset.version.series, language),
+        version: resolveName(preset.version, language),
+        nominalWeight: preset.nominalWeight,
+      })
+    : (material.spoolType?.name ?? null);
   const tareWeight = spoolTareWeight + (material.storageBox?.tareWeight ?? 0);
   const remainingWeight =
     lastWeighing != null
@@ -208,7 +240,8 @@ export function computeMaterialStats(
 }
 
 export async function findMaterialsByUser(
-  userId: number
+  userId: number,
+  language: LanguageCode = FALLBACK_LANGUAGE
 ): Promise<MaterialOverview[]> {
   const db = getDb();
   const rows = await db.query.materials.findMany({
@@ -216,7 +249,7 @@ export async function findMaterialsByUser(
     with: {
       spoolType: true,
       storageBox: true,
-      spoolPresetVariant: true,
+      spoolPresetVariant: withPresetPath,
       weighings: true,
     },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
@@ -235,18 +268,23 @@ export async function findMaterialsByUser(
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
-      row.weighings.length
+      row.weighings.length,
+      language
     );
   });
 }
 
-export async function findMaterialById(userId: number, id: number) {
+export async function findMaterialById(
+  userId: number,
+  id: number,
+  language: LanguageCode = FALLBACK_LANGUAGE
+) {
   const row = await getDb().query.materials.findFirst({
     where: and(eq(materials.id, id), eq(materials.userId, userId)),
     with: {
       spoolType: true,
       storageBox: true,
-      spoolPresetVariant: true,
+      spoolPresetVariant: withPresetPath,
       weighings: { orderBy: (t, { desc: d }) => [d(t.weighedAt), d(t.id)] },
     },
   });
@@ -262,7 +300,8 @@ export async function findMaterialById(userId: number, id: number) {
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
       },
       last,
-      list.length
+      list.length,
+      language
     ),
     weighings: list,
   };

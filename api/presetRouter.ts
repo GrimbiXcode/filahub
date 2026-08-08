@@ -2,8 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   PRESET_SCOPES,
+  buildVariantDisplayName,
+  nameI18nInputSchema,
   proposalChangePayloadSchema,
   proposalNewPayloadSchema,
+  resolveName,
   SPOOL_MATERIALS,
   materialTypesSchema,
 } from "@contracts/presets";
@@ -52,11 +55,14 @@ const proposeFromSpoolTypeInput = z.object({
     .min(1, "Herstellername ist erforderlich")
     .max(255),
   series: z.string().trim().min(1, "Name der Serie ist erforderlich").max(255),
+  /** Übersetzungen der Serie, vom Einreichenden mitgeliefert */
+  seriesI18n: nameI18nInputSchema,
   version: z
     .string()
     .trim()
     .min(1, "Bezeichnung der Ausführung ist erforderlich")
     .max(255),
+  versionI18n: nameI18nInputSchema,
   spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
   materialTypes: materialTypesSchema,
   nominalWeight: z
@@ -103,7 +109,7 @@ export const presetRouter = createRouter({
 
   /** Flache Auswahlliste für das Materialformular (ohne Ausgeblendete) */
   options: authedQuery.query(({ ctx }) =>
-    findPresetOptionsForUser(ctx.user.id)
+    findPresetOptionsForUser(ctx.user.id, ctx.language)
   ),
 
   setHidden: authedQuery
@@ -142,7 +148,14 @@ export const presetRouter = createRouter({
       }
       const created = await createSpoolType({
         userId: ctx.user.id,
-        name: input.name?.trim() || path.variant.displayName,
+        name:
+          input.name?.trim() ||
+          buildVariantDisplayName({
+            manufacturer: path.manufacturer.name,
+            series: resolveName(path.series, ctx.language),
+            version: resolveName(path.version, ctx.language),
+            nominalWeight: path.variant.nominalWeight,
+          }),
         manufacturer: path.manufacturer.name,
         tareWeight: path.variant.tareWeight,
         sourceVariantId: path.variant.id,
@@ -188,9 +201,14 @@ export const presetRouter = createRouter({
         const payload = proposalNewPayloadSchema.safeParse({
           kind: "new",
           manufacturer: { name: input.manufacturer },
-          series: { name: input.series, materialTypes: input.materialTypes },
+          series: {
+            name: input.series,
+            nameI18n: input.seriesI18n,
+            materialTypes: input.materialTypes,
+          },
           version: {
             name: input.version,
+            nameI18n: input.versionI18n,
             spoolMaterial: input.spoolMaterial ?? null,
           },
           variant: {

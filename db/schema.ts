@@ -1,3 +1,4 @@
+import type { NameI18n } from "@contracts/presets";
 import {
   pgTable,
   pgEnum,
@@ -41,6 +42,12 @@ export const users = pgTable("users", {
   currency: varchar("currency", { length: 3 }).default("EUR").notNull(),
   /** BCP-47-Locale für Zahlen- und Datumsformate; NULL = Locale des Browsers */
   locale: varchar("locale", { length: 35 }),
+  /**
+   * Oberflächensprache („de“/„en“, siehe contracts/i18n.ts); NULL = Sprache
+   * des Browsers. Bewusst getrennt von `locale`: Sprache und Zahlenformat
+   * sind zwei verschiedene Entscheidungen.
+   */
+  language: varchar("language", { length: 5 }),
   /**
    * Höchste Release-Note-Version, die der Benutzer gesehen hat (`0.7.0`).
    * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
@@ -226,7 +233,10 @@ export const presetSpoolSeries = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     manufacturerId: bigint("manufacturerId", { mode: "number" }).notNull(),
+    /** Grundname – Pflicht, speist den Slug und ist die Rückfallebene */
     name: varchar("name", { length: 255 }).notNull(),
+    /** Übersetzungen abweichend vom Grundname (siehe contracts/presets.ts) */
+    nameI18n: jsonb("nameI18n").$type<NameI18n>(),
     /** Stabiler Schlüssel innerhalb des Herstellers, z. B. „polyterra-pla“ */
     slug: varchar("slug", { length: 255 }).notNull(),
     ...presetMeta(),
@@ -282,7 +292,10 @@ export const presetSpoolVersions = pgTable(
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     seriesId: bigint("seriesId", { mode: "number" }).notNull(),
+    /** Grundname – Pflicht, speist den Slug und ist die Rückfallebene */
     name: varchar("name", { length: 255 }).notNull(),
+    /** Übersetzungen abweichend vom Grundname (siehe contracts/presets.ts) */
+    nameI18n: jsonb("nameI18n").$type<NameI18n>(),
     /** Stabiler Schlüssel innerhalb der Serie, z. B. „karton-2023“ */
     slug: varchar("slug", { length: 255 }).notNull(),
     spoolMaterial: presetSpoolMaterialEnum("spoolMaterial"),
@@ -317,14 +330,6 @@ export const presetSpoolVariants = pgTable(
     widthMm: integer("widthMm"),
     /** Durchmesser der Mittelbohrung in Millimetern */
     boreDiameterMm: integer("boreDiameterMm"),
-    /**
-     * Vorberechnete Bezeichnung für Auswahllisten, z. B.
-     * „Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg“.
-     * Erspart der Auswahl einen Join über vier Ebenen; muss nach jeder
-     * Umbenennung einer übergeordneten Ebene neu erzeugt werden
-     * (`refreshVariantDisplayNames` in api/queries/presets.ts).
-     */
-    displayName: varchar("displayName", { length: 500 }).notNull(),
     ...presetMeta(),
   },
   t => [

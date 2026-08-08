@@ -5,6 +5,7 @@ import {
   SPOOL_MATERIALS,
   manufacturerFieldsSchema,
   materialTypesSchema,
+  nameI18nInputSchema,
   proposalPayloadSchema,
   seriesFieldsSchema,
   slugify,
@@ -82,6 +83,7 @@ async function applyProposal(
       manufacturerId: manufacturer.id,
       slug: slugify(payload.series.name),
       name: payload.series.name,
+      nameI18n: payload.series.nameI18n ?? null,
       source: "community",
     });
     if (payload.series.materialTypes.length > 0) {
@@ -91,6 +93,7 @@ async function applyProposal(
       seriesId: series.id,
       slug: slugify(payload.version.name),
       name: payload.version.name,
+      nameI18n: payload.version.nameI18n ?? null,
       spoolMaterial: payload.version.spoolMaterial ?? null,
       validFrom: payload.version.validFrom ?? null,
       validTo: payload.version.validTo ?? null,
@@ -200,6 +203,7 @@ const presetAdminRouter = createRouter({
         manufacturerId: input.manufacturerId,
         slug: slugify(input.name),
         name: input.name,
+        nameI18n: input.nameI18n ?? null,
       });
       await setSeriesMaterialTypes(series.id, input.materialTypes);
       return series;
@@ -253,6 +257,7 @@ const presetAdminRouter = createRouter({
       z.object({
         seriesId: z.number().int().positive(),
         name: z.string().trim().min(1, "Bezeichnung ist erforderlich").max(255),
+        nameI18n: nameI18nInputSchema,
         spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,
@@ -263,6 +268,7 @@ const presetAdminRouter = createRouter({
         seriesId: input.seriesId,
         slug: slugify(input.name),
         name: input.name,
+        nameI18n: input.nameI18n ?? null,
         spoolMaterial: input.spoolMaterial ?? null,
         validFrom: input.validFrom ?? null,
         validTo: input.validTo ?? null,
@@ -274,6 +280,7 @@ const presetAdminRouter = createRouter({
       z.object({
         id: z.number().int().positive(),
         name: z.string().trim().min(1).max(255).optional(),
+        nameI18n: nameI18nInputSchema,
         spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,

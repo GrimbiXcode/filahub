@@ -1,11 +1,7 @@
 import { useState } from "react";
 import { Copy, Eye, EyeOff, Library, PencilLine } from "lucide-react";
 import { toast } from "sonner";
-import {
-  SPOOL_MATERIAL_LABELS,
-  formatNominalWeight,
-  type PresetScope,
-} from "@contracts/presets";
+import { formatNominalWeight, type PresetScope } from "@contracts/presets";
 import {
   Accordion,
   AccordionContent,
@@ -29,6 +25,9 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
+import type { Messages } from "@/messages/de";
+import { usePresetNames } from "@/lib/presetNames";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import type { PresetVariantNode, PresetVersionNode } from "@/types";
@@ -44,6 +43,7 @@ function HideToggle({
   onToggle: () => void;
   label: string;
 }) {
+  const t = useT();
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -55,7 +55,11 @@ function HideToggle({
             e.stopPropagation();
             onToggle();
           }}
-          aria-label={hidden ? `${label} einblenden` : `${label} ausblenden`}
+          aria-label={
+            hidden
+              ? t.presetCatalog.showAria({ label })
+              : t.presetCatalog.hideAria({ label })
+          }
         >
           {hidden ? (
             <EyeOff className="h-4 w-4 text-muted-foreground" />
@@ -65,7 +69,7 @@ function HideToggle({
         </Button>
       </TooltipTrigger>
       <TooltipContent>
-        {hidden ? "Wieder einblenden" : "Für mich ausblenden"}
+        {hidden ? t.presetCatalog.show : t.presetCatalog.hide}
       </TooltipContent>
     </Tooltip>
   );
@@ -73,21 +77,33 @@ function HideToggle({
 
 function versionSubtitle(
   version: PresetVersionNode,
-  formatDate: (value: string | Date | null | undefined) => string
+  formatDate: (value: string | Date | null | undefined) => string,
+  t: Messages
 ) {
   const parts: string[] = [];
   if (version.spoolMaterial)
-    parts.push(SPOOL_MATERIAL_LABELS[version.spoolMaterial]);
-  if (version.validFrom) parts.push(`ab ${formatDate(version.validFrom)}`);
-  if (version.validTo) parts.push(`bis ${formatDate(version.validTo)}`);
+    parts.push(t.preset.spoolMaterial[version.spoolMaterial]);
+  if (version.validFrom)
+    parts.push(
+      t.presetCatalog.validFrom({ date: formatDate(version.validFrom) })
+    );
+  if (version.validTo)
+    parts.push(t.presetCatalog.validTo({ date: formatDate(version.validTo) }));
   return parts.join(" · ");
 }
 
 export function PresetCatalog() {
   const utils = trpc.useUtils();
   const { formatGrams, formatDate } = useFormat();
+  const t = useT();
+  const presetNames = usePresetNames();
   const { data: tree, isLoading } = trpc.preset.tree.useQuery();
-  const [changeFor, setChangeFor] = useState<PresetVariantNode | null>(null);
+  // Der Dialog braucht den fertigen Anzeigenamen; zusammensetzen lässt er
+  // sich nur hier, wo Hersteller, Serie und Ausführung im Zugriff sind.
+  const [changeFor, setChangeFor] = useState<{
+    variant: PresetVariantNode;
+    label: string;
+  } | null>(null);
 
   const setHidden = trpc.preset.setHidden.useMutation({
     onSuccess: () => {
@@ -99,7 +115,7 @@ export function PresetCatalog() {
 
   const copyToOwn = trpc.preset.copyToOwn.useMutation({
     onSuccess: created => {
-      toast.success(`„${created?.name}“ als eigener Rollentyp übernommen`);
+      toast.success(t.presetCatalog.adopted({ name: created?.name ?? "" }));
       utils.spoolType.list.invalidate();
     },
     onError: e => toast.error(e.message),
@@ -122,10 +138,9 @@ export function PresetCatalog() {
     return (
       <div className="flex flex-col items-center gap-2 py-12 text-center">
         <Library className="h-10 w-10 text-muted-foreground/50" />
-        <p className="font-medium">Der Preset-Katalog ist noch leer</p>
+        <p className="font-medium">{t.presetCatalog.emptyTitle}</p>
         <p className="max-w-md text-sm text-muted-foreground">
-          Sobald Hersteller und Spulen hinterlegt sind, kannst du sie hier
-          auswählen – das Leergewicht wird dann automatisch übernommen.
+          {t.presetCatalog.emptyDescription}
         </p>
       </div>
     );
@@ -134,10 +149,7 @@ export function PresetCatalog() {
   return (
     <>
       <p className="mb-4 text-sm text-muted-foreground">
-        Vorkonfigurierte Rollen. Was du hier ausblendest, verschwindet aus
-        deiner Auswahl beim Material – bereits zugewiesene Rollen bleiben
-        erhalten. Über „Übernehmen“ wird aus einem Preset ein eigener, frei
-        bearbeitbarer Rollentyp.
+        {t.presetCatalog.intro}
       </p>
 
       <Accordion type="multiple" className="w-full">
@@ -152,11 +164,13 @@ export function PresetCatalog() {
                 <span className="flex items-center gap-2">
                   {manufacturer.name}
                   <span className="text-xs font-normal text-muted-foreground">
-                    {manufacturer.series.length} Serie(n)
+                    {t.presetCatalog.seriesCount({
+                      count: manufacturer.series.length,
+                    })}
                   </span>
                   {manufacturer.hidden && (
                     <Badge variant="outline" className="font-normal">
-                      ausgeblendet
+                      {t.presetCatalog.hidden}
                     </Badge>
                   )}
                 </span>
@@ -180,7 +194,9 @@ export function PresetCatalog() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{series.name}</span>
+                      <span className="font-medium">
+                        {presetNames.name(series)}
+                      </span>
                       {series.materialTypes.map(type => (
                         <Badge
                           key={type}
@@ -192,13 +208,13 @@ export function PresetCatalog() {
                       ))}
                       {series.materialTypes.length === 0 && (
                         <span className="text-xs text-muted-foreground">
-                          alle Materialarten
+                          {t.presetCatalog.allMaterialTypes}
                         </span>
                       )}
                     </div>
                     <HideToggle
                       hidden={series.hidden}
-                      label={series.name}
+                      label={presetNames.name(series)}
                       onToggle={() =>
                         toggle("series", series.id, series.hidden)
                       }
@@ -209,19 +225,19 @@ export function PresetCatalog() {
                     <div key={version.id} className="mt-3">
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
-                          <span>{version.name}</span>
+                          <span>{presetNames.name(version)}</span>
                           {!version.isCurrent && (
                             <Badge variant="outline" className="font-normal">
-                              ältere Ausführung
+                              {t.presetCatalog.olderVersion}
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
-                            {versionSubtitle(version, formatDate)}
+                            {versionSubtitle(version, formatDate, t)}
                           </span>
                         </div>
                         <HideToggle
                           hidden={version.hidden}
-                          label={version.name}
+                          label={presetNames.name(version)}
                           onToggle={() =>
                             toggle("version", version.id, version.hidden)
                           }
@@ -231,13 +247,15 @@ export function PresetCatalog() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead>Nenngewicht</TableHead>
-                            <TableHead>Leergewicht</TableHead>
+                            <TableHead>
+                              {t.presetCatalog.nominalWeight}
+                            </TableHead>
+                            <TableHead>{t.common.tare}</TableHead>
                             <TableHead className="hidden sm:table-cell">
-                              Abmessungen (Ø × Breite × Bohrung)
+                              {t.presetCatalog.dimensions}
                             </TableHead>
                             <TableHead className="text-right">
-                              Aktionen
+                              {t.common.actions}
                             </TableHead>
                           </TableRow>
                         </TableHeader>
@@ -276,7 +294,7 @@ export function PresetCatalog() {
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      Als eigenen Rollentyp übernehmen
+                                      {t.presetCatalog.adopt}
                                     </TooltipContent>
                                   </Tooltip>
                                   <Tooltip>
@@ -284,7 +302,18 @@ export function PresetCatalog() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => setChangeFor(variant)}
+                                        onClick={() =>
+                                          setChangeFor({
+                                            variant,
+                                            label: presetNames.variantLabel({
+                                              manufacturer,
+                                              series,
+                                              version,
+                                              nominalWeight:
+                                                variant.nominalWeight,
+                                            }),
+                                          })
+                                        }
                                       >
                                         <PencilLine className="h-4 w-4" />
                                       </Button>
@@ -333,8 +362,9 @@ export function PresetCatalog() {
       </Accordion>
 
       <ProposeChangeDialog
-        key={changeFor?.id ?? "none"}
-        variant={changeFor}
+        key={changeFor?.variant.id ?? "none"}
+        variant={changeFor?.variant ?? null}
+        label={changeFor?.label ?? ""}
         open={changeFor != null}
         onOpenChange={open => !open && setChangeFor(null)}
       />
