@@ -40,8 +40,19 @@ export const env = {
     .split(",")
     .map(s => s.trim())
     .filter(Boolean),
-  /** Telegram-User-ID des ersten Admins (optional, sonst: erster registrierte Nutzer) */
+  /** Telegram-User-ID des ersten Admins */
   ownerTelegramId: process.env.OWNER_TELEGRAM_ID ?? "",
+  /*
+    Registrierung für jeden Telegram-Nutzer öffnen.
+
+    Bis 1.1.1 war das der stille Standard: leere `TELEGRAM_ALLOWED_IDS`
+    hießen „jeder darf“. Wer die Variable schlicht übersah, betrieb eine
+    offene Instanz, ohne es zu merken – und wurde damit ohne Absicht
+    Verantwortlicher für die Daten Fremder. Jetzt muss man es sagen wollen.
+  */
+  telegramOpenRegistration: ["1", "true"].includes(
+    (process.env.TELEGRAM_OPEN_REGISTRATION ?? "").toLowerCase()
+  ),
   /**
    * Anmeldung ohne Telegram für die lokale Entwicklung (`DEV_LOGIN=1`).
    * Wirkt nur außerhalb von NODE_ENV=production – siehe api/devLogin.ts.

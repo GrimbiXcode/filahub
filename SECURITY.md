@@ -34,20 +34,28 @@ Out of scope:
   personally. Do not test against it; run your own instance instead.
 - Anything requiring an already-compromised host, database or Telegram bot
   token.
-- Missing hardening headers on a deployment, when the deployment itself is
-  what sets them — the app is meant to run behind a reverse proxy.
+- Hardening that belongs to the deployment rather than the app — TLS
+  configuration, HSTS, network exposure. The app itself now sets
+  Content-Security-Policy, `X-Frame-Options`, `Referrer-Policy` and
+  `Permissions-Policy` (`api/app.ts`); a gap _there_ is in scope.
 
 ## Things worth knowing before you report
 
 These are documented behaviours, not bugs:
 
-- **`TELEGRAM_ALLOWED_IDS` empty means open registration.** That is the
-  documented default in `.env.example`; set the whitelist if you don't want it.
+- **`TELEGRAM_ALLOWED_IDS` empty means nobody can sign in.** Open registration
+  requires `TELEGRAM_OPEN_REGISTRATION=1` as an explicit choice. With it, and
+  without `OWNER_TELEGRAM_ID`, no account is made admin automatically — see
+  `shouldGrantAdmin` in `api/queries/users.ts`.
 - **`DEV_LOGIN=1` bypasses Telegram entirely** and creates an admin. It is
   ignored when `NODE_ENV=production`, and the route is not even registered
   there — see `api/devLogin.ts`.
-- **The session cookie is `Secure; SameSite=None` outside localhost**, so the
+- **The session cookie is `Secure; SameSite=Lax` outside localhost**, so the
   app requires HTTPS in production. Serving it over plain HTTP is a
   misconfiguration, not a vulnerability in the app.
+- **Sessions last 30 days and can be revoked.** The token carries the
+  `tokenVersion` it was issued under; "sign out everywhere" bumps the counter
+  and invalidates every token at once. A plain sign-out only clears the cookie
+  on that device.
 - **The preset catalogue is deliberately global**, shared by every account on
   an instance. Every other table is scoped to its owner.

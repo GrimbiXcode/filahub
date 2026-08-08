@@ -21,11 +21,28 @@ import {
   upsertUser,
 } from "./queries/users";
 
+/**
+ * Prüft, ob sich dieses Telegram-Konto anmelden darf.
+ *
+ * Ohne Freigabeliste **und** ohne ausdrückliches `TELEGRAM_OPEN_REGISTRATION`
+ * kommt niemand herein. Das ist die Umkehr des früheren Verhaltens, wo eine
+ * leere Liste „jeder darf“ bedeutete: Wer die Variable übersah, betrieb
+ * unbemerkt eine offene Instanz und wurde damit ungewollt Verantwortlicher
+ * für die Daten Fremder.
+ */
 function assertAllowed(telegramId: string) {
-  if (
-    env.telegramAllowedIds.length > 0 &&
-    !env.telegramAllowedIds.includes(telegramId)
-  ) {
+  if (env.telegramAllowedIds.length === 0) {
+    if (!env.telegramOpenRegistration) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Diese Instanz nimmt keine Anmeldungen an. Der Betreiber muss TELEGRAM_ALLOWED_IDS setzen oder die Registrierung ausdrücklich öffnen.",
+      });
+    }
+    return;
+  }
+
+  if (!env.telegramAllowedIds.includes(telegramId)) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Dieses Konto ist für den Zugriff nicht freigeschaltet.",
