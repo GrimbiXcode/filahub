@@ -35,7 +35,13 @@ export const users = pgTable("users", {
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   telegramUsername: varchar("telegramUsername", { length: 255 }),
-  email: varchar("email", { length: 320 }),
+  /*
+    Keine E-Mail-Adresse: Die Anmeldung läuft ausschließlich über Telegram, die
+    App hat für eine Adresse keinen Zweck. Die Spalte existierte bis 1.1.1 aus
+    der Altdatenbank heraus, wurde nie beschrieben und ist entfernt worden.
+    Wer sie wieder einführt, braucht einen Zweck, eine Rechtsgrundlage und
+    einen Eintrag in der Datenschutzerklärung.
+  */
   avatar: text("avatar"),
   role: userRoleEnum("role").default("user").notNull(),
   /** Anzeigewährung als ISO-4217-Code (siehe contracts/locale.ts) */
@@ -53,6 +59,15 @@ export const users = pgTable("users", {
    * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
    */
   lastSeenReleaseVersion: varchar("lastSeenReleaseVersion", { length: 32 }),
+  /**
+   * Zähler zum Entwerten ausgegebener Sitzungen.
+   *
+   * Das Session-Token trägt den Stand mit, unter dem es ausgestellt wurde.
+   * Wird der Zähler erhöht, sind alle älteren Token ungültig – ohne dass es
+   * dafür eine Sperrliste bräuchte. Der Vergleich ist gratis, weil
+   * `authenticateRequest` die Benutzerzeile ohnehin bei jedem Request lädt.
+   */
+  tokenVersion: integer("tokenVersion").default(0).notNull(),
   createdAt: tsColumn("createdAt").defaultNow().notNull(),
   updatedAt: tsColumn("updatedAt")
     .defaultNow()
@@ -122,52 +137,64 @@ export type StorageBox = typeof storageBoxes.$inferSelect;
 export type InsertStorageBox = typeof storageBoxes.$inferInsert;
 
 /** 3D-Druckmaterial (Filament-Rolle im Lager) */
-export const materials = pgTable("materials", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: bigint("userId", { mode: "number" }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
-  identifier: varchar("identifier", { length: 50 }),
-  /** Materialart, z. B. PLA, PETG, ABS */
-  materialType: varchar("materialType", { length: 100 }).notNull(),
-  manufacturer: varchar("manufacturer", { length: 255 }),
-  color: varchar("color", { length: 100 }),
-  /** Preis in Cent (z. B. 2499 = 24,99 €) */
-  priceCents: integer("priceCents"),
-  /** Kaufdatum als ISO-String YYYY-MM-DD */
-  purchaseDate: date("purchaseDate", { mode: "string" }),
-  /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
-  nominalWeight: integer("nominalWeight").notNull(),
-  /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
-  spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
-  /**
-   * Alternativ zu `spoolTypeId`: direkt referenzierte Preset-Variante aus dem
-   * globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
-   */
-  spoolPresetVariantId: bigint("spoolPresetVariantId", { mode: "number" }),
-  /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
-  storageBoxId: bigint("storageBoxId", { mode: "number" }),
-  notes: text("notes"),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-  updatedAt: tsColumn("updatedAt")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-});
+export const materials = pgTable(
+  "materials",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
+    identifier: varchar("identifier", { length: 50 }),
+    /** Materialart, z. B. PLA, PETG, ABS */
+    materialType: varchar("materialType", { length: 100 }).notNull(),
+    manufacturer: varchar("manufacturer", { length: 255 }),
+    color: varchar("color", { length: 100 }),
+    /** Preis in Cent (z. B. 2499 = 24,99 €) */
+    priceCents: integer("priceCents"),
+    /** Kaufdatum als ISO-String YYYY-MM-DD */
+    purchaseDate: date("purchaseDate", { mode: "string" }),
+    /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
+    nominalWeight: integer("nominalWeight").notNull(),
+    /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
+    spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
+    /**
+     * Alternativ zu `spoolTypeId`: direkt referenzierte Preset-Variante aus dem
+     * globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
+     */
+    spoolPresetVariantId: bigint("spoolPresetVariantId", { mode: "number" }),
+    /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
+    storageBoxId: bigint("storageBoxId", { mode: "number" }),
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  // Jede Abfrage filtert nach Besitzer; der Löschlauf beim Kontolöschen
+  // ebenfalls.
+  t => [index("materials_user_idx").on(t.userId)]
+);
 
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = typeof materials.$inferInsert;
 
 /** Wägung eines Materials: gemessenes Bruttogewicht inkl. Rolle (+ Box) */
-export const weighings = pgTable("weighings", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  materialId: bigint("materialId", { mode: "number" }).notNull(),
-  /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
-  grossWeight: integer("grossWeight").notNull(),
-  weighedAt: tsColumn("weighedAt").defaultNow().notNull(),
-  note: varchar("note", { length: 500 }),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-});
+export const weighings = pgTable(
+  "weighings",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    materialId: bigint("materialId", { mode: "number" }).notNull(),
+    /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
+    grossWeight: integer("grossWeight").notNull(),
+    weighedAt: tsColumn("weighedAt").defaultNow().notNull(),
+    note: varchar("note", { length: 500 }),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  // Wägungen hängen am Material – ohne Index wäre das Löschen eines Kontos
+  // ein Full Scan pro Rolle.
+  t => [index("weighings_material_idx").on(t.materialId)]
+);
 
 export type Weighing = typeof weighings.$inferSelect;
 export type InsertWeighing = typeof weighings.$inferInsert;
@@ -404,8 +431,12 @@ export const presetProposals = pgTable(
   "preset_proposals",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    /** Einreicher */
-    userId: bigint("userId", { mode: "number" }).notNull(),
+    /**
+     * Einreicher. `NULL`, wenn das Konto gelöscht wurde: Angenommene
+     * Vorschläge bleiben als Moderationsnachweis erhalten, die Identität des
+     * Einreichers verschwindet aber mit dem Konto (Art. 17 DSGVO).
+     */
+    userId: bigint("userId", { mode: "number" }),
     kind: presetProposalKindEnum("kind").notNull(),
     /** Katalogebene, auf die sich der Vorschlag bezieht */
     targetType: presetScopeEnum("targetType").notNull(),
@@ -491,3 +522,59 @@ export const migrationState = pgTable("migration_state", {
 
 export type MigrationState = typeof migrationState.$inferSelect;
 export type InsertMigrationState = typeof migrationState.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Sicherheitsprotokoll
+// ---------------------------------------------------------------------------
+
+/**
+ * Audit-Log: sicherheitsrelevante Ereignisse.
+ *
+ * Vorher ließ sich ein Vorfall aus den Aufzeichnungen der Anwendung heraus
+ * gar nicht rekonstruieren – es gab nur Zeitstempel in den Fachtabellen.
+ *
+ * Das Protokoll ist selbst personenbezogen und deshalb bewusst schmal
+ * gehalten: Ereignistyp, Zeitpunkt, Beteiligte, ein strukturiertes Detail.
+ * Kein Freitext, keine Klartext-IP, keine Nutzungsdaten. Aufbewahrung
+ * 90 Tage, siehe AUDIT_RETENTION_DAYS in contracts/audit.ts.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: tsColumn("at").defaultNow().notNull(),
+    /** Ereignisname aus AUDIT_EVENTS (contracts/audit.ts) */
+    event: varchar("event", { length: 64 }).notNull(),
+    /**
+     * Wer gehandelt hat. `NULL`, wenn niemand angemeldet war – etwa bei einem
+     * fehlgeschlagenen Anmeldeversuch – oder wenn das Konto gelöscht wurde.
+     */
+    actorUserId: bigint("actorUserId", { mode: "number" }),
+    /** Wen es betraf, falls abweichend vom Handelnden. */
+    subjectUserId: bigint("subjectUserId", { mode: "number" }),
+    /**
+     * Telegram-ID bei Ereignissen vor der Anmeldung – dort gibt es noch kein
+     * Konto, auf das sich verweisen ließe.
+     */
+    telegramId: varchar("telegramId", { length: 64 }),
+    /**
+     * HMAC-SHA256 der Client-Adresse mit `APP_SECRET`, nie die Adresse selbst.
+     *
+     * Ein einfacher Hash brächte hier nichts: Der IPv4-Raum hat 2^32 Werte und
+     * ist in Minuten durchprobiert. Erst der Schlüssel macht die Zuordnung für
+     * Dritte unmöglich – wiedererkennen lässt sich dieselbe Adresse trotzdem,
+     * und genau das braucht die Aufklärung.
+     */
+    ipHash: varchar("ipHash", { length: 64 }),
+    /** Strukturierte Zusatzangaben, bewusst kein Freitextfeld. */
+    detail: jsonb("detail"),
+  },
+  t => [
+    index("audit_log_at_idx").on(t.at),
+    index("audit_log_event_at_idx").on(t.event, t.at),
+    index("audit_log_actor_idx").on(t.actorUserId),
+  ]
+);
+
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type InsertAuditLogEntry = typeof auditLog.$inferInsert;

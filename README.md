@@ -35,16 +35,23 @@ Drizzle ORM + PostgreSQL (database)
 cp .env.example .env
 # fill in .env: APP_SECRET (e.g. `openssl rand -hex 32`), DATABASE_URL,
 # TELEGRAM_BOT_TOKEN, TELEGRAM_BOT_USERNAME, TELEGRAM_ALLOWED_IDS, OWNER_TELEGRAM_ID
+# and, if anyone but you will use it, the LEGAL_OPERATOR_* values
 ```
 
-| Variable                | Purpose                                                           |
-| ----------------------- | ----------------------------------------------------------------- |
-| `APP_SECRET`            | Random secret for signing session tokens                          |
-| `DATABASE_URL`          | PostgreSQL connection string                                      |
-| `TELEGRAM_BOT_TOKEN`    | Token from @BotFather                                             |
-| `TELEGRAM_BOT_USERNAME` | Bot username without @                                            |
-| `TELEGRAM_ALLOWED_IDS`  | Allowed Telegram IDs (comma-separated); empty = open registration |
-| `OWNER_TELEGRAM_ID`     | Telegram ID of the admin                                          |
+| Variable                     | Purpose                                                                     |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| `APP_SECRET`                 | Random secret for signing session tokens                                    |
+| `DATABASE_URL`               | PostgreSQL connection string                                                |
+| `TELEGRAM_BOT_TOKEN`         | Token from @BotFather                                                       |
+| `TELEGRAM_BOT_USERNAME`      | Bot username without @                                                      |
+| `TELEGRAM_ALLOWED_IDS`       | Allowed Telegram IDs (comma-separated); empty = nobody, unless opened below |
+| `TELEGRAM_OPEN_REGISTRATION` | Set to `1` to let any Telegram account register                             |
+| `OWNER_TELEGRAM_ID`          | Telegram ID of the admin                                                    |
+| `LEGAL_OPERATOR_NAME`        | Who runs this instance — shown in the imprint and privacy policy            |
+| `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator (`\n` separates lines)                       |
+| `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |
+| `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
+| `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
 
 ## 3. Set up the database
 
@@ -160,20 +167,33 @@ Notes:
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 
 The app listens on port 3000. Put a reverse proxy with HTTPS in front of it
-for your domain. With [Caddy](https://caddyserver.com), one line in the
-`Caddyfile` is enough:
+for your domain. With [Caddy](https://caddyserver.com):
 
 ```
 filahub.yourdomain.at {
     reverse_proxy 127.0.0.1:3000
+
+    # HTTPS only, including subdomains. Caddy redirects HTTP to HTTPS on its
+    # own; this tells the browser to stop asking. Start with a short max-age
+    # while you are still moving things around — the value is hard to take
+    # back once browsers have seen it.
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 }
 ```
+
+The app sets its own Content-Security-Policy, `X-Frame-Options`,
+`Referrer-Policy` and `Permissions-Policy` (see `api/app.ts`), so the proxy
+does not have to. Do not strip or overwrite them.
+
+Caddy sets `X-Forwarded-For` by default, which is what the sign-in rate limit
+keys on. If you have a second proxy in front of Caddy — Cloudflare, say — set
+`TRUST_PROXY_HOPS=2`, otherwise the limit counts the wrong address.
 
 DNS: point an A record of the domain to your server's IP. Caddy obtains the
 TLS certificate automatically. nginx + Certbot works too, of course.
 
-> Outside of localhost, the session cookie is set as `Secure; SameSite=None`
-> – HTTPS is therefore required in production.
+> Outside of localhost the session cookie is `Secure; SameSite=Lax` – HTTPS is
+> therefore required in production.
 
 ## 6. Login flow
 
@@ -191,11 +211,23 @@ TLS certificate automatically. nginx + Certbot works too, of course.
 **Alternative: code login via the bot**
 
 1. Click the bot link on the login page
-2. Send `/login` to the bot → receive a 6-digit code (valid for 10 min)
+2. Send `/login` to the bot → receive a 6-digit code (valid for 5 min)
 3. Enter the code on the website → logged in
 
-When the whitelist (`TELEGRAM_ALLOWED_IDS`) is active, only the listed IDs
-can sign in. The `OWNER_TELEGRAM_ID` receives the admin role.
+### Who may sign in
+
+Only the IDs in `TELEGRAM_ALLOWED_IDS` can sign in. **An empty list means
+nobody** — set `TELEGRAM_OPEN_REGISTRATION=1` if you really want any Telegram
+account to be able to register.
+
+That default is deliberate. Open registration makes you the data controller for
+however many strangers show up, with everything that follows from it — see
+[PRIVACY.md](PRIVACY.md). Nobody should end up there by overlooking a variable.
+
+`OWNER_TELEGRAM_ID` gets the admin role and keeps it on every sign-in. If it is
+unset, the very first account to register becomes admin — but only while a
+whitelist is in place. With open registration there is no such shortcut, or the
+first stranger to find a fresh instance would take it over.
 
 ## 7. Preset catalogue
 
@@ -311,6 +343,21 @@ number is yours – that is what the custom spool types are for.
 
 Found a vulnerability? Please report it privately – see
 [SECURITY.md](SECURITY.md). Don't open a public issue for it.
+
+## Running it for other people
+
+The moment someone other than you signs in, you are the data controller for
+their data — not the author of this software.
+
+- **[PRIVACY.md](PRIVACY.md)** — what the app stores, who else receives data,
+  which variables you must set, and how the built-in export and erasure work.
+- **[COMPLIANCE.md](COMPLIANCE.md)** — where the project stands on the Cyber
+  Resilience Act and the rest, plus templates for a record of processing
+  activities and the technical measures.
+
+Users of your instance see an imprint at `/impressum`, a privacy policy at
+`/datenschutz` and terms at `/nutzungsbedingungen`, filled from your
+`LEGAL_OPERATOR_*` configuration. Without it, those pages say so.
 
 ## License
 

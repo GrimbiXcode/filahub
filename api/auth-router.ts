@@ -1,43 +1,66 @@
-import * as cookie from "cookie";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { Session } from "@contracts/constants";
 import { languageSchema } from "@contracts/i18n";
 import { currencySchema, localeSchema } from "@contracts/locale";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
-import { getSessionCookieOptions } from "./lib/cookies";
+import { clearSessionCookie, sessionCookie } from "./lib/cookies";
 import { env } from "./lib/env";
-import { createRouter, authedQuery, publicQuery } from "./middleware";
+import { recordAudit } from "./queries/audit";
+import {
+  createRouter,
+  authedQuery,
+  publicQuery,
+  rateLimited,
+} from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
 import {
   markReleaseNotesSeen,
+  revokeSessions,
   updateUserSettings,
   upsertUser,
 } from "./queries/users";
 
-function assertAllowed(telegramId: string) {
-  if (
-    env.telegramAllowedIds.length > 0 &&
-    !env.telegramAllowedIds.includes(telegramId)
-  ) {
+/**
+ * Prüft, ob sich dieses Telegram-Konto anmelden darf.
+ *
+ * Ohne Freigabeliste **und** ohne ausdrückliches `TELEGRAM_OPEN_REGISTRATION`
+ * kommt niemand herein. Das ist die Umkehr des früheren Verhaltens, wo eine
+ * leere Liste „jeder darf“ bedeutete: Wer die Variable übersah, betrieb
+ * unbemerkt eine offene Instanz und wurde damit ungewollt Verantwortlicher
+ * für die Daten Fremder.
+ */
+function assertAllowed(telegramId: string, ip: string | null) {
+  if (env.telegramAllowedIds.length === 0) {
+    if (!env.telegramOpenRegistration) {
+      recordAudit({
+        event: "login.blocked",
+        telegramId,
+        ip,
+        detail: { reason: "registration_closed" },
+      });
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message:
+          "Diese Instanz nimmt keine Anmeldungen an. Der Betreiber muss TELEGRAM_ALLOWED_IDS setzen oder die Registrierung ausdrücklich öffnen.",
+      });
+    }
+    return;
+  }
+
+  if (!env.telegramAllowedIds.includes(telegramId)) {
+    recordAudit({
+      event: "login.blocked",
+      telegramId,
+      ip,
+      detail: { reason: "not_allowlisted" },
+    });
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Dieses Konto ist für den Zugriff nicht freigeschaltet.",
     });
   }
-}
-
-function sessionCookie(token: string, headers: Headers) {
-  const opts = getSessionCookieOptions(headers);
-  return cookie.serialize(Session.cookieName, token, {
-    httpOnly: opts.httpOnly,
-    path: opts.path,
-    sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-    secure: opts.secure,
-    maxAge: Session.maxAgeMs / 1000,
-  });
 }
 
 export const authRouter = createRouter({
@@ -78,8 +101,21 @@ export const authRouter = createRouter({
     devLoginAvailable: !env.isProduction && env.devLogin,
   })),
 
-  /** Code vom Telegram-Bot einlösen und Session setzen */
+  /**
+   * Code vom Telegram-Bot einlösen und Session setzen.
+   *
+   * Der Code hat sechs Stellen, also eine Million Möglichkeiten – ohne Sperre
+   * ließe sich der Bestand gültiger Codes in überschaubarer Zeit durchprobieren,
+   * und ein Treffer meldet als der betreffende Benutzer an. Die Einlösung ist
+   * bewusst nicht an die Telegram-ID gebunden: Das Formular kennt sie nicht,
+   * es gibt also nichts, wogegen sich prüfen ließe. Die Sperre ist damit die
+   * einzige wirksame Bremse.
+   */
   login: publicQuery
+    .use(rateLimited({ key: "auth.login", limit: 10, windowMs: 10 * 60_000 }))
+    .use(
+      rateLimited({ key: "auth.login.hour", limit: 30, windowMs: 60 * 60_000 })
+    )
     .input(
       z.object({
         code: z
@@ -91,6 +127,16 @@ export const authRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const entry = await redeemLoginCode(input.code);
       if (!entry) {
+        /*
+          Bewusst ohne den eingegebenen Code im Protokoll: Wer die
+          Protokolltabelle lesen kann, bekäme sonst eine Liste gerade
+          gültiger Codes frei Haus.
+        */
+        recordAudit({
+          event: "login.failed",
+          ip: ctx.clientIp,
+          detail: { method: "code" },
+        });
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message:
@@ -98,16 +144,27 @@ export const authRouter = createRouter({
         });
       }
 
-      assertAllowed(entry.telegramId);
+      assertAllowed(entry.telegramId, ctx.clientIp);
 
-      await upsertUser({
+      const user = await upsertUser({
         unionId: entry.telegramId,
         name: entry.telegramName ?? entry.telegramUsername,
         telegramUsername: entry.telegramUsername,
         lastSignInAt: new Date(),
       });
 
-      const token = await signSessionToken({ unionId: entry.telegramId });
+      recordAudit({
+        event: "login.success",
+        actorUserId: user.id,
+        telegramId: entry.telegramId,
+        ip: ctx.clientIp,
+        detail: { method: "code" },
+      });
+
+      const token = await signSessionToken({
+        unionId: entry.telegramId,
+        tokenVersion: user.tokenVersion,
+      });
       ctx.resHeaders.append(
         "set-cookie",
         sessionCookie(token, ctx.req.headers)
@@ -124,6 +181,7 @@ export const authRouter = createRouter({
    * auf Wunsch teilt der Nutzer im Dialog auch seine Telefonnummer mit Telegram.
    */
   loginWithWidget: publicQuery
+    .use(rateLimited({ key: "auth.widget", limit: 20, windowMs: 10 * 60_000 }))
     .input(
       z.object({
         id: z.number(),
@@ -143,6 +201,16 @@ export const authRouter = createRouter({
         });
       }
       if (!verifyTelegramWidgetData(env.telegramBotToken, input)) {
+        /*
+          Hier lohnt das Hinsehen: Eine ungültige Signatur entsteht nicht
+          beim normalen Gebrauch. Entweder ist der Bot-Token gewechselt
+          worden – oder jemand versucht, sich Anmeldedaten zu bauen.
+        */
+        recordAudit({
+          event: "login.widget_invalid",
+          telegramId: String(input.id),
+          ip: ctx.clientIp,
+        });
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Die Telegram-Anmeldung konnte nicht verifiziert werden.",
@@ -150,22 +218,39 @@ export const authRouter = createRouter({
       }
 
       const telegramId = String(input.id);
-      assertAllowed(telegramId);
+      assertAllowed(telegramId, ctx.clientIp);
 
       const name =
         [input.first_name, input.last_name].filter(Boolean).join(" ") ||
         input.username ||
         null;
 
-      await upsertUser({
+      /*
+        `photo_url` wird bewusst nicht übernommen: Es zeigt auf Telegrams CDN,
+        und jede Anzeige des Bildes wäre ein Abruf dort – bei jedem
+        Seitenaufruf, für jeden angemeldeten Benutzer. Die Initialen aus
+        `AvatarFallback` leisten dasselbe ohne Drittabruf. Das Feld bleibt in
+        der Eingabe, weil Telegram es in die HMAC-Prüfsumme einrechnet.
+      */
+      const user = await upsertUser({
         unionId: telegramId,
         name,
         telegramUsername: input.username ?? null,
-        avatar: input.photo_url ?? null,
         lastSignInAt: new Date(),
       });
 
-      const token = await signSessionToken({ unionId: telegramId });
+      recordAudit({
+        event: "login.success",
+        actorUserId: user.id,
+        telegramId,
+        ip: ctx.clientIp,
+        detail: { method: "widget" },
+      });
+
+      const token = await signSessionToken({
+        unionId: telegramId,
+        tokenVersion: user.tokenVersion,
+      });
       ctx.resHeaders.append(
         "set-cookie",
         sessionCookie(token, ctx.req.headers)
@@ -173,18 +258,33 @@ export const authRouter = createRouter({
       return { success: true, name };
     }),
 
+  /**
+   * Abmelden auf diesem Gerät. Entwertet bewusst **nur** das Cookie: Wer sich
+   * am Telefon abmeldet, will nicht zugleich am Rechner hinausfliegen.
+   */
   logout: authedQuery.mutation(async ({ ctx }) => {
-    const opts = getSessionCookieOptions(ctx.req.headers);
-    ctx.resHeaders.append(
-      "set-cookie",
-      cookie.serialize(Session.cookieName, "", {
-        httpOnly: opts.httpOnly,
-        path: opts.path,
-        sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-        secure: opts.secure,
-        maxAge: 0,
-      })
-    );
+    recordAudit({
+      event: "logout",
+      actorUserId: ctx.user.id,
+      ip: ctx.clientIp,
+    });
+    ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
+    return { success: true };
+  }),
+
+  /**
+   * Abmelden auf allen Geräten – der Weg für den Fall, dass ein Gerät
+   * abhandengekommen ist. Erhöht `users.tokenVersion` und macht damit jedes
+   * ausgestellte Token ungültig, auch das der eigenen Sitzung.
+   */
+  logoutAllDevices: authedQuery.mutation(async ({ ctx }) => {
+    await revokeSessions(ctx.user.id);
+    recordAudit({
+      event: "session.revoked",
+      actorUserId: ctx.user.id,
+      ip: ctx.clientIp,
+    });
+    ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
     return { success: true };
   }),
 });

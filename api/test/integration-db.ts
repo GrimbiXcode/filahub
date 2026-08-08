@@ -34,6 +34,9 @@ export function callerFor(user: User, language: LanguageCode = "de") {
     resHeaders: new Headers(),
     user,
     language,
+    // Feste Adresse: Die Tests sollen sich nicht gegenseitig in die Sperre
+    // laufen lassen, und die geprüften Prozeduren sind ohnehin authentifiziert.
+    clientIp: "127.0.0.1",
   });
 }
 

@@ -1,6 +1,14 @@
 export const Session = {
   cookieName: "filament_sid",
-  maxAgeMs: 365 * 24 * 60 * 60 * 1000,
+  /**
+   * Lebensdauer einer Sitzung. Ein Jahr war reichlich für ein Token, das sich
+   * nicht widerrufen ließ; 30 Tage sind bequem genug und begrenzen den
+   * Schaden, wenn ein Token abhandenkommt.
+   *
+   * Gilt für Cookie **und** JWT – `signSessionToken` leitet die Ablaufzeit
+   * hieraus ab, damit beide nicht auseinanderlaufen können.
+   */
+  maxAgeMs: 30 * 24 * 60 * 60 * 1000,
 } as const;
 
 export const ErrorMessages = {

@@ -38,3 +38,6 @@ build/
 # Test coverage
 coverage/
 .nyc_output/
+
+# Lokal erzeugte Stückliste (in CI ein Artefakt, kein Repo-Inhalt)
+sbom.cdx.json

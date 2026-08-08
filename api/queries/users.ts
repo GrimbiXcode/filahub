@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
 import { compareVersions } from "@contracts/releaseNotes";
@@ -59,9 +59,45 @@ export async function updateUserSettings(
 }
 
 /**
+ * Entscheidet, ob ein Konto beim Anlegen Administratorrechte bekommt.
+ *
+ * Ausgelagert und frei von Umgebungszugriffen, damit sich die Regel prüfen
+ * lässt – es geht um Rechtevergabe, da ist ein Test mehr wert als eine
+ * Zeile weniger.
+ *
+ * Zwei Wege führen zu „ja“:
+ *
+ *  1. Die Telegram-ID steht in `OWNER_TELEGRAM_ID`. Das ist die ausdrückliche
+ *     Ansage des Betreibers und gilt bei jeder Anmeldung erneut.
+ *  2. Es ist der allererste Benutzer **und** es gibt eine Freigabeliste. Dann
+ *     hat der Betreiber diese Person zugelassen; die Bequemlichkeit der
+ *     Ersteinrichtung ist hier unbedenklich.
+ *
+ * Bei offener Registrierung ohne Freigabeliste gibt es **keine** Automatik.
+ * Sonst wäre es ein Wettrennen: Auf einer frisch aufgesetzten, öffentlich
+ * erreichbaren Instanz bekäme schlicht der erste Fremde die Administration.
+ */
+export async function shouldGrantAdmin(options: {
+  unionId: string;
+  ownerTelegramId: string;
+  hasAllowlist: boolean;
+  isFirstUser: () => Promise<boolean>;
+}): Promise<boolean> {
+  if (options.ownerTelegramId && options.unionId === options.ownerTelegramId) {
+    return true;
+  }
+  if (!options.hasAllowlist) return false;
+  return options.isFirstUser();
+}
+
+/**
  * Legt einen Benutzer an bzw. aktualisiert ihn beim Login.
  * Rolle: explizit gesetzter Owner (OWNER_TELEGRAM_ID) oder der allererste
- * registrierte Benutzer wird Admin.
+ * registrierte Benutzer – Letzteres aber nur bei gesetzter Freigabeliste,
+ * siehe unten.
+ *
+ * Gibt die geschriebene Zeile zurück – der Aufrufer braucht daraus
+ * `tokenVersion`, um das Session-Token auszustellen.
  */
 export async function upsertUser(data: InsertUser) {
   const values = { ...data };
@@ -69,32 +105,48 @@ export async function upsertUser(data: InsertUser) {
     lastSignInAt: new Date(),
     name: data.name,
     telegramUsername: data.telegramUsername,
-    avatar: data.avatar,
   };
 
   if (values.role === undefined) {
-    const isOwner =
-      !!env.ownerTelegramId && values.unionId === env.ownerTelegramId;
-    const existing = await findUserByUnionId(values.unionId!);
-    if (isOwner) {
+    const grantAdmin = await shouldGrantAdmin({
+      unionId: values.unionId!,
+      ownerTelegramId: env.ownerTelegramId,
+      hasAllowlist: env.telegramAllowedIds.length > 0,
+      // Erst fragen, wenn die Antwort zählt – sonst zwei Abfragen pro Login.
+      isFirstUser: async () => {
+        const existing = await findUserByUnionId(values.unionId!);
+        if (existing) return false;
+        const all = await getDb()
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .limit(1);
+        return all.length === 0;
+      },
+    });
+    if (grantAdmin) {
       values.role = "admin";
       updateSet.role = "admin";
-    } else if (!existing) {
-      const all = await getDb()
-        .select({ id: schema.users.id })
-        .from(schema.users)
-        .limit(1);
-      if (all.length === 0) {
-        values.role = "admin";
-        updateSet.role = "admin";
-      }
     }
   }
 
   // Postgres braucht die Konfliktspalte explizit; eindeutig ist die
   // Telegram-ID (`unionId`).
-  await getDb()
+  const [user] = await getDb()
     .insert(schema.users)
     .values(values)
-    .onConflictDoUpdate({ target: schema.users.unionId, set: updateSet });
+    .onConflictDoUpdate({ target: schema.users.unionId, set: updateSet })
+    .returning();
+  return user;
+}
+
+/**
+ * Entwertet alle ausgegebenen Sitzungen eines Benutzers, indem der Zähler
+ * erhöht wird (siehe `users.tokenVersion`). Gedacht für „auf allen Geräten
+ * abmelden“ und für den Fall, dass ein Gerät abhandengekommen ist.
+ */
+export async function revokeSessions(userId: number) {
+  await getDb()
+    .update(schema.users)
+    .set({ tokenVersion: sql`${schema.users.tokenVersion} + 1` })
+    .where(eq(schema.users.id, userId));
 }

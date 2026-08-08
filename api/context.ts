@@ -7,6 +7,7 @@ import {
   type LanguageCode,
 } from "@contracts/i18n";
 import { LANGUAGE_HEADER } from "@contracts/constants";
+import { clientIpFrom } from "./lib/clientIp";
 import { authenticateRequest } from "./telegram/auth";
 
 export type TrpcContext = {
@@ -23,6 +24,12 @@ export type TrpcContext = {
    * auch ein `curl` etwas Brauchbares.
    */
   language: LanguageCode;
+  /**
+   * Adresse des Aufrufers, soweit ermittelbar – Schlüssel für die
+   * Zugriffsbegrenzung. `null`, wenn keine Weiterleitungs-Kopfzeile ankommt;
+   * dann teilen sich alle Aufrufer einen Eimer.
+   */
+  clientIp: string | null;
 };
 
 const KNOWN_LANGUAGES = SUPPORTED_LANGUAGES.map(l => l.code) as LanguageCode[];
@@ -42,6 +49,7 @@ export async function createContext(
     req: opts.req,
     resHeaders: opts.resHeaders,
     language: FALLBACK_LANGUAGE,
+    clientIp: clientIpFrom(opts.req.headers),
   };
   try {
     ctx.user = await authenticateRequest(opts.req.headers);

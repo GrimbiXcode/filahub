@@ -13,15 +13,50 @@ jobs:
     permissions:
       contents: read
       packages: write
+      # Für actions/attest-build-provenance: `id-token` holt das
+      # OIDC-Token, mit dem Sigstore signiert, `attestations` schreibt das
+      # Ergebnis an das Abbild.
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Stückliste der npm-Abhängigkeiten im CycloneDX-Format.
+      #
+      # Formal schuldet ein nicht-kommerzielles Projekt das nicht (siehe
+      # COMPLIANCE.md). Wer filahub aber gewerblich einsetzt, wird selbst
+      # zum Hersteller im Sinne des Cyber Resilience Act und braucht dann
+      # genau diese Liste – bereitzustellen kostet hier einen Schritt.
+      - name: SBOM erzeugen (npm)
+        run: |
+          npx --yes @cyclonedx/cyclonedx-npm@latest \
+            --omit dev \
+            --output-format JSON \
+            --output-file sbom.cdx.json
+          echo "Komponenten: $(node -e "console.log(require('./sbom.cdx.json').components.length)")"
+
+      - name: SBOM als Artefakt ablegen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.cdx.json
+          retention-days: 90
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -29,7 +64,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.IMAGE_NAME }}
           tags: |
@@ -38,7 +73,8 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           push: true
@@ -46,3 +82,22 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Hängt Stückliste und Herkunftsnachweis an das Abbild selbst.
+          # Abrufbar mit:
+          #   docker buildx imagetools inspect ghcr.io/…/filahub:latest \
+          #     --format '{{ json .SBOM }}'
+          sbom: true
+          provenance: mode=max
+
+      # Zusätzlich zur BuildKit-Provenance oben: Diese Bescheinigung wird von
+      # Sigstore signiert und in ein öffentliches Transparenzprotokoll
+      # geschrieben. Erst damit lässt sich von außen prüfen, dass genau
+      # dieses Abbild aus genau diesem Repository stammt:
+      #   gh attestation verify oci://ghcr.io/…/filahub:latest \
+      #     --repo GrimbiXcode/filahub
+      - name: Herkunftsnachweis erzeugen
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.IMAGE_NAME }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true

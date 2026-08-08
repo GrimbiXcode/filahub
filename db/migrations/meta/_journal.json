@@ -22,6 +22,34 @@
       "when": 1786145293891,
       "tag": "0002_preset_name_i18n",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786189525908,
+      "tag": "0003_drop_user_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786191924413,
+      "tag": "0004_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786194092928,
+      "tag": "0005_session_token_version",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786197262137,
+      "tag": "0006_audit_log",
+      "breakpoints": true
     }
   ]
 }

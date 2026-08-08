@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { MessageCircleCode, Send, Wrench } from "lucide-react";
+import { MessageCircleCode, Send, ShieldQuestion, Wrench } from "lucide-react";
+import {
+  LEGAL_DOCUMENTS,
+  LEGAL_PATHS,
+  TELEGRAM_WIDGET_CONSENT_KEY,
+} from "@/const";
 import { Wordmark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -35,6 +40,11 @@ export default function Login() {
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const t = useT();
+  // Einmal getroffen, bleibt die Entscheidung bestehen – sonst müsste man sie
+  // bei jedem Anmeldeversuch neu treffen.
+  const [widgetConsent, setWidgetConsent] = useState(
+    () => localStorage.getItem(TELEGRAM_WIDGET_CONSENT_KEY) === "1"
+  );
 
   const loginWithWidget = trpc.auth.loginWithWidget.useMutation({
     onSuccess: async () => {
@@ -51,9 +61,16 @@ export default function Login() {
     onError: e => setError(e.message),
   });
 
-  // Offizielles Telegram Login Widget laden
+  /*
+    Offizielles Telegram Login Widget laden – erst nach ausdrücklicher
+    Einwilligung. Das Skript stammt von telegram.org; allein sein Abruf teilt
+    Telegram IP-Adresse und Gerätedaten mit, unabhängig davon, ob am Ende eine
+    Anmeldung zustande kommt. Die Anmeldung per Bot-Code kommt ohne jedes
+    Telegram-Asset aus und bleibt deshalb der einwilligungsfreie Standardweg.
+  */
   useEffect(() => {
     if (
+      !widgetConsent ||
       !loginInfo?.botConfigured ||
       !loginInfo.botUsername ||
       !widgetRef.current
@@ -74,12 +91,12 @@ export default function Login() {
       window.onTelegramAuth = undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loginInfo?.botConfigured, loginInfo?.botUsername]);
+  }, [widgetConsent, loginInfo?.botConfigured, loginInfo?.botUsername]);
 
   const botUsername = loginInfo?.botUsername;
 
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="relative flex min-h-screen items-center justify-center p-4 pb-16">
       {/* Farbschema schon vor der Anmeldung umstellbar */}
       <div className="fixed right-3 top-3">
         <ThemeToggle />
@@ -103,7 +120,32 @@ export default function Login() {
             <>
               <div className="space-y-3 text-center">
                 <p className="text-sm text-muted-foreground">{t.login.intro}</p>
-                <div ref={widgetRef} className="flex justify-center min-h-10" />
+                {widgetConsent ? (
+                  <div
+                    ref={widgetRef}
+                    className="flex justify-center min-h-10"
+                  />
+                ) : (
+                  <div className="space-y-2 rounded-md border border-dashed p-3 text-left">
+                    <p className="text-xs text-muted-foreground">
+                      {t.login.widgetNotice}
+                    </p>
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        localStorage.setItem(TELEGRAM_WIDGET_CONSENT_KEY, "1");
+                        setWidgetConsent(true);
+                      }}
+                    >
+                      <ShieldQuestion className="mr-2 h-4 w-4" />
+                      {t.login.widgetLoad}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      {t.login.widgetAlternative}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3">
@@ -197,6 +239,20 @@ export default function Login() {
           )}
         </CardContent>
       </Card>
+
+      {/* Vor der Anmeldung erreichbar: Die Informationspflicht nach Art. 13
+          DSGVO greift, bevor jemand ein Konto anlegt. */}
+      <nav className="absolute bottom-4 flex flex-wrap justify-center gap-x-4 gap-y-1 px-4 text-xs text-muted-foreground">
+        {LEGAL_DOCUMENTS.map(entry => (
+          <a
+            key={entry}
+            href={LEGAL_PATHS[entry]}
+            className="underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {t.legal[entry]}
+          </a>
+        ))}
+      </nav>
     </div>
   );
 }

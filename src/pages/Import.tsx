@@ -4,6 +4,7 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCopy,
+  ShieldAlert,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -234,6 +235,19 @@ export default function Import() {
                 {importPrompt}
               </pre>
             )}
+
+            {/*
+              Der Prompt lädt dazu ein, eine Rechnung in ein fremdes
+              Sprachmodell zu geben. filahub überträgt dabei selbst nichts –
+              aber Rechnungen tragen Namen, Anschrift und Zahlungsdaten, und
+              wer das nicht bedenkt, gibt sie unbeabsichtigt aus der Hand.
+              Der Hinweis steht bewusst hier und nicht nur in der
+              Datenschutzerklärung: gelesen wird er nur an dieser Stelle.
+            */}
+            <p className="flex gap-2 text-xs text-muted-foreground">
+              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t.import.privacyWarning}</span>
+            </p>
           </CardContent>
         </Card>
 
