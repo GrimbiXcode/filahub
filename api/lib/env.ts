@@ -1,14 +1,41 @@
 import "dotenv/config";
 
 /**
- * Wandelt ein literales `\n` in einen echten Zeilenumbruch.
+ * Macht aus einem Umgebungswert einen mehrzeiligen Text – egal, wie die
+ * Zeilenumbrüche dort hineingeraten sind.
  *
- * Nötig, weil `\n` nur in doppelt gequoteten `.env`-Werten expandiert wird –
- * in `docker-compose.yml` unter `environment:` oder bei `docker run -e`
- * dagegen nie. So schreibt man eine mehrzeilige Anschrift überall gleich.
+ * Es gibt dafür schlicht zu viele Wege, und keiner davon ist falsch:
+ *
+ *  - `\n` als **literale** Zeichenfolge. So landet es in einer nicht
+ *    gequoteten Konfigurationszeile, unter `environment:` in
+ *    `docker-compose.yml` und bei `docker run -e`.
+ *  - Ein **echter** Umbruch. So kommt es aus einem gequoteten Wert und aus
+ *    mehrzeiligen Eingabefeldern von Verwaltungsoberflächen.
+ *  - `\r\n` in beiden Formen. Windows schreibt es so, und manche
+ *    Web-Formulare schicken CRLF, auch wenn niemand danach gefragt hat.
+ *
+ * Ohne die `\r`-Behandlung blieb bei literalem `\r\n` ein sichtbares `\r`
+ * im Text stehen – in einem Impressum eine unschöne Art, aufzufallen.
+ *
+ * Leerräume am Zeilenrand fallen weg: Bei einer Anschrift sind sie nie
+ * gewollt, und am Zeilenende steuern zwei Leerzeichen in Markdown den
+ * Umbruch (siehe `fillOperator` in `src/lib/legal.ts`) – da soll nichts
+ * durcheinandergeraten, was der Betreiber nicht bewusst gesetzt hat.
  */
-function multiline(value: string | undefined): string {
-  return (value ?? "").replace(/\\n/g, "\n");
+export function multiline(value: string | undefined): string {
+  return (
+    (value ?? "")
+      // Literale Escapes zuerst, sonst bliebe der Backslash stehen.
+      .replace(/\\r\\n|\\n|\\r/g, "\n")
+      // Danach echte Zeilenenden vereinheitlichen.
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map(line => line.trim())
+      // Leerzeilen raus: Eine Anschrift ist ein zusammenhängender Block, und
+      // eine leere Zeile würde in Markdown einen neuen Absatz beginnen.
+      .filter(Boolean)
+      .join("\n")
+  );
 }
 
 function required(name: string): string {
@@ -83,7 +110,9 @@ export const env = {
    * nach Art. 28 DSGVO in der Datenschutzerklärung zu nennen. Ebenfalls
    * instanzspezifisch: Der eine hostet bei einem Anbieter, der Nächste im Keller.
    */
-  operatorHosting: process.env.LEGAL_OPERATOR_HOSTING ?? "",
+  // Wie die Anschrift mehrzeilig: Ein Anbieter mit Sitz und Rechenzentrum
+  // steht selten in einer Zeile.
+  operatorHosting: multiline(process.env.LEGAL_OPERATOR_HOSTING),
 
   /**
    * Wie viele vertrauenswürdige Proxys vor der App stehen. Bestimmt, welcher
