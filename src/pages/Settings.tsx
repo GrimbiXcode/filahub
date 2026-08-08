@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Download, LogOut, Trash2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { InstallAppCard } from "@/components/InstallAppCard";
 import { PageHeader } from "@/components/PageHeader";
 import { ThemeSegmentedControl } from "@/components/ThemeToggle";
 import {
@@ -272,9 +273,14 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Steht weit unten: eine einmalige Handlung, die niemand sucht,
+            während er Formate einstellt. */}
+        <InstallAppCard />
+
         {/* Betroffenenrechte: Auskunft, Datenübertragbarkeit, Löschung.
-            Bewusst zuunterst – gebraucht wird das selten, gefunden werden
-            muss es trotzdem. */}
+            Bewusst ganz zuunterst – gebraucht wird das selten, gefunden
+            werden muss es trotzdem, und eine Kontolöschung will man nicht
+            versehentlich streifen. */}
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">

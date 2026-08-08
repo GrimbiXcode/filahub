@@ -171,6 +171,25 @@ export const de = {
     regionalFormatLabel: "Zahlen- und Datumsformat",
     automatic: (vars: { value: string }) =>
       `Automatisch (Browser: ${vars.value})`,
+    install: "Schnellzugriff",
+    installButton: "Zum Home-Bildschirm hinzufügen",
+    installHint:
+      "Legt filahub als eigenständige App auf den Home-Bildschirm oder ins Dock – mit eigenem Symbol und ohne Adressleiste. Es wird nichts heruntergeladen, es bleibt dieselbe Webseite.",
+    installAlready: "filahub läuft bereits als installierte App.",
+    installDialogDescription:
+      "Der Weg dorthin gehört dem Browser, nicht der Seite – ein Knopf hier kann ihn nicht abkürzen. Für deinen Browser geht es so:",
+    installHowIos:
+      "Tippe unten in der Leiste auf „Teilen“ (Quadrat mit Pfeil nach oben), scrolle im Menü nach unten und wähle „Zum Home-Bildschirm“.",
+    installHowAndroid:
+      "Öffne das Browsermenü (drei Punkte oben rechts) und wähle „App installieren“ oder „Zum Startbildschirm hinzufügen“.",
+    installHowChromium:
+      "Klicke rechts in der Adressleiste auf das Installationssymbol (Bildschirm mit Pfeil). Fehlt es, findest du den Punkt im Browsermenü (drei Punkte) unter „Streamen, Speichern und Teilen“.",
+    installHowSafari:
+      "Wähle in der Menüleiste „Ablage“ und darin „Zum Dock hinzufügen“. Das gibt es ab macOS Sonoma.",
+    installHowFirefox:
+      "Firefox am Rechner kann Webseiten nicht als App installieren. Setze filahub als Lesezeichen – oder öffne die Seite in Chrome, Edge oder Safari, wenn du ein eigenes Symbol möchtest.",
+    installHowUnknown:
+      "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
     dataAndAccount: "Daten und Konto",
     exportHint:
       "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Rollen, Wägungen, Rollentypen, Lagerboxen, ausgeblendete Presets, eingereichte Vorschläge und offene Login-Codes. Das Format ist dasselbe, das der Import wieder einliest.",

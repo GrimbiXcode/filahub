@@ -320,6 +320,25 @@ MySQL schema – the same structure existing installations actually come from.
 - **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with
   the version and `latest`.
 
+## Acknowledgements
+
+The empty weights in the starter catalogue (`db/presets/catalog.ts`) are not
+our own measurements. They come from work other people did and share:
+
+- **[SpoolmanDB](https://github.com/Donkie/SpoolmanDB)** (MIT) – the filament
+  database behind [Spoolman](https://github.com/Donkie/Spoolman). It records
+  the empty weight per product line and spool size and is kept current by its
+  contributors. This is the main source for the catalogue.
+- **[SpoolVault – Empty Spool Weights by Brand](https://www.spoolvault.com/guides/empty-spool-weights.html)**
+  – a cross-check per brand and spool material.
+- **[MatterHackers – Empty Spool Weights](https://help.matterhackers.com/article/129-empty-spool-weights)**
+  – a long-standing reference list, useful for older spools.
+
+Manufacturers change spools without saying so, and cardboard spools take on
+water, so treat every catalogue value as a starting point rather than a
+measurement of the spool in your hand. Weigh the empty spool once and the
+number is yours – that is what the custom spool types are for.
+
 ## Security
 
 Found a vulnerability? Please report it privately – see
