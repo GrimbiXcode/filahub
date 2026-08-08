@@ -4,6 +4,7 @@ import { deletionConfirmationMatches } from "@contracts/account";
 import { clearSessionCookie } from "./lib/cookies";
 import { authedQuery, createRouter } from "./middleware";
 import { deleteUserAccount, exportUserData } from "./queries/account";
+import { recordAudit } from "./queries/audit";
 
 /**
  * Betroffenenrechte am eigenen Konto: Auskunft, Datenübertragbarkeit, Löschung.
@@ -21,7 +22,14 @@ export const accountRouter = createRouter({
    * landen im Cache von TanStack Query und blieben dort als vollständiger
    * Personendatensatz liegen. Ein Datenabzug soll fließen, nicht herumliegen.
    */
-  export: authedQuery.mutation(({ ctx }) => exportUserData(ctx.user.id)),
+  export: authedQuery.mutation(({ ctx }) => {
+    recordAudit({
+      event: "account.exported",
+      actorUserId: ctx.user.id,
+      ip: ctx.clientIp,
+    });
+    return exportUserData(ctx.user.id);
+  }),
 
   /**
    * Kontolöschung nach Art. 17 DSGVO.
@@ -39,6 +47,18 @@ export const accountRouter = createRouter({
           message: "Die Bestätigung stimmt nicht mit deinem Namen überein.",
         });
       }
+
+      /*
+        Vor der Löschung protokollieren: Danach ist die Benutzer-ID weg, und
+        der Eintrag ließe sich keinem Vorgang mehr zuordnen. `deleteUserAccount`
+        anonymisiert die Einträge anschließend selbst.
+      */
+      recordAudit({
+        event: "account.deleted",
+        actorUserId: ctx.user.id,
+        subjectUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
 
       const result = await deleteUserAccount(ctx.user.id);
 

@@ -43,6 +43,13 @@
       "when": 1786194092928,
       "tag": "0005_session_token_version",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786197262137,
+      "tag": "0006_audit_log",
+      "breakpoints": true
     }
   ]
 }

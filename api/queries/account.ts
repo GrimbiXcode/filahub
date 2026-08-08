@@ -77,6 +77,21 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     where: eq(schema.loginCodes.telegramId, profile.unionId),
   });
 
+  /*
+    Sicherheitsprotokoll, soweit es diese Person betrifft. Ohne `ipHash`:
+    Der Wert ist für die betroffene Person wertlos und würde nur einem
+    Dritten helfen, der den Export in die Hände bekommt.
+  */
+  const auditLog = await db
+    .select({
+      at: schema.auditLog.at,
+      event: schema.auditLog.event,
+      detail: schema.auditLog.detail,
+    })
+    .from(schema.auditLog)
+    .where(eq(schema.auditLog.actorUserId, userId))
+    .orderBy(schema.auditLog.at);
+
   return {
     formatVersion: ACCOUNT_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
@@ -88,6 +103,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     hiddenSpoolPresets,
     presetProposals,
     loginCodes,
+    auditLog,
   };
 }
 
@@ -201,7 +217,29 @@ export async function deleteUserAccount(
       .delete(schema.loginCodes)
       .where(eq(schema.loginCodes.telegramId, user.unionId));
 
-    // 11. Zuletzt das Konto selbst
+    /*
+      11. Sicherheitsprotokoll anonymisieren, nicht löschen.
+
+      Würden die Einträge mitgelöscht, wäre die Vorfallaufklärung mit einem
+      Klick auszuhebeln: Wer sich unbefugt Zugang verschafft hat, löscht das
+      Konto und damit die eigenen Spuren. Was bleibt, ist der Ablauf – Zeit,
+      Ereignis, gehashte Adresse –, nicht die Person. Nach der
+      Aufbewahrungsfrist von 90 Tagen verschwinden auch diese Zeilen
+      (siehe api/queries/audit.ts).
+
+      Gedeckt über Art. 17 Abs. 3 lit. b/e DSGVO; die Datenschutzerklärung
+      benennt es.
+    */
+    await tx
+      .update(schema.auditLog)
+      .set({ actorUserId: null, telegramId: null })
+      .where(eq(schema.auditLog.actorUserId, userId));
+    await tx
+      .update(schema.auditLog)
+      .set({ subjectUserId: null })
+      .where(eq(schema.auditLog.subjectUserId, userId));
+
+    // 12. Zuletzt das Konto selbst
     await tx.delete(schema.users).where(eq(schema.users.id, userId));
 
     return { anonymizedProposals: anonymized.length };

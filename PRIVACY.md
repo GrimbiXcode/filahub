@@ -27,14 +27,15 @@ details into the Markdown** — the next person to pull the image would ship the
 
 ## What the application stores
 
-| Data                                                                                                            | Where              | How long                            |
-| --------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------- |
-| Telegram ID, display name, Telegram username                                                                    | `users`            | until the account is deleted        |
-| Last sign-in timestamp                                                                                          | `users`            | until the account is deleted        |
-| Display settings (language, currency, format)                                                                   | `users`            | until the account is deleted        |
-| Spools, weigh-ins, spool types, storage boxes — including prices, purchase dates, locations and free-text notes | own tables         | until the account is deleted        |
-| Preset proposals with reasoning and moderation record                                                           | `preset_proposals` | see "Deletion" below                |
-| Sign-in codes with Telegram ID and name                                                                         | `login_codes`      | **purged automatically after 24 h** |
+| Data                                                                                                                                    | Where              | How long                               |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------- |
+| Telegram ID, display name, Telegram username                                                                                            | `users`            | until the account is deleted           |
+| Last sign-in timestamp                                                                                                                  | `users`            | until the account is deleted           |
+| Display settings (language, currency, format)                                                                                           | `users`            | until the account is deleted           |
+| Spools, weigh-ins, spool types, storage boxes — including prices, purchase dates, locations and free-text notes                         | own tables         | until the account is deleted           |
+| Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals` | see "Deletion" below                   |
+| Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`      | **purged automatically after 24 h**    |
+| Security log: sign-ins, failed attempts, deletions, moderation decisions — with an HMAC of the client address, never the address itself | `audit_log`        | **purged automatically after 90 days** |
 
 No profile pictures. No email addresses — the column existed until 1.1.1 and was
 dropped, because nothing ever wrote to it except the legacy MySQL import.
@@ -95,8 +96,23 @@ become aware of a personal data breach. Swiss law (Art. 24 revFADP) says "as
 soon as possible" without a fixed deadline. Either way you need to know who your
 authority is **before** it happens — look it up now, not during.
 
-The app writes no audit log yet. If you need to reconstruct who did what, you
-have Postgres timestamps and whatever your reverse proxy logs. Plan accordingly.
+The `audit_log` table is what you reconstruct from. It records sign-ins and
+sign-outs, failed and blocked attempts, rate-limit hits, invalid widget
+signatures, account exports and deletions, and moderation decisions.
+
+There is no admin screen for it; query it directly:
+
+```sql
+SELECT at, event, "actorUserId", detail
+FROM audit_log
+WHERE at > now() - interval '7 days'
+ORDER BY at DESC;
+```
+
+Client addresses are stored as an HMAC keyed with `APP_SECRET`, never in the
+clear. You can still recognise the same address across entries — compute the
+HMAC of an address you suspect and compare. Rotating `APP_SECRET` breaks that
+correlation for older rows, which is one more reason not to rotate it casually.
 
 ## Open registration
 

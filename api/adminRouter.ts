@@ -13,6 +13,7 @@ import {
   type ProposalPayload,
 } from "@contracts/presets";
 import { adminQuery, createRouter } from "./middleware";
+import { recordAudit } from "./queries/audit";
 import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
   canClaimRun,
@@ -434,6 +435,13 @@ const proposalAdminRouter = createRouter({
         message: "Der Vorschlag wurde zwischenzeitlich bearbeitet.",
       });
     }
+    recordAudit({
+      event: "proposal.approved",
+      actorUserId: ctx.user.id,
+      subjectUserId: proposal.userId,
+      ip: ctx.clientIp,
+      detail: { proposalId: input.id, resultId },
+    });
     return { ok: true, resultId };
   }),
 
@@ -460,6 +468,14 @@ const proposalAdminRouter = createRouter({
           message: "Der Vorschlag wurde bereits bearbeitet.",
         });
       }
+      // Die Begründung selbst bleibt draußen – sie ist Freitext und steht
+      // ohnehin am Vorschlag.
+      recordAudit({
+        event: "proposal.rejected",
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+        detail: { proposalId: input.id },
+      });
       return { ok: true };
     }),
 });

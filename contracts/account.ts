@@ -29,6 +29,13 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "hiddenSpoolPresets",
   "presetProposals",
   "loginCodes",
+  /*
+    Das Sicherheitsprotokoll gehört dazu: Es enthält Ereignisse über diese
+    Person, also ihre Daten. Auskunft heißt Auskunft – auch über das, was
+    unbequem sein könnte. Die gehashte Adresse bleibt draußen, sie sagt der
+    betroffenen Person nichts und wäre nur für Dritte interessant.
+  */
+  "auditLog",
 ] as const;
 
 export type AccountExportSection = (typeof ACCOUNT_EXPORT_SECTIONS)[number];

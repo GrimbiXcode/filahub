@@ -1,5 +1,6 @@
 import { lt } from "drizzle-orm";
 import { loginCodes } from "@db/schema";
+import { purgeAuditLog } from "./audit";
 import { getDb } from "./connection";
 
 /**
@@ -37,11 +38,31 @@ export async function purgeExpiredLoginCodes(): Promise<number> {
  */
 export async function runRetentionSweep(): Promise<void> {
   try {
-    const removed = await purgeExpiredLoginCodes();
-    if (removed > 0) {
-      console.log(`[retention] ${removed} abgelaufene Login-Codes gelöscht.`);
+    const codes = await purgeExpiredLoginCodes();
+    if (codes > 0) {
+      console.log(`[retention] ${codes} abgelaufene Login-Codes gelöscht.`);
     }
   } catch (error) {
-    console.warn("[retention] Löschlauf fehlgeschlagen:", error);
+    console.warn(
+      "[retention] Löschlauf für Login-Codes fehlgeschlagen:",
+      error
+    );
+  }
+
+  /*
+    Eigener try/catch: Scheitert das eine, soll das andere trotzdem laufen.
+    Beides in einem Block hätte zur Folge, dass ein Fehler bei den Codes das
+    Audit-Log unbegrenzt anwachsen ließe – und das ist selbst personenbezogen.
+  */
+  try {
+    const entries = await purgeAuditLog();
+    if (entries > 0) {
+      console.log(`[retention] ${entries} alte Protokolleinträge gelöscht.`);
+    }
+  } catch (error) {
+    console.warn(
+      "[retention] Löschlauf für das Audit-Log fehlgeschlagen:",
+      error
+    );
   }
 }

@@ -3,6 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { consumeRateLimit } from "./lib/rateLimit";
+import { recordAudit } from "./queries/audit";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -64,6 +65,15 @@ export function rateLimited(options: {
     const bucket = `${options.key}:${ctx.clientIp ?? "unbekannt"}`;
     const result = consumeRateLimit(bucket, options.limit, options.windowMs);
     if (!result.allowed) {
+      /*
+        Nur beim Zuschlagen protokollieren, nicht bei jedem Versuch – sonst
+        schriebe ein Angriff genau das Protokoll voll, das ihn aufklären soll.
+      */
+      recordAudit({
+        event: "login.rate_limited",
+        ip: ctx.clientIp,
+        detail: { bucket: options.key },
+      });
       throw new TRPCError({
         code: "TOO_MANY_REQUESTS",
         message: `Zu viele Versuche. Bitte in ${result.retryAfterSeconds} Sekunden erneut probieren.`,

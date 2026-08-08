@@ -522,3 +522,59 @@ export const migrationState = pgTable("migration_state", {
 
 export type MigrationState = typeof migrationState.$inferSelect;
 export type InsertMigrationState = typeof migrationState.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Sicherheitsprotokoll
+// ---------------------------------------------------------------------------
+
+/**
+ * Audit-Log: sicherheitsrelevante Ereignisse.
+ *
+ * Vorher ließ sich ein Vorfall aus den Aufzeichnungen der Anwendung heraus
+ * gar nicht rekonstruieren – es gab nur Zeitstempel in den Fachtabellen.
+ *
+ * Das Protokoll ist selbst personenbezogen und deshalb bewusst schmal
+ * gehalten: Ereignistyp, Zeitpunkt, Beteiligte, ein strukturiertes Detail.
+ * Kein Freitext, keine Klartext-IP, keine Nutzungsdaten. Aufbewahrung
+ * 90 Tage, siehe AUDIT_RETENTION_DAYS in contracts/audit.ts.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    at: tsColumn("at").defaultNow().notNull(),
+    /** Ereignisname aus AUDIT_EVENTS (contracts/audit.ts) */
+    event: varchar("event", { length: 64 }).notNull(),
+    /**
+     * Wer gehandelt hat. `NULL`, wenn niemand angemeldet war – etwa bei einem
+     * fehlgeschlagenen Anmeldeversuch – oder wenn das Konto gelöscht wurde.
+     */
+    actorUserId: bigint("actorUserId", { mode: "number" }),
+    /** Wen es betraf, falls abweichend vom Handelnden. */
+    subjectUserId: bigint("subjectUserId", { mode: "number" }),
+    /**
+     * Telegram-ID bei Ereignissen vor der Anmeldung – dort gibt es noch kein
+     * Konto, auf das sich verweisen ließe.
+     */
+    telegramId: varchar("telegramId", { length: 64 }),
+    /**
+     * HMAC-SHA256 der Client-Adresse mit `APP_SECRET`, nie die Adresse selbst.
+     *
+     * Ein einfacher Hash brächte hier nichts: Der IPv4-Raum hat 2^32 Werte und
+     * ist in Minuten durchprobiert. Erst der Schlüssel macht die Zuordnung für
+     * Dritte unmöglich – wiedererkennen lässt sich dieselbe Adresse trotzdem,
+     * und genau das braucht die Aufklärung.
+     */
+    ipHash: varchar("ipHash", { length: 64 }),
+    /** Strukturierte Zusatzangaben, bewusst kein Freitextfeld. */
+    detail: jsonb("detail"),
+  },
+  t => [
+    index("audit_log_at_idx").on(t.at),
+    index("audit_log_event_at_idx").on(t.event, t.at),
+    index("audit_log_actor_idx").on(t.actorUserId),
+  ]
+);
+
+export type AuditLogEntry = typeof auditLog.$inferSelect;
+export type InsertAuditLogEntry = typeof auditLog.$inferInsert;

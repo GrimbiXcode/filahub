@@ -5,6 +5,7 @@ import { currencySchema, localeSchema } from "@contracts/locale";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { clearSessionCookie, sessionCookie } from "./lib/cookies";
 import { env } from "./lib/env";
+import { recordAudit } from "./queries/audit";
 import {
   createRouter,
   authedQuery,
@@ -30,9 +31,15 @@ import {
  * unbemerkt eine offene Instanz und wurde damit ungewollt Verantwortlicher
  * für die Daten Fremder.
  */
-function assertAllowed(telegramId: string) {
+function assertAllowed(telegramId: string, ip: string | null) {
   if (env.telegramAllowedIds.length === 0) {
     if (!env.telegramOpenRegistration) {
+      recordAudit({
+        event: "login.blocked",
+        telegramId,
+        ip,
+        detail: { reason: "registration_closed" },
+      });
       throw new TRPCError({
         code: "FORBIDDEN",
         message:
@@ -43,6 +50,12 @@ function assertAllowed(telegramId: string) {
   }
 
   if (!env.telegramAllowedIds.includes(telegramId)) {
+    recordAudit({
+      event: "login.blocked",
+      telegramId,
+      ip,
+      detail: { reason: "not_allowlisted" },
+    });
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Dieses Konto ist für den Zugriff nicht freigeschaltet.",
@@ -114,6 +127,16 @@ export const authRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const entry = await redeemLoginCode(input.code);
       if (!entry) {
+        /*
+          Bewusst ohne den eingegebenen Code im Protokoll: Wer die
+          Protokolltabelle lesen kann, bekäme sonst eine Liste gerade
+          gültiger Codes frei Haus.
+        */
+        recordAudit({
+          event: "login.failed",
+          ip: ctx.clientIp,
+          detail: { method: "code" },
+        });
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message:
@@ -121,13 +144,21 @@ export const authRouter = createRouter({
         });
       }
 
-      assertAllowed(entry.telegramId);
+      assertAllowed(entry.telegramId, ctx.clientIp);
 
       const user = await upsertUser({
         unionId: entry.telegramId,
         name: entry.telegramName ?? entry.telegramUsername,
         telegramUsername: entry.telegramUsername,
         lastSignInAt: new Date(),
+      });
+
+      recordAudit({
+        event: "login.success",
+        actorUserId: user.id,
+        telegramId: entry.telegramId,
+        ip: ctx.clientIp,
+        detail: { method: "code" },
       });
 
       const token = await signSessionToken({
@@ -170,6 +201,16 @@ export const authRouter = createRouter({
         });
       }
       if (!verifyTelegramWidgetData(env.telegramBotToken, input)) {
+        /*
+          Hier lohnt das Hinsehen: Eine ungültige Signatur entsteht nicht
+          beim normalen Gebrauch. Entweder ist der Bot-Token gewechselt
+          worden – oder jemand versucht, sich Anmeldedaten zu bauen.
+        */
+        recordAudit({
+          event: "login.widget_invalid",
+          telegramId: String(input.id),
+          ip: ctx.clientIp,
+        });
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Die Telegram-Anmeldung konnte nicht verifiziert werden.",
@@ -177,7 +218,7 @@ export const authRouter = createRouter({
       }
 
       const telegramId = String(input.id);
-      assertAllowed(telegramId);
+      assertAllowed(telegramId, ctx.clientIp);
 
       const name =
         [input.first_name, input.last_name].filter(Boolean).join(" ") ||
@@ -198,6 +239,14 @@ export const authRouter = createRouter({
         lastSignInAt: new Date(),
       });
 
+      recordAudit({
+        event: "login.success",
+        actorUserId: user.id,
+        telegramId,
+        ip: ctx.clientIp,
+        detail: { method: "widget" },
+      });
+
       const token = await signSessionToken({
         unionId: telegramId,
         tokenVersion: user.tokenVersion,
@@ -214,6 +263,11 @@ export const authRouter = createRouter({
    * am Telefon abmeldet, will nicht zugleich am Rechner hinausfliegen.
    */
   logout: authedQuery.mutation(async ({ ctx }) => {
+    recordAudit({
+      event: "logout",
+      actorUserId: ctx.user.id,
+      ip: ctx.clientIp,
+    });
     ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
     return { success: true };
   }),
@@ -225,6 +279,11 @@ export const authRouter = createRouter({
    */
   logoutAllDevices: authedQuery.mutation(async ({ ctx }) => {
     await revokeSessions(ctx.user.id);
+    recordAudit({
+      event: "session.revoked",
+      actorUserId: ctx.user.id,
+      ip: ctx.clientIp,
+    });
     ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
     return { success: true };
   }),

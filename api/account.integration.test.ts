@@ -132,12 +132,14 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese fünf plus `profile` (users), `weighings` (hängt am Material) und
-      `loginCodes` (hängt an der Telegram-ID) ergeben die Abschnitte des
-      Exports. Ändert sich die linke Seite, muss die rechte nachziehen.
+      Diese fünf plus vier, die den Personenbezug über eine andere Spalte
+      führen: `profile` (users.id), `weighings` (über das Material),
+      `loginCodes` (Telegram-ID) und `auditLog` (actorUserId). Ändert sich
+      die linke Seite, muss die rechte nachziehen.
     */
     expect([...ACCOUNT_EXPORT_SECTIONS].sort()).toEqual(
       [
+        "auditLog",
         "hiddenSpoolPresets",
         "loginCodes",
         "materials",
@@ -341,6 +343,46 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
   it("ist in sich abgeschlossen – ein zweiter Lauf schlägt fehl", async () => {
     await deleteUserAccount(owner.id);
     await expect(deleteUserAccount(owner.id)).rejects.toThrow();
+  });
+
+  it("anonymisiert das Sicherheitsprotokoll, statt es zu löschen", async () => {
+    /*
+      Würde das Protokoll mitgelöscht, wäre die Vorfallaufklärung mit einem
+      Klick auszuhebeln: Wer sich unbefugt Zugang verschafft hat, löscht das
+      Konto und damit die eigenen Spuren.
+    */
+    await db()
+      .insert(schema.auditLog)
+      .values([
+        {
+          event: "login.success",
+          actorUserId: owner.id,
+          telegramId: owner.unionId,
+          ipHash: "a".repeat(64),
+        },
+        {
+          event: "proposal.approved",
+          actorUserId: stranger.id,
+          subjectUserId: owner.id,
+        },
+      ]);
+
+    await deleteUserAccount(owner.id);
+
+    const entries = await db().query.auditLog.findMany();
+    expect(entries).toHaveLength(2);
+
+    const own = entries.find(e => e.event === "login.success")!;
+    expect(own.actorUserId).toBeNull();
+    expect(own.telegramId).toBeNull();
+    // Ablauf und Adressfingerabdruck bleiben – ohne sie wäre nichts gewonnen.
+    expect(own.ipHash).toBe("a".repeat(64));
+    expect(own.at).toBeInstanceOf(Date);
+
+    const foreign = entries.find(e => e.event === "proposal.approved")!;
+    expect(foreign.subjectUserId).toBeNull();
+    // Der fremde Handelnde bleibt unangetastet.
+    expect(foreign.actorUserId).toBe(stranger.id);
   });
 
   it("hinterlässt keine offenen Login-Codes", async () => {

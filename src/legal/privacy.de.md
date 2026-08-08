@@ -16,15 +16,16 @@ auslösen – das geht schneller.
 
 ## 2. Welche Daten verarbeitet werden
 
-| Daten                                                                                                                | Zweck                                 | Rechtsgrundlage                               | Aufbewahrung                                |
-| -------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | --------------------------------------------- | ------------------------------------------- |
-| Telegram-ID, Anzeigename, Telegram-Benutzername                                                                      | Konto und Anmeldung                   | Art. 6 Abs. 1 lit. b DSGVO (Vertrag)          | bis zur Löschung des Kontos                 |
-| Zeitpunkt der letzten Anmeldung                                                                                      | Betrieb, Erkennung ungenutzter Konten | Art. 6 Abs. 1 lit. f (berechtigtes Interesse) | bis zur Löschung des Kontos                 |
-| Bestand: Rollen, Wägungen, Rollentypen, Lagerboxen – samt Preisen, Kaufdaten, Kurz-Kennungen, Lagerorten und Notizen | Kernfunktion der Anwendung            | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
-| Einstellungen: Sprache, Währung, Zahlenformat, zuletzt gesehene Neuerungen                                           | Darstellung                           | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
-| Anmeldecodes: Telegram-ID, Telegram-Name, Code                                                                       | Anmeldung ohne Widget                 | Art. 6 Abs. 1 lit. b                          | **automatisch nach 24 Stunden gelöscht**    |
-| Preset-Vorschläge: Inhalt, Begründung, Einreicher, Moderationsvermerk                                                | Pflege des gemeinsamen Katalogs       | Art. 6 Abs. 1 lit. b und lit. f               | siehe Abschnitt 8                           |
-| Server-Protokolle beim Hoster, u. a. IP-Adresse                                                                      | Betrieb und Abwehr von Angriffen      | Art. 6 Abs. 1 lit. f                          | nach Vorgabe des Hosters, siehe Abschnitt 4 |
+| Daten                                                                                                                                                                                      | Zweck                                  | Rechtsgrundlage                               | Aufbewahrung                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------- | ------------------------------------------- |
+| Telegram-ID, Anzeigename, Telegram-Benutzername                                                                                                                                            | Konto und Anmeldung                    | Art. 6 Abs. 1 lit. b DSGVO (Vertrag)          | bis zur Löschung des Kontos                 |
+| Zeitpunkt der letzten Anmeldung                                                                                                                                                            | Betrieb, Erkennung ungenutzter Konten  | Art. 6 Abs. 1 lit. f (berechtigtes Interesse) | bis zur Löschung des Kontos                 |
+| Bestand: Rollen, Wägungen, Rollentypen, Lagerboxen – samt Preisen, Kaufdaten, Kurz-Kennungen, Lagerorten und Notizen                                                                       | Kernfunktion der Anwendung             | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
+| Einstellungen: Sprache, Währung, Zahlenformat, zuletzt gesehene Neuerungen                                                                                                                 | Darstellung                            | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
+| Anmeldecodes: Telegram-ID, Telegram-Name, Code                                                                                                                                             | Anmeldung ohne Widget                  | Art. 6 Abs. 1 lit. b                          | **automatisch nach 24 Stunden gelöscht**    |
+| Preset-Vorschläge: Inhalt, Begründung, Einreicher, Moderationsvermerk                                                                                                                      | Pflege des gemeinsamen Katalogs        | Art. 6 Abs. 1 lit. b und lit. f               | siehe Abschnitt 8                           |
+| Server-Protokolle beim Hoster, u. a. IP-Adresse                                                                                                                                            | Betrieb und Abwehr von Angriffen       | Art. 6 Abs. 1 lit. f                          | nach Vorgabe des Hosters, siehe Abschnitt 4 |
+| Sicherheitsprotokoll: An- und Abmeldungen, fehlgeschlagene Versuche, Kontolöschungen, Moderationsentscheidungen – mit Zeitpunkt und einem **verschlüsselten Fingerabdruck** der IP-Adresse | Erkennung und Aufklärung von Vorfällen | Art. 6 Abs. 1 lit. f                          | **90 Tage**                                 |
 
 Freitextfelder wie Notizen oder Lagerort füllst du selbst. Was du dort
 hineinschreibst, wird mitgespeichert – auch wenn es mit Filament nichts zu tun
@@ -143,6 +144,13 @@ Konten verweisen auf diese Katalogeinträge, ein Mitlöschen würde deren Bestan
 beschädigen. Der Eintrag selbst lässt danach keinen Rückschluss mehr auf dich
 zu. Hast du als Administrator Vorschläge moderiert, bleibt die Entscheidung
 nachvollziehbar, dein Name wird auch dort entfernt.
+
+Einträge im **Sicherheitsprotokoll** werden anonymisiert statt gelöscht: Der
+Ablauf bleibt stehen, der Bezug zu deinem Konto verschwindet. Der Grund ist
+kein Vorbehalt gegen dich, sondern die Wirksamkeit des Protokolls – ließe es
+sich durch eine Kontolöschung leeren, könnte jemand, der sich unbefugt Zugang
+verschafft hat, damit seine eigenen Spuren beseitigen. Spätestens nach 90 Tagen
+verschwinden auch diese Zeilen (Art. 17 Abs. 3 lit. b und e DSGVO).
 
 **Beschwerderecht.** Du kannst dich bei einer Aufsichtsbehörde beschweren – in
 der Schweiz beim Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten

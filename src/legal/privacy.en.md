@@ -16,15 +16,16 @@ faster.
 
 ## 2. What data is processed
 
-| Data                                                                                                                    | Purpose                               | Legal basis                        | Retention                                |
-| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| Telegram ID, display name, Telegram username                                                                            | account and sign-in                   | Art. 6(1)(b) GDPR (contract)       | until the account is deleted             |
-| Time of last sign-in                                                                                                    | operation, spotting dormant accounts  | Art. 6(1)(f) (legitimate interest) | until the account is deleted             |
-| Stock: spools, weigh-ins, spool types, storage boxes – including prices, purchase dates, short IDs, locations and notes | core function of the application      | Art. 6(1)(b)                       | until the account is deleted             |
-| Settings: language, currency, number format, last release notes seen                                                    | presentation                          | Art. 6(1)(b)                       | until the account is deleted             |
-| Sign-in codes: Telegram ID, Telegram name, code                                                                         | signing in without the widget         | Art. 6(1)(b)                       | **deleted automatically after 24 hours** |
-| Preset proposals: content, reasoning, submitter, moderation record                                                      | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 8                            |
-| Server logs at the host, including IP address                                                                           | operation and defence against attacks | Art. 6(1)(f)                       | as configured by the host, see section 4 |
+| Data                                                                                                                                                                 | Purpose                               | Legal basis                        | Retention                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| Telegram ID, display name, Telegram username                                                                                                                         | account and sign-in                   | Art. 6(1)(b) GDPR (contract)       | until the account is deleted             |
+| Time of last sign-in                                                                                                                                                 | operation, spotting dormant accounts  | Art. 6(1)(f) (legitimate interest) | until the account is deleted             |
+| Stock: spools, weigh-ins, spool types, storage boxes – including prices, purchase dates, short IDs, locations and notes                                              | core function of the application      | Art. 6(1)(b)                       | until the account is deleted             |
+| Settings: language, currency, number format, last release notes seen                                                                                                 | presentation                          | Art. 6(1)(b)                       | until the account is deleted             |
+| Sign-in codes: Telegram ID, Telegram name, code                                                                                                                      | signing in without the widget         | Art. 6(1)(b)                       | **deleted automatically after 24 hours** |
+| Preset proposals: content, reasoning, submitter, moderation record                                                                                                   | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 8                            |
+| Server logs at the host, including IP address                                                                                                                        | operation and defence against attacks | Art. 6(1)(f)                       | as configured by the host, see section 4 |
+| Security log: sign-ins and sign-outs, failed attempts, account deletions, moderation decisions – with a timestamp and an **encrypted fingerprint** of the IP address | detecting and investigating incidents | Art. 6(1)(f)                       | **90 days**                              |
 
 Free-text fields such as notes or location are filled in by you. Whatever you
 put there is stored along with the rest – even if it has nothing to do with
@@ -136,6 +137,13 @@ and without your reasoning. The reason: other accounts reference those catalogue
 entries, and removing them would damage their stock. The entry itself no longer
 allows any conclusion about you. If you moderated proposals as an
 administrator, the decision stays traceable but your name is removed there too.
+
+Entries in the **security log** are anonymised rather than deleted: the sequence
+of events remains, the link to your account does not. The reason is not
+suspicion of you but the usefulness of the log — if deleting an account emptied
+it, anyone who gained access without permission could erase their own traces
+that way. Those rows disappear after 90 days at the latest (Art. 17(3)(b) and
+(e) GDPR).
 
 **Right to lodge a complaint.** You may complain to a supervisory authority – in
 Switzerland the Federal Data Protection and Information Commissioner (FDPIC), in

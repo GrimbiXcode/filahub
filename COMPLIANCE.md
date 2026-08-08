@@ -144,6 +144,9 @@ For Art. 32 GDPR / Art. 8 revFADP. What the software provides:
   `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`; HSTS in production
 - **Data minimisation**: sign-in codes purged after 24 h; no profile pictures;
   no email addresses
+- **Security logging**: sign-ins, failed and blocked attempts, rate-limit hits,
+  account exports and deletions, moderation decisions — client addresses stored
+  as an HMAC keyed with `APP_SECRET`, never in the clear, purged after 90 days
 - **SQL injection**: Drizzle ORM throughout; the few raw fragments use only
   module constants and the identifier escaper
 
@@ -153,9 +156,8 @@ agreement with the hosting provider.
 
 Known gaps, deliberately recorded rather than glossed over:
 
-- **No audit log.** Sign-ins, failed attempts, admin actions and role changes
-  leave no trace beyond database timestamps. This is the largest remaining gap:
-  an incident could not be reconstructed from the application's own records.
+- **No admin screen for the security log.** The `audit_log` table is written
+  and purged automatically, but reading it means querying Postgres directly.
 - **No coverage measurement**, and no test for the authorisation boundary as a
   whole — though account deletion, export, session handling, the rate limiter
   and role assignment are covered.
@@ -166,18 +168,26 @@ Known gaps, deliberately recorded rather than glossed over:
 
 ## Erasure concept
 
-| Data                                                                        | On account deletion                          |
-| --------------------------------------------------------------------------- | -------------------------------------------- |
-| Own stock: materials, weigh-ins, spool types, storage boxes, hidden presets | deleted                                      |
-| Proposals — pending, rejected, withdrawn                                    | deleted                                      |
-| Proposals — accepted                                                        | anonymised: `userId` and comment set to NULL |
-| Global catalogue entries                                                    | kept; they carry no personal data            |
-| Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                     |
-| Sign-in codes                                                               | deleted                                      |
-| Account                                                                     | deleted                                      |
+| Data                                                                        | On account deletion                                                              |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Own stock: materials, weigh-ins, spool types, storage boxes, hidden presets | deleted                                                                          |
+| Proposals — pending, rejected, withdrawn                                    | deleted                                                                          |
+| Proposals — accepted                                                        | anonymised: `userId` and comment set to NULL                                     |
+| Global catalogue entries                                                    | kept; they carry no personal data                                                |
+| Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                                                         |
+| Sign-in codes                                                               | deleted                                                                          |
+| Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
+| Account                                                                     | deleted                                                                          |
 
-Sign-in codes are additionally purged after 24 hours regardless of any deletion
-request (`api/queries/retention.ts`).
+Sign-in codes are additionally purged after 24 hours, and security log entries
+after 90 days, regardless of any deletion request
+(`api/queries/retention.ts`).
+
+Security log entries are anonymised rather than deleted for a specific reason:
+if deleting an account emptied the log, anyone who gained unauthorised access
+could erase their own traces by deleting the account they broke into. Art. 17(3)
+lit. b and e cover keeping the sequence of events; what goes is the link to the
+person.
 
 The reasoning for keeping accepted proposals is in
 `deleteUserAccount` and in the privacy policy shown to users. It rests on
