@@ -144,6 +144,25 @@ export const en: Messages = {
     regionalFormatLabel: "Number and date format",
     automatic: (vars: { value: string }) =>
       `Automatic (browser: ${vars.value})`,
+    install: "Quick access",
+    installButton: "Add to home screen",
+    installHint:
+      "Puts filahub on your home screen or in the dock as an app of its own – with its own icon and no address bar. Nothing is downloaded; it stays the same website.",
+    installAlready: "filahub is already running as an installed app.",
+    installDialogDescription:
+      "Getting there is the browser's job, not the page's – a button here cannot shortcut it. For your browser:",
+    installHowIos:
+      "Tap “Share” in the bar at the bottom (the square with an arrow), scroll down the menu and pick “Add to Home Screen”.",
+    installHowAndroid:
+      "Open the browser menu (three dots, top right) and pick “Install app” or “Add to home screen”.",
+    installHowChromium:
+      "Click the install icon at the right of the address bar (a screen with an arrow). If it is not there, look in the browser menu (three dots) under “Cast, save and share”.",
+    installHowSafari:
+      "Choose “File” in the menu bar, then “Add to Dock”. This needs macOS Sonoma or later.",
+    installHowFirefox:
+      "Firefox on the desktop cannot install websites as apps. Bookmark filahub instead – or open it in Chrome, Edge or Safari if you want an icon of its own.",
+    installHowUnknown:
+      "Look for “Install app”, “Add to home screen” or “Add to dock” in your browser's menu. What the entry is called is up to the browser.",
   },
 
   releaseNotes: {

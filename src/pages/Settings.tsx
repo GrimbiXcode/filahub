@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
+import { InstallAppCard } from "@/components/InstallAppCard";
 import { PageHeader } from "@/components/PageHeader";
 import { ThemeSegmentedControl } from "@/components/ThemeToggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -202,6 +203,10 @@ export default function Settings() {
             </dl>
           </CardContent>
         </Card>
+
+        {/* Steht zuunterst: eine einmalige Handlung, die niemand sucht,
+            während er Formate einstellt. */}
+        <InstallAppCard />
       </div>
     </AuthLayout>
   );
