@@ -9,6 +9,10 @@ Telegram-only login.
 **Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
 Drizzle ORM + PostgreSQL (database)
 
+[Product page](https://grimbixcode.github.io/filahub/) ·
+[Live instance](https://filahub.weblabor.io) ·
+[Container images](https://github.com/GrimbiXcode/filahub/pkgs/container/filahub)
+
 ---
 
 ## 1. Create a Telegram bot
@@ -283,3 +287,21 @@ MySQL schema – the same structure existing installations actually come from.
   the build works.
 - **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with
   the version and `latest`.
+
+## Security
+
+Found a vulnerability? Please report it privately – see
+[SECURITY.md](SECURITY.md). Don't open a public issue for it.
+
+## License
+
+filahub is free software under the **GNU Affero General Public License,
+version 3 or later** ([LICENSE](LICENSE)).
+
+You may run, study, modify and redistribute it. If you distribute it, or run a
+**modified** version and let other people use it over a network, you have to
+offer those people the corresponding source under the same license (AGPL
+§ 13). Running an unmodified copy for yourself carries no such obligation.
+
+The software comes with **no warranty and no liability** to the extent
+permitted by law (AGPL §§ 15–17).

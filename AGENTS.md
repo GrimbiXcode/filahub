@@ -1,9 +1,10 @@
-# Filament-Lager
+# filahub
 
 Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filamente mit
 Rollentypen (Spule/Verpackung) und Lagerboxen (Drybox) inkl. Leergewicht
 (Tara), Wägungen mit automatischer Restmengenberechnung, Kurz-Kennungen zum
-schnellen Wiederfinden, Login ausschließlich über Telegram.
+schnellen Wiederfinden, Login ausschließlich über Telegram. Die Oberfläche
+spricht Deutsch und Englisch (umschaltbar pro Benutzer).
 
 ## Tech-Stack
 
@@ -156,6 +157,51 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   dauerhaft unangetastet. Für inhaltliche Korrekturen am Startkatalog
   `PRESET_SEED_REVISION` erhöhen.
 
+## Sprachen (i18n)
+
+Die Oberfläche gibt es auf Deutsch und Englisch. Umgeschaltet wird pro
+**Benutzer** in den Einstellungen (`users.language`, `NULL` = Sprache des
+Browsers) – bewusst getrennt von `users.locale`, das nur Zahlen-, Gewichts-
+und Datumsformate steuert. Wer die Oberfläche englisch will, will nicht
+zwangsläufig auch US-Datumsformate.
+
+- `contracts/i18n.ts` – Sprachliste, zod-Schema, `languageFromTag()`
+- `src/messages/de.ts` – **Leitsprache**; `Messages = typeof de`
+- `src/messages/en.ts` – als `Messages` typisiert, also ein Abbild von `de.ts`
+- `src/providers/i18n.tsx` – liest `users.language`, setzt `<html lang>`
+- `src/lib/i18nContext.ts` – `useT()` (nur Texte) bzw. `useI18n()`
+  (zusätzlich `language`), plus `TextKey<S>`
+
+Zugriff läuft über Objektpfade statt Schlüsselstrings:
+
+```tsx
+const t = useT();
+<h1>{t.home.title}</h1>
+<p>{t.home.statMaterialsLow({ count: 3 })}</p>
+```
+
+Damit ist ein Tippfehler oder ein in `en.ts` vergessener Eintrag ein
+**Compile-Fehler**, kein leeres Feld zur Laufzeit. Werte werden nur dort über
+Funktionen eingesetzt, wo es nötig ist.
+
+Regeln:
+
+- Keine Zeichenkette direkt ins JSX – auch nicht in `aria-label`, `title`,
+  `placeholder` oder `toast.*`.
+- Tabellen wie Navigations- oder Sortierlisten führen den **Schlüssel**
+  (`label: "overview"`), nicht den fertigen Text – sonst wäre die Sprache beim
+  Modulladen eingefroren. Typ dafür: `TextKey<"nav">`.
+- Zahlen, Gewichte, Preise und Datumsangaben kommen weiter aus `useFormat()`.
+- Währungs- und Locale-Namen in den Einstellungen liefert `Intl.DisplayNames`
+  (`currencyLabel`/`localeLabel` in `contracts/locale.ts`), nicht der Katalog.
+- Der Produktname `filahub` steht als `APP_NAME` in `src/const.ts` und wird
+  nicht übersetzt.
+- Der Massenimport-Prompt existiert in beiden Sprachen
+  (`src/lib/importPrompt.ts`); die **JSON-Schlüssel bleiben deutsch**, sie sind
+  Teil des Vertrags in `contracts/import.ts`.
+- Der Telegram-Bot antwortet zweisprachig – beim `/login` existiert der
+  Benutzer oft noch gar nicht, seine Spracheinstellung ist also unbekannt.
+
 ## Release Notes
 
 Was sich pro Version geändert hat, steht als Markdown in `src/release-notes/`
@@ -176,6 +222,32 @@ Bilder liegen daneben in `images/` und werden über `import.meta.glob` mitgebaut
 - `vite.config.ts` reicht die Version aus `package.json` als `__APP_VERSION__`
   ins Frontend; benutzt wird sie ausschließlich über `APP_VERSION` aus
   `src/lib/appVersion.ts`. In `api/` und `contracts/` gibt es den Wert nicht.
+
+## Mehrsprachige Katalognamen
+
+Serien und Ausführungen im Preset-Katalog tragen neben dem Grundnamen (`name`,
+deutsch) eine jsonb-Spalte `nameI18n` mit den Übersetzungen. Hersteller haben
+keine – „Polymaker“ ist ein Eigenname.
+
+- `resolveName(entry, language)` in `contracts/presets.ts` löst auf und fällt
+  auf den Grundnamen zurück; `missingTranslations()` liefert die Lücken.
+- Der **Anzeigename einer Variante wird nicht gespeichert**, sondern beim Lesen
+  aus Hersteller + Serie + Ausführung + Nenngewicht erzeugt. Damit kann er
+  weder veralten noch an einer Sprache kleben. Die früheren Helfer
+  `buildDisplayNameForVersion` und `refreshVariantDisplayNames` sind entfallen.
+- Wer die Sprache braucht, nimmt `ctx.language` (siehe `api/context.ts`): erst
+  `users.language`, sonst die Kopfzeile `x-filahub-language`, sonst die
+  Grundsprache. Die Kopfzeile ist nötig, weil bei der Einstellung
+  „automatisch“ nur der Browser die Sprache kennt.
+- `preset.tree` liefert bewusst die Rohdaten (`name` + `nameI18n`) – die
+  Verwaltung muss beide Sprachen bearbeiten können. `preset.options` und die
+  Materialabfragen liefern dagegen fertige Namen.
+- Im Client löst `usePresetNames()` (`src/lib/presetNames.ts`) auf.
+
+Neue Sprache: Eintrag in `contracts/i18n.ts`, Schlüssel in `nameI18nSchema`
+(`contracts/presets.ts`), Katalogdatei unter `src/messages/`. Die Verwaltung
+und der Vorschlagsdialog erzeugen ihre Felder aus `SUPPORTED_LANGUAGES` und
+ziehen automatisch nach.
 
 ## Konfiguration / Umgebungsvariablen
 

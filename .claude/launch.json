@@ -19,6 +19,20 @@
         "dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "filahub-landing",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DEV_LOGIN=1",
+        "DEV_LOGIN_NAME=Demo",
+        "APP_SECRET=dev-landing-secret",
+        "DATABASE_URL=postgres://filahub:filahub@127.0.0.1:5434/filahub",
+        "npm",
+        "run",
+        "dev"
+      ],
+      "port": 3000
     }
   ]
 }
