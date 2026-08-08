@@ -3,8 +3,6 @@ import { Check, Inbox, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   PRESET_PROPOSAL_STATUSES,
-  PRESET_PROPOSAL_STATUS_LABELS,
-  PRESET_SCOPE_LABELS,
   type PresetProposalStatus,
 } from "@contracts/presets";
 import { AdminLayout } from "@/components/AdminLayout";
@@ -38,6 +36,8 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
+import type { Messages } from "@/messages/de";
 import { trpc } from "@/lib/trpc";
 import type { AdminProposalItem } from "@/types";
 
@@ -54,7 +54,10 @@ const STATUS_VARIANT: Record<
 };
 
 /** Vorschlagsinhalt als Feld/Wert-Paare für die Gegenüberstellung */
-function payloadRows(payload: unknown): { label: string; value: string }[] {
+function payloadRows(
+  payload: unknown,
+  t: Messages
+): { label: string; value: string }[] {
   if (typeof payload !== "object" || payload === null) return [];
   const p = payload as Record<string, unknown>;
   if (p.kind === "new") {
@@ -65,16 +68,22 @@ function payloadRows(payload: unknown): { label: string; value: string }[] {
       { name?: string; spoolMaterial?: string } | undefined;
     const variant = (p.variant ?? {}) as Record<string, unknown>;
     return [
-      { label: "Hersteller", value: manufacturer?.name ?? "–" },
-      { label: "Serie", value: series?.name ?? "–" },
       {
-        label: "Materialarten",
+        label: t.adminProposals.rowManufacturer,
+        value: manufacturer?.name ?? "–",
+      },
+      { label: t.adminProposals.rowSeries, value: series?.name ?? "–" },
+      {
+        label: t.adminProposals.rowMaterialTypes,
         value: series?.materialTypes?.length
           ? series.materialTypes.join(", ")
           : "alle",
       },
-      { label: "Ausführung", value: version?.name ?? "–" },
-      { label: "Spulenmaterial", value: version?.spoolMaterial ?? "–" },
+      { label: t.adminProposals.rowVersion, value: version?.name ?? "–" },
+      {
+        label: t.adminProposals.rowSpoolMaterial,
+        value: version?.spoolMaterial ?? "–",
+      },
       ...Object.entries(variant).map(([key, value]) => ({
         label: key,
         value: value == null ? "–" : String(value),
@@ -91,6 +100,7 @@ function payloadRows(payload: unknown): { label: string; value: string }[] {
 export default function AdminProposals() {
   const utils = trpc.useUtils();
   const { formatDate } = useFormat();
+  const t = useT();
   const [status, setStatus] = useState<string>("pending");
   const [detail, setDetail] = useState<AdminProposalItem | null>(null);
   const [rejecting, setRejecting] = useState<AdminProposalItem | null>(null);
@@ -109,7 +119,7 @@ export default function AdminProposals() {
 
   const approve = trpc.admin.proposal.approve.useMutation({
     onSuccess: () => {
-      toast.success("Vorschlag übernommen");
+      toast.success(t.adminProposals.approved);
       invalidate();
       setDetail(null);
     },
@@ -118,7 +128,7 @@ export default function AdminProposals() {
 
   const reject = trpc.admin.proposal.reject.useMutation({
     onSuccess: () => {
-      toast.success("Vorschlag abgelehnt");
+      toast.success(t.adminProposals.rejected);
       invalidate();
       setRejecting(null);
       setDetail(null);
@@ -128,18 +138,18 @@ export default function AdminProposals() {
 
   return (
     <AdminLayout
-      title="Vorschläge"
-      description="Community-Vorschläge für den Preset-Katalog prüfen"
+      title={t.adminProposals.title}
+      description={t.adminProposals.description}
       actions={
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Alle Vorschläge</SelectItem>
+            <SelectItem value={ALL}>{t.adminProposals.allProposals}</SelectItem>
             {PRESET_PROPOSAL_STATUSES.map(s => (
               <SelectItem key={s} value={s}>
-                {PRESET_PROPOSAL_STATUS_LABELS[s]}
+                {t.preset.status[s]}
               </SelectItem>
             ))}
           </SelectContent>
@@ -157,7 +167,7 @@ export default function AdminProposals() {
           ) : (proposals ?? []).length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
               <Inbox className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium">Keine Vorschläge in dieser Ansicht</p>
+              <p className="font-medium">{t.adminProposals.emptyTitle}</p>
             </div>
           ) : (
             <>
@@ -174,8 +184,10 @@ export default function AdminProposals() {
                       <div className="min-w-0">
                         <p className="font-medium">
                           {p.kind === "new"
-                            ? "Neuer Eintrag"
-                            : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
+                            ? t.adminProposals.kindNew
+                            : t.myProposals.kindChange({
+                                scope: t.preset.scope[p.targetType],
+                              })}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {formatDate(p.createdAt)} ·{" "}
@@ -186,7 +198,7 @@ export default function AdminProposals() {
                         variant={STATUS_VARIANT[p.status]}
                         className="shrink-0 font-normal"
                       >
-                        {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
+                        {t.preset.status[p.status]}
                       </Badge>
                     </div>
                     {p.comment && (
@@ -202,12 +214,14 @@ export default function AdminProposals() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Eingereicht</TableHead>
-                      <TableHead>Von</TableHead>
-                      <TableHead>Art</TableHead>
-                      <TableHead>Begründung</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Aktionen</TableHead>
+                      <TableHead>{t.adminProposals.submitted}</TableHead>
+                      <TableHead>{t.adminProposals.from}</TableHead>
+                      <TableHead>{t.adminProposals.kind}</TableHead>
+                      <TableHead>{t.adminProposals.reason}</TableHead>
+                      <TableHead>{t.myProposals.status}</TableHead>
+                      <TableHead className="text-right">
+                        {t.common.actions}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -223,8 +237,10 @@ export default function AdminProposals() {
                         <TableCell>{p.submittedBy?.name ?? "–"}</TableCell>
                         <TableCell>
                           {p.kind === "new"
-                            ? "Neuer Eintrag"
-                            : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
+                            ? t.adminProposals.kindNew
+                            : t.myProposals.kindChange({
+                                scope: t.preset.scope[p.targetType],
+                              })}
                         </TableCell>
                         <TableCell className="max-w-[260px] truncate text-muted-foreground">
                           {p.comment ?? "–"}
@@ -234,7 +250,7 @@ export default function AdminProposals() {
                             variant={STATUS_VARIANT[p.status]}
                             className="font-normal"
                           >
-                            {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
+                            {t.preset.status[p.status]}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
@@ -246,7 +262,7 @@ export default function AdminProposals() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Übernehmen"
+                                title={t.adminProposals.approve}
                                 disabled={approve.isPending}
                                 onClick={() => approve.mutate({ id: p.id })}
                               >
@@ -255,7 +271,7 @@ export default function AdminProposals() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                title="Ablehnen"
+                                title={t.adminProposals.reject}
                                 onClick={() => {
                                   setReason("");
                                   setRejecting(p);
@@ -281,16 +297,20 @@ export default function AdminProposals() {
           <DialogHeader>
             <DialogTitle>
               {detail?.kind === "new"
-                ? "Neuer Katalogeintrag"
-                : "Änderungsvorschlag"}
+                ? t.adminProposals.detailNew
+                : t.adminProposals.detailChange}
             </DialogTitle>
             <DialogDescription>
-              Eingereicht von {detail?.submittedBy?.name ?? "unbekannt"}
-              {detail?.comment ? ` · „${detail.comment}“` : ""}
+              {t.adminProposals.submittedBy({
+                name: detail?.submittedBy?.name ?? t.adminProposals.unknownUser,
+              })}
+              {detail?.comment
+                ? t.adminProposals.withComment({ comment: detail.comment })
+                : ""}
             </DialogDescription>
           </DialogHeader>
           <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-2 text-sm">
-            {payloadRows(detail?.payload).map(row => (
+            {payloadRows(detail?.payload, t).map(row => (
               <div key={row.label} className="contents">
                 <dt className="text-muted-foreground">{row.label}</dt>
                 <dd className="font-medium">{row.value}</dd>
@@ -299,7 +319,7 @@ export default function AdminProposals() {
           </dl>
           {detail?.reviewNote && (
             <p className="rounded-md border bg-muted/40 p-3 text-sm">
-              Begründung der Moderation: {detail.reviewNote}
+              {t.adminProposals.moderationNote({ note: detail.reviewNote })}
             </p>
           )}
           {detail?.status === "pending" && (
@@ -311,13 +331,15 @@ export default function AdminProposals() {
                   setRejecting(detail);
                 }}
               >
-                Ablehnen
+                {t.adminProposals.reject}
               </Button>
               <Button
                 disabled={approve.isPending}
                 onClick={() => approve.mutate({ id: detail.id })}
               >
-                {approve.isPending ? "Wird übernommen …" : "Übernehmen"}
+                {approve.isPending
+                  ? t.adminProposals.approving
+                  : t.adminProposals.approve}
               </Button>
             </DialogFooter>
           )}
@@ -330,20 +352,20 @@ export default function AdminProposals() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Vorschlag ablehnen</DialogTitle>
+            <DialogTitle>{t.adminProposals.rejectTitle}</DialogTitle>
             <DialogDescription>
               Die Begründung sieht die einreichende Person unter „Meine
               Vorschläge“.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-2">
-            <Label htmlFor="ap-reason">Begründung *</Label>
+            <Label htmlFor="ap-reason">{t.adminProposals.reasonLabel}</Label>
             <Textarea
               id="ap-reason"
               rows={3}
               value={reason}
               onChange={e => setReason(e.target.value)}
-              placeholder="z. B. „Leergewicht weicht von der Herstellerangabe ab“"
+              placeholder={t.adminProposals.reasonPlaceholder}
             />
           </div>
           <DialogFooter>
@@ -355,14 +377,14 @@ export default function AdminProposals() {
               disabled={reject.isPending}
               onClick={() => {
                 if (!reason.trim())
-                  return toast.error(
-                    "Bitte eine Begründung für die Ablehnung angeben"
-                  );
+                  return toast.error(t.adminProposals.reasonRequired);
                 if (rejecting)
                   reject.mutate({ id: rejecting.id, reason: reason.trim() });
               }}
             >
-              {reject.isPending ? "Wird abgelehnt …" : "Ablehnen"}
+              {reject.isPending
+                ? t.adminProposals.rejecting
+                : t.adminProposals.reject}
             </Button>
           </DialogFooter>
         </DialogContent>

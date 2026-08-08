@@ -14,15 +14,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
+import type { Messages } from "@/messages/de";
 import { trpc } from "@/lib/trpc";
 import type { AdminSystemStatus, LegacyImportStatus } from "@/types";
 
-const IMPORT_STATUS_LABELS: Record<LegacyImportStatus, string> = {
-  pending: "Ausstehend",
-  running: "Läuft",
-  completed: "Abgeschlossen",
-  failed: "Fehlgeschlagen",
-  skipped: "Nicht erforderlich",
+/** Schlüssel in `t.adminSystem` statt fertiger Beschriftung */
+const IMPORT_STATUS_LABELS: Record<
+  LegacyImportStatus,
+  keyof Messages["adminSystem"]
+> = {
+  pending: "statusPending",
+  running: "statusRunning",
+  completed: "statusCompleted",
+  failed: "statusFailed",
+  skipped: "statusSkipped",
 };
 
 const IMPORT_STATUS_VARIANT: Record<
@@ -75,12 +81,13 @@ function SectionCard({
 }
 
 function DatabaseCard({ data }: { data: AdminSystemStatus["database"] }) {
+  const t = useT();
   return (
-    <SectionCard title="Datenbank">
-      <Row label="System">PostgreSQL {data.version}</Row>
-      <Row label="Datenbank">{data.database}</Row>
-      <Row label="Verbindung">{data.source}</Row>
-      <Row label="Verbindungen im Pool">
+    <SectionCard title={t.adminSystem.database}>
+      <Row label={t.adminSystem.system}>PostgreSQL {data.version}</Row>
+      <Row label={t.adminSystem.databaseName}>{data.database}</Row>
+      <Row label={t.adminSystem.connection}>{data.source}</Row>
+      <Row label={t.adminSystem.poolConnections}>
         {data.pool.total} gesamt · {data.pool.idle} frei · {data.pool.waiting}{" "}
         wartend
       </Row>
@@ -96,17 +103,20 @@ function MigrationsCard({
   seed: AdminSystemStatus["seed"];
 }) {
   const { formatDate, formatNumber } = useFormat();
+  const t = useT();
   const offen = migrations.filter(m => !m.applied).length;
 
   return (
     <SectionCard
-      title="Schema-Migrationen"
+      title={t.adminSystem.migrations}
       actions={
         <Badge
           variant={offen === 0 ? "secondary" : "destructive"}
           className="font-normal"
         >
-          {offen === 0 ? "Aktuell" : `${offen} ausstehend`}
+          {offen === 0
+            ? t.adminSystem.upToDate
+            : t.adminSystem.pendingCount({ count: offen })}
         </Badge>
       }
     >
@@ -115,15 +125,19 @@ function MigrationsCard({
         // ihrer Anwendung – den hält Drizzle nicht fest.
         <Row key={m.tag} label={`${m.tag} (${formatDate(m.generatedAt)})`}>
           {m.applied ? (
-            <span className="text-muted-foreground">angewendet</span>
+            <span className="text-muted-foreground">
+              {t.adminSystem.applied}
+            </span>
           ) : (
-            <span className="text-destructive">ausstehend</span>
+            <span className="text-destructive">{t.adminSystem.pending}</span>
           )}
         </Row>
       ))}
-      <Row label="Preset-Startkatalog">
-        Revision {seed.revision} · {formatNumber(seed.seededRows)} Einträge aus
-        dem Startkatalog
+      <Row label={t.adminSystem.seedCatalog}>
+        {t.adminSystem.seedRevision({
+          revision: seed.revision,
+          rows: formatNumber(seed.seededRows),
+        })}
       </Row>
     </SectionCard>
   );
@@ -141,12 +155,13 @@ function LegacyImportCard({
   isRetrying: boolean;
 }) {
   const { formatDateTime, formatNumber } = useFormat();
+  const t = useT();
 
   if (!data) {
     return (
-      <SectionCard title="Datenübernahme aus MySQL">
+      <SectionCard title={t.adminSystem.legacyImport}>
         <p className="py-2 text-sm text-muted-foreground">
-          Für diese Installation liegt kein Übernahmelauf vor.
+          {t.adminSystem.legacyNoRun}
         </p>
       </SectionCard>
     );
@@ -154,14 +169,14 @@ function LegacyImportCard({
 
   return (
     <SectionCard
-      title="Datenübernahme aus MySQL"
+      title={t.adminSystem.legacyImport}
       actions={
         <div className="flex items-center gap-2">
           <Badge
             variant={IMPORT_STATUS_VARIANT[data.status]}
             className="font-normal"
           >
-            {IMPORT_STATUS_LABELS[data.status]}
+            {t.adminSystem[IMPORT_STATUS_LABELS[data.status]] as string}
           </Badge>
           {kannWiederholen && (
             <Button
@@ -173,7 +188,7 @@ function LegacyImportCard({
               <RefreshCw
                 className={`mr-2 h-3.5 w-3.5 ${isRetrying ? "animate-spin" : ""}`}
               />
-              Erneut versuchen
+              {t.adminSystem.retry}
             </Button>
           )}
         </div>
@@ -181,8 +196,7 @@ function LegacyImportCard({
     >
       {data.status === "skipped" && (
         <p className="py-2 text-sm text-muted-foreground">
-          Es ist keine Altdatenbank hinterlegt. Um Daten aus einer bestehenden
-          MySQL-Installation zu übernehmen, <code>LEGACY_MYSQL_URL</code> setzen
+          {t.adminSystem.legacyNotConfigured} <code>LEGACY_MYSQL_URL</code>
           und den Server neu starten. Die Zieldatenbank muss dafür leer sein.
         </p>
       )}
@@ -193,25 +207,33 @@ function LegacyImportCard({
         </p>
       )}
 
-      {data.source && <Row label="Quelle">{data.source}</Row>}
+      {data.source && <Row label={t.adminSystem.source}>{data.source}</Row>}
       {data.startedAt && (
-        <Row label="Gestartet">{formatDateTime(data.startedAt)}</Row>
+        <Row label={t.adminSystem.startedAt}>
+          {formatDateTime(data.startedAt)}
+        </Row>
       )}
       {data.finishedAt && (
-        <Row label="Beendet">{formatDateTime(data.finishedAt)}</Row>
+        <Row label={t.adminSystem.finishedAt}>
+          {formatDateTime(data.finishedAt)}
+        </Row>
       )}
       {data.status !== "skipped" && (
         <>
-          <Row label="Tabellen">
+          <Row label={t.adminSystem.tables}>
             {formatNumber(data.tablesDone)} von {formatNumber(data.tablesTotal)}
           </Row>
-          <Row label="Übernommene Zeilen">{formatNumber(data.rowsCopied)}</Row>
+          <Row label={t.adminSystem.copiedRows}>
+            {formatNumber(data.rowsCopied)}
+          </Row>
         </>
       )}
 
       {data.error && (
         <div className="mt-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
-          <p className="text-sm font-medium text-destructive">Fehlermeldung</p>
+          <p className="text-sm font-medium text-destructive">
+            {t.adminSystem.errorMessage}
+          </p>
           <p className="mt-1 break-words font-mono text-xs text-destructive">
             {data.error}
           </p>
@@ -238,9 +260,13 @@ function LegacyImportCard({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Tabelle</TableHead>
-                  <TableHead className="text-right">In der Quelle</TableHead>
-                  <TableHead className="text-right">Übernommen</TableHead>
+                  <TableHead>{t.adminSystem.colTable}</TableHead>
+                  <TableHead className="text-right">
+                    {t.adminSystem.colInSource}
+                  </TableHead>
+                  <TableHead className="text-right">
+                    {t.adminSystem.colCopied}
+                  </TableHead>
                   <TableHead className="text-right">
                     Bereits vorhanden
                   </TableHead>
@@ -284,9 +310,10 @@ function LegacyImportCard({
 }
 
 function TableCountsCard({ data }: { data: AdminSystemStatus["tableCounts"] }) {
+  const t = useT();
   const { formatNumber } = useFormat();
   return (
-    <SectionCard title="Tabellen">
+    <SectionCard title={t.adminSystem.tables}>
       <div className="grid gap-x-8 sm:grid-cols-2">
         {data.map(t => (
           <Row key={t.table} label={t.table}>
@@ -300,6 +327,7 @@ function TableCountsCard({ data }: { data: AdminSystemStatus["tableCounts"] }) {
 
 export default function AdminSystem() {
   const utils = trpc.useUtils();
+  const t = useT();
   const { data, isLoading } = trpc.admin.system.status.useQuery(undefined, {
     // Während der Übernahme mitlaufen, sonst bliebe der Fortschritt stehen.
     refetchInterval: query =>
@@ -310,11 +338,15 @@ export default function AdminSystem() {
     onSuccess: result => {
       toast.success(
         result.status === "completed"
-          ? `Datenübernahme abgeschlossen – ${result.rowsCopied} Zeilen übernommen.` +
+          ? t.adminSystem.importDone({ rows: result.rowsCopied }) +
               (result.seeded
-                ? ` Preset-Katalog: ${result.seeded.created} neu.`
+                ? t.adminSystem.importSeeded({ count: result.seeded.created })
                 : "")
-          : `Datenübernahme: ${IMPORT_STATUS_LABELS[result.status]}`
+          : t.adminSystem.importStatus({
+              status: t.adminSystem[
+                IMPORT_STATUS_LABELS[result.status]
+              ] as string,
+            })
       );
       void utils.admin.system.status.invalidate();
     },
@@ -326,8 +358,8 @@ export default function AdminSystem() {
 
   return (
     <AdminLayout
-      title="System"
-      description="Datenbank, Migrationen und Datenübernahme"
+      title={t.adminSystem.title}
+      description={t.adminSystem.description}
     >
       {isLoading || !data ? (
         <div className="space-y-4">

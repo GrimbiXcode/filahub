@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 
@@ -54,6 +55,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const isEdit = !!material;
   const utils = trpc.useUtils();
   const { centsToInput, currencySymbol, formatGrams, parseMoney } = useFormat();
+  const t = useT();
   const { data: spoolTypes } = trpc.spoolType.list.useQuery();
   const { data: presetOptions } = trpc.preset.options.useQuery();
   const { data: storageBoxes } = trpc.storageBox.list.useQuery();
@@ -166,7 +168,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
 
   const createMutation = trpc.material.create.useMutation({
     onSuccess: () => {
-      toast.success("Material angelegt");
+      toast.success(t.materialForm.created);
       invalidate();
       onOpenChange(false);
     },
@@ -174,7 +176,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   });
   const updateMutation = trpc.material.update.useMutation({
     onSuccess: () => {
-      toast.success("Material gespeichert");
+      toast.success(t.materialForm.saved);
       invalidate();
       onOpenChange(false);
     },
@@ -187,14 +189,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     e.preventDefault();
     const nominal = parseInt(nominalWeight, 10);
     const finalName = effectiveName.trim() || autoName;
-    if (!finalName)
-      return toast.error(
-        "Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)"
-      );
-    if (!materialType.trim())
-      return toast.error("Bitte eine Materialart angeben");
+    if (!finalName) return toast.error(t.materialForm.nameRequired);
+    if (!materialType.trim()) return toast.error(t.materialForm.typeRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
-      return toast.error("Bitte eine gültige Nennmenge in Gramm angeben");
+      return toast.error(t.materialForm.nominalRequired);
 
     const spoolSelection = decodeSpoolRef(spoolRef);
     const base = {
@@ -221,7 +219,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
         ? parseInt(initialGrossWeight, 10)
         : null;
       if (initial != null && (!Number.isFinite(initial) || initial <= 0))
-        return toast.error("Bitte ein gültiges Anfangsgewicht angeben");
+        return toast.error(t.materialForm.initialInvalid);
       createMutation.mutate({ ...base, initialGrossWeight: initial });
     }
   };
@@ -239,18 +237,18 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       >
         <DialogHeader className="border-b p-4 sm:p-6">
           <DialogTitle>
-            {isEdit ? "Material bearbeiten" : "Neues Material"}
+            {isEdit ? t.materialForm.editTitle : t.materialForm.createTitle}
           </DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet."
-              : "Lege ein neues Filament an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen."}
+              ? t.materialForm.editDescription
+              : t.materialForm.createDescription}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
             <div className="grid gap-2">
-              <Label htmlFor="m-type">Materialart *</Label>
+              <Label htmlFor="m-type">{t.materialForm.materialTypeLabel}</Label>
               <AutocompleteInput
                 id="m-type"
                 value={materialType}
@@ -260,7 +258,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-manufacturer">Hersteller</Label>
+              <Label htmlFor="m-manufacturer">{t.common.manufacturer}</Label>
               <AutocompleteInput
                 id="m-manufacturer"
                 value={manufacturer}
@@ -270,7 +268,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-color">Farbe</Label>
+              <Label htmlFor="m-color">{t.common.color}</Label>
               <AutocompleteInput
                 id="m-color"
                 value={color}
@@ -280,7 +278,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-identifier">Kennung</Label>
+              <Label htmlFor="m-identifier">{t.materialForm.identifier}</Label>
               <Input
                 id="m-identifier"
                 value={identifier}
@@ -290,7 +288,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="m-name">Bezeichnung *</Label>
+              <Label htmlFor="m-name">{t.materialForm.nameLabel}</Label>
               <Input
                 id="m-name"
                 value={effectiveName}
@@ -298,21 +296,25 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   setNameTouched(true);
                   setName(e.target.value);
                 }}
-                placeholder="Wird automatisch aus Hersteller + Typ + Farbe befüllt"
+                placeholder={t.materialForm.namePlaceholder}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-price">Preis ({currencySymbol})</Label>
+              <Label htmlFor="m-price">
+                {t.materialForm.priceLabel({ symbol: currencySymbol })}
+              </Label>
               <Input
                 id="m-price"
                 inputMode="decimal"
                 value={price}
                 onChange={e => setPrice(e.target.value)}
-                placeholder={`z. B. ${centsToInput(2499)}`}
+                placeholder={t.materialForm.pricePlaceholder({
+                  example: centsToInput(2499),
+                })}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-date">Kaufdatum</Label>
+              <Label htmlFor="m-date">{t.materialForm.purchaseDate}</Label>
               <Input
                 id="m-date"
                 type="date"
@@ -321,7 +323,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="m-nominal">Nennmenge (g) *</Label>
+              <Label htmlFor="m-nominal">{t.materialForm.nominalLabel}</Label>
               <Input
                 id="m-nominal"
                 type="number"
@@ -329,7 +331,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 min={1}
                 value={nominalWeight}
                 onChange={e => setNominalWeight(e.target.value)}
-                placeholder="z. B. 1000"
+                placeholder={t.materialForm.nominalPlaceholder}
               />
               {/* Die vier üblichen Spulengrößen als Knopf – spart auf dem
                   Telefon das Eintippen. */}
@@ -352,7 +354,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label>Rolle / Verpackung</Label>
+              <Label>{t.materialForm.spool}</Label>
               <SpoolPicker
                 value={spoolRef}
                 onChange={setSpoolRef}
@@ -363,13 +365,13 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label>Lagerbox / Drybox</Label>
+              <Label>{t.materialForm.storageBox}</Label>
               <Select value={storageBoxId} onValueChange={setStorageBoxId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Lagerbox wählen" />
+                  <SelectValue placeholder={t.materialForm.chooseBox} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>Keine Box</SelectItem>
+                  <SelectItem value={NONE}>{t.materialForm.noBox}</SelectItem>
                   {storageBoxes?.map(b => (
                     <SelectItem key={b.id} value={String(b.id)}>
                       {b.name} ({formatGrams(b.tareWeight)})
@@ -379,16 +381,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               </Select>
               {storageBoxes?.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  Noch keine Lagerboxen angelegt – unter „Lagerboxen“
-                  hinzufügen.
+                  {t.materialForm.noBoxesHint}
                 </p>
               )}
             </div>
             {!isEdit && (
               <div className="grid gap-2 sm:col-span-2">
                 <Label htmlFor="m-initial">
-                  Erstwägung inkl. Rolle{selectedBox ? " + Box" : ""} (g,
-                  optional)
+                  {t.materialForm.initialLabel({ withBox: !!selectedBox })}
                 </Label>
                 <Input
                   id="m-initial"
@@ -396,7 +396,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   min={1}
                   value={initialGrossWeight}
                   onChange={e => setInitialGrossWeight(e.target.value)}
-                  placeholder="Gemessenes Gesamtgewicht beim Kauf"
+                  placeholder={t.materialForm.initialPlaceholder}
                 />
                 <p className="text-xs text-muted-foreground">
                   Tara gesamt: {formatGrams(totalTare)} (Rolle{" "}
@@ -409,12 +409,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               </div>
             )}
             <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="m-notes">Notizen</Label>
+              <Label htmlFor="m-notes">{t.common.notes}</Label>
               <Textarea
                 id="m-notes"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                placeholder="Drucktemperatur, Besonderheiten …"
+                placeholder={t.materialForm.notesPlaceholder}
                 rows={2}
               />
             </div>
@@ -429,7 +429,11 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               Abbrechen
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Speichern …" : isEdit ? "Speichern" : "Anlegen"}
+              {saving
+                ? t.common.saving
+                : isEdit
+                  ? t.common.save
+                  : t.common.create}
             </Button>
           </DialogFooter>
         </form>

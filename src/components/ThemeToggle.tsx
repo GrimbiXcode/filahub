@@ -7,8 +7,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
-import { THEMES, THEME_LABELS, useAppTheme, type Theme } from "@/lib/theme";
+import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
 
 const THEME_ICONS: Record<Theme, typeof Sun> = {
   light: Sun,
@@ -21,6 +22,7 @@ const THEME_ICONS: Record<Theme, typeof Sun> = {
  * Seitenleiste.
  */
 export function ThemeToggle({ className }: { className?: string }) {
+  const t = useT();
   const { theme, resolvedTheme, setTheme } = useAppTheme();
   const Icon = resolvedTheme === "dark" ? Moon : Sun;
 
@@ -31,7 +33,7 @@ export function ThemeToggle({ className }: { className?: string }) {
           variant="ghost"
           size="icon"
           className={cn("shrink-0", className)}
-          aria-label={`Farbschema: ${THEME_LABELS[theme]}`}
+          aria-label={t.theme.current({ theme: t.theme[theme] })}
         >
           <Icon className="h-4 w-4" />
         </Button>
@@ -46,7 +48,7 @@ export function ThemeToggle({ className }: { className?: string }) {
             return (
               <DropdownMenuRadioItem key={value} value={value}>
                 <ItemIcon className="mr-2 h-4 w-4" />
-                {THEME_LABELS[value]}
+                {t.theme[value]}
               </DropdownMenuRadioItem>
             );
           })}
@@ -61,12 +63,13 @@ export function ThemeToggle({ className }: { className?: string }) {
  * Möglichkeiten auf einen Blick sichtbar sein sollen.
  */
 export function ThemeSegmentedControl() {
+  const t = useT();
   const { theme, setTheme } = useAppTheme();
 
   return (
     <div
       role="radiogroup"
-      aria-label="Farbschema"
+      aria-label={t.theme.label}
       className="grid grid-cols-3 gap-2"
     >
       {THEMES.map(value => {
@@ -88,7 +91,7 @@ export function ThemeSegmentedControl() {
             )}
           >
             <Icon className="h-5 w-5" />
-            {THEME_LABELS[value]}
+            {t.theme[value]}
           </button>
         );
       })}

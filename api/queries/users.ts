@@ -44,11 +44,12 @@ export async function markReleaseNotesSeen(userId: number, version: string) {
  */
 export async function updateUserSettings(
   userId: number,
-  patch: { currency?: string; locale?: string | null }
+  patch: { currency?: string; locale?: string | null; language?: string | null }
 ) {
   const values: Partial<InsertUser> = {};
   if (patch.currency !== undefined) values.currency = patch.currency;
   if (patch.locale !== undefined) values.locale = patch.locale;
+  if (patch.language !== undefined) values.language = patch.language;
   if (Object.keys(values).length === 0) return;
 
   await getDb()

@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
@@ -45,6 +46,7 @@ export default function MaterialDetail() {
     formatMoney,
     formatPercent,
   } = useFormat();
+  const t = useT();
 
   const { data: material, isLoading } = trpc.material.byId.useQuery(
     { id: materialId },
@@ -56,7 +58,7 @@ export default function MaterialDetail() {
 
   const deleteMutation = trpc.material.delete.useMutation({
     onSuccess: () => {
-      toast.success("Material gelöscht");
+      toast.success(t.materialDetail.materialDeleted);
       utils.material.list.invalidate();
       navigate("/");
     },
@@ -64,7 +66,7 @@ export default function MaterialDetail() {
   });
   const deleteWeighing = trpc.material.deleteWeighing.useMutation({
     onSuccess: () => {
-      toast.success("Wägung gelöscht");
+      toast.success(t.materialDetail.weighingDeleted);
       utils.material.byId.invalidate();
       utils.material.list.invalidate();
       setDeletingWeighing(null);
@@ -88,9 +90,9 @@ export default function MaterialDetail() {
     return (
       <AuthLayout>
         <div className="flex flex-col items-center gap-4 py-16 text-center">
-          <p className="text-lg font-medium">Material nicht gefunden</p>
+          <p className="text-lg font-medium">{t.materialDetail.notFound}</p>
           <Button variant="outline" onClick={() => navigate("/")}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Zur Übersicht
+            <ArrowLeft className="mr-2 h-4 w-4" /> {t.materialDetail.toOverview}
           </Button>
         </div>
       </AuthLayout>
@@ -132,19 +134,19 @@ export default function MaterialDetail() {
                 className="flex-1 sm:flex-none"
                 onClick={() => openWeighing(asOverview)}
               >
-                <Scale className="mr-2 h-4 w-4" /> Wiegen
+                <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
               </Button>
               <Button
                 variant="outline"
                 className="flex-1 sm:flex-none"
                 onClick={() => openMaterialForm(asOverview)}
               >
-                <Pencil className="mr-2 h-4 w-4" /> Bearbeiten
+                <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
               </Button>
               <Button
                 variant="outline"
                 size="icon"
-                aria-label="Material löschen"
+                aria-label={t.materialDetail.deleteMaterial}
                 className="text-destructive hover:text-destructive"
                 onClick={() => setDeleteOpen(true)}
               >
@@ -157,7 +159,9 @@ export default function MaterialDetail() {
         {/* Füllstand */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Füllstand</CardTitle>
+            <CardTitle className="text-base">
+              {t.materialDetail.fillLevel}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-end justify-between gap-3">
@@ -168,7 +172,9 @@ export default function MaterialDetail() {
                   {formatGrams(material.remainingWeight)}
                 </div>
                 <p className="mt-0.5 text-sm text-muted-foreground">
-                  von {formatGrams(material.nominalWeight)} Nennmenge
+                  {t.materialDetail.ofNominal({
+                    amount: formatGrams(material.nominalWeight),
+                  })}
                 </p>
               </div>
               {material.remainingPercent != null && (
@@ -185,27 +191,35 @@ export default function MaterialDetail() {
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
               <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Verbraucht</div>
+                <div className="text-xs text-muted-foreground">
+                  {t.materialDetail.consumed}
+                </div>
                 <div className="font-medium">{formatGrams(consumed)}</div>
               </div>
               <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Tara gesamt</div>
+                <div className="text-xs text-muted-foreground">
+                  {t.materialDetail.tareTotal}
+                </div>
                 <div className="font-medium">
                   {formatGrams(material.tareWeight)}
                 </div>
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
-                  Letzte Wägung
+                  {t.materialDetail.lastWeighing}
                 </div>
                 <div className="font-medium">
                   {material.lastWeighing
-                    ? `${formatGrams(material.lastWeighing.grossWeight)} brutto`
-                    : "noch keine"}
+                    ? t.materialDetail.lastWeighingGross({
+                        amount: formatGrams(material.lastWeighing.grossWeight),
+                      })
+                    : t.materialDetail.noWeighingYet}
                 </div>
               </div>
               <div className="rounded-lg border p-3">
-                <div className="text-xs text-muted-foreground">Restwert</div>
+                <div className="text-xs text-muted-foreground">
+                  {t.materialDetail.remainingValue}
+                </div>
                 <div className="font-medium">
                   {material.priceCents != null && material.nominalWeight > 0
                     ? formatMoney(
@@ -225,23 +239,35 @@ export default function MaterialDetail() {
           {/* Stammdaten */}
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">Stammdaten</CardTitle>
+              <CardTitle className="text-base">
+                {t.materialDetail.masterData}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-3 text-sm">
-                <dt className="text-muted-foreground">Kennung</dt>
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.identifier}
+                </dt>
                 <dd className="font-mono">{material.identifier ?? "–"}</dd>
-                <dt className="text-muted-foreground">Materialart</dt>
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.materialType}
+                </dt>
                 <dd>{material.materialType}</dd>
-                <dt className="text-muted-foreground">Hersteller</dt>
+                <dt className="text-muted-foreground">
+                  {t.common.manufacturer}
+                </dt>
                 <dd>{material.manufacturer ?? "–"}</dd>
-                <dt className="text-muted-foreground">Farbe</dt>
+                <dt className="text-muted-foreground">{t.common.color}</dt>
                 <dd>{material.color ?? "–"}</dd>
-                <dt className="text-muted-foreground">Preis</dt>
+                <dt className="text-muted-foreground">{t.common.price}</dt>
                 <dd>{formatMoney(material.priceCents)}</dd>
-                <dt className="text-muted-foreground">Kaufdatum</dt>
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.purchaseDate}
+                </dt>
                 <dd>{formatDate(material.purchaseDate)}</dd>
-                <dt className="text-muted-foreground">Rolle / Verpackung</dt>
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.spool}
+                </dt>
                 <dd className="flex flex-wrap items-center gap-1.5">
                   {material.spoolLabel ? (
                     <>
@@ -252,7 +278,7 @@ export default function MaterialDetail() {
                       </span>
                       {material.spoolPresetVariant && (
                         <Badge variant="secondary" className="font-normal">
-                          Katalog
+                          {t.materialDetail.fromCatalog}
                         </Badge>
                       )}
                     </>
@@ -260,14 +286,18 @@ export default function MaterialDetail() {
                     "–"
                   )}
                 </dd>
-                <dt className="text-muted-foreground">Lagerbox / Drybox</dt>
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.storageBox}
+                </dt>
                 <dd className="flex flex-wrap items-center gap-1.5">
                   {material.storageBox ? (
                     <>
                       <Archive className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="break-words">
-                        {material.storageBox.name} (
-                        {formatGrams(material.storageBox.tareWeight)} Tara)
+                        {material.storageBox.name}{" "}
+                        {t.materialDetail.tareSuffix({
+                          amount: formatGrams(material.storageBox.tareWeight),
+                        })}
                       </span>
                     </>
                   ) : (
@@ -276,7 +306,7 @@ export default function MaterialDetail() {
                 </dd>
                 {material.notes && (
                   <>
-                    <dt className="text-muted-foreground">Notizen</dt>
+                    <dt className="text-muted-foreground">{t.common.notes}</dt>
                     <dd className="whitespace-pre-wrap break-words">
                       {material.notes}
                     </dd>
@@ -289,20 +319,22 @@ export default function MaterialDetail() {
           {/* Wägungsverlauf */}
           <Card>
             <CardHeader className="flex-row items-center justify-between pb-2">
-              <CardTitle className="text-base">Wägungsverlauf</CardTitle>
+              <CardTitle className="text-base">
+                {t.materialDetail.history}
+              </CardTitle>
               <Button
                 size="sm"
                 variant="outline"
                 onClick={() => openWeighing(asOverview)}
               >
-                <Scale className="mr-2 h-3.5 w-3.5" /> Neue Wägung
+                <Scale className="mr-2 h-3.5 w-3.5" />{" "}
+                {t.materialDetail.newWeighing}
               </Button>
             </CardHeader>
             <CardContent>
               {weighings.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  Noch keine Wägungen. Die Restmenge entspricht aktuell der
-                  Nennmenge.
+                  {t.materialDetail.noWeighings}
                 </p>
               ) : (
                 <>
@@ -319,12 +351,14 @@ export default function MaterialDetail() {
                               Math.max(0, w.grossWeight - material.tareWeight)
                             )}
                             <span className="ml-1 text-xs font-normal text-muted-foreground">
-                              netto
+                              {t.materialDetail.net}
                             </span>
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {formatDateTime(w.weighedAt)} ·{" "}
-                            {formatGrams(w.grossWeight)} brutto
+                            {t.materialDetail.grossAt({
+                              when: formatDateTime(w.weighedAt),
+                              amount: formatGrams(w.grossWeight),
+                            })}
                           </div>
                           {w.note && (
                             <div className="mt-1 break-words text-xs text-muted-foreground">
@@ -335,7 +369,7 @@ export default function MaterialDetail() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          aria-label="Wägung löschen"
+                          aria-label={t.materialDetail.deleteWeighing}
                           onClick={() => setDeletingWeighing(w.id)}
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -348,10 +382,10 @@ export default function MaterialDetail() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Datum</TableHead>
-                          <TableHead>Brutto</TableHead>
-                          <TableHead>Netto</TableHead>
-                          <TableHead>Notiz</TableHead>
+                          <TableHead>{t.common.date}</TableHead>
+                          <TableHead>{t.materialDetail.colGross}</TableHead>
+                          <TableHead>{t.materialDetail.colNet}</TableHead>
+                          <TableHead>{t.materialDetail.colNote}</TableHead>
                           <TableHead />
                         </TableRow>
                       </TableHeader>
@@ -374,7 +408,7 @@ export default function MaterialDetail() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Wägung löschen"
+                                aria-label={t.materialDetail.deleteWeighing}
                                 onClick={() => setDeletingWeighing(w.id)}
                               >
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -395,19 +429,22 @@ export default function MaterialDetail() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Material löschen?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t.materialDetail.deleteMaterialTitle}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              „{material.name}“ und alle zugehörigen Wägungen werden endgültig
-              gelöscht.
+              {t.materialDetail.deleteMaterialDescription({
+                name: material.name,
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => deleteMutation.mutate({ id: material.id })}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Löschen
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -421,13 +458,15 @@ export default function MaterialDetail() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Wägung löschen?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t.materialDetail.deleteWeighingTitle}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Die Restmenge wird danach aus der nächstälteren Wägung berechnet.
+              {t.materialDetail.deleteWeighingDescription}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleteWeighing.isPending}
               onClick={() =>
@@ -436,7 +475,7 @@ export default function MaterialDetail() {
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Löschen
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -11,9 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SUPPORTED_LANGUAGES, type LanguageCode } from "@contracts/i18n";
 import {
   SUPPORTED_CURRENCIES,
   SUPPORTED_LOCALES,
+  currencyLabel,
+  localeLabel,
   type CurrencyCode,
   type LocaleCode,
 } from "@contracts/locale";
@@ -24,6 +27,7 @@ import {
   formatMoney,
 } from "@contracts/format";
 import { browserLocale, useFormat } from "@/lib/formatContext";
+import { browserLanguage, useI18n } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 
 /** Wert im Auswahlfeld, wenn der Browser über das Format entscheidet */
@@ -37,46 +41,86 @@ const PREVIEW_DATE = "2026-07-20";
 export default function Settings() {
   const utils = trpc.useUtils();
   const { locale, localeSetting, currency } = useFormat();
+  const { t, language, languageSetting } = useI18n();
 
   const updateSettings = trpc.auth.updateSettings.useMutation({
     onSuccess: () => {
       utils.auth.me.invalidate();
-      toast.success("Einstellung gespeichert");
+      toast.success(t.settings.saved);
     },
     onError: e => toast.error(e.message),
   });
 
   const browser = browserLocale();
+  const browserLang = browserLanguage();
 
   return (
     <AuthLayout>
       <div className="flex max-w-2xl flex-col gap-4 sm:gap-6">
         <PageHeader
-          title="Einstellungen"
-          description="Darstellung, Währung und Zahlenformate"
+          title={t.settings.title}
+          description={t.settings.description}
         />
 
+        {/* Sprache steht bewusst zuoberst: Wer die Oberfläche nicht lesen
+            kann, sucht genau hier – und die Autonyme („Deutsch“, „English“)
+            sind auch dann verständlich. */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Erscheinungsbild</CardTitle>
+            <CardTitle className="text-base">{t.settings.language}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <ThemeSegmentedControl />
+            <div className="grid gap-2 sm:max-w-sm">
+              <Label htmlFor="s-language">{t.settings.languageLabel}</Label>
+              <Select
+                value={languageSetting ?? AUTO}
+                disabled={updateSettings.isPending}
+                onValueChange={value =>
+                  updateSettings.mutate({
+                    language: value === AUTO ? null : (value as LanguageCode),
+                  })
+                }
+              >
+                <SelectTrigger id="s-language">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={AUTO}>
+                    {t.settings.automatic({ value: browserLang })}
+                  </SelectItem>
+                  {SUPPORTED_LANGUAGES.map(l => (
+                    <SelectItem key={l.code} value={l.code}>
+                      {localeLabel(l.code, language)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <p className="text-xs text-muted-foreground">
-              „System“ folgt der Einstellung deines Geräts. Das Farbschema wird
-              lokal gespeichert und gilt deshalb pro Gerät – am Telefon darf es
-              dunkel sein, während der Rechner hell bleibt.
+              {t.settings.languageHint}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Währung</CardTitle>
+            <CardTitle className="text-base">{t.settings.appearance}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <ThemeSegmentedControl />
+            <p className="text-xs text-muted-foreground">
+              {t.settings.appearanceHint}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">{t.settings.currency}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="grid gap-2 sm:max-w-sm">
-              <Label htmlFor="s-currency">Anzeigewährung</Label>
+              <Label htmlFor="s-currency">{t.settings.currencyLabel}</Label>
               <Select
                 value={currency}
                 disabled={updateSettings.isPending}
@@ -90,26 +134,28 @@ export default function Settings() {
                 <SelectContent>
                   {SUPPORTED_CURRENCIES.map(c => (
                     <SelectItem key={c.code} value={c.code}>
-                      {c.label} ({currencySymbol(locale, c.code)})
+                      {currencyLabel(c.code, language)} (
+                      {currencySymbol(locale, c.code)})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
             <p className="text-xs text-muted-foreground">
-              Bestehende Preise werden nicht umgerechnet, sondern nur in der
-              neuen Währung dargestellt.
+              {t.settings.currencyHint}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Regionalformat</CardTitle>
+            <CardTitle className="text-base">
+              {t.settings.regionalFormat}
+            </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="grid gap-2 sm:max-w-sm">
-              <Label htmlFor="s-locale">Zahlen- und Datumsformat</Label>
+              <Label htmlFor="s-locale">{t.settings.regionalFormatLabel}</Label>
               <Select
                 value={localeSetting ?? AUTO}
                 disabled={updateSettings.isPending}
@@ -124,11 +170,11 @@ export default function Settings() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={AUTO}>
-                    Automatisch (Browser: {browser})
+                    {t.settings.automatic({ value: browser })}
                   </SelectItem>
                   {SUPPORTED_LOCALES.map(l => (
                     <SelectItem key={l.code} value={l.code}>
-                      {l.label}
+                      {localeLabel(l.code, language)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -136,19 +182,19 @@ export default function Settings() {
             </div>
             <dl className="grid gap-1 rounded-lg border p-3 text-sm sm:max-w-sm">
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Datum</dt>
+                <dt className="text-muted-foreground">{t.common.date}</dt>
                 <dd className="font-medium">
                   {formatDate(PREVIEW_DATE, locale)}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Gewicht</dt>
+                <dt className="text-muted-foreground">{t.common.weight}</dt>
                 <dd className="font-medium">
                   {formatGrams(PREVIEW_GRAMS, locale)}
                 </dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">Preis</dt>
+                <dt className="text-muted-foreground">{t.common.price}</dt>
                 <dd className="font-medium">
                   {formatMoney(PREVIEW_CENTS, locale, currency)}
                 </dd>

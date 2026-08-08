@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import {
   centsToInputString,
   currencySymbol as currencySymbolFor,
@@ -38,10 +38,6 @@ export function FormatProvider({ children }: { children: ReactNode }) {
   const currency =
     (user?.currency as CurrencyCode | undefined) ?? DEFAULT_CURRENCY;
   const locale = localeSetting ?? browserLocale();
-
-  useEffect(() => {
-    document.documentElement.lang = locale;
-  }, [locale]);
 
   const helpers = useMemo<FormatHelpers>(
     () => ({

@@ -13,11 +13,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { PresetVariantNode } from "@/types";
 
 type Props = {
   variant: PresetVariantNode | null;
+  /**
+   * Fertiger Anzeigename der Variante. Kommt vom Aufrufer, weil nur der die
+   * drei Ebenen darüber kennt – die Variante selbst trägt ihn nicht mehr.
+   */
+  label: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
@@ -34,8 +40,14 @@ function parseOptionalInt(value: string): number | null | undefined {
  * gegenüber dem aktuellen Stand abweicht – ein leerer Vorschlag wird
  * serverseitig abgelehnt.
  */
-export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
+export function ProposeChangeDialog({
+  variant,
+  label,
+  open,
+  onOpenChange,
+}: Props) {
   const utils = trpc.useUtils();
+  const t = useT();
   // Der Aufrufer gibt der Komponente einen key je Variante – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [tareWeight, setTareWeight] = useState(() =>
@@ -54,9 +66,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
 
   const submit = trpc.preset.proposals.submitChange.useMutation({
     onSuccess: () => {
-      toast.success(
-        "Vorschlag eingereicht – er wird von der Moderation geprüft."
-      );
+      toast.success(t.proposeChange.submitted);
       utils.preset.proposals.mine.invalidate();
       onOpenChange(false);
     },
@@ -69,13 +79,13 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
 
     const tare = parseInt(tareWeight, 10);
     if (!Number.isFinite(tare) || tare < 0)
-      return toast.error("Bitte ein gültiges Leergewicht in Gramm angeben");
+      return toast.error(t.proposeChange.invalidTare);
 
     const outer = parseOptionalInt(outerDiameterMm);
     const width = parseOptionalInt(widthMm);
     const bore = parseOptionalInt(boreDiameterMm);
     if (outer === undefined || width === undefined || bore === undefined)
-      return toast.error("Bitte gültige Abmessungen in Millimetern angeben");
+      return toast.error(t.proposeChange.invalidDimensions);
 
     // Nur tatsächliche Abweichungen übermitteln
     const patch: Record<string, number | null> = {};
@@ -85,7 +95,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
     if (bore !== variant.boreDiameterMm) patch.boreDiameterMm = bore;
 
     if (Object.keys(patch).length === 0)
-      return toast.error("Der Vorschlag enthält keine Änderungen");
+      return toast.error(t.proposeChange.noChanges);
 
     submit.mutate({
       targetType: "variant",
@@ -99,17 +109,17 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Änderung vorschlagen</DialogTitle>
+          <DialogTitle>{t.proposeChange.title}</DialogTitle>
           <DialogDescription>
-            {variant?.displayName} ·{" "}
-            {variant ? formatNominalWeight(variant.nominalWeight) : ""}. Deine
-            Korrektur wird von einer Administratorin oder einem Administrator
-            geprüft, bevor sie im Katalog landet.
+            {t.proposeChange.description({
+              spool: label,
+              size: variant ? formatNominalWeight(variant.nominalWeight) : "",
+            })}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="pc-tare">Leergewicht (g)</Label>
+            <Label htmlFor="pc-tare">{t.proposeChange.tareLabel}</Label>
             <Input
               id="pc-tare"
               type="number"
@@ -121,7 +131,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
           <div className="grid grid-cols-3 gap-3">
             <div className="grid gap-1.5">
               <Label htmlFor="pc-outer" className="text-xs">
-                Außen-Ø (mm)
+                {t.proposeChange.outerDiameter}
               </Label>
               <Input
                 id="pc-outer"
@@ -132,7 +142,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pc-width" className="text-xs">
-                Breite (mm)
+                {t.proposeChange.width}
               </Label>
               <Input
                 id="pc-width"
@@ -143,7 +153,7 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
             </div>
             <div className="grid gap-1.5">
               <Label htmlFor="pc-bore" className="text-xs">
-                Bohrung (mm)
+                {t.proposeChange.bore}
               </Label>
               <Input
                 id="pc-bore"
@@ -154,13 +164,13 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="pc-comment">Begründung</Label>
+            <Label htmlFor="pc-comment">{t.proposeChange.reason}</Label>
             <Textarea
               id="pc-comment"
               rows={2}
               value={comment}
               onChange={e => setComment(e.target.value)}
-              placeholder="z. B. „Leere Spule dreimal gewogen, im Mittel 138 g“"
+              placeholder={t.proposeChange.reasonPlaceholder}
             />
           </div>
           <DialogFooter>
@@ -170,10 +180,12 @@ export function ProposeChangeDialog({ variant, open, onOpenChange }: Props) {
               onClick={() => onOpenChange(false)}
               disabled={submit.isPending}
             >
-              Abbrechen
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={submit.isPending}>
-              {submit.isPending ? "Wird gesendet …" : "Vorschlag einreichen"}
+              {submit.isPending
+                ? t.proposeChange.submitting
+                : t.proposeChange.submit}
             </Button>
           </DialogFooter>
         </form>

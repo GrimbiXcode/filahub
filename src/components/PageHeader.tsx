@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
+import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -29,6 +30,7 @@ export function PageHeader({
   className,
 }: Props) {
   const navigate = useNavigate();
+  const t = useT();
 
   return (
     <div
@@ -43,7 +45,7 @@ export function PageHeader({
             variant="ghost"
             size="icon"
             className="-ml-2 shrink-0"
-            aria-label="Zurück"
+            aria-label={t.common.back}
             onClick={() => navigate(backTo)}
           >
             <ArrowLeft className="h-5 w-5" />

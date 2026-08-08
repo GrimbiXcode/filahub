@@ -1,10 +1,6 @@
 import { Inbox, Undo2 } from "lucide-react";
 import { toast } from "sonner";
-import {
-  PRESET_PROPOSAL_STATUS_LABELS,
-  PRESET_SCOPE_LABELS,
-  type PresetProposalStatus,
-} from "@contracts/presets";
+import { type PresetProposalStatus } from "@contracts/presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,6 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 
 const STATUS_VARIANT: Record<
@@ -48,11 +45,12 @@ function describePayload(payload: unknown): string {
 export function MyPresetProposals() {
   const utils = trpc.useUtils();
   const { formatDate } = useFormat();
+  const t = useT();
   const { data: proposals, isLoading } = trpc.preset.proposals.mine.useQuery();
 
   const withdraw = trpc.preset.proposals.withdraw.useMutation({
     onSuccess: () => {
-      toast.success("Vorschlag zurückgezogen");
+      toast.success(t.myProposals.withdrawn);
       utils.preset.proposals.mine.invalidate();
     },
     onError: e => toast.error(e.message),
@@ -72,11 +70,9 @@ export function MyPresetProposals() {
     return (
       <div className="flex flex-col items-center gap-2 py-12 text-center">
         <Inbox className="h-10 w-10 text-muted-foreground/50" />
-        <p className="font-medium">Noch keine Vorschläge eingereicht</p>
+        <p className="font-medium">{t.myProposals.emptyTitle}</p>
         <p className="max-w-md text-sm text-muted-foreground">
-          Über „Als Preset vorschlagen“ bei einem eigenen Rollentyp oder
-          „Änderung vorschlagen“ im Katalog kannst du den gemeinsamen Katalog
-          verbessern.
+          {t.myProposals.emptyDescription}
         </p>
       </div>
     );
@@ -86,11 +82,11 @@ export function MyPresetProposals() {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Eingereicht</TableHead>
-          <TableHead>Art</TableHead>
-          <TableHead>Inhalt</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-right">Aktionen</TableHead>
+          <TableHead>{t.myProposals.submitted}</TableHead>
+          <TableHead>{t.myProposals.kind}</TableHead>
+          <TableHead>{t.myProposals.content}</TableHead>
+          <TableHead>{t.myProposals.status}</TableHead>
+          <TableHead className="text-right">{t.common.actions}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -101,8 +97,10 @@ export function MyPresetProposals() {
             </TableCell>
             <TableCell>
               {p.kind === "new"
-                ? "Neuer Eintrag"
-                : `Änderung (${PRESET_SCOPE_LABELS[p.targetType]})`}
+                ? t.myProposals.kindNew
+                : t.myProposals.kindChange({
+                    scope: t.preset.scope[p.targetType],
+                  })}
             </TableCell>
             <TableCell className="max-w-[320px] truncate text-muted-foreground">
               {describePayload(p.payload)}
@@ -113,7 +111,7 @@ export function MyPresetProposals() {
                   variant={STATUS_VARIANT[p.status]}
                   className="w-fit font-normal"
                 >
-                  {PRESET_PROPOSAL_STATUS_LABELS[p.status]}
+                  {t.preset.status[p.status]}
                 </Badge>
                 {p.reviewNote && (
                   <span className="text-xs text-muted-foreground">
@@ -127,7 +125,7 @@ export function MyPresetProposals() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  title="Zurückziehen"
+                  title={t.myProposals.withdraw}
                   onClick={() => withdraw.mutate({ id: p.id })}
                   disabled={withdraw.isPending}
                 >

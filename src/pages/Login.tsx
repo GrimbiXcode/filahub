@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { MessageCircleCode, Send, Wrench } from "lucide-react";
+import { Wordmark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 
 type TelegramWidgetUser = {
@@ -32,6 +34,7 @@ export default function Login() {
   const widgetRef = useRef<HTMLDivElement>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const t = useT();
 
   const loginWithWidget = trpc.auth.loginWithWidget.useMutation({
     onSuccess: async () => {
@@ -82,31 +85,31 @@ export default function Login() {
         <ThemeToggle />
       </div>
       <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle>Filament-Lager</CardTitle>
+        <CardHeader className="items-center text-center">
+          <CardTitle>
+            <Wordmark className="justify-center text-lg [&_svg]:h-6 [&_svg]:w-6" />
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoading ? (
-            <p className="text-sm text-muted-foreground text-center">Laden …</p>
+            <p className="text-sm text-muted-foreground text-center">
+              {t.common.loading}
+            </p>
           ) : !loginInfo?.botConfigured ? (
             <p className="text-sm text-destructive text-center">
-              Telegram-Login ist noch nicht konfiguriert. Bitte hinterlege
-              TELEGRAM_BOT_TOKEN und TELEGRAM_BOT_USERNAME auf dem Server.
+              {t.login.notConfigured}
             </p>
           ) : (
             <>
               <div className="space-y-3 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Melde dich mit deinem Telegram-Konto an. Telegram bestätigt
-                  deine Identität – auf Wunsch auch per Telefonnummer.
-                </p>
+                <p className="text-sm text-muted-foreground">{t.login.intro}</p>
                 <div ref={widgetRef} className="flex justify-center min-h-10" />
               </div>
 
               <div className="flex items-center gap-3">
                 <Separator className="flex-1" />
                 <span className="text-xs text-muted-foreground">
-                  oder per Code
+                  {t.login.orWithCode}
                 </span>
                 <Separator className="flex-1" />
               </div>
@@ -121,7 +124,7 @@ export default function Login() {
               >
                 <div className="space-y-1.5">
                   <Label htmlFor="login-code" className="text-xs">
-                    Code vom Bot{" "}
+                    {t.login.codeFromBot}{" "}
                     {botUsername && (
                       <a
                         className="font-medium underline"
@@ -132,14 +135,14 @@ export default function Login() {
                         @{botUsername}
                       </a>
                     )}{" "}
-                    (per <span className="font-mono">/login</span> anfordern)
+                    {t.login.codeRequestHint({ command: "/login" })}
                   </Label>
                   <Input
                     id="login-code"
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     maxLength={6}
-                    placeholder="6-stelliger Code"
+                    placeholder={t.login.codePlaceholder}
                     value={code}
                     onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
                   />
@@ -151,7 +154,9 @@ export default function Login() {
                   disabled={code.length !== 6 || loginWithCode.isPending}
                 >
                   <MessageCircleCode className="mr-2 h-4 w-4" />
-                  {loginWithCode.isPending ? "Anmelden …" : "Mit Code anmelden"}
+                  {loginWithCode.isPending
+                    ? t.login.signingIn
+                    : t.login.signInWithCode}
                 </Button>
               </form>
 
@@ -172,7 +177,7 @@ export default function Login() {
               <div className="flex items-center gap-3">
                 <Separator className="flex-1" />
                 <span className="text-xs text-muted-foreground">
-                  Entwicklung
+                  {t.login.development}
                 </span>
                 <Separator className="flex-1" />
               </div>
@@ -186,7 +191,7 @@ export default function Login() {
                 }}
               >
                 <Wrench className="mr-2 h-4 w-4" />
-                Ohne Telegram anmelden
+                {t.login.signInWithoutTelegram}
               </Button>
             </>
           )}

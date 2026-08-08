@@ -11,3 +11,10 @@ export const ErrorMessages = {
 export const Paths = {
   login: "/login",
 } as const;
+
+/**
+ * Kopfzeile, mit der der Client seine tatsächliche Oberflächensprache meldet.
+ * Nötig, solange die Spracheinstellung auf „automatisch“ steht – dann kennt
+ * nur der Browser die Sprache (siehe api/context.ts).
+ */
+export const LANGUAGE_HEADER = "x-filahub-language";

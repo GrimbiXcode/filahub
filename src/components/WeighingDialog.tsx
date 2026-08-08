@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 
@@ -25,6 +26,7 @@ type Props = {
 export function WeighingDialog({ open, onOpenChange, material }: Props) {
   const utils = trpc.useUtils();
   const { formatGrams, formatPercent } = useFormat();
+  const t = useT();
   const [grossWeight, setGrossWeight] = useState("");
   const [note, setNote] = useState("");
 
@@ -55,7 +57,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
 
   const addWeighing = trpc.material.addWeighing.useMutation({
     onSuccess: () => {
-      toast.success("Wägung gespeichert");
+      toast.success(t.weighing.saved);
       utils.material.list.invalidate();
       utils.material.byId.invalidate();
       utils.material.recentWeighings.invalidate();
@@ -69,7 +71,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
     if (!material) return;
     const gross = parseInt(grossWeight, 10);
     if (!Number.isFinite(gross) || gross <= 0)
-      return toast.error("Bitte ein gültiges Gewicht in Gramm angeben");
+      return toast.error(t.weighing.invalidWeight);
     addWeighing.mutate({
       materialId: material.id,
       grossWeight: gross,
@@ -84,19 +86,20 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Scale className="h-5 w-5" /> Material wiegen
+            <Scale className="h-5 w-5" /> {t.weighing.title}
           </DialogTitle>
           <DialogDescription>
-            Wiege „{material.name}“ komplett – inklusive Rolle
-            {material.storageBox ? " und Lagerbox" : ""}. Das Leergewicht wird
-            automatisch abgezogen.
+            {t.weighing.description({
+              name: material.name,
+              withBox: material.storageBox != null,
+            })}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4">
           {/* Das Gewichtsfeld steht bewusst oben: Wer vor der Waage steht,
               tippt die Zahl ein und ist fertig. */}
           <div className="grid gap-2">
-            <Label htmlFor="w-gross">Gemessenes Gesamtgewicht (g) *</Label>
+            <Label htmlFor="w-gross">{t.weighing.grossLabel}</Label>
             <Input
               id="w-gross"
               type="number"
@@ -105,7 +108,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
               autoFocus
               value={grossWeight}
               onChange={e => setGrossWeight(e.target.value)}
-              placeholder="z. B. 740"
+              placeholder={t.weighing.grossPlaceholder}
               // Die Pfeilchen des Zahlenfelds stören in der großen Anzeige
               className="h-14 text-center text-2xl font-semibold tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
@@ -113,7 +116,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
           {preview && (
             <div className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm">
               <div className="flex justify-between font-medium">
-                <span>Effektiv übrig</span>
+                <span>{t.weighing.remaining}</span>
                 <span className="tabular-nums">
                   {formatGrams(preview.remaining)}
                   {preview.percent != null &&
@@ -125,29 +128,30 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
           <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                Tara Rolle/Verpackung
+                {t.weighing.tareSpool}
               </span>
               <span>{formatGrams(material.spoolTareWeight)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                Tara Lagerbox
-                {material.storageBox ? ` (${material.storageBox.name})` : ""}
+                {material.storageBox
+                  ? t.weighing.tareBoxNamed({ name: material.storageBox.name })
+                  : t.weighing.tareBox}
               </span>
               <span>{formatGrams(material.storageBox?.tareWeight ?? 0)}</span>
             </div>
             <div className="flex justify-between font-medium border-t pt-1">
-              <span>Tara gesamt</span>
+              <span>{t.weighing.tareTotal}</span>
               <span>{formatGrams(material.tareWeight)}</span>
             </div>
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="w-note">Notiz (optional)</Label>
+            <Label htmlFor="w-note">{t.common.notesOptional}</Label>
             <Input
               id="w-note"
               value={note}
               onChange={e => setNote(e.target.value)}
-              placeholder="z. B. nach Druck von Teil X"
+              placeholder={t.weighing.notePlaceholder}
             />
           </div>
           <DialogFooter>
@@ -157,10 +161,10 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
               onClick={() => onOpenChange(false)}
               disabled={addWeighing.isPending}
             >
-              Abbrechen
+              {t.common.cancel}
             </Button>
             <Button type="submit" disabled={addWeighing.isPending}>
-              {addWeighing.isPending ? "Speichern …" : "Wägung speichern"}
+              {addWeighing.isPending ? t.common.saving : t.weighing.submit}
             </Button>
           </DialogFooter>
         </form>

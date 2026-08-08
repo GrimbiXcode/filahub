@@ -2,6 +2,7 @@ import * as cookie from "cookie";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { Session } from "@contracts/constants";
+import { languageSchema } from "@contracts/i18n";
 import { currencySchema, localeSchema } from "@contracts/locale";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { getSessionCookieOptions } from "./lib/cookies";
@@ -48,6 +49,7 @@ export const authRouter = createRouter({
       z.object({
         currency: currencySchema.optional(),
         locale: localeSchema.optional(),
+        language: languageSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {

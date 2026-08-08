@@ -38,7 +38,8 @@ import {
   useQuickActionsState,
   type PaletteMode,
 } from "@/lib/quickActions";
-import { THEME_LABELS, useAppTheme } from "@/lib/theme";
+import { useT, type TextKey } from "@/lib/i18nContext";
+import { useAppTheme } from "@/lib/theme";
 import { trpc } from "@/lib/trpc";
 
 /**
@@ -94,18 +95,21 @@ export function QuickActionsHost() {
   );
 }
 
-const NAV_TARGETS = [
-  { icon: LayoutDashboard, label: "Materialübersicht", path: "/" },
-  { icon: Disc3, label: "Rollentypen", path: "/rollentypen" },
-  { icon: Archive, label: "Lagerboxen", path: "/lagerboxen" },
-  { icon: FileUp, label: "Massenimport", path: "/import" },
-  { icon: Sparkles, label: "Neuerungen", path: RELEASE_NOTES_PATH },
-  { icon: SettingsIcon, label: "Einstellungen", path: SETTINGS_PATH },
+/** Schlüssel in `t.nav` statt fertiger Beschriftung – siehe AuthLayout */
+type NavKey = TextKey<"nav">;
+
+const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
+  { icon: LayoutDashboard, label: "overview", path: "/" },
+  { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
+  { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
+  { icon: FileUp, label: "import", path: "/import" },
+  { icon: Sparkles, label: "releaseNotes", path: RELEASE_NOTES_PATH },
+  { icon: SettingsIcon, label: "settings", path: SETTINGS_PATH },
 ];
 
-const ADMIN_TARGETS = [
-  { icon: Library, label: "Preset-Katalog", path: "/verwaltung/presets" },
-  { icon: Package, label: "Vorschläge", path: "/verwaltung/vorschlaege" },
+const ADMIN_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
+  { icon: Library, label: "presetCatalog", path: "/verwaltung/presets" },
+  { icon: Package, label: "proposals", path: "/verwaltung/vorschlaege" },
 ];
 
 type PaletteProps = {
@@ -125,6 +129,7 @@ function CommandPalette({
   const { isAdmin } = useAuth();
   const { formatGrams } = useFormat();
   const { theme, setTheme } = useAppTheme();
+  const t = useT();
   // Erst laden, wenn die Suche wirklich geöffnet wird
   const { data: materials } = trpc.material.list.useQuery(undefined, {
     enabled: open,
@@ -162,7 +167,9 @@ function CommandPalette({
         <span className="truncate text-xs text-muted-foreground">
           {material.materialType}
           {material.manufacturer ? ` · ${material.manufacturer}` : ""} ·{" "}
-          {formatGrams(material.remainingWeight)} übrig
+          {t.quick.remaining({
+            amount: formatGrams(material.remainingWeight),
+          })}
         </span>
       </div>
       {material.identifier && (
@@ -177,106 +184,112 @@ function CommandPalette({
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={mode === "weigh" ? "Material wiegen" : "Schnellsuche"}
+      title={mode === "weigh" ? t.quick.weighTitle : t.quick.searchTitle}
       description={
-        mode === "weigh"
-          ? "Material auswählen, das gewogen werden soll"
-          : "Materialien finden, Seiten öffnen und Aktionen ausführen"
+        mode === "weigh" ? t.quick.weighDescription : t.quick.searchDescription
       }
       className="sm:max-w-xl"
     >
       <CommandInput
         placeholder={
           mode === "weigh"
-            ? "Kennung oder Bezeichnung des Materials …"
-            : "Suchen: Kennung, Material, Seite oder Aktion …"
+            ? t.quick.weighPlaceholder
+            : t.quick.searchPlaceholder
         }
       />
       <CommandList className="max-h-[60vh]">
-        <CommandEmpty>Nichts gefunden.</CommandEmpty>
+        <CommandEmpty>{t.common.nothingFound}</CommandEmpty>
 
         {mode === "weigh" ? (
-          <CommandGroup heading="Material zum Wiegen">
+          <CommandGroup heading={t.quick.groupWeigh}>
             {materialItems}
           </CommandGroup>
         ) : (
           <>
-            <CommandGroup heading="Aktionen">
+            <CommandGroup heading={t.quick.groupActions}>
               <CommandItem
-                value="wiegen wägung waage material"
+                value={t.quick.keywordsWeigh}
                 onSelect={() => onModeChange("weigh")}
               >
                 <Scale className="mr-2 h-4 w-4" />
-                Material wiegen
+                {t.quick.weighTitle}
               </CommandItem>
               <CommandItem
-                value="neues material anlegen filament hinzufügen"
+                value={t.quick.keywordsNewMaterial}
                 onSelect={() => run(() => quickActions.openMaterialForm())}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Neues Material anlegen
+                {t.quick.newMaterial}
               </CommandItem>
             </CommandGroup>
 
             <CommandSeparator />
 
-            <CommandGroup heading="Springe zu">
+            <CommandGroup heading={t.quick.groupJumpTo}>
               {NAV_TARGETS.map(target => (
                 <CommandItem
                   key={target.path}
-                  value={`gehe zu ${target.label}`}
+                  value={t.quick.keywordsGoTo({ label: t.nav[target.label] })}
                   onSelect={() => run(() => navigate(target.path))}
                 >
                   <target.icon className="mr-2 h-4 w-4" />
-                  {target.label}
+                  {t.nav[target.label]}
                 </CommandItem>
               ))}
               {isAdmin &&
                 ADMIN_TARGETS.map(target => (
                   <CommandItem
                     key={target.path}
-                    value={`verwaltung ${target.label}`}
+                    value={t.quick.keywordsAdmin({
+                      label: t.nav[target.label],
+                    })}
                     onSelect={() => run(() => navigate(target.path))}
                   >
                     <target.icon className="mr-2 h-4 w-4" />
-                    {target.label}
+                    {t.nav[target.label]}
                   </CommandItem>
                 ))}
             </CommandGroup>
 
             <CommandSeparator />
 
-            <CommandGroup heading="Farbschema">
+            <CommandGroup heading={t.theme.label}>
               <CommandItem
-                value="farbschema hell light"
+                value={t.quick.keywordsThemeLight}
                 onSelect={() => run(() => setTheme("light"))}
               >
                 <Sun className="mr-2 h-4 w-4" />
-                {THEME_LABELS.light}
-                {theme === "light" && <CommandShortcut>aktiv</CommandShortcut>}
+                {t.theme.light}
+                {theme === "light" && (
+                  <CommandShortcut>{t.theme.active}</CommandShortcut>
+                )}
               </CommandItem>
               <CommandItem
-                value="farbschema dunkel dark nachtmodus"
+                value={t.quick.keywordsThemeDark}
                 onSelect={() => run(() => setTheme("dark"))}
               >
                 <Moon className="mr-2 h-4 w-4" />
-                {THEME_LABELS.dark}
-                {theme === "dark" && <CommandShortcut>aktiv</CommandShortcut>}
+                {t.theme.dark}
+                {theme === "dark" && (
+                  <CommandShortcut>{t.theme.active}</CommandShortcut>
+                )}
               </CommandItem>
               <CommandItem
-                value="farbschema system automatisch"
+                value={t.quick.keywordsThemeSystem}
                 onSelect={() => run(() => setTheme("system"))}
               >
                 <Monitor className="mr-2 h-4 w-4" />
-                {THEME_LABELS.system}
-                {theme === "system" && <CommandShortcut>aktiv</CommandShortcut>}
+                {t.theme.system}
+                {theme === "system" && (
+                  <CommandShortcut>{t.theme.active}</CommandShortcut>
+                )}
               </CommandItem>
             </CommandGroup>
 
             {materialItems.length > 0 && (
               <>
                 <CommandSeparator />
-                <CommandGroup heading="Materialien">
+                <CommandGroup heading={t.quick.groupMaterials}>
                   {materialItems}
                 </CommandGroup>
               </>

@@ -3,6 +3,7 @@ import { ShieldAlert } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/hooks/useAuth";
+import { useT } from "@/lib/i18nContext";
 
 /**
  * Rahmen für Verwaltungsseiten. Der Hinweis hier ist reine Bequemlichkeit –
@@ -20,6 +21,7 @@ export function AdminLayout({
   children: ReactNode;
 }) {
   const { isAdmin, isLoading } = useAuth();
+  const t = useT();
 
   return (
     <AuthLayout>
@@ -33,10 +35,9 @@ export function AdminLayout({
         {!isLoading && !isAdmin ? (
           <div className="flex flex-col items-center gap-2 py-16 text-center">
             <ShieldAlert className="h-10 w-10 text-muted-foreground/50" />
-            <p className="font-medium">Kein Zugriff</p>
+            <p className="font-medium">{t.adminGate.title}</p>
             <p className="text-sm text-muted-foreground">
-              Dieser Bereich ist Administratorinnen und Administratoren
-              vorbehalten.
+              {t.adminGate.description}
             </p>
           </div>
         ) : (

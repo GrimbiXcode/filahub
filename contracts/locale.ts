@@ -15,6 +15,11 @@ import { z } from "zod";
 /**
  * Auswählbare Anzeigewährungen (ISO 4217). Bewusst nur Währungen mit zwei
  * Nachkommastellen – Beträge liegen als `priceCents` in Hundertsteln vor.
+ *
+ * `label` ist nur der Notnagel: Die Oberfläche zeigt den Namen über
+ * `Intl.DisplayNames` in der Sprache des Benutzers an (siehe
+ * `currencyLabel`/`localeLabel` unten) und fällt nur darauf zurück, wenn der
+ * Browser den Code nicht kennt.
  */
 export const SUPPORTED_CURRENCIES = [
   { code: "EUR", label: "Euro" },
@@ -83,3 +88,36 @@ export const FALLBACK_LOCALE: LocaleCode = "de-DE";
 
 /** `null` = automatisch, also die Locale des Browsers */
 export const localeSchema = z.enum(LOCALE_CODES).nullable();
+
+// ---------------------------------------------------------------------------
+// Anzeigenamen
+// ---------------------------------------------------------------------------
+
+/**
+ * Name einer Währung in der gewünschten Sprache, z. B. „Schweizer Franken“
+ * bzw. „Swiss Franc“. Fällt auf den ISO-Code zurück, wenn der Browser
+ * `Intl.DisplayNames` nicht kennt.
+ */
+export function currencyLabel(code: string, language: string): string {
+  try {
+    return (
+      new Intl.DisplayNames([language], { type: "currency" }).of(code) ?? code
+    );
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * Name eines Regionalformats in der gewünschten Sprache, z. B.
+ * „Deutsch (Schweiz)“ bzw. „German (Switzerland)“.
+ */
+export function localeLabel(code: string, language: string): string {
+  try {
+    return (
+      new Intl.DisplayNames([language], { type: "language" }).of(code) ?? code
+    );
+  } catch {
+    return code;
+  }
+}

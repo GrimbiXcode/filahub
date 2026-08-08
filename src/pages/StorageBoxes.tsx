@@ -37,12 +37,14 @@ import {
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
 
 export default function StorageBoxes() {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
+  const t = useT();
   const { data: boxes, isLoading } = trpc.storageBox.list.useQuery();
   const { data: materials } = trpc.material.list.useQuery();
 
@@ -76,7 +78,7 @@ export default function StorageBoxes() {
 
   const createMutation = trpc.storageBox.create.useMutation({
     onSuccess: () => {
-      toast.success("Lagerbox angelegt");
+      toast.success(t.storageBoxes.created);
       invalidate();
       setDialogOpen(false);
     },
@@ -84,7 +86,7 @@ export default function StorageBoxes() {
   });
   const updateMutation = trpc.storageBox.update.useMutation({
     onSuccess: () => {
-      toast.success("Lagerbox gespeichert");
+      toast.success(t.storageBoxes.saved);
       invalidate();
       setDialogOpen(false);
     },
@@ -92,7 +94,7 @@ export default function StorageBoxes() {
   });
   const deleteMutation = trpc.storageBox.delete.useMutation({
     onSuccess: () => {
-      toast.success("Lagerbox gelöscht");
+      toast.success(t.storageBoxes.deleted);
       invalidate();
       setDeleting(null);
     },
@@ -104,9 +106,9 @@ export default function StorageBoxes() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const tare = parseInt(tareWeight, 10);
-    if (!name.trim()) return toast.error("Bitte einen Namen angeben");
+    if (!name.trim()) return toast.error(t.common.nameRequired);
     if (!Number.isFinite(tare) || tare < 0)
-      return toast.error("Bitte ein gültiges Leergewicht in Gramm angeben");
+      return toast.error(t.common.invalidTare);
     const payload = {
       name: name.trim(),
       location: location.trim() || undefined,
@@ -123,14 +125,14 @@ export default function StorageBoxes() {
     <AuthLayout>
       <div className="flex flex-col gap-4 sm:gap-6">
         <PageHeader
-          title="Lagerboxen"
-          description="Dryboxen und Aufbewahrungsboxen mit Leergewicht – beim Wiegen in der Box wird deren Tara automatisch abgezogen"
+          title={t.storageBoxes.title}
+          description={t.storageBoxes.description}
           actions={
             <Button
               className="w-full sm:w-auto"
               onClick={() => openDialog(null)}
             >
-              <Plus className="mr-2 h-4 w-4" /> Neue Lagerbox
+              <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.newBox}
             </Button>
           }
         />
@@ -145,14 +147,12 @@ export default function StorageBoxes() {
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <Archive className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium">Noch keine Lagerboxen angelegt</p>
+              <p className="font-medium">{t.storageBoxes.emptyTitle}</p>
               <p className="max-w-md text-sm text-muted-foreground">
-                Wiege deine leere Drybox, trage das Leergewicht ein und weise
-                sie einem Material zu – die App rechnet die Box-Tara automatisch
-                heraus.
+                {t.storageBoxes.emptyDescription}
               </p>
               <Button onClick={() => openDialog(null)}>
-                <Plus className="mr-2 h-4 w-4" /> Erste Lagerbox anlegen
+                <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.firstBox}
               </Button>
             </CardContent>
           </Card>
@@ -171,20 +171,22 @@ export default function StorageBoxes() {
                       <div className="min-w-0">
                         <p className="truncate font-medium">{b.name}</p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
-                          {formatGrams(b.tareWeight)} Tara
+                          {t.storageBoxes.tareSuffix({
+                            amount: formatGrams(b.tareWeight),
+                          })}
                           {b.location ? ` · ${b.location}` : ""}
                         </p>
                       </div>
                       {count > 0 ? (
                         <Badge variant="secondary" className="shrink-0">
-                          {count} Material{count > 1 ? "ien" : ""}
+                          {t.storageBoxes.assigned({ count })}
                         </Badge>
                       ) : (
                         <Badge
                           variant="outline"
                           className="shrink-0 font-normal"
                         >
-                          frei
+                          {t.storageBoxes.free}
                         </Badge>
                       )}
                     </div>
@@ -199,13 +201,13 @@ export default function StorageBoxes() {
                         className="h-10 flex-1"
                         onClick={() => openDialog(b)}
                       >
-                        <Pencil className="mr-2 h-4 w-4" /> Bearbeiten
+                        <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-10 w-10"
-                        aria-label="Lagerbox löschen"
+                        aria-label={t.storageBoxes.deleteBox}
                         onClick={() => setDeleting(b)}
                       >
                         <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -221,14 +223,16 @@ export default function StorageBoxes() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Standort</TableHead>
-                      <TableHead>Leergewicht</TableHead>
-                      <TableHead>Belegung</TableHead>
+                      <TableHead>{t.common.name}</TableHead>
+                      <TableHead>{t.storageBoxes.location}</TableHead>
+                      <TableHead>{t.common.tare}</TableHead>
+                      <TableHead>{t.storageBoxes.occupancy}</TableHead>
                       <TableHead className="hidden lg:table-cell">
-                        Notizen
+                        {t.common.notes}
                       </TableHead>
-                      <TableHead className="text-right">Aktionen</TableHead>
+                      <TableHead className="text-right">
+                        {t.common.actions}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -244,7 +248,7 @@ export default function StorageBoxes() {
                           <TableCell>
                             {count > 0 ? (
                               <Badge variant="secondary">
-                                {count} Material{count > 1 ? "ien" : ""}
+                                {t.storageBoxes.assigned({ count })}
                               </Badge>
                             ) : (
                               <span className="text-muted-foreground">
@@ -260,7 +264,7 @@ export default function StorageBoxes() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Bearbeiten"
+                                aria-label={t.common.edit}
                                 onClick={() => openDialog(b)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -268,7 +272,7 @@ export default function StorageBoxes() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                aria-label="Löschen"
+                                aria-label={t.common.delete}
                                 onClick={() => setDeleting(b)}
                               >
                                 <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -290,7 +294,7 @@ export default function StorageBoxes() {
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editing ? "Lagerbox bearbeiten" : "Neue Lagerbox"}
+              {editing ? t.storageBoxes.editBox : t.storageBoxes.newBox}
             </DialogTitle>
             <DialogDescription>
               Das Leergewicht der leeren Box (ohne Material) in Gramm.
@@ -298,25 +302,25 @@ export default function StorageBoxes() {
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="b-name">Name *</Label>
+              <Label htmlFor="b-name">{t.common.nameRequiredLabel}</Label>
               <Input
                 id="b-name"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="z. B. Drybox 1"
+                placeholder={t.storageBoxes.namePlaceholder}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="b-location">Standort</Label>
+              <Label htmlFor="b-location">{t.storageBoxes.location}</Label>
               <Input
                 id="b-location"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                placeholder="z. B. Regal links, Werkstatt"
+                placeholder={t.storageBoxes.locationPlaceholder}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="b-tare">Leergewicht (g) *</Label>
+              <Label htmlFor="b-tare">{t.storageBoxes.tareLabel}</Label>
               <Input
                 id="b-tare"
                 type="number"
@@ -324,11 +328,11 @@ export default function StorageBoxes() {
                 min={0}
                 value={tareWeight}
                 onChange={e => setTareWeight(e.target.value)}
-                placeholder="z. B. 850"
+                placeholder={t.storageBoxes.tarePlaceholder}
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="b-notes">Notizen</Label>
+              <Label htmlFor="b-notes">{t.common.notes}</Label>
               <Textarea
                 id="b-notes"
                 value={notes}
@@ -346,7 +350,11 @@ export default function StorageBoxes() {
                 Abbrechen
               </Button>
               <Button type="submit" disabled={saving}>
-                {saving ? "Speichern …" : editing ? "Speichern" : "Anlegen"}
+                {saving
+                  ? t.common.saving
+                  : editing
+                    ? t.common.save
+                    : t.common.create}
               </Button>
             </DialogFooter>
           </form>
@@ -359,21 +367,22 @@ export default function StorageBoxes() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Lagerbox löschen?</AlertDialogTitle>
+            <AlertDialogTitle>{t.storageBoxes.deleteTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              „{deleting?.name}“ wird gelöscht. Sie darf aktuell keinem Material
-              zugewiesen sein.
+              {t.storageBoxes.deleteDescription({
+                name: deleting?.name ?? "",
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Abbrechen</AlertDialogCancel>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
                 deleting && deleteMutation.mutate({ id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Löschen
+              {t.common.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

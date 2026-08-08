@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/table";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
@@ -58,12 +59,13 @@ const NO_BOX = "none";
 /** Ab hier gilt ein Material als „niedriger Bestand“ */
 const LOW_STOCK_PERCENT = 25;
 
+/** `label` ist der Schlüssel in `t.home`, nicht der fertige Text */
 const SORT_OPTIONS = [
-  { value: "identifier", label: "Kennung" },
-  { value: "name", label: "Bezeichnung" },
-  { value: "percent", label: "Füllstand" },
-  { value: "remaining", label: "Restmenge" },
-  { value: "purchase", label: "Kaufdatum" },
+  { value: "identifier", label: "sortIdentifier" },
+  { value: "name", label: "sortName" },
+  { value: "percent", label: "sortPercent" },
+  { value: "remaining", label: "sortRemaining" },
+  { value: "purchase", label: "sortPurchase" },
 ] as const;
 
 type SortKey = (typeof SORT_OPTIONS)[number]["value"];
@@ -100,6 +102,7 @@ export default function Home() {
   const { data: materials, isLoading } = trpc.material.list.useQuery();
   const { formatDate, formatGrams, formatMoney, formatPercent } = useFormat();
   const { openMaterialForm, openWeighing } = useQuickActions();
+  const t = useT();
 
   const [search, setSearch] = useState("");
   const [identifierLookup, setIdentifierLookup] = useState("");
@@ -203,7 +206,7 @@ export default function Home() {
   if (search.trim())
     activeFilters.push({
       key: "search",
-      label: `Suche: „${search.trim()}“`,
+      label: t.home.filterSearch({ query: search.trim() }),
       clear: () => setSearch(""),
     });
   if (typeFilter !== ALL)
@@ -223,14 +226,15 @@ export default function Home() {
       key: "box",
       label:
         boxFilter === NO_BOX
-          ? "Ohne Box"
-          : (boxes.find(([id]) => String(id) === boxFilter)?.[1] ?? "Lagerbox"),
+          ? t.home.noBox
+          : (boxes.find(([id]) => String(id) === boxFilter)?.[1] ??
+            t.home.storageBox),
       clear: () => setBoxFilter(ALL),
     });
   if (onlyLowStock)
     activeFilters.push({
       key: "low",
-      label: `≤ ${LOW_STOCK_PERCENT} % Restbestand`,
+      label: t.home.filterLowStock({ percent: LOW_STOCK_PERCENT }),
       clear: () => setOnlyLowStock(false),
     });
 
@@ -266,8 +270,8 @@ export default function Home() {
     }
     toast.error(
       candidates.length === 0
-        ? `Kein Material zu „${identifierLookup.trim()}“ gefunden`
-        : `Mehrere Treffer für „${identifierLookup.trim()}“ – bitte die genaue Kennung eingeben`
+        ? t.home.lookupNotFound({ query: identifierLookup.trim() })
+        : t.home.lookupAmbiguous({ query: identifierLookup.trim() })
     );
   };
 
@@ -282,13 +286,13 @@ export default function Home() {
   const filterFields = (
     <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
       <div className="grid gap-2">
-        <Label htmlFor="f-type">Materialart</Label>
+        <Label htmlFor="f-type">{t.home.materialType}</Label>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger id="f-type">
-            <SelectValue placeholder="Materialart" />
+            <SelectValue placeholder={t.home.materialType} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Alle Materialarten</SelectItem>
+            <SelectItem value={ALL}>{t.home.allMaterialTypes}</SelectItem>
             {materialTypes.map(t => (
               <SelectItem key={t} value={t}>
                 {t}
@@ -298,16 +302,16 @@ export default function Home() {
         </Select>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="f-manufacturer">Hersteller</Label>
+        <Label htmlFor="f-manufacturer">{t.common.manufacturer}</Label>
         <Select
           value={manufacturerFilter}
           onValueChange={setManufacturerFilter}
         >
           <SelectTrigger id="f-manufacturer">
-            <SelectValue placeholder="Hersteller" />
+            <SelectValue placeholder={t.common.manufacturer} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Alle Hersteller</SelectItem>
+            <SelectItem value={ALL}>{t.home.allManufacturers}</SelectItem>
             {manufacturers.map(m => (
               <SelectItem key={m} value={m}>
                 {m}
@@ -317,14 +321,14 @@ export default function Home() {
         </Select>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="f-box">Lagerbox</Label>
+        <Label htmlFor="f-box">{t.home.storageBox}</Label>
         <Select value={boxFilter} onValueChange={setBoxFilter}>
           <SelectTrigger id="f-box">
-            <SelectValue placeholder="Lagerbox" />
+            <SelectValue placeholder={t.home.storageBox} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>Alle Boxen</SelectItem>
-            <SelectItem value={NO_BOX}>Ohne Box</SelectItem>
+            <SelectItem value={ALL}>{t.home.allBoxes}</SelectItem>
+            <SelectItem value={NO_BOX}>{t.home.noBox}</SelectItem>
             {boxes.map(([id, name]) => (
               <SelectItem key={id} value={String(id)}>
                 {name}
@@ -334,7 +338,7 @@ export default function Home() {
         </Select>
       </div>
       <div className="grid gap-2">
-        <Label htmlFor="f-sort">Sortierung</Label>
+        <Label htmlFor="f-sort">{t.home.sorting}</Label>
         <div className="flex gap-2">
           <Select
             value={sortKey}
@@ -346,7 +350,7 @@ export default function Home() {
             <SelectContent>
               {SORT_OPTIONS.map(option => (
                 <SelectItem key={option.value} value={option.value}>
-                  {option.label}
+                  {t.home[option.label]}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -355,9 +359,7 @@ export default function Home() {
             type="button"
             variant="outline"
             size="icon"
-            aria-label={
-              sortDir === "asc" ? "Aufsteigend sortiert" : "Absteigend sortiert"
-            }
+            aria-label={sortDir === "asc" ? t.home.sortAsc : t.home.sortDesc}
             onClick={() => setSortDir(dir => (dir === "asc" ? "desc" : "asc"))}
           >
             {sortDir === "asc" ? (
@@ -370,7 +372,7 @@ export default function Home() {
       </div>
       <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2 md:col-span-4">
         <Label htmlFor="low-stock" className="font-normal">
-          Nur niedriger Bestand (≤ {LOW_STOCK_PERCENT} %)
+          {t.home.onlyLowStock({ percent: LOW_STOCK_PERCENT })}
         </Label>
         <Switch
           id="low-stock"
@@ -385,14 +387,14 @@ export default function Home() {
     <AuthLayout>
       <div className="flex flex-col gap-4 sm:gap-6">
         <PageHeader
-          title="Materialübersicht"
-          description="Dein 3D-Druck-Materiallager auf einen Blick"
+          title={t.home.title}
+          description={t.home.description}
           actions={
             <Button
               className="w-full sm:w-auto"
               onClick={() => openMaterialForm()}
             >
-              <Plus className="mr-2 h-4 w-4" /> Neues Material
+              <Plus className="mr-2 h-4 w-4" /> {t.home.newMaterial}
             </Button>
           }
         />
@@ -406,15 +408,15 @@ export default function Home() {
                 <Input
                   id="identifier-lookup"
                   className="h-11 pl-9"
-                  placeholder="Kennung eingeben, z. B. F01"
+                  placeholder={t.home.lookupPlaceholder}
                   autoComplete="off"
                   value={identifierLookup}
                   onChange={e => setIdentifierLookup(e.target.value)}
-                  aria-label="Kennung für Schnellzugriff"
+                  aria-label={t.home.lookupAria}
                 />
               </div>
               <Button type="submit" className="h-11 shrink-0">
-                <Scale className="mr-2 h-4 w-4" /> Wiegen
+                <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
               </Button>
             </form>
           </CardContent>
@@ -424,12 +426,12 @@ export default function Home() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
             icon={<Package className="h-4 w-4" />}
-            label="Materialien"
+            label={t.home.statMaterials}
             value={String(stats.count)}
             hint={
               stats.lowStock > 0
-                ? `${stats.lowStock} mit niedrigem Bestand`
-                : "alle ausreichend befüllt"
+                ? t.home.statMaterialsLow({ count: stats.lowStock })
+                : t.home.statMaterialsOk
             }
             highlight={stats.lowStock > 0}
             onClick={
@@ -439,21 +441,21 @@ export default function Home() {
           />
           <StatCard
             icon={<Weight className="h-4 w-4" />}
-            label="Restmenge"
+            label={t.home.statRemaining}
             value={formatGrams(stats.totalRemaining)}
-            hint="effektiv verfügbar (ohne Tara)"
+            hint={t.home.statRemainingHint}
           />
           <StatCard
             icon={<Wallet className="h-4 w-4" />}
-            label="Restwert"
+            label={t.home.statValue}
             value={formatMoney(stats.totalValue)}
-            hint="anteilig nach Restmenge"
+            hint={t.home.statValueHint}
           />
           <StatCard
             icon={<Archive className="h-4 w-4" />}
-            label="In Drybox"
+            label={t.home.statInBox}
             value={String(stats.inBox)}
-            hint="Materialien mit Lagerbox"
+            hint={t.home.statInBoxHint}
           />
         </div>
 
@@ -464,16 +466,16 @@ export default function Home() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="h-10 pl-9"
-                placeholder="Suchen …"
+                placeholder={t.common.search}
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                aria-label="Materialien durchsuchen"
+                aria-label={t.home.searchAria}
               />
               {search && (
                 <button
                   type="button"
                   onClick={() => setSearch("")}
-                  aria-label="Suche leeren"
+                  aria-label={t.home.clearSearch}
                   className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent"
                 >
                   <X className="h-4 w-4" />
@@ -499,7 +501,7 @@ export default function Home() {
                 className="max-h-[85vh] overflow-y-auto rounded-t-xl p-4"
               >
                 <SheetHeader className="p-0">
-                  <SheetTitle>Filter und Sortierung</SheetTitle>
+                  <SheetTitle>{t.home.filterSheetTitle}</SheetTitle>
                 </SheetHeader>
                 {filterFields}
                 <div className="flex gap-2 pb-safe">
@@ -509,13 +511,13 @@ export default function Home() {
                     onClick={resetFilters}
                     disabled={activeFilters.length === 0}
                   >
-                    Zurücksetzen
+                    {t.home.reset}
                   </Button>
                   <Button
                     className="flex-1"
                     onClick={() => setFilterSheetOpen(false)}
                   >
-                    {sorted.length} anzeigen
+                    {t.home.showCount({ count: sorted.length })}
                   </Button>
                 </div>
               </SheetContent>
@@ -540,7 +542,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={filter.clear}
-                    aria-label={`Filter „${filter.label}“ entfernen`}
+                    aria-label={t.home.removeFilter({ label: filter.label })}
                     className="rounded-full p-0.5 hover:bg-background/60"
                   >
                     <X className="h-3 w-3" />
@@ -548,7 +550,7 @@ export default function Home() {
                 </Badge>
               ))}
               <Button variant="ghost" size="sm" onClick={resetFilters}>
-                Alle zurücksetzen
+                {t.home.resetAll}
               </Button>
             </div>
           )}
@@ -567,13 +569,13 @@ export default function Home() {
               <Package className="h-10 w-10 text-muted-foreground/50" />
               <p className="font-medium">
                 {(materials ?? []).length === 0
-                  ? "Noch keine Materialien im Lager"
-                  : "Keine Treffer für die aktuellen Filter"}
+                  ? t.home.emptyTitle
+                  : t.home.emptyFiltered}
               </p>
               <p className="max-w-sm text-sm text-muted-foreground">
                 {(materials ?? []).length === 0
-                  ? "Lege dein erstes Filament an – mit Rolle, Gewicht und Preis."
-                  : "Passe Suche oder Filter an."}
+                  ? t.home.emptyHint
+                  : t.home.emptyFilteredHint}
               </p>
               {(materials ?? []).length === 0 ? (
                 <Button onClick={() => openMaterialForm()}>
@@ -610,28 +612,28 @@ export default function Home() {
                   <TableHeader>
                     <TableRow>
                       <SortableHead
-                        label="Kennung"
+                        label={t.home.colIdentifier}
                         sortKey="identifier"
                         activeKey={sortKey}
                         dir={sortDir}
                         onSort={toggleSort}
                       />
                       <SortableHead
-                        label="Material"
+                        label={t.home.colMaterial}
                         sortKey="name"
                         activeKey={sortKey}
                         dir={sortDir}
                         onSort={toggleSort}
                       />
-                      <TableHead>Art</TableHead>
+                      <TableHead>{t.home.colType}</TableHead>
                       {/* Spalten fallen zuerst weg, die anderswo ohnehin
                           stehen – sonst rutscht die Aktionsspalte aus dem
                           Blick und „Wiegen“ ist nur noch scrollbar. */}
                       <TableHead className="hidden xl:table-cell">
-                        Hersteller
+                        {t.common.manufacturer}
                       </TableHead>
                       <SortableHead
-                        label="Restmenge"
+                        label={t.home.colRemaining}
                         sortKey="percent"
                         activeKey={sortKey}
                         dir={sortDir}
@@ -639,20 +641,22 @@ export default function Home() {
                         className="min-w-[180px]"
                       />
                       <TableHead className="hidden 2xl:table-cell">
-                        Rolle / Box
+                        {t.home.colSpoolBox}
                       </TableHead>
                       <TableHead className="hidden lg:table-cell">
-                        Preis
+                        {t.common.price}
                       </TableHead>
                       <SortableHead
-                        label="Kaufdatum"
+                        label={t.home.colPurchase}
                         sortKey="purchase"
                         activeKey={sortKey}
                         dir={sortDir}
                         onSort={toggleSort}
                         className="hidden lg:table-cell"
                       />
-                      <TableHead className="text-right">Aktionen</TableHead>
+                      <TableHead className="text-right">
+                        {t.common.actions}
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -731,7 +735,8 @@ export default function Home() {
                               variant="outline"
                               onClick={() => openWeighing(m)}
                             >
-                              <Scale className="mr-1 h-3.5 w-3.5" /> Wiegen
+                              <Scale className="mr-1 h-3.5 w-3.5" />{" "}
+                              {t.nav.weigh}
                             </Button>
                           </div>
                         </TableCell>
@@ -826,6 +831,7 @@ function SortableHead({
   onSort: (key: SortKey) => void;
   className?: string;
 }) {
+  const t = useT();
   const isActive = sortKey === activeKey;
   return (
     <TableHead className={className}>
@@ -833,7 +839,7 @@ function SortableHead({
         type="button"
         onClick={() => onSort(sortKey)}
         className="-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        aria-label={`Nach ${label} sortieren`}
+        aria-label={t.home.sortBy({ label })}
       >
         {label}
         {isActive ? (
@@ -860,6 +866,7 @@ function MaterialCard({
   onWeigh: () => void;
 }) {
   const { formatGrams, formatPercent } = useFormat();
+  const t = useT();
 
   return (
     <div className="rounded-xl border bg-card shadow-sm">
@@ -902,7 +909,9 @@ function MaterialCard({
 
         <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
           <span className="font-medium text-foreground">
-            {formatGrams(material.remainingWeight)} übrig
+            {t.home.remaining({
+              amount: formatGrams(material.remainingWeight),
+            })}
           </span>
           {material.storageBox && (
             <span className="flex min-w-0 items-center gap-1">
@@ -914,7 +923,7 @@ function MaterialCard({
       </button>
       <div className="border-t p-2">
         <Button variant="ghost" className="h-10 w-full" onClick={onWeigh}>
-          <Scale className="mr-2 h-4 w-4" /> Wiegen
+          <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
         </Button>
       </div>
     </div>

@@ -22,6 +22,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useFormat } from "@/lib/formatContext";
+import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 import type { PresetOption, SpoolTypeItem } from "@/types";
 
@@ -60,6 +61,7 @@ export function SpoolPicker({
 }: Props) {
   const [open, setOpen] = useState(false);
   const { formatGrams } = useFormat();
+  const t = useT();
 
   const selected = useMemo(() => {
     const ref = decodeSpoolRef(value);
@@ -157,7 +159,9 @@ export function SpoolPicker({
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground">Rolle wählen</span>
+              <span className="text-muted-foreground">
+                {t.spoolPicker.choose}
+              </span>
             )}
           </span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -168,9 +172,9 @@ export function SpoolPicker({
         align="start"
       >
         <Command>
-          <CommandInput placeholder="Hersteller, Serie oder Gewicht suchen …" />
+          <CommandInput placeholder={t.spoolPicker.searchPlaceholder} />
           <CommandList>
-            <CommandEmpty>Keine passende Rolle gefunden.</CommandEmpty>
+            <CommandEmpty>{t.spoolPicker.empty}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value="keine unbekannt"
@@ -185,12 +189,12 @@ export function SpoolPicker({
                     value === NO_SPOOL ? "opacity-100" : "opacity-0"
                   )}
                 />
-                Keine / unbekannt
+                {t.spoolPicker.none}
               </CommandItem>
             </CommandGroup>
 
             {ownSpoolTypes.length > 0 && (
-              <CommandGroup heading="Eigene Rollentypen">
+              <CommandGroup heading={t.spoolPicker.ownTypes}>
                 {ownSpoolTypes.map(own => (
                   <CommandItem
                     key={`own-${own.id}`}
@@ -229,8 +233,8 @@ export function SpoolPicker({
               <CommandGroup
                 heading={
                   matching.length > 0
-                    ? "Weitere Katalog-Rollen"
-                    : "Katalog-Rollen"
+                    ? t.spoolPicker.catalogMore
+                    : t.spoolPicker.catalog
                 }
               >
                 {others.map(renderPreset)}
@@ -239,8 +243,7 @@ export function SpoolPicker({
 
             {presets.length === 0 && ownSpoolTypes.length === 0 && (
               <div className="px-3 py-4 text-xs text-muted-foreground">
-                Noch keine Rollentypen angelegt – unter „Rollentypen“ hinzufügen
-                oder ein Preset aus dem Katalog wählen.
+                {t.spoolPicker.nothingYet}
               </div>
             )}
           </CommandList>

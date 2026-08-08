@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -24,6 +25,7 @@ export function AutocompleteInput({
   suggestions,
   placeholder,
 }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -61,7 +63,7 @@ export function AutocompleteInput({
         <button
           type="button"
           tabIndex={-1}
-          aria-label="Vorschläge anzeigen"
+          aria-label={t.autocomplete.showSuggestions}
           className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           onMouseDown={e => e.preventDefault()}
           onClick={() => setOpen(o => !o)}
@@ -100,7 +102,7 @@ export function AutocompleteInput({
       )}
       {open && value.trim() && !exactMatch && filtered.length === 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover px-3 py-2 text-xs text-muted-foreground shadow-md">
-          Neuer Eintrag – erscheint beim nächsten Mal in der Auswahl
+          {t.autocomplete.newEntry}
         </div>
       )}
     </div>

@@ -32,6 +32,8 @@ import {
 import { importPayloadSchema } from "@contracts/import";
 import { buildImportPrompt } from "@/lib/importPrompt";
 import { useFormat } from "@/lib/formatContext";
+import { useI18n } from "@/lib/i18nContext";
+import type { Messages } from "@/messages/de";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 
@@ -57,18 +59,19 @@ function stripCodeFences(text: string): string {
 /** Liefert die Validierungsfehler einer Zeile (leer = gültig). */
 function zeilenFehler(
   zeile: ImportZeile,
-  parseMoney: (value: string) => number | null
+  parseMoney: (value: string) => number | null,
+  t: Messages
 ): string[] {
   const fehler: string[] = [];
-  if (!zeile.typ.trim()) fehler.push("Typ fehlt");
+  if (!zeile.typ.trim()) fehler.push(t.import.errTypeMissing);
   const gewicht = Number(zeile.nenngewicht);
   if (!Number.isInteger(gewicht) || gewicht <= 0)
-    fehler.push("Nenngewicht ungültig");
+    fehler.push(t.import.errNominal);
   const anzahl = Number(zeile.anzahl);
   if (!Number.isInteger(anzahl) || anzahl < 1 || anzahl > 50)
-    fehler.push("Anzahl ungültig");
+    fehler.push(t.import.errCount);
   if (zeile.preis.trim() && parseMoney(zeile.preis) === null)
-    fehler.push("Preis ungültig");
+    fehler.push(t.import.errPrice);
   return fehler;
 }
 
@@ -78,8 +81,9 @@ export default function Import() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const { centsToInput, currency, currencySymbol, parseMoney } = useFormat();
+  const { t, language } = useI18n();
   const dateiInputRef = useRef<HTMLInputElement>(null);
-  const importPrompt = buildImportPrompt(currency);
+  const importPrompt = buildImportPrompt(currency, language);
 
   const [jsonText, setJsonText] = useState("");
   const [pruefFehler, setPruefFehler] = useState<string | null>(null);
@@ -99,9 +103,9 @@ export default function Import() {
   const promptKopieren = async () => {
     try {
       await navigator.clipboard.writeText(importPrompt);
-      toast.success("Prompt in die Zwischenablage kopiert");
+      toast.success(t.import.promptCopied);
     } catch {
-      toast.error("Kopieren fehlgeschlagen – bitte manuell markieren");
+      toast.error(t.import.copyFailed);
     }
   };
 
@@ -120,9 +124,7 @@ export default function Import() {
     try {
       parsed = JSON.parse(stripCodeFences(jsonText));
     } catch {
-      setPruefFehler(
-        "Das ist kein gültiges JSON. Bitte die Ausgabe des LLM prüfen."
-      );
+      setPruefFehler(t.import.invalidJson);
       return;
     }
     const ergebnis = importPayloadSchema.safeParse(parsed);
@@ -164,7 +166,9 @@ export default function Import() {
     setZeilen(prev => prev?.filter((_, i) => i !== index) ?? null);
   };
 
-  const fehlerProZeile = (zeilen ?? []).map(z => zeilenFehler(z, parseMoney));
+  const fehlerProZeile = (zeilen ?? []).map(z =>
+    zeilenFehler(z, parseMoney, t)
+  );
   const hatFehler = fehlerProZeile.some(f => f.length > 0);
   const kaufdatumUngueltig = kaufdatum !== "" && !DATUM_REGEX.test(kaufdatum);
   const gesamtAnzahl = (zeilen ?? []).reduce((summe, z) => {
@@ -196,25 +200,19 @@ export default function Import() {
   return (
     <AuthLayout>
       <div className="flex max-w-5xl flex-col gap-4 sm:gap-6">
-        <PageHeader
-          title="Massenimport"
-          description="Bestellliste per LLM in JSON umwandeln und alle Positionen auf einmal ins Lager übernehmen."
-        />
+        <PageHeader title={t.import.title} description={t.import.description} />
 
         {/* Schritt 1: Prompt kopieren */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">1. Prompt kopieren</CardTitle>
-            <CardDescription>
-              Diesen Prompt zusammen mit deiner Bestellliste (Rechnung,
-              Bestellbestätigung …) an ein LLM deiner Wahl schicken.
-            </CardDescription>
+            <CardTitle className="text-base">{t.import.step1}</CardTitle>
+            <CardDescription>{t.import.step1Description}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-wrap gap-2">
               <Button onClick={promptKopieren}>
                 <ClipboardCopy className="mr-2 h-4 w-4" />
-                Prompt kopieren
+                {t.import.copyPrompt}
               </Button>
               {/* Der Prompt ist lang – auf dem Telefon bleibt er eingeklappt,
                   bis ihn jemand wirklich lesen will. */}
@@ -228,7 +226,7 @@ export default function Import() {
                 ) : (
                   <ChevronDown className="mr-2 h-4 w-4" />
                 )}
-                Prompt {promptSichtbar ? "verbergen" : "anzeigen"}
+                {promptSichtbar ? t.import.hidePrompt : t.import.showPrompt}
               </Button>
             </div>
             {promptSichtbar && (
@@ -242,11 +240,8 @@ export default function Import() {
         {/* Schritt 2: JSON einfügen oder hochladen */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">2. JSON einfügen</CardTitle>
-            <CardDescription>
-              Die Antwort des LLM hier einfügen oder als Datei (.json, .txt)
-              hochladen.
-            </CardDescription>
+            <CardTitle className="text-base">{t.import.step2}</CardTitle>
+            <CardDescription>{t.import.step2Description}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <Textarea
@@ -266,14 +261,14 @@ export default function Import() {
             )}
             <div className="flex flex-wrap gap-2">
               <Button onClick={pruefen} disabled={!jsonText.trim()}>
-                Überprüfen
+                {t.import.check}
               </Button>
               <Button
                 variant="outline"
                 onClick={() => dateiInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Datei hochladen
+                {t.import.uploadFile}
               </Button>
               <input
                 ref={dateiInputRef}
@@ -290,17 +285,12 @@ export default function Import() {
         {zeilen != null && (
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-base">
-                3. Prüfen und importieren
-              </CardTitle>
-              <CardDescription>
-                Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen.
-                Pro Position und Stückzahl wird ein eigenes Material angelegt.
-              </CardDescription>
+              <CardTitle className="text-base">{t.import.step3}</CardTitle>
+              <CardDescription>{t.import.step3Description}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex max-w-56 flex-col gap-1.5">
-                <Label htmlFor="kaufdatum">Kaufdatum (optional)</Label>
+                <Label htmlFor="kaufdatum">{t.import.purchaseDateLabel}</Label>
                 <Input
                   id="kaufdatum"
                   type="date"
@@ -317,7 +307,7 @@ export default function Import() {
 
               {zeilen.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Keine Positionen mehr vorhanden.
+                  {t.import.noPositions}
                 </p>
               ) : (
                 <>
@@ -337,13 +327,15 @@ export default function Import() {
                         >
                           <div className="mb-3 flex items-center justify-between">
                             <span className="text-sm font-medium">
-                              Position {index + 1}
+                              {t.import.position({ index: index + 1 })}
                             </span>
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => zeileLoeschen(index)}
-                              aria-label={`Position ${index + 1} löschen`}
+                              aria-label={t.import.deletePosition({
+                                index: index + 1,
+                              })}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -354,7 +346,7 @@ export default function Import() {
                                 htmlFor={`p-typ-${index}`}
                                 className="text-xs"
                               >
-                                Typ *
+                                {t.import.typeLabel}
                               </Label>
                               <Input
                                 id={`p-typ-${index}`}
@@ -369,7 +361,7 @@ export default function Import() {
                                 htmlFor={`p-hersteller-${index}`}
                                 className="text-xs"
                               >
-                                Hersteller
+                                {t.common.manufacturer}
                               </Label>
                               <Input
                                 id={`p-hersteller-${index}`}
@@ -388,7 +380,7 @@ export default function Import() {
                                 htmlFor={`p-farbe-${index}`}
                                 className="text-xs"
                               >
-                                Farbe
+                                {t.common.color}
                               </Label>
                               <Input
                                 id={`p-farbe-${index}`}
@@ -403,7 +395,7 @@ export default function Import() {
                                 htmlFor={`p-gewicht-${index}`}
                                 className="text-xs"
                               >
-                                Nenngewicht (g)
+                                {t.import.nominalLabel}
                               </Label>
                               <Input
                                 id={`p-gewicht-${index}`}
@@ -423,13 +415,15 @@ export default function Import() {
                                 htmlFor={`p-preis-${index}`}
                                 className="text-xs"
                               >
-                                Preis ({currencySymbol})
+                                {t.import.priceLabel({
+                                  symbol: currencySymbol,
+                                })}
                               </Label>
                               <Input
                                 id={`p-preis-${index}`}
                                 value={zeile.preis}
                                 inputMode="decimal"
-                                placeholder="z. B. 29,99"
+                                placeholder={t.import.pricePlaceholder}
                                 onChange={e =>
                                   zeileAendern(index, "preis", e.target.value)
                                 }
@@ -440,7 +434,7 @@ export default function Import() {
                                 htmlFor={`p-anzahl-${index}`}
                                 className="text-xs"
                               >
-                                Anzahl
+                                {t.import.countLabel}
                               </Label>
                               <Input
                                 id={`p-anzahl-${index}`}
@@ -466,16 +460,18 @@ export default function Import() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Hersteller</TableHead>
-                          <TableHead>Typ</TableHead>
-                          <TableHead>Farbe</TableHead>
+                          <TableHead>{t.common.manufacturer}</TableHead>
+                          <TableHead>{t.import.typeLabel}</TableHead>
+                          <TableHead>{t.common.color}</TableHead>
                           <TableHead className="w-28">
-                            Nenngewicht (g)
+                            {t.import.nominalLabel}
                           </TableHead>
                           <TableHead className="w-28">
-                            Preis ({currencySymbol})
+                            {t.import.priceLabel({ symbol: currencySymbol })}
                           </TableHead>
-                          <TableHead className="w-20">Anzahl</TableHead>
+                          <TableHead className="w-20">
+                            {t.import.countLabel}
+                          </TableHead>
                           <TableHead className="w-12" />
                         </TableRow>
                       </TableHeader>
@@ -538,7 +534,7 @@ export default function Import() {
                                 <Input
                                   value={zeile.preis}
                                   inputMode="decimal"
-                                  placeholder="z. B. 29,99"
+                                  placeholder={t.import.pricePlaceholder}
                                   aria-label={`Preis Position ${index + 1}`}
                                   onChange={e =>
                                     zeileAendern(index, "preis", e.target.value)
@@ -564,7 +560,9 @@ export default function Import() {
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => zeileLoeschen(index)}
-                                  aria-label={`Position ${index + 1} löschen`}
+                                  aria-label={t.import.deletePosition({
+                                    index: index + 1,
+                                  })}
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -583,7 +581,10 @@ export default function Import() {
                   {zeilen.map((_, index) =>
                     fehlerProZeile[index].length > 0 ? (
                       <p key={index} className="text-sm text-destructive">
-                        Position {index + 1}: {fehlerProZeile[index].join(", ")}
+                        {t.import.positionError({
+                          index: index + 1,
+                          errors: fehlerProZeile[index].join(", "),
+                        })}
                       </p>
                     ) : null
                   )}
@@ -597,12 +598,12 @@ export default function Import() {
                   className="w-full sm:w-auto"
                 >
                   {importMutation.isPending
-                    ? "Importiere …"
-                    : `${gesamtAnzahl} Materialien importieren`}
+                    ? t.import.importing
+                    : t.import.importCount({ count: gesamtAnzahl })}
                 </Button>
                 {hatFehler && (
                   <p className="text-sm text-destructive">
-                    Bitte zuerst die markierten Fehler beheben.
+                    {t.import.fixErrors}
                   </p>
                 )}
               </div>

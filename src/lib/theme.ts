@@ -4,13 +4,6 @@ import { useTheme } from "next-themes";
 export const THEMES = ["light", "dark", "system"] as const;
 export type Theme = (typeof THEMES)[number];
 
-/** Beschriftungen für die Oberfläche */
-export const THEME_LABELS: Record<Theme, string> = {
-  light: "Hell",
-  dark: "Dunkel",
-  system: "System",
-};
-
 /**
  * Hintergrundfarbe der Adressleiste je Farbschema. Muss zu `--background`
  * aus `index.css` passen – dieselben Werte stehen im Inline-Skript in

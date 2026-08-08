@@ -27,7 +27,12 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { LOGIN_PATH, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
+import {
+  APP_NAME,
+  LOGIN_PATH,
+  RELEASE_NOTES_PATH,
+  SETTINGS_PATH,
+} from "@/const";
 import {
   Archive,
   Database,
@@ -55,25 +60,42 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
+import { Wordmark } from "./Logo";
 import { QuickActionsHost } from "./QuickActions";
 import { useQuickActions } from "@/lib/quickActions";
 import { useReleaseNotes } from "@/hooks/useReleaseNotes";
 import { ThemeToggle } from "./ThemeToggle";
-import { THEMES, THEME_LABELS, useAppTheme, type Theme } from "@/lib/theme";
+import { useT, type TextKey } from "@/lib/i18nContext";
+import type { Messages } from "@/messages/de";
+import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
 import { Button } from "./ui/button";
 
-const menuItems = [
-  { icon: LayoutDashboard, label: "Materialübersicht", path: "/" },
-  { icon: FileUp, label: "Import", path: "/import" },
-  { icon: Disc3, label: "Rollentypen", path: "/rollentypen" },
-  { icon: Archive, label: "Lagerboxen", path: "/lagerboxen" },
+/**
+ * Die Einträge tragen den Schlüssel in `t.nav`, nicht die fertige
+ * Beschriftung – sonst wäre die Sprache beim Modulladen eingefroren.
+ */
+type NavKey = TextKey<"nav">;
+
+const menuItems: {
+  icon: typeof LayoutDashboard;
+  label: NavKey;
+  path: string;
+}[] = [
+  { icon: LayoutDashboard, label: "overview", path: "/" },
+  { icon: FileUp, label: "import", path: "/import" },
+  { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
+  { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
 ];
 
 /** Nur für Administratoren sichtbar; abgesichert wird serverseitig (adminQuery) */
-const adminMenuItems = [
-  { icon: Library, label: "Preset-Katalog", path: "/verwaltung/presets" },
-  { icon: Inbox, label: "Vorschläge", path: "/verwaltung/vorschlaege" },
-  { icon: Database, label: "System", path: "/verwaltung/system" },
+const adminMenuItems: {
+  icon: typeof LayoutDashboard;
+  label: NavKey;
+  path: string;
+}[] = [
+  { icon: Library, label: "presetCatalog", path: "/verwaltung/presets" },
+  { icon: Inbox, label: "proposals", path: "/verwaltung/vorschlaege" },
+  { icon: Database, label: "system", path: "/verwaltung/system" },
 ];
 
 const THEME_ICONS: Record<Theme, typeof Sun> = {
@@ -94,15 +116,15 @@ const isMac =
 const SEARCH_SHORTCUT = isMac ? "⌘K" : "Strg K";
 
 /** Titel für die Kopfzeile auf schmalen Geräten */
-function titleForPath(pathname: string): string {
+function titleForPath(pathname: string, t: Messages): string {
   const item = [...menuItems, ...adminMenuItems].find(
     entry => entry.path === pathname
   );
-  if (item) return item.label;
-  if (pathname === RELEASE_NOTES_PATH) return "Neuerungen";
-  if (pathname === SETTINGS_PATH) return "Einstellungen";
-  if (pathname.startsWith("/material/")) return "Material";
-  return "Filament-Lager";
+  if (item) return t.nav[item.label] as string;
+  if (pathname === RELEASE_NOTES_PATH) return t.nav.releaseNotes;
+  if (pathname === SETTINGS_PATH) return t.nav.settings;
+  if (pathname.startsWith("/material/")) return t.nav.material;
+  return APP_NAME;
 }
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
@@ -111,6 +133,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
   const { isLoading, user } = useAuth();
+  const t = useT();
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, sidebarWidth.toString());
@@ -126,11 +149,10 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
         <div className="flex w-full max-w-md flex-col items-center gap-8">
           <div className="flex flex-col items-center gap-4">
             <h1 className="text-center text-2xl font-semibold tracking-tight">
-              Bitte anmelden
+              {t.authGate.title}
             </h1>
             <p className="max-w-sm text-center text-sm text-muted-foreground">
-              Für den Zugriff auf dein Materiallager ist eine Anmeldung
-              erforderlich.
+              {t.authGate.description}
             </p>
           </div>
           <Button
@@ -140,7 +162,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             size="lg"
             className="w-full"
           >
-            Anmelden
+            {t.authGate.action}
           </Button>
         </div>
       </div>
@@ -178,6 +200,7 @@ function AuthLayoutContent({
   const { openPalette } = useQuickActions();
   const { theme, setTheme } = useAppTheme();
   const { unreadCount } = useReleaseNotes();
+  const t = useT();
   const isCollapsed = state === "collapsed";
   const [isDragging, setIsDragging] = useState(false);
   // In der eingeklappten Leiste gibt es nichts zu ziehen – abgeleitet statt
@@ -230,14 +253,12 @@ function AuthLayoutContent({
               <button
                 onClick={toggleSidebar}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-                aria-label="Navigation ein-/ausklappen"
+                aria-label={t.nav.toggleSidebar}
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
               </button>
               {!isCollapsed ? (
-                <span className="truncate font-semibold tracking-tight">
-                  Filament-Lager
-                </span>
+                <Wordmark className="min-w-0 [&>span]:truncate" />
               ) : null}
             </div>
           </SidebarHeader>
@@ -251,11 +272,11 @@ function AuthLayoutContent({
                     setOpenMobile(false);
                     openPalette("weigh");
                   }}
-                  tooltip="Material wiegen"
+                  tooltip={t.nav.weighMaterial}
                   className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
                 >
                   <Scale className="h-4 w-4" />
-                  <span>Wiegen</span>
+                  <span>{t.nav.weigh}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               <SidebarMenuItem>
@@ -264,11 +285,13 @@ function AuthLayoutContent({
                     setOpenMobile(false);
                     openPalette();
                   }}
-                  tooltip={`Suchen (${SEARCH_SHORTCUT})`}
+                  tooltip={t.nav.searchWithShortcut({
+                    shortcut: SEARCH_SHORTCUT,
+                  })}
                   className="h-10 font-normal text-muted-foreground"
                 >
                   <Search className="h-4 w-4" />
-                  <span>Suchen …</span>
+                  <span>{t.common.search}</span>
                   <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
                     {SEARCH_SHORTCUT}
                   </kbd>
@@ -286,13 +309,13 @@ function AuthLayoutContent({
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => go(item.path)}
-                      tooltip={item.label}
+                      tooltip={t.nav[item.label]}
                       className="h-10 font-normal transition-all"
                     >
                       <item.icon
                         className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
                       />
-                      <span>{item.label}</span>
+                      <span>{t.nav[item.label]}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -303,7 +326,7 @@ function AuthLayoutContent({
               <>
                 <SidebarSeparator className="my-2" />
                 <SidebarGroup className="py-0">
-                  <SidebarGroupLabel>Verwaltung</SidebarGroupLabel>
+                  <SidebarGroupLabel>{t.nav.administration}</SidebarGroupLabel>
                   <SidebarMenu className="px-2 py-1">
                     {adminMenuItems.map(item => {
                       const isActive = location.pathname === item.path;
@@ -312,13 +335,13 @@ function AuthLayoutContent({
                           <SidebarMenuButton
                             isActive={isActive}
                             onClick={() => go(item.path)}
-                            tooltip={item.label}
+                            tooltip={t.nav[item.label]}
                             className="h-10 font-normal transition-all"
                           >
                             <item.icon
                               className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
                             />
-                            <span>{item.label}</span>
+                            <span>{t.nav[item.label]}</span>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       );
@@ -337,8 +360,8 @@ function AuthLayoutContent({
                   onClick={() => go(RELEASE_NOTES_PATH)}
                   tooltip={
                     unreadCount > 0
-                      ? `Neuerungen (${unreadCount} ungelesen)`
-                      : "Neuerungen"
+                      ? t.nav.releaseNotesUnread({ count: unreadCount })
+                      : t.nav.releaseNotes
                   }
                   className="h-10 font-normal transition-all"
                 >
@@ -359,7 +382,7 @@ function AuthLayoutContent({
                       />
                     )}
                   </span>
-                  <span>Neuerungen</span>
+                  <span>{t.nav.releaseNotes}</span>
                 </SidebarMenuButton>
                 {unreadCount > 0 && (
                   <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground">
@@ -371,7 +394,7 @@ function AuthLayoutContent({
                 <SidebarMenuButton
                   isActive={location.pathname === SETTINGS_PATH}
                   onClick={() => go(SETTINGS_PATH)}
-                  tooltip="Einstellungen"
+                  tooltip={t.nav.settings}
                   className="h-10 font-normal transition-all"
                 >
                   <Settings
@@ -379,7 +402,7 @@ function AuthLayoutContent({
                       location.pathname === SETTINGS_PATH ? "text-primary" : ""
                     }`}
                   />
-                  <span>Einstellungen</span>
+                  <span>{t.nav.settings}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
@@ -390,7 +413,7 @@ function AuthLayoutContent({
                     {user?.avatar && (
                       <AvatarImage
                         src={user.avatar}
-                        alt={user.name ?? "Profilbild"}
+                        alt={user.name ?? t.nav.profilePicture}
                       />
                     )}
                     <AvatarFallback className="text-xs font-medium">
@@ -411,7 +434,7 @@ function AuthLayoutContent({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
-                  Farbschema
+                  {t.theme.label}
                 </DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={theme}
@@ -422,7 +445,7 @@ function AuthLayoutContent({
                     return (
                       <DropdownMenuRadioItem key={value} value={value}>
                         <Icon className="mr-2 h-4 w-4" />
-                        {THEME_LABELS[value]}
+                        {t.theme[value]}
                       </DropdownMenuRadioItem>
                     );
                   })}
@@ -433,7 +456,7 @@ function AuthLayoutContent({
                   className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Abmelden</span>
+                  <span>{t.nav.signOut}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -458,13 +481,13 @@ function AuthLayoutContent({
         <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
           <SidebarTrigger className="size-10 rounded-lg" />
           <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
-            {titleForPath(location.pathname)}
+            {titleForPath(location.pathname, t)}
           </span>
           <Button
             variant="ghost"
             size="icon"
             className="size-10"
-            aria-label="Material wiegen"
+            aria-label={t.nav.weighMaterial}
             onClick={() => openPalette("weigh")}
           >
             <Scale className="h-5 w-5" />
@@ -473,7 +496,7 @@ function AuthLayoutContent({
             variant="ghost"
             size="icon"
             className="size-10"
-            aria-label="Suchen"
+            aria-label={t.common.search}
             onClick={() => openPalette()}
           >
             <Search className="h-5 w-5" />
