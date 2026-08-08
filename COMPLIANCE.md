@@ -69,7 +69,10 @@ upstream. In place today:
   Trivy against the built image
 - **Pinned supply chain**: every GitHub Action pinned to a commit SHA, base
   image pinned to a digest, lockfile committed
-- **Least privilege at runtime**: the container runs as `node`, not root
+- **Least privilege at runtime**: the container runs as `node`, not root, and
+  npm is removed from the finished image — it is only needed to install
+  dependencies, but ships its own dependency tree that would otherwise show up
+  in every scan of a product that never calls it
 
 ### The one open advisory
 

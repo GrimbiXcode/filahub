@@ -87,7 +87,7 @@ export type SeedManufacturer = {
  * bereits geseedete Einträge überschrieben – von Administratoren oder aus
  * der Community geänderte Einträge bleiben davon immer unberührt.
  */
-export const PRESET_SEED_REVISION = 3;
+export const PRESET_SEED_REVISION = 4;
 
 export const presetSeedCatalog: SeedManufacturer[] = [
   {
@@ -97,7 +97,16 @@ export const presetSeedCatalog: SeedManufacturer[] = [
     series: [
       {
         slug: "polyterra-pla",
-        name: "PolyTerra PLA",
+        /*
+         * Polymaker hat die PLA-Ästhetiklinien ab Ende 2024 auf „Panchroma“
+         * umbenannt: PolyTerra PLA wurde Panchroma Matte, PolyTerra PLA+
+         * wurde Satin, die Effekte aus PolyLite wurden Galaxy und Starlight.
+         * Laut Polymaker-Wiki nur ein neuer Name, dieselbe Rezeptur und
+         * dieselbe Spule – deshalb bleibt es ein Eintrag. Beide Namen stehen
+         * im Label, sonst findet weder die alte noch die neue Rolle hierher.
+         */
+        name: "Panchroma (früher PolyTerra PLA)",
+        nameI18n: { en: "Panchroma (formerly PolyTerra PLA)" },
         materialTypes: ["PLA"],
         versions: [
           {
@@ -114,7 +123,21 @@ export const presetSeedCatalog: SeedManufacturer[] = [
                 widthMm: 66,
                 boreDiameterMm: 55,
               },
+              {
+                nominalWeight: 3000,
+                tareWeight: 425,
+                outerDiameterMm: 250,
+                widthMm: 117,
+                boreDiameterMm: 55,
+              },
             ],
+          },
+          {
+            slug: "kunststoffspule-5-kg",
+            name: "Kunststoffspule (5 kg)",
+            nameI18n: { en: "Plastic spool (5 kg)" },
+            spoolMaterial: "kunststoff",
+            variants: [{ nominalWeight: 5000, tareWeight: 819 }],
           },
           {
             slug: "kunststoff-bis-2020",
@@ -921,6 +944,37 @@ export const presetSeedCatalog: SeedManufacturer[] = [
             variants: [
               { nominalWeight: 1000, tareWeight: 250 },
               { nominalWeight: 2500, tareWeight: 700 },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "r3d",
+    name: "R3D",
+    website: "https://r3dprint.com",
+    series: [
+      {
+        slug: "standardspule",
+        name: "Standardspule",
+        nameI18n: { en: "Standard spool" },
+        materialTypes: ["PLA", "PETG", "ABS", "ASA", "TPU"],
+        versions: [
+          {
+            /*
+             * Nur die Kunststoffspule: SpoolmanDB führt daneben eine
+             * Kartonspule, nennt dafür aber im selben Datensatz 100 g und
+             * 140 g – und die anderen Sammlungen kennen für R3D gar keine.
+             * Ein widersprüchlicher Startwert wäre schlechter als keiner.
+             */
+            slug: "kunststoffspule",
+            name: "Kunststoffspule",
+            nameI18n: { en: "Plastic spool" },
+            spoolMaterial: "kunststoff",
+            variants: [
+              { nominalWeight: 1000, tareWeight: 127 },
+              { nominalWeight: 3000, tareWeight: 320 },
             ],
           },
         ],

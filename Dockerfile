@@ -29,7 +29,16 @@ ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
 # `--ignore-scripts`: Zur Laufzeit wird nichts kompiliert, aber jedes
 # install-Skript einer Abhängigkeit liefe hier mit Root-Rechten im Bau.
-RUN npm ci --omit=dev --ignore-scripts
+#
+# Danach fliegt npm selbst raus. Das ist kein Aufräumen um der 18 MB willen:
+# npm bringt einen eigenen Abhängigkeitsbaum mit, der im fertigen Abbild
+# liegen bleibt und dort mit jeder neuen Schwachstelle darin auftaucht –
+# obwohl zur Laufzeit nur `node dist/boot.js` läuft und npm nie aufgerufen
+# wird. Was nicht im Abbild ist, muss auch nicht gepatcht werden.
+RUN npm ci --omit=dev --ignore-scripts \
+    && rm -rf /usr/local/lib/node_modules/npm \
+              /usr/local/bin/npm /usr/local/bin/npx \
+              /root/.npm
 COPY --from=build /app/dist ./dist
 COPY drizzle.config.ts ./
 COPY db ./db
