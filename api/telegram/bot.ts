@@ -69,7 +69,11 @@ async function handleUpdate(update: TelegramUpdate) {
     const code = await issueLoginCode(from);
     await sendMessage(
       from.id,
-      `Dein Login-Code für das Filament-Lager:\n\n${code}\n\nDer Code ist 10 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.`
+      // Zweisprachig: Der Bot kennt die Spracheinstellung nicht – beim /login
+      // existiert der Benutzer in der Datenbank oft noch gar nicht.
+      `Dein Login-Code für filahub / Your filahub login code:\n\n${code}\n\n` +
+        `Der Code ist 10 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.\n` +
+        `The code is valid for 10 minutes. Enter it on the website to sign in.`
     );
   } else if (text === "/id") {
     await sendMessage(from.id, `Deine Telegram-ID: ${from.id}`);
