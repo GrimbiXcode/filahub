@@ -54,12 +54,33 @@ that CRA obligations then apply.
 ### Voluntary alignment
 
 The CRA is not owed here, but several of its expectations are cheap and useful
-regardless — an SBOM, dependency scanning, build provenance. They also matter
-for a different reason: a company deploying filahub commercially becomes the
-manufacturer under the CRA and will need an SBOM from upstream. Providing one
-costs a CI step.
+regardless. They also matter for a different reason: a company deploying filahub
+commercially becomes the manufacturer under the CRA and will need an SBOM from
+upstream. In place today:
 
-Status: not yet implemented. Tracked as phase 4 of the compliance roadmap.
+- **SBOM** in CycloneDX format, generated per release — attached to the
+  container image as an attestation and kept as a workflow artifact
+- **Build provenance** via BuildKit and, signed through Sigstore and recorded in
+  a public transparency log, `actions/attest-build-provenance`. Verifiable with
+  `gh attestation verify` — see [SECURITY.md](SECURITY.md)
+- **Dependency updates** through Dependabot (npm, GitHub Actions, Docker base
+  image)
+- **Vulnerability gate** in CI: `npm audit` over production dependencies, and
+  Trivy against the built image
+- **Pinned supply chain**: every GitHub Action pinned to a commit SHA, base
+  image pinned to a digest, lockfile committed
+- **Least privilege at runtime**: the container runs as `node`, not root
+
+### The one open advisory
+
+`@hono/node-server` below 2.0.5 has a path traversal in `serve-static`
+**on Windows**, through an encoded backslash. filahub ships as a Linux
+container, so it is not reachable here, and the fix is a major version bump of
+the HTTP server — a real regression risk for no gain in this deployment.
+
+The CI gate is therefore set to `--audit-level=high`, which lets this moderate
+advisory stand. Revisit when `@hono/node-server` 2.x is otherwise worth
+adopting.
 
 ## What else applies, and what does not
 
@@ -133,10 +154,15 @@ agreement with the hosting provider.
 Known gaps, deliberately recorded rather than glossed over:
 
 - **No audit log.** Sign-ins, failed attempts, admin actions and role changes
-  leave no trace beyond database timestamps.
+  leave no trace beyond database timestamps. This is the largest remaining gap:
+  an incident could not be reconstructed from the application's own records.
 - **No coverage measurement**, and no test for the authorisation boundary as a
-  whole — though the account deletion and export paths are covered.
-- **No SBOM, no dependency scanning, no build provenance.**
+  whole — though account deletion, export, session handling, the rate limiter
+  and role assignment are covered.
+- **Rate limiting is per process.** A deployment with several replicas
+  multiplies the effective limit by the replica count.
+- **Commits are not consistently signed**, and release tags are lightweight
+  rather than signed and annotated.
 
 ## Erasure concept
 

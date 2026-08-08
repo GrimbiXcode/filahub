@@ -1,0 +1,41 @@
+version: 2
+
+# Ohne automatische Aktualisierungen veraltet ein Abhängigkeitsbaum dieser
+# Größe still vor sich hin – und das festgenagelte Basisabbild im Dockerfile
+# bekäme nie wieder einen Sicherheitspatch. Beides fängt Dependabot ab.
+#
+# Zusammengefasst wird bewusst großzügig: Ein Solo-Projekt erträgt keine
+# dreißig offenen Pull Requests pro Woche, und einzeln durchgewinkte
+# Radix-Aktualisierungen bringen niemandem etwas.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      radix:
+        patterns: ["@radix-ui/*"]
+      types:
+        patterns: ["@types/*"]
+      dev-dependencies:
+        dependency-type: development
+    # Sicherheitsaktualisierungen kommen unabhängig von diesen Gruppen und
+    # von der Wochentaktung – dafür sorgt GitHub selbst.
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Hält den Digest in Dockerfile nach. Ohne diesen Eintrag wäre das Pinning
+  # dort eine Falle statt einer Absicherung.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3

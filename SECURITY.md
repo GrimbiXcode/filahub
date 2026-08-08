@@ -5,6 +5,16 @@
 Only the latest release gets security fixes. There are no maintained release
 branches — upgrade to the newest tag before reporting.
 
+This is a hobby project maintained by one person. "Supported" means fixes land
+in the next release when I get to them, not within a contractual window. If you
+need guarantees, run your own fork; the licence gives you everything you need
+to.
+
+Dependencies are watched by Dependabot (npm, GitHub Actions and the Docker base
+image), and CI fails on high-severity advisories in production dependencies.
+One moderate advisory is knowingly left open — see COMPLIANCE.md for which and
+why.
+
 ## Reporting a vulnerability
 
 **Please do not open a public issue.** Use GitHub's private reporting instead:
@@ -59,3 +69,37 @@ These are documented behaviours, not bugs:
   on that device.
 - **The preset catalogue is deliberately global**, shared by every account on
   an instance. Every other table is scoped to its owner.
+
+## Verifying a release
+
+Container images carry a build attestation and a software bill of materials.
+Both are produced by the release workflow and can be checked without trusting
+me:
+
+```bash
+# Was this image built from this repository, by its CI?
+gh attestation verify oci://ghcr.io/grimbixcode/filahub:latest \
+  --repo GrimbiXcode/filahub
+
+# What is inside it?
+docker buildx imagetools inspect ghcr.io/grimbixcode/filahub:latest \
+  --format '{{ json .SBOM }}'
+```
+
+A CycloneDX SBOM of the npm dependencies is also attached to each release run
+as a workflow artifact.
+
+## If this ever becomes a commercial product
+
+filahub is currently outside the scope of the EU Cyber Resilience Act, because
+it is not supplied in the course of a commercial activity — the reasoning and
+the conditions under which that changes are in
+[COMPLIANCE.md](COMPLIANCE.md).
+
+Should it change, Art. 14 CRA reporting has applied since 11 September 2026 and
+would bind this project: an actively exploited vulnerability or a severe
+incident goes to the coordinating CSIRT and ENISA as an early warning within
+**24 hours**, a notification within **72 hours**, and a final report within
+**14 days** of a fix being available. That process does not exist here today,
+and setting it up would be a precondition for going commercial, not an
+afterthought.
