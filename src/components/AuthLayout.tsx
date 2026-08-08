@@ -503,7 +503,14 @@ function AuthLayoutContent({
           </Button>
           <ThemeToggle className="size-10" />
         </div>
-        <main className="flex-1">
+        {/*
+          Letzte Absicherung gegen seitliches Schieben: `clip` statt `hidden`,
+          weil es keinen Scroll-Container erzeugt und `position: sticky` im
+          Inhalt deshalb weiter funktioniert. Der eigentliche Schutz sind die
+          Regeln an den Feldern selbst – das hier fängt nur ab, dass ein
+          einzelner Ausreisser die ganze Seite verschiebbar macht.
+        */}
+        <main className="min-w-0 flex-1 overflow-x-clip">
           <div className="mx-auto w-full max-w-7xl p-4 pb-[calc(3rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-10">
             {children}
           </div>
