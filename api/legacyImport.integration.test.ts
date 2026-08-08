@@ -292,7 +292,13 @@ describe.skipIf(!legacyUrl)("Datenübernahme aus MySQL", () => {
     // über ihren Slug wiederfinden – deshalb läuft er in api/boot.ts nach der
     // Übernahme.
     const stats = await seedSpoolPresets();
-    expect(stats.skipped).toBeGreaterThan(0);
+    // Die Altdatenbank enthält nur einen Ausschnitt des Startkatalogs; den Rest
+    // legt das Seeding zu Recht an. Entscheidend ist, dass die übernommenen
+    // Einträge *wiedererkannt* werden – ob sie dabei übersprungen oder
+    // aktualisiert werden, hängt an PRESET_SEED_REVISION: Nach einer Erhöhung,
+    // etwa um Übersetzungen nachzuliefern, werden Altdaten bewusst
+    // aktualisiert. Der eigentliche Beweis steht unten: eindeutige Slugs.
+    expect(stats.skipped + stats.updated).toBeGreaterThan(0);
 
     const manufacturers = await db().query.presetManufacturers.findMany();
     const slugs = manufacturers.map(m => m.slug);

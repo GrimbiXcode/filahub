@@ -30,7 +30,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # enablement schaltet Pages per API auf "GitHub Actions", falls es im
+      # Repository noch nicht eingerichtet ist – sonst scheitert der erste Lauf.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

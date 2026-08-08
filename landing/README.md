@@ -3,7 +3,8 @@
 The public product page, published to
 <https://grimbixcode.github.io/filahub/> by
 [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) on every push to
-`main` that touches this directory.
+`main` that touches this directory. The workflow switches the repository's Pages
+source to GitHub Actions itself on the first run.
 
 Plain HTML and CSS, no build step and no external requests — `index.html`,
 `style.css` and the PNGs in `assets/` are the whole thing. To work on it, open
