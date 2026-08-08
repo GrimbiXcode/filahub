@@ -8,6 +8,11 @@ RUN npm run build
 
 # ---- Runtime ----
 FROM node:26-alpine
+LABEL org.opencontainers.image.title="filahub" \
+      org.opencontainers.image.description="Inventory for 3D-printing filament with weigh-in based remaining quantity" \
+      org.opencontainers.image.source="https://github.com/GrimbiXcode/filahub" \
+      org.opencontainers.image.url="https://grimbixcode.github.io/filahub/" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later"
 # wget für den Healthcheck (busybox-wget reichte nicht überall, s. IPv6-Hinweis)
 RUN apk add --no-cache wget
 WORKDIR /app
