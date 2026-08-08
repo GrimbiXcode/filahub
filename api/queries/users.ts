@@ -69,7 +69,6 @@ export async function upsertUser(data: InsertUser) {
     lastSignInAt: new Date(),
     name: data.name,
     telegramUsername: data.telegramUsername,
-    avatar: data.avatar,
   };
 
   if (values.role === undefined) {

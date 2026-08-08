@@ -5,7 +5,29 @@
       "name": "filahub-dev",
       "runtimeExecutable": "env",
       "runtimeArgs": ["DEV_LOGIN=1", "npm", "run", "dev"],
-      "port": 3000
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "_comment": "Login-Oberfläche ohne echten Bot testen. Der Bot pollt nur unter NODE_ENV=production, das Dummy-Token bleibt hier folgenlos.",
+      "name": "filahub-dev-telegram",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "DEV_LOGIN=1",
+        "TELEGRAM_BOT_TOKEN=000000:dummy-token-for-ui-testing",
+        "TELEGRAM_BOT_USERNAME=FilahubUiTestBot",
+        "APP_SECRET=dev-telegram-ui-secret",
+        "DATABASE_URL=postgres://filahub:filahub@127.0.0.1:5433/filahub_test",
+        "LEGAL_OPERATOR_NAME=Test Betreiber",
+        "LEGAL_OPERATOR_ADDRESS=Teststrasse 1\\n1234 Testort\\nSchweiz",
+        "LEGAL_OPERATOR_EMAIL=test@example.org",
+        "LEGAL_OPERATOR_HOSTING=Test-Hoster AG, Testort (Rechenzentrum: Testland)",
+        "npm",
+        "run",
+        "dev"
+      ],
+      "port": 3000,
+      "autoPort": true
     },
     {
       "name": "filahub-dev-sandbox",

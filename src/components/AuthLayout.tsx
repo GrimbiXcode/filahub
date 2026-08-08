@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,6 +29,8 @@ import {
 } from "@/components/ui/sidebar";
 import {
   APP_NAME,
+  LEGAL_DOCUMENTS,
+  LEGAL_PATHS,
   LOGIN_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
@@ -409,13 +411,12 @@ function AuthLayoutContent({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center">
+                  {/*
+                    Bewusst nur die Initialen: Ein Telegram-Profilbild käme von
+                    Telegrams CDN und würde bei jedem Seitenaufruf dorthin
+                    zurückrufen.
+                  */}
                   <Avatar className="h-9 w-9 shrink-0 border">
-                    {user?.avatar && (
-                      <AvatarImage
-                        src={user.avatar}
-                        alt={user.name ?? t.nav.profilePicture}
-                      />
-                    )}
                     <AvatarFallback className="text-xs font-medium">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
@@ -460,6 +461,21 @@ function AuthLayoutContent({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* Rechtstexte müssen von überall erreichbar sein. In der
+                eingeklappten Leiste ist kein Platz dafür – dort führt der Weg
+                über die Einstellungen. */}
+            <nav className="flex flex-wrap gap-x-3 gap-y-1 px-1 pt-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+              {LEGAL_DOCUMENTS.map(entry => (
+                <a
+                  key={entry}
+                  href={LEGAL_PATHS[entry]}
+                  className="underline-offset-2 hover:text-foreground hover:underline"
+                >
+                  {t.legal[entry]}
+                </a>
+              ))}
+            </nav>
           </SidebarFooter>
         </Sidebar>
         {/* Ziehgriff nur am Zeigergerät – auf dem Telefon liegt die Leiste

@@ -1,6 +1,8 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { randomInt } from "node:crypto";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { loginCodes } from "@db/schema";
 import { getDb } from "../queries/connection";
+import { runRetentionSweep } from "../queries/retention";
 import { env } from "../lib/env";
 
 type TelegramUser = {
@@ -34,7 +36,24 @@ async function sendMessage(chatId: number, text: string) {
   }
 }
 
-/** Erzeugt einen neuen 6-stelligen Login-Code (10 Minuten gültig). */
+/** Gültigkeitsdauer eines Login-Codes. Kurz, weil er nur abgetippt wird. */
+const LOGIN_CODE_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * Erzeugt einen 6-stelligen Login-Code.
+ *
+ * `crypto.randomInt` statt `Math.random`: Der Code ist ein
+ * Authentifizierungsmerkmal, sein Zufall muss kryptographisch tauglich sein.
+ * Und `padStart` statt eines Offsets von 100000 – sonst käme nie eine führende
+ * Null heraus und der Raum schrumpfte von einer Million auf 900 000.
+ *
+ * Exportiert, damit genau diese beiden Eigenschaften prüfbar bleiben.
+ */
+export function generateLoginCode(): string {
+  return String(randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+/** Legt einen frischen Code für den Nutzer an und gibt ihn zurück. */
 async function issueLoginCode(user: TelegramUser): Promise<string> {
   const db = getDb();
   // Alte, unbenutzte Codes dieses Nutzers verwerfen
@@ -43,8 +62,10 @@ async function issueLoginCode(user: TelegramUser): Promise<string> {
     .where(
       and(eq(loginCodes.telegramId, String(user.id)), isNull(loginCodes.usedAt))
     );
+  // Gelegenheit zum Aufräumen: fremde Altcodes tragen ebenfalls Telegram-Namen
+  await runRetentionSweep();
 
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = generateLoginCode();
   const name =
     [user.first_name, user.last_name].filter(Boolean).join(" ") ||
     user.username ||
@@ -54,7 +75,7 @@ async function issueLoginCode(user: TelegramUser): Promise<string> {
     telegramId: String(user.id),
     telegramUsername: user.username ?? null,
     telegramName: name,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    expiresAt: new Date(Date.now() + LOGIN_CODE_TTL_MS),
   });
   return code;
 }
@@ -72,8 +93,8 @@ async function handleUpdate(update: TelegramUpdate) {
       // Zweisprachig: Der Bot kennt die Spracheinstellung nicht – beim /login
       // existiert der Benutzer in der Datenbank oft noch gar nicht.
       `Dein Login-Code für filahub / Your filahub login code:\n\n${code}\n\n` +
-        `Der Code ist 10 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.\n` +
-        `The code is valid for 10 minutes. Enter it on the website to sign in.`
+        `Der Code ist 5 Minuten gültig. Gib ihn auf der Website ein, um dich anzumelden.\n` +
+        `The code is valid for 5 minutes. Enter it on the website to sign in.`
     );
   } else if (text === "/id") {
     await sendMessage(from.id, `Deine Telegram-ID: ${from.id}`);
@@ -126,11 +147,23 @@ export function startTelegramBot() {
   );
 }
 
-/** Prüft einen eingegebenen Code und markiert ihn als verwendet. */
+/**
+ * Prüft einen eingegebenen Code und markiert ihn als verwendet.
+ *
+ * Schreiben statt erst lesen: Getrennt gelesen und dann geschrieben, sehen zwei
+ * gleichzeitige Einlösungen desselben Codes beide `usedAt IS NULL` – und beide
+ * melden an. Hier wartet die zweite Anfrage auf die Zeilensperre der ersten und
+ * wertet die `WHERE`-Bedingung danach erneut aus; `usedAt` ist dann gesetzt,
+ * sie bekommt also nichts zurück.
+ *
+ * Die Unterabfrage begrenzt den Treffer auf eine Zeile. Codes sind nur pro
+ * Benutzer eindeutig, nicht global – ohne die Begrenzung würde eine zufällige
+ * Kollision den Code eines Fremden gleich mit entwerten.
+ */
 export async function redeemLoginCode(code: string) {
   const db = getDb();
-  const rows = await db
-    .select()
+  const candidate = db
+    .select({ id: loginCodes.id })
     .from(loginCodes)
     .where(
       and(
@@ -139,12 +172,13 @@ export async function redeemLoginCode(code: string) {
         gt(loginCodes.expiresAt, new Date())
       )
     )
+    .orderBy(desc(loginCodes.createdAt))
     .limit(1);
-  const entry = rows.at(0);
-  if (!entry) return null;
-  await db
+
+  const updated = await db
     .update(loginCodes)
     .set({ usedAt: new Date() })
-    .where(eq(loginCodes.id, entry.id));
-  return entry;
+    .where(and(inArray(loginCodes.id, candidate), isNull(loginCodes.usedAt)))
+    .returning();
+  return updated.at(0) ?? null;
 }

@@ -75,6 +75,19 @@ if (env.isProduction) {
     );
   }
 
+  /*
+    Aufbewahrung: einmal beim Start und danach alle sechs Stunden. Bewusst nach
+    der Datenübernahme – die bringt Login-Codes aus der alten MySQL-Datenbank
+    mit, die damit gleich im ersten Lauf verschwinden.
+
+    Ein externer Scheduler wäre für einen Container, der ohnehin durchläuft,
+    unnötiger Aufwand; `unref()` sorgt dafür, dass das Intervall den Prozess
+    nicht am Beenden hindert.
+  */
+  const { runRetentionSweep } = await import("./queries/retention");
+  await runRetentionSweep();
+  setInterval(() => void runRetentionSweep(), 6 * 60 * 60 * 1000).unref();
+
   const port = parseInt(process.env.PORT || "3000");
   startTelegramBot();
   // Auf allen Interfaces lauschen, damit der Container von außen

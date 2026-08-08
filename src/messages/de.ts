@@ -72,7 +72,6 @@ export const de = {
     releaseNotesUnread: (vars: { count: number }) =>
       `Neuerungen (${vars.count} ungelesen)`,
     toggleSidebar: "Navigation ein-/ausklappen",
-    profilePicture: "Profilbild",
     signOut: "Abmelden",
   },
 
@@ -90,6 +89,11 @@ export const de = {
       "Melde dich mit deinem Telegram-Konto an. Telegram bestätigt deine Identität – auf Wunsch auch per Telefonnummer.",
     notConfigured:
       "Telegram-Login ist noch nicht konfiguriert. Bitte hinterlege TELEGRAM_BOT_TOKEN und TELEGRAM_BOT_USERNAME auf dem Server.",
+    widgetNotice:
+      "Der Telegram-Anmeldebutton wird von telegram.org geladen. Telegram erfährt dabei deine IP-Adresse und Angaben zu deinem Gerät – auch dann, wenn du dich am Ende nicht anmeldest. Telegram sitzt in den Vereinigten Arabischen Emiraten, für die kein Angemessenheitsbeschluss vorliegt.",
+    widgetLoad: "Telegram-Anmeldung laden",
+    widgetAlternative:
+      "Nicht nötig: Die Anmeldung per Code weiter unten kommt ohne Telegram-Skript aus.",
     orWithCode: "oder per Code",
     codeFromBot: "Code vom Bot",
     codeRequestHint: (vars: { command: string }) =>
@@ -99,6 +103,16 @@ export const de = {
     signingIn: "Anmelden …",
     development: "Entwicklung",
     signInWithoutTelegram: "Ohne Telegram anmelden",
+  },
+
+  legal: {
+    privacy: "Datenschutz",
+    imprint: "Impressum",
+    terms: "Nutzungsbedingungen",
+    backToApp: "Zurück zur App",
+    missing: "Dieser Text liegt noch nicht vor.",
+    operatorMissing:
+      "Für diese Instanz sind keine Betreiberangaben hinterlegt. Wer sie betreibt, ist datenschutzrechtlich verantwortlich und muss LEGAL_OPERATOR_NAME, LEGAL_OPERATOR_ADDRESS und LEGAL_OPERATOR_EMAIL setzen.",
   },
 
   authGate: {
@@ -157,6 +171,22 @@ export const de = {
     regionalFormatLabel: "Zahlen- und Datumsformat",
     automatic: (vars: { value: string }) =>
       `Automatisch (Browser: ${vars.value})`,
+    dataAndAccount: "Daten und Konto",
+    exportHint:
+      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Rollen, Wägungen, Rollentypen, Lagerboxen, ausgeblendete Presets, eingereichte Vorschläge und offene Login-Codes. Das Format ist dasselbe, das der Import wieder einliest.",
+    exportAction: "Daten herunterladen",
+    exportPending: "Wird zusammengestellt …",
+    exportDone: "Export heruntergeladen",
+    deleteHint:
+      "Löscht dein Konto und deinen gesamten Bestand endgültig. Vorschläge, die in den gemeinsamen Katalog übernommen wurden, bleiben dort erhalten – ohne deinen Namen und ohne deine Begründung.",
+    deleteAction: "Konto löschen",
+    deleteTitle: "Konto endgültig löschen?",
+    deleteDescription:
+      "Das lässt sich nicht rückgängig machen. Lade dir vorher deine Daten herunter, wenn du sie behalten willst.",
+    deleteConfirmLabel: (vars: { name: string }) =>
+      `Tippe zur Bestätigung „${vars.name}“ ein`,
+    deleteConfirmAction: "Endgültig löschen",
+    deletePending: "Wird gelöscht …",
   },
 
   releaseNotes: {

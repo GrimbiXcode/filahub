@@ -22,6 +22,20 @@
       "when": 1786145293891,
       "tag": "0002_preset_name_i18n",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1786189525908,
+      "tag": "0003_drop_user_email",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786191924413,
+      "tag": "0004_account_deletion",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,54 @@
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+import { deletionConfirmationMatches } from "@contracts/account";
+import { clearSessionCookie } from "./lib/cookies";
+import { authedQuery, createRouter } from "./middleware";
+import { deleteUserAccount, exportUserData } from "./queries/account";
+
+/**
+ * Betroffenenrechte am eigenen Konto: Auskunft, Datenübertragbarkeit, Löschung.
+ *
+ * Beide Prozeduren sind `authedQuery` – jeder darf nur an die eigenen Daten.
+ * Eine Auskunft über fremde Konten gibt es hier bewusst auch für
+ * Administratoren nicht.
+ */
+export const accountRouter = createRouter({
+  /**
+   * Vollständige Auskunft nach Art. 15 DSGVO in maschinenlesbarer Form
+   * (Art. 20).
+   *
+   * Absichtlich eine `mutation` und keine `query`: Ergebnisse von Queries
+   * landen im Cache von TanStack Query und blieben dort als vollständiger
+   * Personendatensatz liegen. Ein Datenabzug soll fließen, nicht herumliegen.
+   */
+  export: authedQuery.mutation(({ ctx }) => exportUserData(ctx.user.id)),
+
+  /**
+   * Kontolöschung nach Art. 17 DSGVO.
+   *
+   * Der Anzeigename muss abgetippt werden. Das ist kein Zierrat: Die Löschung
+   * ist endgültig, und ein Dialog mit „Abbrechen/OK“ wird routiniert
+   * weggeklickt.
+   */
+  delete: authedQuery
+    .input(z.object({ confirmation: z.string().min(1).max(255) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!deletionConfirmationMatches(input.confirmation, ctx.user.name)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Die Bestätigung stimmt nicht mit deinem Namen überein.",
+        });
+      }
+
+      const result = await deleteUserAccount(ctx.user.id);
+
+      /*
+        Cookie sofort löschen: Das Konto ist weg, das Token zeigt ins Leere.
+        Ohne das liefe der Client noch mit einer Session weiter, die bei jeder
+        Abfrage in einen 401 läuft.
+      */
+      ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
+
+      return result;
+    }),
+});

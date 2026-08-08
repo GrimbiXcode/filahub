@@ -63,7 +63,6 @@ export const en: Messages = {
     releaseNotesUnread: (vars: { count: number }) =>
       `What's new (${vars.count} unread)`,
     toggleSidebar: "Show or hide the navigation",
-    profilePicture: "Profile picture",
     signOut: "Sign out",
   },
 
@@ -81,6 +80,11 @@ export const en: Messages = {
       "Sign in with your Telegram account. Telegram confirms your identity – by phone number too, if you want.",
     notConfigured:
       "The Telegram login is not configured yet. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME on the server.",
+    widgetNotice:
+      "The Telegram sign-in button is loaded from telegram.org. Telegram learns your IP address and details about your device in the process – even if you never sign in. Telegram is based in the United Arab Emirates, for which no adequacy decision exists.",
+    widgetLoad: "Load Telegram sign-in",
+    widgetAlternative:
+      "Not required: the code sign-in below works without any Telegram script.",
     orWithCode: "or use a code",
     codeFromBot: "Code from the bot",
     codeRequestHint: (vars: { command: string }) =>
@@ -90,6 +94,16 @@ export const en: Messages = {
     signingIn: "Signing in …",
     development: "Development",
     signInWithoutTelegram: "Sign in without Telegram",
+  },
+
+  legal: {
+    privacy: "Privacy",
+    imprint: "Imprint",
+    terms: "Terms of use",
+    backToApp: "Back to the app",
+    missing: "This text is not available yet.",
+    operatorMissing:
+      "No operator details are configured for this instance. Whoever runs it is the data controller and needs to set LEGAL_OPERATOR_NAME, LEGAL_OPERATOR_ADDRESS and LEGAL_OPERATOR_EMAIL.",
   },
 
   authGate: {
@@ -144,6 +158,22 @@ export const en: Messages = {
     regionalFormatLabel: "Number and date format",
     automatic: (vars: { value: string }) =>
       `Automatic (browser: ${vars.value})`,
+    dataAndAccount: "Data and account",
+    exportHint:
+      "Download everything stored for your account: profile, spools, weigh-ins, spool types, storage boxes, hidden presets, submitted proposals and pending login codes. The format is the same one the import reads back.",
+    exportAction: "Download my data",
+    exportPending: "Collecting …",
+    exportDone: "Export downloaded",
+    deleteHint:
+      "Permanently deletes your account and your entire stock. Proposals that made it into the shared catalogue stay there – without your name and without your reasoning.",
+    deleteAction: "Delete account",
+    deleteTitle: "Delete your account for good?",
+    deleteDescription:
+      "This cannot be undone. Download your data first if you want to keep it.",
+    deleteConfirmLabel: (vars: { name: string }) =>
+      `Type “${vars.name}” to confirm`,
+    deleteConfirmAction: "Delete permanently",
+    deletePending: "Deleting …",
   },
 
   releaseNotes: {

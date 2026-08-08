@@ -1,5 +1,16 @@
 import "dotenv/config";
 
+/**
+ * Wandelt ein literales `\n` in einen echten Zeilenumbruch.
+ *
+ * Nötig, weil `\n` nur in doppelt gequoteten `.env`-Werten expandiert wird –
+ * in `docker-compose.yml` unter `environment:` oder bei `docker run -e`
+ * dagegen nie. So schreibt man eine mehrzeilige Anschrift überall gleich.
+ */
+function multiline(value: string | undefined): string {
+  return (value ?? "").replace(/\\n/g, "\n");
+}
+
 function required(name: string): string {
   const value = process.env[name];
   if (!value && process.env.NODE_ENV === "production") {
@@ -38,4 +49,28 @@ export const env = {
   devLogin: ["1", "true"].includes((process.env.DEV_LOGIN ?? "").toLowerCase()),
   /** Anzeigename des Entwickler-Kontos */
   devLoginName: process.env.DEV_LOGIN_NAME || "Dev-Benutzer",
+
+  /*
+    Betreiberangaben für Impressum und Datenschutzerklärung.
+
+    Bewusst aus der Umgebung und nicht aus den Textdateien: Die Rechtstexte
+    liegen im Docker-Image, jede Instanz hat aber einen eigenen Betreiber.
+    Wären die Angaben fest eingebaut, würde jeder Selbst-Hoster den Autor der
+    Software als Verantwortlichen für seine Datenverarbeitung ausweisen – falsch
+    für ihn, unzumutbar für den Autor.
+
+    Wer eine öffentlich erreichbare Instanz betreibt, ist Verantwortlicher im
+    Sinne von Art. 4 Nr. 7 DSGVO bzw. Art. 5 lit. j revDSG und muss diese
+    Angaben ausfüllen. Fehlen sie, weist die App im Rechtsbereich sichtbar
+    darauf hin, statt einen falschen Namen zu nennen.
+  */
+  operatorName: process.env.LEGAL_OPERATOR_NAME ?? "",
+  operatorAddress: multiline(process.env.LEGAL_OPERATOR_ADDRESS),
+  operatorEmail: process.env.LEGAL_OPERATOR_EMAIL ?? "",
+  /**
+   * Wer die Server stellt, auf denen diese Instanz läuft – als Auftragsverarbeiter
+   * nach Art. 28 DSGVO in der Datenschutzerklärung zu nennen. Ebenfalls
+   * instanzspezifisch: Der eine hostet bei einem Anbieter, der Nächste im Keller.
+   */
+  operatorHosting: process.env.LEGAL_OPERATOR_HOSTING ?? "",
 };

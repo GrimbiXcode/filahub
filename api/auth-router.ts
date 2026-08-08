@@ -1,11 +1,9 @@
-import * as cookie from "cookie";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { Session } from "@contracts/constants";
 import { languageSchema } from "@contracts/i18n";
 import { currencySchema, localeSchema } from "@contracts/locale";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
-import { getSessionCookieOptions } from "./lib/cookies";
+import { clearSessionCookie, sessionCookie } from "./lib/cookies";
 import { env } from "./lib/env";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
@@ -27,17 +25,6 @@ function assertAllowed(telegramId: string) {
       message: "Dieses Konto ist für den Zugriff nicht freigeschaltet.",
     });
   }
-}
-
-function sessionCookie(token: string, headers: Headers) {
-  const opts = getSessionCookieOptions(headers);
-  return cookie.serialize(Session.cookieName, token, {
-    httpOnly: opts.httpOnly,
-    path: opts.path,
-    sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-    secure: opts.secure,
-    maxAge: Session.maxAgeMs / 1000,
-  });
 }
 
 export const authRouter = createRouter({
@@ -157,11 +144,17 @@ export const authRouter = createRouter({
         input.username ||
         null;
 
+      /*
+        `photo_url` wird bewusst nicht übernommen: Es zeigt auf Telegrams CDN,
+        und jede Anzeige des Bildes wäre ein Abruf dort – bei jedem
+        Seitenaufruf, für jeden angemeldeten Benutzer. Die Initialen aus
+        `AvatarFallback` leisten dasselbe ohne Drittabruf. Das Feld bleibt in
+        der Eingabe, weil Telegram es in die HMAC-Prüfsumme einrechnet.
+      */
       await upsertUser({
         unionId: telegramId,
         name,
         telegramUsername: input.username ?? null,
-        avatar: input.photo_url ?? null,
         lastSignInAt: new Date(),
       });
 
@@ -174,17 +167,7 @@ export const authRouter = createRouter({
     }),
 
   logout: authedQuery.mutation(async ({ ctx }) => {
-    const opts = getSessionCookieOptions(ctx.req.headers);
-    ctx.resHeaders.append(
-      "set-cookie",
-      cookie.serialize(Session.cookieName, "", {
-        httpOnly: opts.httpOnly,
-        path: opts.path,
-        sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-        secure: opts.secure,
-        maxAge: 0,
-      })
-    );
+    ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
     return { success: true };
   }),
 });

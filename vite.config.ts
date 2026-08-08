@@ -24,7 +24,9 @@ export default defineConfig({
     react(),
   ],
   server: {
-    port: 3000,
+    // Wie der Produktionsserver in api/boot.ts: PORT gewinnt, sonst 3000.
+    // So lassen sich mehrere Instanzen parallel starten.
+    port: parseInt(process.env.PORT || "3000"),
   },
   resolve: {
     alias: {

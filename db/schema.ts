@@ -35,7 +35,13 @@ export const users = pgTable("users", {
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   telegramUsername: varchar("telegramUsername", { length: 255 }),
-  email: varchar("email", { length: 320 }),
+  /*
+    Keine E-Mail-Adresse: Die Anmeldung läuft ausschließlich über Telegram, die
+    App hat für eine Adresse keinen Zweck. Die Spalte existierte bis 1.1.1 aus
+    der Altdatenbank heraus, wurde nie beschrieben und ist entfernt worden.
+    Wer sie wieder einführt, braucht einen Zweck, eine Rechtsgrundlage und
+    einen Eintrag in der Datenschutzerklärung.
+  */
   avatar: text("avatar"),
   role: userRoleEnum("role").default("user").notNull(),
   /** Anzeigewährung als ISO-4217-Code (siehe contracts/locale.ts) */
@@ -122,52 +128,64 @@ export type StorageBox = typeof storageBoxes.$inferSelect;
 export type InsertStorageBox = typeof storageBoxes.$inferInsert;
 
 /** 3D-Druckmaterial (Filament-Rolle im Lager) */
-export const materials = pgTable("materials", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: bigint("userId", { mode: "number" }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
-  identifier: varchar("identifier", { length: 50 }),
-  /** Materialart, z. B. PLA, PETG, ABS */
-  materialType: varchar("materialType", { length: 100 }).notNull(),
-  manufacturer: varchar("manufacturer", { length: 255 }),
-  color: varchar("color", { length: 100 }),
-  /** Preis in Cent (z. B. 2499 = 24,99 €) */
-  priceCents: integer("priceCents"),
-  /** Kaufdatum als ISO-String YYYY-MM-DD */
-  purchaseDate: date("purchaseDate", { mode: "string" }),
-  /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
-  nominalWeight: integer("nominalWeight").notNull(),
-  /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
-  spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
-  /**
-   * Alternativ zu `spoolTypeId`: direkt referenzierte Preset-Variante aus dem
-   * globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
-   */
-  spoolPresetVariantId: bigint("spoolPresetVariantId", { mode: "number" }),
-  /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
-  storageBoxId: bigint("storageBoxId", { mode: "number" }),
-  notes: text("notes"),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-  updatedAt: tsColumn("updatedAt")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-});
+export const materials = pgTable(
+  "materials",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
+    identifier: varchar("identifier", { length: 50 }),
+    /** Materialart, z. B. PLA, PETG, ABS */
+    materialType: varchar("materialType", { length: 100 }).notNull(),
+    manufacturer: varchar("manufacturer", { length: 255 }),
+    color: varchar("color", { length: 100 }),
+    /** Preis in Cent (z. B. 2499 = 24,99 €) */
+    priceCents: integer("priceCents"),
+    /** Kaufdatum als ISO-String YYYY-MM-DD */
+    purchaseDate: date("purchaseDate", { mode: "string" }),
+    /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
+    nominalWeight: integer("nominalWeight").notNull(),
+    /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
+    spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
+    /**
+     * Alternativ zu `spoolTypeId`: direkt referenzierte Preset-Variante aus dem
+     * globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
+     */
+    spoolPresetVariantId: bigint("spoolPresetVariantId", { mode: "number" }),
+    /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
+    storageBoxId: bigint("storageBoxId", { mode: "number" }),
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  // Jede Abfrage filtert nach Besitzer; der Löschlauf beim Kontolöschen
+  // ebenfalls.
+  t => [index("materials_user_idx").on(t.userId)]
+);
 
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = typeof materials.$inferInsert;
 
 /** Wägung eines Materials: gemessenes Bruttogewicht inkl. Rolle (+ Box) */
-export const weighings = pgTable("weighings", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  materialId: bigint("materialId", { mode: "number" }).notNull(),
-  /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
-  grossWeight: integer("grossWeight").notNull(),
-  weighedAt: tsColumn("weighedAt").defaultNow().notNull(),
-  note: varchar("note", { length: 500 }),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-});
+export const weighings = pgTable(
+  "weighings",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    materialId: bigint("materialId", { mode: "number" }).notNull(),
+    /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
+    grossWeight: integer("grossWeight").notNull(),
+    weighedAt: tsColumn("weighedAt").defaultNow().notNull(),
+    note: varchar("note", { length: 500 }),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  // Wägungen hängen am Material – ohne Index wäre das Löschen eines Kontos
+  // ein Full Scan pro Rolle.
+  t => [index("weighings_material_idx").on(t.materialId)]
+);
 
 export type Weighing = typeof weighings.$inferSelect;
 export type InsertWeighing = typeof weighings.$inferInsert;
@@ -404,8 +422,12 @@ export const presetProposals = pgTable(
   "preset_proposals",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    /** Einreicher */
-    userId: bigint("userId", { mode: "number" }).notNull(),
+    /**
+     * Einreicher. `NULL`, wenn das Konto gelöscht wurde: Angenommene
+     * Vorschläge bleiben als Moderationsnachweis erhalten, die Identität des
+     * Einreichers verschwindet aber mit dem Konto (Art. 17 DSGVO).
+     */
+    userId: bigint("userId", { mode: "number" }),
     kind: presetProposalKindEnum("kind").notNull(),
     /** Katalogebene, auf die sich der Vorschlag bezieht */
     targetType: presetScopeEnum("targetType").notNull(),

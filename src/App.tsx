@@ -1,6 +1,6 @@
 import { Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
+import { LEGAL_PATHS, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
@@ -11,6 +11,7 @@ import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
 import SpoolTypes from "./pages/SpoolTypes";
 import StorageBoxes from "./pages/StorageBoxes";
+import Legal from "./pages/Legal";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import ReleaseNotes from "./pages/ReleaseNotes";
@@ -33,6 +34,16 @@ export default function App() {
         <Route path="/verwaltung/vorschlaege" element={<AdminProposals />} />
         <Route path="/verwaltung/system" element={<AdminSystem />} />
         <Route path="/login" element={<Login />} />
+        {/* Ohne Anmeldung erreichbar – siehe LEGAL_PATHS in src/const.ts */}
+        <Route
+          path={LEGAL_PATHS.privacy}
+          element={<Legal document="privacy" />}
+        />
+        <Route
+          path={LEGAL_PATHS.imprint}
+          element={<Legal document="imprint" />}
+        />
+        <Route path={LEGAL_PATHS.terms} element={<Legal document="terms" />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       {/* Auf dem Telefon oben: unten rechts würde die Meldung den

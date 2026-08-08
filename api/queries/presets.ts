@@ -768,7 +768,9 @@ export async function findProposalsForReview(
 
   return proposals.map(p => ({
     ...p,
-    submittedBy: byId.get(p.userId) ?? null,
+    // `userId` ist null, wenn der Einreicher sein Konto gelöscht hat. Der
+    // Vorschlag bleibt als Moderationsnachweis stehen, die Person nicht.
+    submittedBy: p.userId != null ? (byId.get(p.userId) ?? null) : null,
     reviewedByUser:
       p.reviewedBy != null ? (byId.get(p.reviewedBy) ?? null) : null,
   }));
