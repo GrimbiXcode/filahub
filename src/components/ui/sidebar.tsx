@@ -362,7 +362,14 @@ function SidebarSeparator({
     <Separator
       data-slot="sidebar-separator"
       data-sidebar="separator"
-      className={cn("bg-sidebar-border mx-2 w-auto", className)}
+      // Abweichung von shadcn: ein blosses w-auto verliert gegen die
+      // orientation-Variante von Separator (höhere Spezifität). Die Linie wäre
+      // dann 100 % breit *plus* mx-2 und ließe SidebarContent horizontal
+      // scrollen. Gleiche Variante → gleiche Spezifität, w-auto gewinnt.
+      className={cn(
+        "bg-sidebar-border mx-2 w-auto data-[orientation=horizontal]:w-auto",
+        className
+      )}
       {...props}
     />
   )
