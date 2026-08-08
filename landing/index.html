@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>filahub — self-hosted filament inventory</title>
+    <meta
+      name="description"
+      content="Self-hosted inventory for 3D-printing filament. Put a spool on a scale and type the number: filahub subtracts the empty weight of the spool and of the drybox, and keeps the result."
+    />
+    <link rel="canonical" href="https://grimbixcode.github.io/filahub/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://grimbixcode.github.io/filahub/" />
+    <meta
+      property="og:title"
+      content="filahub — self-hosted filament inventory"
+    />
+    <meta
+      property="og:description"
+      content="Put a spool on a scale and type the number. filahub subtracts the tare of the spool and the drybox, and keeps the result."
+    />
+    <meta
+      property="og:image"
+      content="https://grimbixcode.github.io/filahub/assets/overview.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23eab308' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a class="brand" href="#top">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+            <circle
+              cx="16"
+              cy="16"
+              r="13"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              opacity=".45"
+            />
+            <path
+              d="M16 3a13 13 0 0 1 11.3 19.4"
+              fill="none"
+              stroke="var(--mid)"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            />
+            <circle
+              cx="16"
+              cy="16"
+              r="4"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              opacity=".45"
+            />
+          </svg>
+          filahub
+        </a>
+        <nav class="header-nav">
+          <a href="#tare">Weighing</a>
+          <a href="#catalogue">Catalogue</a>
+          <a href="#self-hosting">Self-hosting</a>
+        </nav>
+        <div class="header-cta">
+          <a class="btn btn-ghost" href="https://github.com/GrimbiXcode/filahub"
+            >GitHub</a
+          >
+          <a class="btn btn-solid" href="https://filahub.weblabor.io"
+            >Open the instance</a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="wrap hero-grid">
+          <div class="hero-text">
+            <p class="eyebrow">
+              <span class="dot"></span>Self-hosted · filament inventory
+            </p>
+            <h1 class="display">How much is actually left on that spool?</h1>
+            <p class="lede">
+              Put it on a kitchen scale and type in what the scale says. filahub
+              subtracts the empty weight of the spool and of the drybox it lives
+              in, and keeps the result — for every spool, every time.
+            </p>
+            <div class="cta-row">
+              <a class="btn btn-solid btn-lg" href="https://filahub.weblabor.io"
+                >Open filahub.weblabor.io</a
+              >
+              <a
+                class="btn btn-ghost btn-lg"
+                href="https://github.com/GrimbiXcode/filahub"
+                >Source on GitHub</a
+              >
+            </div>
+          </div>
+
+          <!-- Signature: the subtraction the whole product is built on -->
+          <figure class="ledger" aria-labelledby="ledger-cap">
+            <div class="ledger-row" style="--i: 0">
+              <span class="ledger-key">on the scale</span>
+              <span class="ledger-note">gross, spool and box included</span>
+              <span class="ledger-val">1,954 g</span>
+            </div>
+            <div class="ledger-row" style="--i: 1">
+              <span class="ledger-key">spool</span>
+              <span class="ledger-note">PolyTerra PLA · cardboard · 1 kg</span>
+              <span class="ledger-val ledger-sub">− 140 g</span>
+            </div>
+            <div class="ledger-row" style="--i: 2">
+              <span class="ledger-key">drybox</span>
+              <span class="ledger-note">Drybox A · PLA/PETG</span>
+              <span class="ledger-val ledger-sub">− 1,450 g</span>
+            </div>
+            <div class="ledger-rule" style="--i: 3"></div>
+            <div class="ledger-row ledger-total" style="--i: 4">
+              <span class="ledger-key">filament left</span>
+              <span class="ledger-note">of 1,000 g nominal</span>
+              <span class="ledger-val">364 g <em>36%</em></span>
+            </div>
+            <div class="bar" style="--i: 5">
+              <div class="bar-fill"></div>
+            </div>
+            <figcaption id="ledger-cap">
+              Real numbers from the weigh-in dialog below. The percentage colour
+              is the app's own scale: orange at 25% and under, yellow to 50%,
+              green above.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <figure class="shot shot-lead">
+        <img
+          src="assets/overview.png"
+          width="2160"
+          height="1500"
+          alt="The filahub overview: stat cards for count, remaining grams, remaining value and spools in a drybox, above a table of nine filaments with fill bars."
+        />
+        <figcaption>
+          Nine spools, 6,508 g left, three of them under 25%.
+        </figcaption>
+      </figure>
+
+      <section class="band" id="tare" style="--accent: var(--mid)">
+        <div class="wrap">
+          <div class="col">
+            <p class="eyebrow"><span class="dot dot-mid"></span>Weighing</p>
+            <h2>The empty weight is the whole problem</h2>
+            <p>
+              A spool that reads 1,590 g on the scale might be empty or might
+              hold half a kilo — it depends entirely on what the spool and the
+              box underneath it weigh. So filahub stores those two numbers as
+              data and does the subtraction for you:
+            </p>
+            <p class="formula">remaining = gross − spool tare − drybox tare</p>
+            <p>
+              Nothing is derived from slicer estimates or print jobs. The
+              remaining quantity is whatever the last weigh-in said, so it is
+              wrong only if the scale was.
+            </p>
+            <p>
+              Give a spool a short identifier — <code>F01</code> — and write it
+              on the label. Typing it into the box at the top of the overview
+              opens the weigh-in dialog on that spool. Standing at the printer,
+              the whole loop is: scale, F01, number, done.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/weighing.png"
+            width="2160"
+            height="1500"
+            alt="The weigh-in dialog: an entered gross weight of 1954 g, a highlighted result of 364 g (36%), and a breakdown listing 140 g spool tare, 1450 g storage-box tare and 1590 g total tare."
+            loading="lazy"
+          />
+          <figcaption>
+            The dialog shows the tare it is about to subtract, before you save.
+          </figcaption>
+        </figure>
+
+        <div class="wrap">
+          <div class="col">
+            <p>
+              Every weigh-in is kept, not overwritten. A spool's page lists them
+              with gross and net side by side, which is what turns an inventory
+              into a consumption record: 995 g in March, 812 g in April, 590 g
+              in June, 408 g at the end of July.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/detail.png"
+            width="2160"
+            height="1500"
+            alt="A filament's detail page: fill level 408 g of 1000 g at 41 percent, cards for consumed grams, total tare, last gross weight and remaining value, master data, and a weighing history table with four dated entries."
+            loading="lazy"
+          />
+          <figcaption>
+            Consumed, total tare, last gross reading and the remaining value of
+            what is on the spool.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="band" id="catalogue" style="--accent: var(--full)">
+        <div class="wrap">
+          <div class="col">
+            <p class="eyebrow"><span class="dot dot-full"></span>Catalogue</p>
+            <h2>An empty weight is a fact, so it is shared</h2>
+            <p>
+              Weighing an empty Prusament spool is a job exactly one person
+              should ever have to do. filahub ships a catalogue that everyone on
+              an instance draws from, with four levels:
+            </p>
+            <p class="formula">manufacturer → series → version → size</p>
+            <p>
+              The version level is the one that earns its keep. Polymaker moved
+              PolyTerra PLA from a 215 g plastic spool to a 140 g cardboard one,
+              and both are in the catalogue with the period each was sold in.
+              Pick the wrong one and every weigh-in on that spool is off by 75 g
+              — quietly, forever.
+            </p>
+            <p>
+              A size carries the empty weight and, where it is known, outer
+              diameter, width and bore. A series can be tagged with the material
+              types it is sold in, so PLA offers PLA spools first.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/presets.png"
+            width="2160"
+            height="1725"
+            alt="The preset catalogue with Polymaker expanded: the PolyLite series in 1 kg and 3 kg sizes, and PolyTerra PLA with a cardboard version from 2021 and an older plastic version up to 2020, each listing empty weight and dimensions."
+            loading="lazy"
+          />
+          <figcaption>
+            Polymaker expanded: two series, and two spool versions with the
+            dates that tell them apart.
+          </figcaption>
+        </figure>
+
+        <div class="wrap">
+          <div class="col">
+            <p>
+              Hide any manufacturer, series, version or single size you will
+              never own. Hiding changes only your own picker — a spool already
+              assigned to a filament stays valid and keeps its tare. You can
+              also copy a preset into your own, freely editable spool type when
+              yours differs from the catalogue.
+            </p>
+            <p>
+              Found a wrong number? Send a correction. Suggestions go into a
+              moderation queue; an accepted one is applied to the catalogue and
+              becomes visible to everyone, and a rejected one comes back with
+              the reason.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="band" id="import" style="--accent: var(--low)">
+        <div class="wrap">
+          <div class="col">
+            <p class="eyebrow"><span class="dot dot-low"></span>Bulk import</p>
+            <h2>A whole order in one pass</h2>
+            <p>
+              filahub generates a prompt. Hand it to an LLM together with your
+              order confirmation, paste the JSON that comes back, and you get an
+              editable table — manufacturer, type, colour, nominal weight,
+              price, quantity. Correct what the model got wrong, drop the lines
+              you do not want, and only then does anything get written.
+            </p>
+            <p>
+              A line with quantity 2 becomes two separate materials, because two
+              spools are two spools and they will not be weighed together.
+            </p>
+            <p>
+              The JSON keys stay German — <code>typ</code>,
+              <code>hersteller</code>, <code>nenngewicht</code> — whichever
+              language the interface is set to. They are part of the schema the
+              server validates against, so translating them would break the
+              import.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/import.png"
+            width="2160"
+            height="1500"
+            alt="The import page: pasted JSON in a text area, and below it a review table with four order lines from Polymaker, Prusament, Bambu Lab and SUNLU, ending in a button labelled import 5 materials."
+            loading="lazy"
+          />
+          <figcaption>
+            Four order lines, one of them a double — five materials to be
+            created.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="band band-close" id="self-hosting">
+        <div class="wrap">
+          <div class="split">
+            <div class="split-text">
+              <p class="eyebrow"><span class="dot"></span>Self-hosting</p>
+              <h2>Runs on your own server</h2>
+              <p>
+                One container from
+                <code>ghcr.io/grimbixcode/filahub</code> and a PostgreSQL
+                database. Pending migrations are applied at startup, so an empty
+                database sets itself up and an update is a pull and a restart.
+              </p>
+              <p>
+                Sign-in goes through Telegram — either the official login widget
+                or a six-digit code from your own bot — with an optional
+                whitelist of user IDs. Every row belongs to exactly one account;
+                the shared preset catalogue is the deliberate exception.
+              </p>
+              <p>
+                The interface is available in English and German, and the
+                language belongs to the account rather than the browser. Number,
+                weight and date formats are a separate setting — an English
+                interface does not force you into American dates.
+              </p>
+              <p>
+                Environment variables, a ready-to-use Compose file and the
+                reverse-proxy setup are in the
+                <a href="https://github.com/GrimbiXcode/filahub#readme"
+                  >README</a
+                >. It is free software under the
+                <a
+                  href="https://github.com/GrimbiXcode/filahub/blob/main/LICENSE"
+                  >AGPL-3.0</a
+                >, so a fork you host yourself stays yours — you just have to
+                pass the source on to whoever uses it.
+              </p>
+              <div class="cta-row">
+                <a
+                  class="btn btn-solid btn-lg"
+                  href="https://filahub.weblabor.io"
+                  >Open filahub.weblabor.io</a
+                >
+                <a
+                  class="btn btn-ghost btn-lg"
+                  href="https://github.com/GrimbiXcode/filahub"
+                  >Source on GitHub</a
+                >
+              </div>
+            </div>
+            <figure class="phone">
+              <img
+                src="assets/mobile.png"
+                width="780"
+                height="1688"
+                alt="filahub on a phone: the overview as stacked cards, each with fill percentage, remaining grams, drybox and a weigh button."
+                loading="lazy"
+              />
+              <figcaption>
+                Cards on a phone — the device that is actually next to the
+                scale.
+              </figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <p class="footer-brand">filahub</p>
+        <nav class="footer-nav">
+          <a href="https://filahub.weblabor.io">filahub.weblabor.io</a>
+          <a href="https://github.com/GrimbiXcode/filahub">GitHub</a>
+          <a href="https://github.com/GrimbiXcode/filahub#readme">README</a>
+          <a href="https://github.com/GrimbiXcode/filahub/releases">Releases</a>
+          <a href="https://github.com/GrimbiXcode/filahub/blob/main/LICENSE"
+            >AGPL-3.0</a
+          >
+        </nav>
+        <p class="footer-note">
+          Free software under the GNU Affero General Public License, version 3
+          or later — run it, study it, change it, share it. Provided without
+          warranty or liability to the extent the law allows.
+        </p>
+        <p class="footer-note">
+          The interface speaks English and German, switchable per account.
+          Screenshots are from a running instance with sample data.
+        </p>
+      </div>
+    </footer>
+  </body>
+</html>
