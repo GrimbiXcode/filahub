@@ -48,10 +48,38 @@ cp .env.example .env
 | `TELEGRAM_OPEN_REGISTRATION` | Set to `1` to let any Telegram account register                             |
 | `OWNER_TELEGRAM_ID`          | Telegram ID of the admin                                                    |
 | `LEGAL_OPERATOR_NAME`        | Who runs this instance — shown in the imprint and privacy policy            |
-| `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator (`\n` separates lines)                       |
+| `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator — multi-line, see below                      |
 | `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |
 | `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
 | `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
+
+### Multi-line values
+
+`LEGAL_OPERATOR_ADDRESS` and `LEGAL_OPERATOR_HOSTING` may span several lines.
+**Write the line breaks as `\n`:**
+
+```bash
+LEGAL_OPERATOR_ADDRESS=Example Street 1\n1234 Town\nSwitzerland
+```
+
+That form survives every route the value can take — an unquoted config line,
+`environment:` in Compose, `docker run -e`, and deployment platforms that feed
+the variables into a build.
+
+A genuinely quoted multi-line value works too where the format allows it:
+
+```bash
+LEGAL_OPERATOR_ADDRESS="Example Street 1
+1234 Town
+Switzerland"
+```
+
+But **do not paste raw line breaks into a deployment UI**. Platforms that build
+the image themselves (Coolify, for instance) pass the variables into the build,
+where a real newline ends the line and the rest is read as the next
+instruction — the build fails. `\n` avoids that entirely.
+
+Windows line endings, blank lines and stray spaces are cleaned up either way.
 
 ## 3. Set up the database
 
