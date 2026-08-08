@@ -313,7 +313,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 })}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid min-w-0 gap-2">
               <Label htmlFor="m-date">{t.materialForm.purchaseDate}</Label>
               <Input
                 id="m-date"

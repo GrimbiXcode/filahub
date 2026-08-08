@@ -94,6 +94,34 @@
   }
 }
 
+@layer base {
+  /*
+    Datums- und Zeitfelder: WebKit (iOS Safari) bemisst diese nativen
+    Steuerelemente an ihrem Inhalt und ignoriert dabei `width: 100%`. Weil ein
+    Grid-Element standardmäßig `min-width: auto` hat, wächst dann die ganze
+    Spalte mit – das Feld sprengt den Dialog nach rechts und die Seite lässt
+    sich seitlich schieben.
+
+    `appearance: none` nimmt dem Feld die intrinsische Breite des nativen
+    Steuerelements; in Chrome bleibt es dabei optisch unverändert, das
+    Kalendersymbol überlebt. `min-width: 0` erlaubt das Schrumpfen unter die
+    Inhaltsbreite.
+
+    Kein `max-width: 100%`: Gemessen klemmt das in dieser Grid-Anordnung nicht,
+    es sähe nur nach Absicherung aus. Was tatsächlich hält, ist `min-w-0` an
+    der Feldspalte – ohne das wächst sie auf die Wunschbreite des Feldes.
+  */
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="month"],
+  input[type="time"],
+  input[type="week"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+  }
+}
+
 @layer utilities {
   /* Platz für die Gestensteuerung am unteren Rand (iPhone, Android-Gesten) */
   .pb-safe {

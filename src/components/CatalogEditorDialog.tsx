@@ -299,7 +299,7 @@ export function CatalogEditorDialog({
 
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-md overflow-y-auto">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? t.catalogEditor[editKey] : t.catalogEditor[createKey]}
@@ -428,7 +428,7 @@ export function CatalogEditorDialog({
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   <Label htmlFor="ce-from">{t.catalogEditor.validFrom}</Label>
                   <Input
                     id="ce-from"
@@ -437,7 +437,7 @@ export function CatalogEditorDialog({
                     onChange={e => setValidFrom(e.target.value)}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   <Label htmlFor="ce-to">{t.catalogEditor.validTo}</Label>
                   <Input
                     id="ce-to"

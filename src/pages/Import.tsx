@@ -289,7 +289,7 @@ export default function Import() {
               <CardDescription>{t.import.step3Description}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="flex max-w-56 flex-col gap-1.5">
+              <div className="flex min-w-0 max-w-56 flex-col gap-1.5">
                 <Label htmlFor="kaufdatum">{t.import.purchaseDateLabel}</Label>
                 <Input
                   id="kaufdatum"
