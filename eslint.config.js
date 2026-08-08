@@ -6,7 +6,13 @@ import tseslint from "typescript-eslint";
 import { defineConfig, globalIgnores } from "eslint/config";
 
 export default defineConfig([
-  globalIgnores(["dist"]),
+  /*
+    `.claude` enthält Arbeitsbäume paralleler Sitzungen – vollständige Kopien
+    des Projekts. Ohne diesen Ausschluss prüft ESLint sie mit und meldet
+    Fehler in Dateien, die gar nicht zum Arbeitsstand gehören. Git ignoriert
+    das Verzeichnis bereits über `.git/info/exclude`.
+  */
+  globalIgnores(["dist", ".claude"]),
   {
     files: ["**/*.{ts,tsx}"],
     extends: [

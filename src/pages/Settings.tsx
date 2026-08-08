@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Download, Trash2 } from "lucide-react";
+import { Download, LogOut, Trash2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import { PageHeader } from "@/components/PageHeader";
 import { ThemeSegmentedControl } from "@/components/ThemeToggle";
@@ -92,6 +92,15 @@ export default function Settings() {
       link.click();
       URL.revokeObjectURL(url);
       toast.success(t.settings.exportDone);
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  const logoutAll = trpc.auth.logoutAllDevices.useMutation({
+    onSuccess: async () => {
+      // Die eigene Sitzung ist mit entwertet – der Weg führt zurück zur Anmeldung.
+      await utils.invalidate();
+      navigate(LOGIN_PATH);
     },
     onError: e => toast.error(e.message),
   });
@@ -287,6 +296,23 @@ export default function Settings() {
                 {exportData.isPending
                   ? t.settings.exportPending
                   : t.settings.exportAction}
+              </Button>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2">
+              <p className="text-sm text-muted-foreground">
+                {t.settings.logoutAllHint}
+              </p>
+              <Button
+                variant="outline"
+                className="sm:self-start"
+                disabled={logoutAll.isPending}
+                onClick={() => logoutAll.mutate()}
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                {t.settings.logoutAllAction}
               </Button>
             </div>
 

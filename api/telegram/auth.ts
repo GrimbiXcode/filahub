@@ -19,5 +19,14 @@ export async function authenticateRequest(headers: Headers) {
   if (!user) {
     throw Errors.forbidden("Benutzer nicht gefunden. Bitte neu anmelden.");
   }
+  /*
+    Widerruf: Das Token nennt den Stand, unter dem es ausgestellt wurde. Liegt
+    der Zähler in der Datenbank höher, wurde die Sitzung seither entwertet –
+    etwa über „auf allen Geräten abmelden“. Kostet keine zusätzliche Abfrage,
+    die Zeile ist oben ohnehin geladen worden.
+  */
+  if (claim.tokenVersion !== user.tokenVersion) {
+    throw Errors.forbidden("Sitzung wurde beendet. Bitte neu anmelden.");
+  }
   return user;
 }

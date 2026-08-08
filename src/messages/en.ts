@@ -164,6 +164,9 @@ export const en: Messages = {
     exportAction: "Download my data",
     exportPending: "Collecting …",
     exportDone: "Export downloaded",
+    logoutAllHint:
+      "Ends your sessions on every device, including this one. Useful if a device went missing or you signed in somewhere you should not have.",
+    logoutAllAction: "Sign out everywhere",
     deleteHint:
       "Permanently deletes your account and your entire stock. Proposals that made it into the shared catalogue stay there – without your name and without your reasoning.",
     deleteAction: "Delete account",
@@ -479,6 +482,8 @@ export const en: Messages = {
     copyPrompt: "Copy the prompt",
     showPrompt: "Show the prompt",
     hidePrompt: "Hide the prompt",
+    privacyWarning:
+      "Think about what the document you send along contains: invoices usually carry your name, address and payment details. That data goes to the language model's provider, not to filahub – redact whatever it does not need.",
     promptCopied: "Prompt copied to the clipboard",
     copyFailed: "Copying failed – please select it manually",
     step2: "2. Paste the JSON",

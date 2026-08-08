@@ -13,29 +13,12 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23eab308' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3C/svg%3E"
     />
-    <script>
-      /*
-        Farbschema vor dem ersten Paint setzen, sonst blitzt beim Laden im
-        Dark-Mode kurz die helle Oberfläche auf. Schlüssel und Werte sind
-        dieselben wie in next-themes (siehe src/providers/theme.tsx).
-      */
-      (function () {
-        try {
-          var stored = localStorage.getItem("theme");
-          var prefersDark = window.matchMedia(
-            "(prefers-color-scheme: dark)"
-          ).matches;
-          var dark = stored === "dark" || (stored !== "light" && prefersDark);
-          var root = document.documentElement;
-          root.classList.toggle("dark", dark);
-          root.style.colorScheme = dark ? "dark" : "light";
-          var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute("content", dark ? "#09090b" : "#ffffff");
-        } catch (e) {
-          /* localStorage kann blockiert sein – dann bleibt es hell */
-        }
-      })();
-    </script>
+    <!--
+      Muss vor dem ersten Paint laufen und deshalb blockierend im <head>.
+      Als eigene Datei statt inline, damit die Content Security Policy ohne
+      `script-src 'unsafe-inline'` auskommt – siehe public/theme-init.js.
+    -->
+    <script src="/theme-init.js"></script>
   </head>
   <body>
     <div id="root"></div>

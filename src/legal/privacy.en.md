@@ -91,7 +91,7 @@ necessity.
 
 | Name                      | Type               | Purpose                               | Duration           |
 | ------------------------- | ------------------ | ------------------------------------- | ------------------ |
-| `filament_sid`            | cookie, `httpOnly` | keeps you signed in                   | 1 year             |
+| `filament_sid`            | cookie, `httpOnly` | keeps you signed in                   | 30 days            |
 | `sidebar_state`           | cookie             | preferred width of the navigation bar | 7 days             |
 | `theme`                   | local storage      | chosen colour scheme                  | until you clear it |
 | `sidebar-width`           | local storage      | chosen width of the navigation bar    | until you clear it |

@@ -59,6 +59,15 @@ export const users = pgTable("users", {
    * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
    */
   lastSeenReleaseVersion: varchar("lastSeenReleaseVersion", { length: 32 }),
+  /**
+   * Zähler zum Entwerten ausgegebener Sitzungen.
+   *
+   * Das Session-Token trägt den Stand mit, unter dem es ausgestellt wurde.
+   * Wird der Zähler erhöht, sind alle älteren Token ungültig – ohne dass es
+   * dafür eine Sperrliste bräuchte. Der Vergleich ist gratis, weil
+   * `authenticateRequest` die Benutzerzeile ohnehin bei jedem Request lädt.
+   */
+  tokenVersion: integer("tokenVersion").default(0).notNull(),
   createdAt: tsColumn("createdAt").defaultNow().notNull(),
   updatedAt: tsColumn("updatedAt")
     .defaultNow()

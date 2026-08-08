@@ -30,6 +30,26 @@
       "autoPort": true
     },
     {
+      "_comment": "Produktionsbau prüfen (vorher `npm run build`). Nur hier greifen die Schutzkopfzeilen auch auf der Seite selbst – in der Entwicklung liefert Vite das HTML an Hono vorbei.",
+      "name": "filahub-prod-check",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "NODE_ENV=production",
+        "APP_SECRET=prod-check-secret",
+        "DATABASE_URL=postgres://filahub:filahub@127.0.0.1:55433/filahub",
+        "TELEGRAM_BOT_TOKEN=000000:dummy-token-for-ui-testing",
+        "TELEGRAM_BOT_USERNAME=FilahubUiTestBot",
+        "LEGAL_OPERATOR_NAME=Test Betreiber",
+        "LEGAL_OPERATOR_ADDRESS=Teststrasse 1\\n1234 Testort\\nSchweiz",
+        "LEGAL_OPERATOR_EMAIL=test@example.org",
+        "LEGAL_OPERATOR_HOSTING=Test-Hoster AG, Testort",
+        "node",
+        "dist/boot.js"
+      ],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
       "name": "filahub-dev-sandbox",
       "runtimeExecutable": "env",
       "runtimeArgs": [

@@ -73,4 +73,15 @@ export const env = {
    * instanzspezifisch: Der eine hostet bei einem Anbieter, der Nächste im Keller.
    */
   operatorHosting: process.env.LEGAL_OPERATOR_HOSTING ?? "",
+
+  /**
+   * Wie viele vertrauenswürdige Proxys vor der App stehen. Bestimmt, welcher
+   * Eintrag aus `x-forwarded-for` als echte Client-Adresse gilt – siehe
+   * `api/lib/clientIp.ts`. Standard 1: ein Reverse Proxy, wie im README
+   * empfohlen.
+   */
+  trustProxyHops: Math.max(
+    1,
+    parseInt(process.env.TRUST_PROXY_HOPS ?? "1", 10) || 1
+  ),
 };

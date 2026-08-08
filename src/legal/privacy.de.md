@@ -95,7 +95,7 @@ Server-Protokolle mit IP-Adressen an.
 
 | Name                      | Art                | Zweck                                   | Dauer              |
 | ------------------------- | ------------------ | --------------------------------------- | ------------------ |
-| `filament_sid`            | Cookie, `httpOnly` | hält deine Anmeldung                    | 1 Jahr             |
+| `filament_sid`            | Cookie, `httpOnly` | hält deine Anmeldung                    | 30 Tage            |
 | `sidebar_state`           | Cookie             | gewünschte Breite der Navigationsleiste | 7 Tage             |
 | `theme`                   | lokaler Speicher   | gewähltes Farbschema                    | bis du ihn löschst |
 | `sidebar-width`           | lokaler Speicher   | gewählte Breite der Navigationsleiste   | bis du ihn löschst |

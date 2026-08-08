@@ -5,12 +5,18 @@ import { currencySchema, localeSchema } from "@contracts/locale";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { clearSessionCookie, sessionCookie } from "./lib/cookies";
 import { env } from "./lib/env";
-import { createRouter, authedQuery, publicQuery } from "./middleware";
+import {
+  createRouter,
+  authedQuery,
+  publicQuery,
+  rateLimited,
+} from "./middleware";
 import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
 import {
   markReleaseNotesSeen,
+  revokeSessions,
   updateUserSettings,
   upsertUser,
 } from "./queries/users";
@@ -65,8 +71,21 @@ export const authRouter = createRouter({
     devLoginAvailable: !env.isProduction && env.devLogin,
   })),
 
-  /** Code vom Telegram-Bot einlösen und Session setzen */
+  /**
+   * Code vom Telegram-Bot einlösen und Session setzen.
+   *
+   * Der Code hat sechs Stellen, also eine Million Möglichkeiten – ohne Sperre
+   * ließe sich der Bestand gültiger Codes in überschaubarer Zeit durchprobieren,
+   * und ein Treffer meldet als der betreffende Benutzer an. Die Einlösung ist
+   * bewusst nicht an die Telegram-ID gebunden: Das Formular kennt sie nicht,
+   * es gibt also nichts, wogegen sich prüfen ließe. Die Sperre ist damit die
+   * einzige wirksame Bremse.
+   */
   login: publicQuery
+    .use(rateLimited({ key: "auth.login", limit: 10, windowMs: 10 * 60_000 }))
+    .use(
+      rateLimited({ key: "auth.login.hour", limit: 30, windowMs: 60 * 60_000 })
+    )
     .input(
       z.object({
         code: z
@@ -87,14 +106,17 @@ export const authRouter = createRouter({
 
       assertAllowed(entry.telegramId);
 
-      await upsertUser({
+      const user = await upsertUser({
         unionId: entry.telegramId,
         name: entry.telegramName ?? entry.telegramUsername,
         telegramUsername: entry.telegramUsername,
         lastSignInAt: new Date(),
       });
 
-      const token = await signSessionToken({ unionId: entry.telegramId });
+      const token = await signSessionToken({
+        unionId: entry.telegramId,
+        tokenVersion: user.tokenVersion,
+      });
       ctx.resHeaders.append(
         "set-cookie",
         sessionCookie(token, ctx.req.headers)
@@ -111,6 +133,7 @@ export const authRouter = createRouter({
    * auf Wunsch teilt der Nutzer im Dialog auch seine Telefonnummer mit Telegram.
    */
   loginWithWidget: publicQuery
+    .use(rateLimited({ key: "auth.widget", limit: 20, windowMs: 10 * 60_000 }))
     .input(
       z.object({
         id: z.number(),
@@ -151,14 +174,17 @@ export const authRouter = createRouter({
         `AvatarFallback` leisten dasselbe ohne Drittabruf. Das Feld bleibt in
         der Eingabe, weil Telegram es in die HMAC-Prüfsumme einrechnet.
       */
-      await upsertUser({
+      const user = await upsertUser({
         unionId: telegramId,
         name,
         telegramUsername: input.username ?? null,
         lastSignInAt: new Date(),
       });
 
-      const token = await signSessionToken({ unionId: telegramId });
+      const token = await signSessionToken({
+        unionId: telegramId,
+        tokenVersion: user.tokenVersion,
+      });
       ctx.resHeaders.append(
         "set-cookie",
         sessionCookie(token, ctx.req.headers)
@@ -166,7 +192,22 @@ export const authRouter = createRouter({
       return { success: true, name };
     }),
 
+  /**
+   * Abmelden auf diesem Gerät. Entwertet bewusst **nur** das Cookie: Wer sich
+   * am Telefon abmeldet, will nicht zugleich am Rechner hinausfliegen.
+   */
   logout: authedQuery.mutation(async ({ ctx }) => {
+    ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
+    return { success: true };
+  }),
+
+  /**
+   * Abmelden auf allen Geräten – der Weg für den Fall, dass ein Gerät
+   * abhandengekommen ist. Erhöht `users.tokenVersion` und macht damit jedes
+   * ausgestellte Token ungültig, auch das der eigenen Sitzung.
+   */
+  logoutAllDevices: authedQuery.mutation(async ({ ctx }) => {
+    await revokeSessions(ctx.user.id);
     ctx.resHeaders.append("set-cookie", clearSessionCookie(ctx.req.headers));
     return { success: true };
   }),

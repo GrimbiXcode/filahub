@@ -177,6 +177,9 @@ export const de = {
     exportAction: "Daten herunterladen",
     exportPending: "Wird zusammengestellt …",
     exportDone: "Export heruntergeladen",
+    logoutAllHint:
+      "Beendet deine Sitzungen auf allen Geräten, auch auf diesem. Sinnvoll, wenn ein Gerät abhandengekommen ist oder du dich irgendwo fremd angemeldet hast.",
+    logoutAllAction: "Auf allen Geräten abmelden",
     deleteHint:
       "Löscht dein Konto und deinen gesamten Bestand endgültig. Vorschläge, die in den gemeinsamen Katalog übernommen wurden, bleiben dort erhalten – ohne deinen Namen und ohne deine Begründung.",
     deleteAction: "Konto löschen",
@@ -494,6 +497,8 @@ export const de = {
     copyPrompt: "Prompt kopieren",
     showPrompt: "Prompt anzeigen",
     hidePrompt: "Prompt verbergen",
+    privacyWarning:
+      "Bedenke, was in dem Dokument steht, das du mitschickst: Rechnungen enthalten meist Name, Anschrift und Zahlungsangaben. Diese Daten gehen an den Anbieter des Sprachmodells, nicht an filahub – schwärze, was er nicht braucht.",
     promptCopied: "Prompt in die Zwischenablage kopiert",
     copyFailed: "Kopieren fehlgeschlagen – bitte manuell markieren",
     step2: "2. JSON einfügen",

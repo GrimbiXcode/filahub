@@ -13,7 +13,15 @@ export function getSessionCookieOptions(headers: Headers): CookieOptions {
   return {
     httpOnly: true,
     path: "/",
-    sameSite: localhost ? "Lax" : "None",
+    /*
+      `Lax`, nicht `None`. Das Telegram-Widget ruft `window.onTelegramAuth` im
+      selben Dokument auf, der anschließende tRPC-Aufruf ist also same-origin –
+      `None` war nie nötig, schickte das Session-Cookie aber bei jeder
+      Cross-Site-Anfrage mit. In einer Codebasis ohne CSRF-Token ist das
+      geschenkte Angriffsfläche. Eingebettet wird die App ohnehin nicht,
+      dagegen steht `frame-ancestors 'none'`.
+    */
+    sameSite: "Lax",
     secure: !localhost,
   };
 }

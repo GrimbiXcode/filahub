@@ -25,7 +25,7 @@ export function registerDevLogin(
   if (env.isProduction || !env.devLogin) return false;
 
   app.get("/api/dev-login", async c => {
-    await upsertUser({
+    const user = await upsertUser({
       unionId: DEV_LOGIN_UNION_ID,
       name: env.devLoginName,
       telegramUsername: "devlogin",
@@ -33,7 +33,10 @@ export function registerDevLogin(
       lastSignInAt: new Date(),
     });
 
-    const token = await signSessionToken({ unionId: DEV_LOGIN_UNION_ID });
+    const token = await signSessionToken({
+      unionId: DEV_LOGIN_UNION_ID,
+      tokenVersion: user.tokenVersion,
+    });
     c.header("set-cookie", sessionCookie(token, c.req.raw.headers));
     return c.redirect("/");
   });

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
 import { compareVersions } from "@contracts/releaseNotes";
@@ -62,6 +62,9 @@ export async function updateUserSettings(
  * Legt einen Benutzer an bzw. aktualisiert ihn beim Login.
  * Rolle: explizit gesetzter Owner (OWNER_TELEGRAM_ID) oder der allererste
  * registrierte Benutzer wird Admin.
+ *
+ * Gibt die geschriebene Zeile zurück – der Aufrufer braucht daraus
+ * `tokenVersion`, um das Session-Token auszustellen.
  */
 export async function upsertUser(data: InsertUser) {
   const values = { ...data };
@@ -92,8 +95,22 @@ export async function upsertUser(data: InsertUser) {
 
   // Postgres braucht die Konfliktspalte explizit; eindeutig ist die
   // Telegram-ID (`unionId`).
-  await getDb()
+  const [user] = await getDb()
     .insert(schema.users)
     .values(values)
-    .onConflictDoUpdate({ target: schema.users.unionId, set: updateSet });
+    .onConflictDoUpdate({ target: schema.users.unionId, set: updateSet })
+    .returning();
+  return user;
+}
+
+/**
+ * Entwertet alle ausgegebenen Sitzungen eines Benutzers, indem der Zähler
+ * erhöht wird (siehe `users.tokenVersion`). Gedacht für „auf allen Geräten
+ * abmelden“ und für den Fall, dass ein Gerät abhandengekommen ist.
+ */
+export async function revokeSessions(userId: number) {
+  await getDb()
+    .update(schema.users)
+    .set({ tokenVersion: sql`${schema.users.tokenVersion} + 1` })
+    .where(eq(schema.users.id, userId));
 }
