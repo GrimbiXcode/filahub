@@ -25,8 +25,19 @@ import "dotenv/config";
 export function multiline(value: string | undefined): string {
   return (
     (value ?? "")
-      // Literale Escapes zuerst, sonst bliebe der Backslash stehen.
-      .replace(/\\r\\n|\\n|\\r/g, "\n")
+      /*
+        Literale Escapes zuerst, sonst bliebe der Backslash stehen.
+
+        `\\+` – ein *oder mehr* Backslashes. Manche Deployment-Plattformen
+        escapen den Wert auf dem Weg in den Bau ein zweites Mal: Aus `\n`
+        wird `\\n`. Coolify tut das, wenn es die Variablen als `ARG` ins
+        generierte Dockerfile oder in eine Umgebungsdatei schreibt.
+
+        Zählte man die Ebenen einzeln auf – erst ein Backslash, dann zwei –,
+        stünde man bei der nächsten Verdopplung vor demselben Problem, nur
+        eine Ebene tiefer. Deshalb gleich beliebig viele.
+      */
+      .replace(/\\+r\\+n|\\+[rn]/g, "\n")
       // Danach echte Zeilenenden vereinheitlichen.
       .replace(/\r\n?/g, "\n")
       .split("\n")

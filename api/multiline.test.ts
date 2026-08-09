@@ -39,6 +39,42 @@ describe("multiline", () => {
     expect(multiline("Strasse 1\r1234 Ort\rSchweiz")).toBe(ERWARTET);
   });
 
+  it("versteht doppelt escapte Formen aus Deployment-Plattformen", () => {
+    /*
+      Coolify escapt den Wert ein zweites Mal, wenn es ihn als `ARG` ins
+      generierte Dockerfile oder in eine Umgebungsdatei schreibt: Aus `\n`
+      wird `\\n`. Vorher blieb davon ein einzelner Backslash am Zeilenende
+      stehen – sichtbar im Impressum.
+
+      `String.raw`, damit hier wirklich zwei Backslashes im Speicher landen
+      und nicht bloß im Quelltext danach aussehen.
+    */
+    expect(multiline(String.raw`Strasse 1\\n1234 Ort\\nSchweiz`)).toBe(
+      ERWARTET
+    );
+    expect(multiline(String.raw`Strasse 1\\r\\n1234 Ort\\r\\nSchweiz`)).toBe(
+      ERWARTET
+    );
+  });
+
+  it("verträgt beliebig tiefe Escape-Ebenen", () => {
+    // Wer Ebenen einzeln aufzählt, steht bei der nächsten wieder hier.
+    for (const backslashes of [1, 2, 3, 4]) {
+      const trenner = "\\".repeat(backslashes) + "n";
+      const eingabe = `Strasse 1${trenner}1234 Ort${trenner}Schweiz`;
+      expect(multiline(eingabe), `${backslashes} Backslash(es)`).toBe(ERWARTET);
+    }
+  });
+
+  it("lässt in keinem Fall einen Backslash am Zeilenende stehen", () => {
+    for (const backslashes of [1, 2, 3, 4]) {
+      const eingabe = "A" + "\\".repeat(backslashes) + "nB";
+      expect(multiline(eingabe), `${backslashes} Backslash(es)`).not.toMatch(
+        /\\/
+      );
+    }
+  });
+
   it("verträgt gemischte Schreibweisen", () => {
     // Kommt vor, wenn jemand einen Wert von Hand ergänzt.
     expect(multiline("Strasse 1\\n1234 Ort\r\nSchweiz")).toBe(ERWARTET);

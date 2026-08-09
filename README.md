@@ -80,6 +80,11 @@ where a real newline ends the line and the rest is read as the next
 instruction — the build fails. `\n` avoids that entirely.
 
 Windows line endings, blank lines and stray spaces are cleaned up either way.
+So is a value that got escaped a second time on its way in — some platforms
+turn `\n` into `\\n` when they write the variables into the build.
+
+Do **not** use `<br>`: the legal pages are Markdown and raw HTML is discarded
+by design, so it would show up as visible text.
 
 ## 3. Set up the database
 
