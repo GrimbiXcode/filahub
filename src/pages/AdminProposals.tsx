@@ -178,7 +178,7 @@ export default function AdminProposals() {
                     key={p.id}
                     type="button"
                     onClick={() => setDetail(p)}
-                    className="rounded-xl border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="rounded-xl border p-3 text-left transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -202,7 +202,7 @@ export default function AdminProposals() {
                       </Badge>
                     </div>
                     {p.comment && (
-                      <p className="mt-2 break-words text-xs text-muted-foreground">
+                      <p className="mt-2 wrap-break-word text-xs text-muted-foreground">
                         {p.comment}
                       </p>
                     )}

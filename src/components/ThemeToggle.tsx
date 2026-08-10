@@ -84,7 +84,7 @@ export function ThemeSegmentedControl() {
             onClick={() => setTheme(value)}
             className={cn(
               "flex flex-col items-center gap-2 rounded-lg border p-3 text-sm transition-colors",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
               active
                 ? "border-primary bg-accent font-medium"
                 : "hover:bg-accent/50"

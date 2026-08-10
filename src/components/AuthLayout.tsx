@@ -254,7 +254,7 @@ function AuthLayoutContent({
             <div className="flex w-full items-center gap-3 px-2 transition-all">
               <button
                 onClick={toggleSidebar}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
                 aria-label={t.nav.toggleSidebar}
               >
                 <PanelLeft className="h-4 w-4 text-muted-foreground" />
@@ -410,7 +410,7 @@ function AuthLayoutContent({
             </SidebarMenu>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center">
+                <button className="flex w-full items-center gap-3 rounded-lg px-1 py-1 text-left transition-colors hover:bg-sidebar-accent focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:justify-center">
                   {/*
                     Bewusst nur die Initialen: Ein Telegram-Profilbild käme von
                     Telegrams CDN und würde bei jedem Seitenaufruf dorthin
@@ -494,7 +494,7 @@ function AuthLayoutContent({
       <SidebarInset className="min-w-0">
         {/* Kopfzeile nur auf schmalen Geräten – per CSS statt per Hook, damit
             beim ersten Rendern nichts springt. */}
-        <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+        <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:hidden">
           <SidebarTrigger className="size-10 rounded-lg" />
           <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
             {titleForPath(location.pathname, t)}

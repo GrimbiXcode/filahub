@@ -18,7 +18,7 @@ function Row({
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b py-2 last:border-0">
       <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-words text-sm font-medium">
+      <span className="min-w-0 wrap-break-word text-sm font-medium">
         {children}
       </span>
     </div>

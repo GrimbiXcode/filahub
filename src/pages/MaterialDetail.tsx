@@ -119,7 +119,7 @@ export default function MaterialDetail() {
                   {material.identifier}
                 </Badge>
               )}
-              <span className="break-words">{material.name}</span>
+              <span className="wrap-break-word">{material.name}</span>
               <Badge variant="secondary">{material.materialType}</Badge>
             </span>
           }
@@ -272,7 +272,7 @@ export default function MaterialDetail() {
                   {material.spoolLabel ? (
                     <>
                       <Disc3 className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="break-words">
+                      <span className="wrap-break-word">
                         {material.spoolLabel} (
                         {formatGrams(material.spoolTareWeight)} Tara)
                       </span>
@@ -293,7 +293,7 @@ export default function MaterialDetail() {
                   {material.storageBox ? (
                     <>
                       <Archive className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="break-words">
+                      <span className="wrap-break-word">
                         {material.storageBox.name}{" "}
                         {t.materialDetail.tareSuffix({
                           amount: formatGrams(material.storageBox.tareWeight),
@@ -307,7 +307,7 @@ export default function MaterialDetail() {
                 {material.notes && (
                   <>
                     <dt className="text-muted-foreground">{t.common.notes}</dt>
-                    <dd className="whitespace-pre-wrap break-words">
+                    <dd className="whitespace-pre-wrap wrap-break-word">
                       {material.notes}
                     </dd>
                   </>
@@ -361,7 +361,7 @@ export default function MaterialDetail() {
                             })}
                           </div>
                           {w.note && (
-                            <div className="mt-1 break-words text-xs text-muted-foreground">
+                            <div className="mt-1 wrap-break-word text-xs text-muted-foreground">
                               {w.note}
                             </div>
                           )}

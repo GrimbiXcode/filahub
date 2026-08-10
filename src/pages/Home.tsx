@@ -799,8 +799,8 @@ function StatCard({
         onClick={onClick}
         aria-pressed={active}
         className={cn(
-          "rounded-xl border bg-card p-3 text-left shadow-sm transition-colors sm:p-4",
-          "hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "rounded-xl border bg-card p-3 text-left shadow-xs transition-colors sm:p-4",
+          "hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
           active && "border-primary bg-accent"
         )}
       >
@@ -810,7 +810,7 @@ function StatCard({
   }
 
   return (
-    <div className="rounded-xl border bg-card p-3 shadow-sm sm:p-4">
+    <div className="rounded-xl border bg-card p-3 shadow-xs sm:p-4">
       {content}
     </div>
   );
@@ -838,7 +838,7 @@ function SortableHead({
       <button
         type="button"
         onClick={() => onSort(sortKey)}
-        className="-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="-mx-1 flex items-center gap-1 rounded px-1 py-0.5 hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
         aria-label={t.home.sortBy({ label })}
       >
         {label}
@@ -869,11 +869,11 @@ function MaterialCard({
   const t = useT();
 
   return (
-    <div className="rounded-xl border bg-card shadow-sm">
+    <div className="rounded-xl border bg-card shadow-xs">
       <button
         type="button"
         onClick={onOpen}
-        className="w-full rounded-t-xl p-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full rounded-t-xl p-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

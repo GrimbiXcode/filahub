@@ -168,7 +168,7 @@ export function SpoolPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[26rem] max-w-[calc(100vw-2rem)] min-w-[--radix-popover-trigger-width] p-0"
+        className="w-104 max-w-[calc(100vw-2rem)] min-w-(--radix-popover-trigger-width) p-0"
         align="start"
       >
         <Command>

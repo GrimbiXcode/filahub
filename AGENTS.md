@@ -8,7 +8,7 @@ spricht Deutsch und Englisch (umschaltbar pro Benutzer).
 
 ## Tech-Stack
 
-- **Frontend:** React 19, Vite 8, TypeScript (strict), Tailwind CSS v3,
+- **Frontend:** React 19, Vite 8, TypeScript (strict), Tailwind CSS v4,
   shadcn/ui (Radix-Primitives, siehe `src/components/ui/`), react-router 7,
   TanStack Query, react-hook-form + zod
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
@@ -297,12 +297,8 @@ Entwicklungsdatenbank.
 - ESLint: `js.configs.recommended`, `typescript-eslint`, react-hooks, react-refresh.
 - UI-Komponenten aus shadcn nachnutzen: `import { Button } from "@/components/ui/button"` –
   keine neuen Basis-Komponenten erfinden. Styling über Tailwind + `cn()` aus `src/lib/utils.ts`.
-  **Beim Übernehmen neuer shadcn-Komponenten auf Tailwind-v4-Syntax achten:**
-  Upstream liefert inzwischen für v4, hier läuft v3. `--spacing(n)` gibt es dort
-  nicht und muss von Hand aufgelöst werden (`n × 0.25rem`), ebenso `var(--spacing)`
-  – der Token ist unter v3 nicht definiert. Unter v3 fällt das nicht auf, weil
-  Tailwind den Wert unverändert durchreicht; seit Vite 8 mit lightningcss
-  minifiziert, bricht der Build daran ab (siehe `calendar.tsx`, `toggle-group.tsx`).
+  Seit Tailwind 4 passt die Upstream-Fassung wieder ohne Übersetzung – v4-Syntax
+  wie `--spacing(n)` oder `size-(--cell-size)` darf so bleiben, wie sie kommt.
 - **Mobile zuerst denken:** Das Layout gibt den Seitenrand vor (`AuthLayout`),
   Seiten fangen mit `<PageHeader …>` an und bringen kein eigenes Padding mit.
   Tabellen sind auf dem Telefon unbedienbar – ab drei Spalten daneben eine

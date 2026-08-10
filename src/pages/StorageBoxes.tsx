@@ -165,7 +165,7 @@ export default function StorageBoxes() {
                 return (
                   <div
                     key={b.id}
-                    className="rounded-xl border bg-card p-3 shadow-sm"
+                    className="rounded-xl border bg-card p-3 shadow-xs"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
@@ -191,7 +191,7 @@ export default function StorageBoxes() {
                       )}
                     </div>
                     {b.notes && (
-                      <p className="mt-2 break-words text-xs text-muted-foreground">
+                      <p className="mt-2 wrap-break-word text-xs text-muted-foreground">
                         {b.notes}
                       </p>
                     )}
