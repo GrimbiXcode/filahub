@@ -44,8 +44,13 @@ export function useReleaseNotes({ markSeenOnMount = false }: Options = {}) {
     undefined
   );
   useEffect(() => {
-    if (isReady)
+    // Genau dieses Festhalten ist der Zweck des Effekts: Sobald der Benutzer
+    // feststeht, wird der Stand einmalig übernommen. Ein Ref reicht nicht, weil
+    // `unreadAtEntry` unten daraus neu berechnet werden muss.
+    if (isReady) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSeenAtEntry(current => (current === undefined ? lastSeen : current));
+    }
     // `lastSeen` bewusst nicht in den Abhängigkeiten: Der Wert soll genau
     // einmal festgehalten werden, nicht bei jeder Aktualisierung neu.
     // eslint-disable-next-line react-hooks/exhaustive-deps

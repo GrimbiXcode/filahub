@@ -74,16 +74,25 @@ upstream. In place today:
   dependencies, but ships its own dependency tree that would otherwise show up
   in every scan of a product that never calls it
 
-### The one open advisory
+### Open advisories
 
-`@hono/node-server` below 2.0.5 has a path traversal in `serve-static`
-**on Windows**, through an encoded backslash. filahub ships as a Linux
-container, so it is not reachable here, and the fix is a major version bump of
-the HTTP server — a real regression risk for no gain in this deployment.
+Production dependencies are currently free of known advisories. The path
+traversal in `@hono/node-server` `serve-static` below 2.0.5 (GHSA-frvp-7c67-39w9,
+Windows only) was closed by moving to `@hono/node-server` 2.x — the public API
+is unchanged, the major bump is a rewrite for throughput.
 
-The CI gate is therefore set to `--audit-level=high`, which lets this moderate
-advisory stand. Revisit when `@hono/node-server` 2.x is otherwise worth
-adopting.
+Two moderate advisories remain in **development** dependencies. Neither ships in
+the image, and both sit behind an upstream package with no fixed release:
+
+- `@hono/vite-dev-server` still depends on `@hono/node-server` 1.x, so the
+  advisory above lives on in a nested copy. It is loaded by the Vite dev server
+  only.
+- `drizzle-kit` pulls the abandoned `@esbuild-kit/esm-loader`, and with it
+  esbuild 0.18 (GHSA-67mh-4wv8-2f99). That advisory concerns esbuild's own
+  `--serve` dev server, which drizzle-kit never starts.
+
+The CI gate stays at `npm audit --omit=dev --audit-level=high`: production
+dependencies are the ones that reach users.
 
 ## What else applies, and what does not
 

@@ -163,7 +163,9 @@ export function parseReleaseNote(filePath: string, raw: string): ReleaseNote {
   try {
     ({ frontmatter, body } = splitFrontmatter(raw));
   } catch (error) {
-    throw new Error(`Release Note "${fileName}": ${(error as Error).message}`);
+    throw new Error(`Release Note "${fileName}": ${(error as Error).message}`, {
+      cause: error,
+    });
   }
 
   const parsed = releaseNoteFrontmatterSchema.safeParse(frontmatter);

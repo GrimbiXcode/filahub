@@ -60,7 +60,7 @@ export class HttpClient {
       return (await response.json()) as T;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
-        throw new Error("Request timeout");
+        throw new Error("Request timeout", { cause: error });
       }
       throw error;
     }

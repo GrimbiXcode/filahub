@@ -45,10 +45,17 @@ export default defineConfig([
     // Sie exportieren neben den Komponenten auch Varianten und Hooks
     // (react-refresh) und nutzen `Math.random()` für Skeleton-Breiten
     // (react-hooks/purity). Beides wird hier nicht umgeschrieben.
-    files: ["src/components/ui/**/*.{ts,tsx}"],
+    //
+    // `use-mobile.ts` stammt aus derselben Quelle und liegt nur deshalb unter
+    // `src/hooks/`, weil shadcn seine Hooks dort ablegt.
+    files: ["src/components/ui/**/*.{ts,tsx}", "src/hooks/use-mobile.ts"],
     rules: {
       "react-refresh/only-export-components": "off",
       "react-hooks/purity": "off",
+      // Seit eslint-plugin-react-hooks 7.1: Das Carousel spiegelt den
+      // Embla-Stand im Effekt, `useIsMobile` den der Media Query – beides ist
+      // die Upstream-Fassung und synchronisiert bewusst ein externes System.
+      "react-hooks/set-state-in-effect": "off",
     },
   },
 ]);
