@@ -62,13 +62,6 @@ export const env = {
   appSecret: required("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  /**
-   * Nur für den Umstieg von MySQL auf Postgres: Ist die Variable gesetzt,
-   * übernimmt der Server beim Start einmalig die Altdaten aus dieser
-   * Datenbank (siehe api/queries/legacyImport.ts). Nach erfolgreicher
-   * Übernahme kann sie entfernt werden.
-   */
-  legacyMysqlUrl: process.env.LEGACY_MYSQL_URL ?? "",
   /** Bot-Token von @BotFather, z. B. "123456:ABC-DEF..." */
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN ?? "",
   /** Bot-Username ohne @, z. B. "FilamentLagerBot" */

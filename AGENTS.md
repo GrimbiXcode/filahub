@@ -12,9 +12,7 @@ spricht Deutsch und Englisch (umschaltbar pro Benutzer).
   shadcn/ui (Radix-Primitives, siehe `src/components/ui/`), react-router 7,
   TanStack Query, react-hook-form + zod
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
-- **Datenbank:** Drizzle ORM + PostgreSQL (`pg`, `drizzle-kit`). `mysql2` ist
-  nur noch der Lese-Treiber für die einmalige Übernahme von Altdaten
-  (`api/queries/legacyImport.ts`)
+- **Datenbank:** Drizzle ORM + PostgreSQL (`pg`, `drizzle-kit`)
 - **Auth:** Telegram Login Widget + Bot-Code-Login, JWT-Session-Cookie (`jose`, HS256)
 - **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
@@ -51,11 +49,9 @@ api/            Hono/tRPC-Backend
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
-                legacyImport.ts (Datenübernahme aus MySQL),
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
-                migrations/ (drizzle-kit-Output),
-                legacy/mysql-baseline.sql (archivierter MySQL-Schemastand)
+                migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -258,52 +254,6 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 `OWNER_TELEGRAM_ID` (Admin). `drizzle.config.ts` benötigt ebenfalls
 `DATABASE_URL`.
 
-Optional für den Umstieg von MySQL: `LEGACY_MYSQL_URL` (siehe „Datenübernahme
-aus MySQL“).
-
-## Datenübernahme aus MySQL
-
-Bis Version 0.7.0 lief die Anwendung auf MySQL. Ist `LEGACY_MYSQL_URL` gesetzt,
-übernimmt der Server beim Start einmalig alle Daten
-(`runLegacyImport` in `api/queries/legacyImport.ts`).
-
-- **Reihenfolge in `api/boot.ts`:** `migrateDb()` → `runLegacyImport()` →
-  `seedSpoolPresets()`. Der Startkatalog kommt zuletzt, damit er übernommene
-  Einträge über ihren Slug wiederfindet, statt Dubletten anzulegen.
-- **IDs bleiben unverändert.** Möglich ist das nur, weil die Datenbank keine
-  Fremdschlüssel führt – es gibt nichts umzuschreiben. Nach jeder Tabelle wird
-  die Sequenz per `setval` nachgezogen, sonst kollidiert der erste neue INSERT.
-- **Idempotent** über `onConflictDoNothing`; ein abgebrochener Lauf wird
-  einfach wiederholt.
-- **Nur in eine leere Zieldatenbank.** Kehrseite der Idempotenz: Kollidiert
-  eine Altzeile mit einer vorhandenen ID, gewinnt das Ziel und die Altzeile
-  fällt still weg. `findBlockingRows` weist den ersten Lauf deshalb ab, wenn
-  schon Zeilen da sind. Die Prüfung läuft **vor** `claimRun` – sonst setzte
-  der abgewiesene Versuch selbst `startedAt` und schaltete sie für alle
-  weiteren Versuche ab.
-- **Das Seeding pausiert**, solange die Übernahme nicht `completed` oder
-  `skipped` ist (`api/boot.ts`). Der Startkatalog vergäbe sonst genau die IDs,
-  die der Wiederholungslauf für die Altdaten braucht; Materialien zeigten
-  danach über ihre unveränderte `spoolPresetVariantId` auf eine fremde Spule.
-  Nach einer erfolgreichen Wiederholung über die Verwaltungsseite zieht
-  `admin.system.retryLegacyImport` das Seeding selbst nach.
-- **Abgestürzte Läufe** bleiben auf `running` stehen. `claimable` übernimmt
-  einen solchen Zustand nach `STALE_RUN_MS` ohne Lebenszeichen; jeder Stapel
-  frischt `updatedAt` auf, damit eine große Tabelle nicht fälschlich als tot
-  gilt. Ohne das wäre die Übernahme nach einem Absturz dauerhaft blockiert.
-- `claimable` schließt `skipped` mit ein: Sonst könnte eine Installation, die
-  einmal ohne `LEGACY_MYSQL_URL` gestartet wurde, die Übernahme nie mehr
-  anstoßen. `completed` fehlt bewusst.
-- **Nicht startkritisch.** Ein Fehler landet in `migration_state` und wird auf
-  `/verwaltung/system` angezeigt – bräche der Start ab, käme man an diese Seite
-  nicht heran. Der Statuswechsel auf `running` ist zugleich die optimistische
-  Sperre gegen doppelte Läufe (dasselbe Muster wie `closeProposal`).
-- **Werteumwandlung** (`convertValue`, `mapRow`): `tinyint(1)` → `boolean`,
-  `json` → `jsonb`, `date` → `YYYY-MM-TT`-Zeichenkette. Reine Funktionen,
-  getestet in `api/legacyImport.test.ts`.
-- `db/legacy/mysql-baseline.sql` ist der archivierte MySQL-Schemastand: Referenz
-  für die Struktur der Quelle und Fixture für den Integrationstest.
-
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
 
 Für die Entwicklung und für automatisierte Oberflächenprüfungen gibt es eine
@@ -399,7 +349,7 @@ Datenbank.
 
 ### Integrationstests (`npm run test:integration`)
 
-- `api/postgres.integration.test.ts` und `api/legacyImport.integration.test.ts`,
+- `api/postgres.integration.test.ts` und `api/account.integration.test.ts`,
   konfiguriert in `vitest.integration.config.ts`; aus `vitest.config.ts`
   ausgeschlossen, damit `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in
@@ -408,10 +358,6 @@ Datenbank.
   Seedings, Katalog- und Vorschlagsfluss über die tRPC-Router, Unique-Keys,
   `RETURNING`, die optimistische Sperre, Zeitstempel und der Systemzustand für
   `/verwaltung/system`.
-- `api/legacyImport.integration.test.ts` braucht zusätzlich
-  `TEST_LEGACY_MYSQL_URL` und überspringt sich sonst selbst. Es baut die Quelle
-  aus `db/legacy/mysql-baseline.sql` auf und prüft Vollständigkeit, ID-Erhalt,
-  Typumwandlung, Sequenz-Reset, Idempotenz und den Fehlerfall.
 - Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
   mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **das gesamte Schema**
   der Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).
@@ -421,13 +367,7 @@ docker run -d --name filahub-test-db -p 127.0.0.1:5433:5432 \
   -e POSTGRES_DB=filahub_test -e POSTGRES_USER=filahub \
   -e POSTGRES_PASSWORD=filahub postgres:17-alpine
 
-# Nur für den Test der Datenübernahme:
-docker run -d --name filahub-legacy-db -p 127.0.0.1:3399:3306 \
-  -e MYSQL_DATABASE=filahub_legacy -e MYSQL_USER=filahub \
-  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
-
 TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
-TEST_LEGACY_MYSQL_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_legacy' \
   npm run test:integration
 ```
 
@@ -455,9 +395,6 @@ TEST_LEGACY_MYSQL_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_legacy' \
   ebenfalls.
 - PostgreSQL muss vom Container/Host aus erreichbar sein; Setup siehe
   `README.md` (Datenbank anlegen, `npm run db:push`).
-- Beim Umstieg einer bestehenden Installation zusätzlich `LEGACY_MYSQL_URL`
-  setzen (siehe „Datenübernahme aus MySQL“) und das Ergebnis unter
-  `/verwaltung/system` prüfen.
 
 ## Sicherheit
 

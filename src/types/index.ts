@@ -24,9 +24,6 @@ export type AdminProposalItem =
 
 /** Systemzustand für /verwaltung/system */
 export type AdminSystemStatus = RouterOutputs["admin"]["system"]["status"];
-export type LegacyImportStatus = NonNullable<
-  AdminSystemStatus["legacyImport"]
->["status"];
 
 /** Gängige 3D-Druck-Materialarten für Vorschläge */
 export const COMMON_MATERIAL_TYPES = [

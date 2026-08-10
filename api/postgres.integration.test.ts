@@ -19,9 +19,8 @@ import { seedSpoolPresets } from "./queries/presetSeed";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import { createProposal, closeProposal, findProposal } from "./queries/presets";
 import { createSpoolType } from "./queries/filament";
-import { getLegacyImportState, runLegacyImport } from "./queries/legacyImport";
 import * as schema from "@db/schema";
-import { LEGACY_IMPORT_KEY, type User } from "@db/schema";
+import { type User } from "@db/schema";
 import {
   callerFor,
   closeDb,
@@ -68,7 +67,6 @@ describe("Migrationen", () => {
       "preset_series_material_types",
       "preset_proposals",
       "hidden_spool_presets",
-      "migration_state",
     ]) {
       expect(names).toContain(table);
     }
@@ -106,7 +104,6 @@ describe("Migrationen", () => {
       "preset_spool_material",
       "preset_proposal_kind",
       "preset_proposal_status",
-      "migration_status",
     ]) {
       expect(names).toContain(type);
     }
@@ -616,19 +613,7 @@ describe("Postgres-Eigenheiten", () => {
   });
 });
 
-describe("Zustand der Datenübernahme", () => {
-  it("vermerkt ohne LEGACY_MYSQL_URL, dass nichts zu tun war", async () => {
-    // Genau der Aufruf, den api/boot.ts beim Serverstart macht.
-    const result = await runLegacyImport();
-    expect(result.status).toBe("skipped");
-    expect(result.rowsCopied).toBe(0);
-
-    const state = await getLegacyImportState();
-    expect(state?.key).toBe(LEGACY_IMPORT_KEY);
-    expect(state?.status).toBe("skipped");
-    expect(state?.finishedAt).toBeInstanceOf(Date);
-  });
-
+describe("Systemzustand", () => {
   it("liefert den Systemzustand für die Verwaltungsseite", async () => {
     const status = await asAdmin.admin.system.status();
 
@@ -637,7 +622,6 @@ describe("Zustand der Datenübernahme", () => {
     expect(status.schemaMigrations.length).toBeGreaterThan(0);
     expect(status.schemaMigrations.every(m => m.applied)).toBe(true);
     expect(status.schemaMigrations[0].generatedAt).toBeInstanceOf(Date);
-    expect(status.legacyImport?.status).toBe("skipped");
     expect(status.seed.seededRows).toBeGreaterThan(0);
 
     const users = status.tableCounts.find(t => t.table === "users");

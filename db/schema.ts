@@ -377,9 +377,9 @@ export const PRESET_SCOPES = [
 ] as const;
 
 /**
- * Katalogebene. In Postgres ist das ein einziger Typ, den sich
- * `hidden_spool_presets.scope` und `preset_proposals.targetType` teilen –
- * unter MySQL war es zweimal dasselbe Inline-Enum.
+ * Katalogebene. Ein einziger Typ, den sich `hidden_spool_presets.scope` und
+ * `preset_proposals.targetType` teilen – so können die beiden Spalten nicht
+ * auseinanderlaufen.
  */
 export const presetScopeEnum = pgEnum("preset_scope", PRESET_SCOPES);
 
@@ -469,59 +469,6 @@ export const presetProposals = pgTable(
 
 export type PresetProposal = typeof presetProposals.$inferSelect;
 export type InsertPresetProposal = typeof presetProposals.$inferInsert;
-
-// ---------------------------------------------------------------------------
-// Zustand einmaliger Wartungsläufe
-// ---------------------------------------------------------------------------
-
-/** Schlüssel des Laufs, der Altdaten aus MySQL übernimmt */
-export const LEGACY_IMPORT_KEY = "legacy_mysql_import";
-
-export const MIGRATION_STATUSES = [
-  "pending",
-  "running",
-  "completed",
-  "failed",
-  "skipped",
-] as const;
-
-export const migrationStatusEnum = pgEnum(
-  "migration_status",
-  MIGRATION_STATUSES
-);
-
-/**
- * Zustand einmaliger Wartungsläufe – aktuell nur die Übernahme der Altdaten
- * aus MySQL (`LEGACY_IMPORT_KEY`). Der Lauf schreibt hier seinen Fortschritt
- * hinein; die Verwaltungsseite `/verwaltung/system` liest ihn aus.
- *
- * Der Statuswechsel auf `running` dient zugleich als optimistische Sperre,
- * damit mehrere Instanzen den Import nicht doppelt starten (siehe
- * `api/queries/legacyImport.ts`).
- */
-export const migrationState = pgTable("migration_state", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  key: varchar("key", { length: 64 }).notNull().unique(),
-  status: migrationStatusEnum("status").default("pending").notNull(),
-  /** Quelle ohne Zugangsdaten, z. B. „db:3306/filahub“ */
-  source: varchar("source", { length: 255 }),
-  tablesTotal: integer("tablesTotal").default(0).notNull(),
-  tablesDone: integer("tablesDone").default(0).notNull(),
-  rowsCopied: integer("rowsCopied").default(0).notNull(),
-  /** Ergebnis je Tabelle, siehe LegacyImportDetail in api/queries/legacyImport.ts */
-  detail: jsonb("detail"),
-  error: text("error"),
-  startedAt: tsColumn("startedAt"),
-  finishedAt: tsColumn("finishedAt"),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-  updatedAt: tsColumn("updatedAt")
-    .defaultNow()
-    .notNull()
-    .$onUpdate(() => new Date()),
-});
-
-export type MigrationState = typeof migrationState.$inferSelect;
-export type InsertMigrationState = typeof migrationState.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Sicherheitsprotokoll
