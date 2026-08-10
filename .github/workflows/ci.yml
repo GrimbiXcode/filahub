@@ -31,10 +31,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
           cache: npm
@@ -65,9 +65,9 @@ jobs:
       # nicht im Abbild und ist oft monatelang nicht behebbar – als Gate wäre
       # das Rauschen, das man irgendwann abschaltet.
       #
-      # Schwelle "high": Ein bekannter moderater Befund bleibt offen
-      # (@hono/node-server, Pfad-Traversal nur unter Windows; die Behebung
-      # wäre ein Hauptversionssprung des HTTP-Servers). Begründung steht in
+      # Schwelle "high": Die verbliebenen moderaten Befunde stecken in
+      # Entwicklungswerkzeugen (@hono/vite-dev-server, drizzle-kit) und haben
+      # upstream keine behobene Fassung. Begründung steht in
       # COMPLIANCE.md.
       - name: Schwachstellen in Produktionsabhängigkeiten
         run: npm audit --omit=dev --audit-level=high
