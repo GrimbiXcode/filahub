@@ -10,10 +10,6 @@
 # (db/migrations) – no manual schema step is needed.
 # Put a reverse proxy with HTTPS (e.g. Caddy) in front of port 3000.
 # The session cookie requires HTTPS outside of localhost.
-#
-# Coming from a MySQL installation? See "Switching from MySQL" in the README:
-# set LEGACY_MYSQL_URL on the app service once, start, check the result under
-# /verwaltung/system, then remove the variable again.
 
 services:
   db:
@@ -47,11 +43,6 @@ services:
       # Points the app at the db service; overrides DATABASE_URL from .env.
       # The password must match POSTGRES_PASSWORD above.
       DATABASE_URL: postgres://filahub:change-me@db:5432/filahub
-      # One-time data migration from an existing MySQL database. Uncomment,
-      # point it at the old server and start once – the app copies the data on
-      # startup and reports the result under /verwaltung/system. Remove the
-      # line afterwards.
-      # LEGACY_MYSQL_URL: mysql://filahub:old-password@old-host:3306/filahub
     ports:
       - "3000:3000"
     # The image also ships a Dockerfile HEALTHCHECK; this entry makes the

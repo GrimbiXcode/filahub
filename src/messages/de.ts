@@ -667,7 +667,7 @@ export const de = {
 
   adminSystem: {
     title: "System",
-    description: "Datenbank, Migrationen und Datenübernahme",
+    description: "Datenbank, Migrationen und Startkatalog",
     database: "Datenbank",
     system: "System",
     databaseName: "Datenbank",
@@ -681,32 +681,9 @@ export const de = {
     seedCatalog: "Preset-Startkatalog",
     seedRevision: (vars: { revision: number; rows: string }) =>
       `Revision ${vars.revision} · ${vars.rows} Einträge aus dem Startkatalog`,
-    legacyImport: "Datenübernahme aus MySQL",
-    legacyNoRun: "Für diese Installation liegt kein Übernahmelauf vor.",
-    legacyNotConfigured:
-      "Es ist keine Altdatenbank hinterlegt. Um Daten aus einer bestehenden MySQL-Installation zu übernehmen,",
-    legacyNotConfiguredSuffix: "setzen und den Server neu starten.",
-    retry: "Erneut versuchen",
     source: "Quelle",
-    startedAt: "Gestartet",
-    finishedAt: "Beendet",
     tables: "Tabellen",
-    copiedRows: "Übernommene Zeilen",
-    errorMessage: "Fehlermeldung",
     colTable: "Tabelle",
-    colInSource: "In der Quelle",
-    colCopied: "Übernommen",
-    importDone: (vars: { rows: number }) =>
-      `Datenübernahme abgeschlossen – ${vars.rows} Zeilen übernommen.`,
-    importSeeded: (vars: { count: number }) =>
-      ` Preset-Katalog: ${vars.count} neu.`,
-    importStatus: (vars: { status: string }) =>
-      `Datenübernahme: ${vars.status}`,
-    statusPending: "Ausstehend",
-    statusRunning: "Läuft",
-    statusCompleted: "Abgeschlossen",
-    statusFailed: "Fehlgeschlagen",
-    statusSkipped: "Nicht erforderlich",
   },
 
   weighing: {

@@ -44,8 +44,3 @@ process.env.APP_SECRET ||= "integration-test-secret";
 delete process.env.OWNER_TELEGRAM_ID;
 delete process.env.TELEGRAM_ALLOWED_IDS;
 delete process.env.TELEGRAM_BOT_TOKEN;
-
-// Die Datenübernahme bekommt ihre Quelle ausschließlich über
-// TEST_LEGACY_MYSQL_URL (siehe api/legacyImport.integration.test.ts) – eine
-// LEGACY_MYSQL_URL aus der .env würde sonst in die Tests hineinwirken.
-delete process.env.LEGACY_MYSQL_URL;

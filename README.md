@@ -155,47 +155,6 @@ Notes:
   if you don't need it.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
-- Coming from an older release that used MySQL? See
-  [Switching from MySQL](#switching-from-mysql) below.
-
-### Switching from MySQL
-
-Releases up to 0.7.0 stored their data in MySQL. The app migrates it for you:
-set `LEGACY_MYSQL_URL` to the old database and start once.
-
-> **Set it before the very first start.** The transfer copies the old IDs
-> unchanged, so it needs an empty Postgres database. A first start without the
-> variable already writes the preset catalogue and takes the IDs the old rows
-> need – the app then refuses the transfer instead of silently mixing the two.
-> If that happened, drop and recreate the Postgres database and start again.
-
-```bash
-# in .env (or in the app service of docker-compose.yml)
-DATABASE_URL=postgres://filahub:...@db:5432/filahub
-LEGACY_MYSQL_URL=mysql://filahub:...@old-host:3306/filahub
-```
-
-On startup the app creates the Postgres schema, copies every table across
-keeping the original IDs, and only then seeds the preset catalogue. The result
-is shown under **Verwaltung → System** (`/verwaltung/system`): the status of
-the transfer, the number of rows per table and, if something went wrong, the
-error message together with a button to try again.
-
-Notes:
-
-- The transfer is **idempotent**. Running it twice copies nothing twice, so an
-  aborted run can simply be repeated.
-- A failure does **not** stop the server from starting – otherwise you could
-  not reach the page that reports it. Fix the cause and either press "Erneut
-  versuchen" on the system page or restart; the failed run is picked up again.
-  A run that died mid-way (status stuck on "Läuft") is resumed automatically
-  after 30 minutes without a sign of life.
-- While a transfer is unfinished, the app does **not** write the preset
-  catalogue. It would take the IDs the remaining old rows still need. The
-  catalogue is written as soon as the transfer completes.
-- The old database is only read, never modified. Keep it until you have
-  checked the result.
-- Remove `LEGACY_MYSQL_URL` once the status says "Abgeschlossen".
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 
@@ -326,28 +285,10 @@ TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
 > the migrations. The connection therefore comes from `TEST_DATABASE_URL` only
 > and must differ from `DATABASE_URL` – use a dedicated test database.
 
-The MySQL → Postgres transfer has its own suite
-(`api/legacyImport.integration.test.ts`). It needs a MySQL source as well and
-skips itself when `TEST_LEGACY_MYSQL_URL` is missing:
-
-```bash
-docker run -d --name filahub-legacy-db -p 127.0.0.1:3399:3306 \
-  -e MYSQL_DATABASE=filahub_legacy -e MYSQL_USER=filahub \
-  -e MYSQL_PASSWORD=filahub -e MYSQL_RANDOM_ROOT_PASSWORD=yes mysql:8.4
-
-TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
-TEST_LEGACY_MYSQL_URL='mysql://filahub:filahub@127.0.0.1:3399/filahub_legacy' \
-  npm run test:integration
-```
-
-The source schema is rebuilt from `db/legacy/mysql-baseline.sql`, the archived
-MySQL schema – the same structure existing installations actually come from.
-
 ## CI / CD
 
 - **Push to `main` and pull requests:** TypeScript check, unit tests and the
-  integration tests against a `postgres:17-alpine` service container, plus a
-  `mysql:8.4` container as the source for the data-transfer suite.
+  integration tests against a `postgres:17-alpine` service container.
 - **Push to `main`:** the Docker image is built (without pushing) to verify
   the build works.
 - **Tag push (`v*`):** the image is built and pushed to GHCR, tagged with

@@ -55,48 +55,20 @@ if (env.isProduction) {
   await migrateDb();
   console.log("Datenbank-Migrationen angewendet.");
 
-  // Altdaten aus MySQL übernehmen, falls LEGACY_MYSQL_URL gesetzt ist.
-  // Muss vor dem Seeding laufen: sonst legt der Startkatalog Einträge an,
-  // die anschließend mit den übernommenen IDs kollidieren. Fehler werden
-  // in `migration_state` festgehalten und auf /verwaltung/system angezeigt –
-  // der Start läuft weiter, sonst käme man an diese Seite nicht heran.
-  const { runLegacyImport } = await import("./queries/legacyImport");
-  const legacy = await runLegacyImport();
-  console.log(
-    `Datenübernahme aus MySQL: ${legacy.status}` +
-      (legacy.status === "completed" ? ` (${legacy.rowsCopied} Zeilen)` : "")
-  );
-
   // Startkatalog nachziehen. Idempotent und bewusst nicht startkritisch:
   // ein Fehler hier darf den Server nicht am Hochfahren hindern.
-  //
-  // Ausgesetzt, solange eine Übernahme offen ist: Das Seeding vergibt neue IDs
-  // aus derselben Sequenz und würde genau die Nummern belegen, die der
-  // Wiederholungslauf für die Altdaten braucht. Die Altzeilen fielen dann
-  // stillschweigend unter `onConflictDoNothing` – und Materialien zeigten über
-  // ihre unveränderte `spoolPresetVariantId` plötzlich auf eine fremde Spule.
-  if (legacy.status === "completed" || legacy.status === "skipped") {
-    try {
-      const { seedSpoolPresets } = await import("./queries/presetSeed");
-      const stats = await seedSpoolPresets();
-      console.log(
-        `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
-      );
-    } catch (error) {
-      console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);
-    }
-  } else {
-    console.warn(
-      `Preset-Katalog übersprungen: Die Datenübernahme ist "${legacy.status}". ` +
-        "Der Startkatalog würde IDs belegen, die für die Altdaten gebraucht " +
-        "werden. Zustand und Wiederholung unter /verwaltung/system."
+  try {
+    const { seedSpoolPresets } = await import("./queries/presetSeed");
+    const stats = await seedSpoolPresets();
+    console.log(
+      `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
     );
+  } catch (error) {
+    console.error("Seeding des Preset-Katalogs fehlgeschlagen:", error);
   }
 
   /*
-    Aufbewahrung: einmal beim Start und danach alle sechs Stunden. Bewusst nach
-    der Datenübernahme – die bringt Login-Codes aus der alten MySQL-Datenbank
-    mit, die damit gleich im ersten Lauf verschwinden.
+    Aufbewahrung: einmal beim Start und danach alle sechs Stunden.
 
     Ein externer Scheduler wäre für einen Container, der ohnehin durchläuft,
     unnötiger Aufwand; `unref()` sorgt dafür, dass das Intervall den Prozess

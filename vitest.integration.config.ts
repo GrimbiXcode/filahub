@@ -1,5 +1,5 @@
 /**
- * Integrationstests gegen eine echte MySQL-Datenbank – bewusst getrennt von
+ * Integrationstests gegen eine echte PostgreSQL-Datenbank – bewusst getrennt von
  * `vitest.config.ts`, damit `npm run test` ohne Datenbank lauffähig bleibt.
  * Start: `npm run test:integration` mit gesetzter `TEST_DATABASE_URL`.
  */

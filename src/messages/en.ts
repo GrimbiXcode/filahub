@@ -649,7 +649,7 @@ export const en: Messages = {
 
   adminSystem: {
     title: "System",
-    description: "Database, migrations and data transfer",
+    description: "Database, migrations and starter catalogue",
     database: "Database",
     system: "System",
     databaseName: "Database",
@@ -663,31 +663,9 @@ export const en: Messages = {
     seedCatalog: "Preset starter catalogue",
     seedRevision: (vars: { revision: number; rows: string }) =>
       `Revision ${vars.revision} · ${vars.rows} entries from the starter catalogue`,
-    legacyImport: "Data transfer from MySQL",
-    legacyNoRun: "There is no transfer run for this installation.",
-    legacyNotConfigured:
-      "No legacy database is configured. To bring data across from an existing MySQL installation, set",
-    legacyNotConfiguredSuffix: "and restart the server.",
-    retry: "Try again",
     source: "Source",
-    startedAt: "Started",
-    finishedAt: "Finished",
     tables: "Tables",
-    copiedRows: "Rows copied",
-    errorMessage: "Error message",
     colTable: "Table",
-    colInSource: "In the source",
-    colCopied: "Copied",
-    importDone: (vars: { rows: number }) =>
-      `Transfer complete – ${vars.rows} rows copied.`,
-    importSeeded: (vars: { count: number }) =>
-      ` Preset catalogue: ${vars.count} new.`,
-    importStatus: (vars: { status: string }) => `Data transfer: ${vars.status}`,
-    statusPending: "Pending",
-    statusRunning: "Running",
-    statusCompleted: "Completed",
-    statusFailed: "Failed",
-    statusSkipped: "Not required",
   },
 
   weighing: {

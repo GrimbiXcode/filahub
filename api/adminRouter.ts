@@ -16,14 +16,7 @@ import { adminQuery, createRouter } from "./middleware";
 import { recordAudit } from "./queries/audit";
 import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
-  canClaimRun,
   countAllTables,
-  getLegacyImportState,
-  retryLegacyImport,
-  type LegacyImportDetail,
-} from "./queries/legacyImport";
-import { seedSpoolPresets, type SeedStats } from "./queries/presetSeed";
-import {
   getDatabaseInfo,
   getSchemaMigrations,
   getSeedInfo,
@@ -483,75 +476,18 @@ const proposalAdminRouter = createRouter({
 /**
  * Systemzustand für `/verwaltung/system`.
  *
- * Zeigt vor allem, wie die Übernahme der Altdaten aus MySQL ausgegangen ist.
- * Sie läuft beim Serverstart und darf ihn nicht abbrechen – ohne diese Seite
- * bliebe ein Fehler deshalb unsichtbar.
+ * Zeigt, worauf der Server läuft und was beim Start passiert ist: Verbindung,
+ * Schema-Migrationen, Füllstand der Fachtabellen und Startkatalog.
  */
 const systemAdminRouter = createRouter({
   status: adminQuery.query(async () => {
-    const [
-      database,
-      schemaMigrations,
-      legacyImport,
-      canRetryImport,
-      tableCounts,
-      seed,
-    ] = await Promise.all([
+    const [database, schemaMigrations, tableCounts, seed] = await Promise.all([
       getDatabaseInfo(),
       getSchemaMigrations(),
-      getLegacyImportState(),
-      canClaimRun(),
       countAllTables(),
       getSeedInfo(),
     ]);
-    return {
-      database,
-      schemaMigrations,
-      legacyImport: legacyImport
-        ? {
-            ...legacyImport,
-            detail: (legacyImport.detail as LegacyImportDetail[] | null) ?? [],
-          }
-        : null,
-      /**
-       * Ob ein Wiederholungslauf gerade möglich ist. Kommt vom Server, weil
-       * dazu auch gehört, ob ein `running`-Zustand schon als abgestürzt gilt –
-       * das soll nicht an der Uhr des Browsers hängen.
-       */
-      canRetryImport,
-      tableCounts,
-      seed,
-    };
-  }),
-
-  /**
-   * Wiederholt eine nicht abgeschlossene Übernahme. Ohne diesen Knopf wäre der
-   * einzige Weg zurück ein Neustart des Containers.
-   */
-  retryLegacyImport: adminQuery.mutation(async () => {
-    const result = await retryLegacyImport();
-    if (result.status === "failed") {
-      const state = await getLegacyImportState();
-      throw new TRPCError({
-        code: "INTERNAL_SERVER_ERROR",
-        message:
-          state?.error ?? "Die Datenübernahme ist erneut fehlgeschlagen.",
-      });
-    }
-
-    // Der Startkatalog wird beim Serverstart ausgelassen, solange eine
-    // Übernahme offen ist (siehe api/boot.ts). Jetzt ist der Weg frei – sonst
-    // fehlte er bis zum nächsten Neustart.
-    let seeded: SeedStats | null = null;
-    if (result.status === "completed") {
-      try {
-        seeded = await seedSpoolPresets();
-      } catch (error) {
-        console.error("Seeding nach der Datenübernahme fehlgeschlagen:", error);
-      }
-    }
-
-    return { status: result.status, rowsCopied: result.rowsCopied, seeded };
+    return { database, schemaMigrations, tableCounts, seed };
   }),
 });
 

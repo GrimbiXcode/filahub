@@ -2,8 +2,8 @@
  * Zustandsdaten für die Verwaltungsseite `/verwaltung/system`.
  *
  * Fasst zusammen, was beim Serverstart passiert ist: Datenbankverbindung,
- * angewandte Schema-Migrationen, Übernahme der Altdaten aus MySQL und der
- * Stand des Preset-Startkatalogs.
+ * angewandte Schema-Migrationen, Füllstand der Fachtabellen und der Stand des
+ * Preset-Startkatalogs.
  */
 import { readFile } from "node:fs/promises";
 import { count, eq, sql } from "drizzle-orm";
@@ -16,7 +16,17 @@ import {
 } from "@db/schema";
 import { env } from "../lib/env";
 import { getDb, getPool } from "./connection";
-import { redactUrl } from "./legacyImport";
+
+/** Verbindungsangabe ohne Zugangsdaten, z. B. „db:5432/filahub“. */
+export function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const port = parsed.port ? `:${parsed.port}` : "";
+    return `${parsed.hostname}${port}${parsed.pathname}`;
+  } catch {
+    return "unbekannte Quelle";
+  }
+}
 
 export type DatabaseInfo = {
   dialect: "postgresql";
@@ -84,6 +94,43 @@ export async function getSchemaMigrations(): Promise<SchemaMigration[]> {
     applied: index < applied.rows.length,
     generatedAt: new Date(entry.when),
   }));
+}
+
+/**
+ * Fachtabellen in der Reihenfolge, in der sie auf der Verwaltungsseite
+ * erscheinen: erst Konten, dann Katalog, dann Bestand. Bewusst eine eigene
+ * Liste statt „alles aus dem Schema“ – Protokoll- und Sitzungstabellen sagen
+ * über den Füllstand des Lagers nichts aus.
+ */
+const COUNTED_TABLES = [
+  "users",
+  "login_codes",
+  "spool_types",
+  "storage_boxes",
+  "preset_manufacturers",
+  "preset_spool_series",
+  "preset_series_material_types",
+  "preset_spool_versions",
+  "preset_spool_variants",
+  "materials",
+  "weighings",
+  "hidden_spool_presets",
+  "preset_proposals",
+] as const;
+
+/** Zeilenzahlen aller Fachtabellen für die Verwaltungsseite. */
+export async function countAllTables(): Promise<
+  { table: string; rows: number }[]
+> {
+  const db = getDb();
+  return Promise.all(
+    COUNTED_TABLES.map(async name => {
+      const result = await db.execute<{ count: string }>(
+        sql`SELECT COUNT(*)::text AS count FROM ${sql.identifier(name)}`
+      );
+      return { table: name, rows: Number(result.rows[0].count) };
+    })
+  );
 }
 
 export type SeedInfo = {
