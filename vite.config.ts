@@ -4,7 +4,6 @@ import path from "path";
 const __dirname = import.meta.dirname;
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
-import { inspectAttr } from "kimi-plugin-inspect-react";
 
 // Version aus package.json ins Frontend reichen (angezeigt unter „Neuerungen").
 // Bewusst per readFileSync statt Import: tsconfig.node.json kennt kein
@@ -20,7 +19,6 @@ export default defineConfig({
   },
   plugins: [
     devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
-    inspectAttr(),
     react(),
   ],
   server: {

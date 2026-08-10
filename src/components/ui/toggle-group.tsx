@@ -33,8 +33,12 @@ function ToggleGroup({
       data-size={size}
       data-spacing={spacing}
       style={{ "--gap": spacing } as React.CSSProperties}
+      // Abweichung von shadcn: `--spacing(…)` ist eine Tailwind-v4-Funktion,
+      // die es unter v3 nicht gibt – sie landete unverändert als
+      // `var(--spacing(var(--gap)))` im CSS, also als toter Wert. Aufgelöst
+      // zum Ergebnis, das v4 liefert: --gap × 0.25rem.
       className={cn(
-        "group/toggle-group flex w-fit items-center gap-[--spacing(var(--gap))] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs",
+        "group/toggle-group flex w-fit items-center gap-[calc(var(--gap)*0.25rem)] rounded-md data-[spacing=default]:data-[variant=outline]:shadow-xs",
         className
       )}
       {...props}

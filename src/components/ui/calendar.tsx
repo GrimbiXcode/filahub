@@ -32,8 +32,12 @@ function Calendar({
   return (
     <DayPicker
       showOutsideDays={showOutsideDays}
+      // Abweichung von shadcn: `--spacing(8)` ist eine Tailwind-v4-Funktion,
+      // die es unter v3 nicht gibt – sie landete unverändert als
+      // `var(--spacing(8))` im CSS, also als toter Wert. Aufgelöst zum
+      // Ergebnis, das v4 liefert: 8 × 0.25rem.
       className={cn(
-        "bg-background group/calendar p-3 [--cell-size:--spacing(8)] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
+        "bg-background group/calendar p-3 [--cell-size:2rem] [[data-slot=card-content]_&]:bg-transparent [[data-slot=popover-content]_&]:bg-transparent",
         String.raw`rtl:**:[.rdp-button\_next>svg]:rotate-180`,
         String.raw`rtl:**:[.rdp-button\_previous>svg]:rotate-180`,
         className
