@@ -290,7 +290,14 @@ export function CatalogEditorDialog({
       return toast.error(t.catalogEditor.nominalInvalid);
     if (!Number.isFinite(tare) || tare < 0)
       return toast.error(t.common.invalidTare);
-    if (tare >= nominal) return toast.error(t.catalogEditor.tareTooLarge);
+    /*
+      Keine Prüfung „Leergewicht kleiner als Nenngewicht“ mehr. Sie galt bis
+      2.2.0 und war schon damals nur für Spulen richtig – 500 g Testpulver in
+      einem 2 kg schweren Metallbehälter verletzen sie, ohne dass an der Angabe
+      etwas falsch wäre. `variantFieldsSchema` hat sie in 2.3.0 abgelegt; blieb
+      sie hier stehen, wäre genau das Gebinde, für das die Regel fiel, über die
+      Oberfläche weiter unerreichbar.
+    */
 
     const outer = optionalInt(outerDiameterMm);
     const width = optionalInt(widthMm);

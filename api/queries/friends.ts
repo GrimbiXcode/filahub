@@ -10,8 +10,7 @@ import {
   type FriendVisibility,
 } from "@contracts/friends";
 import {
-  resolveDensity,
-  secondaryAmount,
+  remainingAmount,
   type MaterialKind,
   type SecondaryAmount,
 } from "@contracts/materials";
@@ -393,34 +392,25 @@ export function toFriendMaterial(
   row: FriendMaterialRow,
   ownerName: string
 ): FriendMaterial {
-  const tare = resolveContainerTare(row) + (row.storageBox?.tareWeight ?? 0);
-  const last = row.weighings.at(0);
-  const remainingWeight =
-    last != null ? Math.max(0, last.grossWeight - tare) : row.nominalWeight;
-  const remainingPercent =
-    row.nominalWeight > 0
-      ? Math.min(
-          100,
-          Math.max(0, Math.round((remainingWeight / row.nominalWeight) * 100))
-        )
-      : null;
   /*
-    Ohne Lager keine Zweitanzeige. Nach der Migration hat jedes Material eines,
-    aber der Typ lässt `null` zu und eine geratene Länge wäre schlimmer als
-    keine – dieselbe Regel wie in `secondaryAmount` selbst.
+    Dieselbe Rechnung wie für den Besitzer, aus derselben Funktion
+    (`remainingAmount` in `contracts/materials.ts`). Vorher stand sie hier ein
+    zweites Mal – und die Zahl, die ein Freund sieht, ist die, auf die er eine
+    Leihbitte stützt.
+
+    Ohne Lager keine Zweitanzeige: Nach der Migration hat jedes Material eines,
+    aber der Typ lässt `null` zu und eine geratene Länge wäre schlimmer als keine.
   */
-  const secondary = row.lager
-    ? secondaryAmount({
-        kind: row.lager.materialKind,
-        grams: remainingWeight,
-        density: resolveDensity({
-          kind: row.lager.materialKind,
-          materialType: row.materialType,
-          densityGramsPerLiter: row.densityGramsPerLiter,
-        }),
-        diameterUm: row.lager.filamentDiameterUm,
-      })
-    : null;
+  const { remainingWeight, remainingPercent, secondary } = remainingAmount({
+    nominalWeight: row.nominalWeight,
+    containerTareWeight: resolveContainerTare(row),
+    boxTareWeight: row.storageBox?.tareWeight,
+    grossWeight: row.weighings.at(0)?.grossWeight,
+    materialType: row.materialType,
+    kind: row.lager?.materialKind,
+    densityGramsPerLiter: row.densityGramsPerLiter,
+    diameterUm: row.lager?.filamentDiameterUm,
+  });
   return {
     id: row.id,
     ownerId: row.userId,
@@ -600,6 +590,15 @@ export type FriendshipView = {
   id: number;
   friendId: number;
   friendName: string;
+  /**
+   * Telegram-Name der Gegenseite – **nur bei angenommener Freundschaft.**
+   *
+   * Ein Freundescode ist zum Weitergeben gedacht und landet auch in Gruppen und
+   * Foren. Wer einen hat, kann anfragen; er soll dadurch aber keine Kennung
+   * bekommen, mit der er die Person direkt anschreibt. Vorher stand der Name
+   * schon in der offenen Anfrage und blieb auch nach dem Ablehnen stehen, und ein
+   * neuer Freundescode nahm ihn nicht zurück.
+   */
   friendUsername: string | null;
   status: Friendship["status"];
   /** Ob der angemeldete Benutzer die Anfrage gestellt hat */
@@ -644,10 +643,18 @@ export async function listFriendships(
   const otherIds = rows.map(r =>
     r.userId === viewerId ? r.friendUserId : r.userId
   );
-  const profiles = await loadProfiles(otherIds);
-  const granted = await loadGrantedShares(viewerId, otherIds);
-  const received = await loadReceivedShares(viewerId, otherIds);
-  const ownLagerIds = await loadOwnLagerIds(viewerId);
+  /*
+    Vier unabhängige Sammelabfragen – keine braucht das Ergebnis einer anderen,
+    alle vier kennen ihre Eingaben schon. Nacheinander abgewartet zahlt die
+    Freundesseite fünf Umläufe statt zwei, und sie tut das bei jeder Änderung an
+    einer Freigabe erneut.
+  */
+  const [profiles, granted, received, ownLagerIds] = await Promise.all([
+    loadProfiles(otherIds),
+    loadGrantedShares(viewerId, otherIds),
+    loadReceivedShares(viewerId, otherIds),
+    loadOwnLagerIds(viewerId),
+  ]);
 
   return rows.map(row => {
     const outgoing = row.userId === viewerId;
@@ -664,7 +671,8 @@ export async function listFriendships(
       id: row.id,
       friendId,
       friendName: profile?.name ?? "",
-      friendUsername: profile?.telegramUsername ?? null,
+      friendUsername:
+        row.status === "accepted" ? (profile?.telegramUsername ?? null) : null,
       status: row.status,
       outgoing,
       sharedByMe: ownLagerIds.map(lagerId => ({
@@ -829,18 +837,29 @@ export async function respondToFriendship(
 }
 
 /**
- * Löst eine Freundschaft auf. Beide Seiten dürfen das, in jedem Status.
+ * Löst eine Freundschaft auf.
+ *
+ * **Eine abgelehnte Zeile darf nur der Ablehnende entfernen.** Sonst könnte die
+ * Seite, gegen die entschieden wurde, das „Nein“ selbst wegräumen und sofort neu
+ * anfragen – womit Ablehnen nur eine Verzögerung wäre und es gegen wiederholte
+ * Anfragen kein Mittel gäbe. Bei `pending` und `accepted` dürfen beide Seiten;
+ * dort ist Auflösen die vorgesehene Handlung.
  *
  * **Die Freigaben gehen in beiden Richtungen mit.** Bleiben sie stehen, weckt
  * eine erneut geschlossene Freundschaft den alten Zugriff wieder auf, ohne dass
  * jemand etwas freigegeben hätte – und weil `resolveShare` dann eine angenommene
  * Freundschaft vorfindet, fällt es an keiner Prüfung auf.
+ *
+ * **Offene Ausleih-Anfragen ebenso.** Ohne sie bliebe eine Anfrage beantwortbar,
+ * deren Zugriffsgrundlage weg ist: Der Besitzer könnte zusagen und der ehemalige
+ * Freund bekäme eine Nachricht mit dem Namen des Materials.
  */
 export async function deleteFriendship(viewerId: number, friendshipId: number) {
   const db = getDb();
   return db.transaction(async tx => {
-    const [row] = await tx
-      .delete(friendships)
+    const [existing] = await tx
+      .select()
+      .from(friendships)
       .where(
         and(
           eq(friendships.id, friendshipId),
@@ -850,6 +869,15 @@ export async function deleteFriendship(viewerId: number, friendshipId: number) {
           )
         )
       )
+      .limit(1);
+    if (!existing) return null;
+    // Nur der Angefragte hat abgelehnt – nur er darf die Ablehnung aufheben.
+    if (existing.status === "declined" && existing.friendUserId !== viewerId)
+      return null;
+
+    const [row] = await tx
+      .delete(friendships)
+      .where(eq(friendships.id, friendshipId))
       .returning();
     if (!row) return null;
 
@@ -873,6 +901,23 @@ export async function deleteFriendship(viewerId: number, friendshipId: number) {
           )
         );
     }
+    await tx
+      .delete(loanRequests)
+      .where(
+        and(
+          eq(loanRequests.status, "open"),
+          or(
+            and(
+              eq(loanRequests.userId, row.userId),
+              eq(loanRequests.ownerUserId, row.friendUserId)
+            ),
+            and(
+              eq(loanRequests.userId, row.friendUserId),
+              eq(loanRequests.ownerUserId, row.userId)
+            )
+          )
+        )
+      );
     return row;
   });
 }
@@ -888,6 +933,10 @@ export async function deleteFriendship(viewerId: number, friendshipId: number) {
  *
  * `none` **löscht** die Zeile, statt sie zu schreiben: Eine fehlende Zeile ist
  * der Grundzustand (siehe `lager_shares` in `db/schema.ts`).
+ *
+ * Beim Zurücknehmen gehen die offenen Ausleih-Anfragen zu Material aus diesem
+ * Lager mit – aus demselben Grund wie in `deleteFriendship`: Eine Anfrage, deren
+ * Zugriffsgrundlage weg ist, darf nicht beantwortbar bleiben.
  */
 export async function setLagerShare(
   ownerId: number,
@@ -908,14 +957,32 @@ export async function setLagerShare(
   if (!friendship || friendship.status !== "accepted") return false;
 
   if (visibility === "none") {
-    await db
-      .delete(lagerShares)
-      .where(
-        and(
-          eq(lagerShares.lagerId, lagerId),
-          eq(lagerShares.sharedWithUserId, friendUserId)
-        )
-      );
+    await db.transaction(async tx => {
+      await tx
+        .delete(lagerShares)
+        .where(
+          and(
+            eq(lagerShares.lagerId, lagerId),
+            eq(lagerShares.sharedWithUserId, friendUserId)
+          )
+        );
+      await tx
+        .delete(loanRequests)
+        .where(
+          and(
+            eq(loanRequests.status, "open"),
+            eq(loanRequests.userId, friendUserId),
+            eq(loanRequests.ownerUserId, ownerId),
+            inArray(
+              loanRequests.materialId,
+              tx
+                .select({ id: materials.id })
+                .from(materials)
+                .where(eq(materials.lagerId, lagerId))
+            )
+          )
+        );
+    });
     return true;
   }
 
@@ -1166,12 +1233,49 @@ export async function findOpenLoanRequest(userId: number, materialId: number) {
   return rows.at(0);
 }
 
-/** Zusagen oder ablehnen. Nur der Besitzer, nur solange offen. */
+/**
+ * Zusagen oder ablehnen. Nur der Besitzer, nur solange offen.
+ *
+ * **Eine Zusage prüft die Freigabe erneut.** Die Kaskaden räumen offene Anfragen
+ * mit, wenn eine Freigabe zurückgenommen oder eine Freundschaft gelöst wird –
+ * aber sie sind Schreibpfade und decken nicht jeden Weg ab, auf dem der Zugriff
+ * enden kann (ein gelöschtes Lager, eine Zeile von Hand). Die Prüfung hier ist
+ * die letzte Gelegenheit vor der Benachrichtigung: Ohne sie schickte ein „Ja“
+ * den Materialnamen an jemanden, der ihn nicht mehr sehen darf. Ablehnen bleibt
+ * immer erlaubt – es gibt nichts heraus und beendet den Vorgang.
+ */
 export async function respondToLoanRequest(
   ownerId: number,
   requestId: number,
   accept: boolean
 ) {
+  if (accept) {
+    const [open] = await getDb()
+      .select({
+        materialId: loanRequests.materialId,
+        userId: loanRequests.userId,
+      })
+      .from(loanRequests)
+      .where(
+        and(
+          eq(loanRequests.id, requestId),
+          eq(loanRequests.ownerUserId, ownerId),
+          eq(loanRequests.status, "open")
+        )
+      )
+      .limit(1);
+    if (!open) return null;
+    const material = await getDb()
+      .select({ lagerId: materials.lagerId })
+      .from(materials)
+      .where(eq(materials.id, open.materialId))
+      .limit(1);
+    const lagerId = material.at(0)?.lagerId;
+    if (lagerId == null) return null;
+    const level = await shareLevelFor(open.userId, lagerId);
+    if (!visibilityAllows(level, "search")) return null;
+  }
+
   const [row] = await getDb()
     .update(loanRequests)
     .set({

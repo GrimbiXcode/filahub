@@ -6,6 +6,7 @@ import {
   createStorageBox,
   deleteStorageBox,
   findStorageBoxesByUser,
+  storageBoxBelongsToUser,
   updateStorageBox,
 } from "./queries/filament";
 
@@ -43,7 +44,14 @@ export const storageBoxRouter = createRouter({
   delete: authedQuery
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const used = await countMaterialsWithStorageBox(input.id);
+      // Erst die Zugehörigkeit, dann der Inhalt – siehe `containerType.delete`.
+      if (!(await storageBoxBelongsToUser(ctx.user.id, input.id))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Drybox nicht gefunden",
+        });
+      }
+      const used = await countMaterialsWithStorageBox(ctx.user.id, input.id);
       if (used > 0) {
         throw new TRPCError({
           code: "CONFLICT",

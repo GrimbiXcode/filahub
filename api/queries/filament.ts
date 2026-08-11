@@ -6,8 +6,8 @@ import {
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
-  resolveDensity,
-  secondaryAmount,
+  remainingAmount,
+  type ContainerForm,
   type SecondaryAmount,
 } from "@contracts/materials";
 import {
@@ -43,6 +43,16 @@ export async function createContainerType(data: {
   userId: number;
   name: string;
   manufacturer?: string;
+  /**
+   * Gebindeform. Fehlt sie, greift die Spaltenvorgabe `rolle`.
+   *
+   * Steht hier ausdrücklich, obwohl Drizzle die Spalte auch ohne Typeintrag
+   * schreiben würde: Ein Feld, das der Parametertyp nicht kennt, lässt sich vom
+   * Aufrufer nicht setzen (Fehler wegen überzähliger Eigenschaft) – genau daran
+   * ist `preset.copyToOwn` gescheitert und hat jede kopierte Flasche zur Rolle
+   * gemacht.
+   */
+  form?: ContainerForm;
   tareWeight: number;
   sourceVariantId?: number | null;
   notes?: string;
@@ -52,7 +62,10 @@ export async function createContainerType(data: {
     .values(data)
     .returning({ id: containerTypes.id });
   return getDb().query.containerTypes.findFirst({
-    where: eq(containerTypes.id, id),
+    where: and(
+      eq(containerTypes.id, id),
+      eq(containerTypes.userId, data.userId)
+    ),
   });
 }
 
@@ -62,6 +75,7 @@ export async function updateContainerType(
   data: Partial<{
     name: string;
     manufacturer: string | null;
+    form: ContainerForm;
     tareWeight: number;
     notes: string | null;
   }>
@@ -70,16 +84,35 @@ export async function updateContainerType(
     .update(containerTypes)
     .set(data)
     .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)));
+  /*
+    Der Besitzerfilter gehört **auch** ans Rücklesen. Ohne ihn traf das UPDATE
+    keine Zeile, das `findFirst` aber die fremde – und der Router gab sie samt
+    Name, Hersteller und Freitext-Notizen an den Aufrufer zurück. Die Prüfung
+    „nichts gefunden“ schlug nicht an, weil eine Zeile gefunden wurde, nur nicht
+    seine.
+  */
   return getDb().query.containerTypes.findFirst({
-    where: eq(containerTypes.id, id),
+    where: and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)),
   });
 }
 
-export async function countMaterialsWithContainerType(id: number) {
+/**
+ * Wie viele Materialien diese Gebindeart benutzen – Grundlage der Löschsperre.
+ *
+ * Besitzergebunden, weil die Anzahl in einer Konfliktmeldung landet: Ohne den
+ * Filter verriete „wird noch von 3 Material(ien) verwendet“ die Belegung einer
+ * fremden Gebindeart. Dieselbe Erwägung wie bei `lager.delete`.
+ */
+export async function countMaterialsWithContainerType(
+  userId: number,
+  id: number
+) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(eq(materials.containerTypeId, id));
+    .where(
+      and(eq(materials.containerTypeId, id), eq(materials.userId, userId))
+    );
   return rows.length;
 }
 
@@ -130,16 +163,18 @@ export async function updateStorageBox(
     .update(storageBoxes)
     .set(data)
     .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)));
+  // Besitzerfilter auch beim Rücklesen – siehe `updateContainerType`.
   return getDb().query.storageBoxes.findFirst({
-    where: eq(storageBoxes.id, id),
+    where: and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)),
   });
 }
 
-export async function countMaterialsWithStorageBox(id: number) {
+/** Besitzergebunden, weil die Anzahl in eine Konfliktmeldung geht. */
+export async function countMaterialsWithStorageBox(userId: number, id: number) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(eq(materials.storageBoxId, id));
+    .where(and(eq(materials.storageBoxId, id), eq(materials.userId, userId)));
   return rows.length;
 }
 
@@ -241,44 +276,24 @@ export function computeMaterialStats(
     : (material.containerType?.name ?? null);
   const tareWeight =
     containerTareWeight + (material.storageBox?.tareWeight ?? 0);
-  const remainingWeight =
-    lastWeighing != null
-      ? Math.max(0, lastWeighing.grossWeight - tareWeight)
-      : material.nominalWeight;
-  const remainingPercent =
-    material.nominalWeight > 0
-      ? Math.min(
-          100,
-          Math.max(
-            0,
-            Math.round((remainingWeight / material.nominalWeight) * 100)
-          )
-        )
-      : null;
   /*
-    Zweitanzeige. Materialart und Filamentstärke kommen aus dem Lager, die
-    Dichte vom Material oder aus der Vorgabe. Fehlt das Lager (kann nur bei
-    einem kaputten Datenbestand passieren), gibt es keine zweite Zahl statt
-    einer geratenen.
+    Restmenge, Prozentwert und Zweitanzeige kommen aus `remainingAmount`
+    (`contracts/materials.ts`) – derselben Funktion, die auch die Freundesansicht
+    benutzt. Zwei Kopien hatten sich sonst über die Zeit auseinanderentwickelt,
+    und der Besitzer und sein Freund hätten für dasselbe Material verschiedene
+    Zahlen gesehen.
   */
-  const kind = material.lager?.materialKind ?? null;
-  const densityUsed =
-    kind != null
-      ? resolveDensity({
-          kind,
-          materialType: material.materialType,
-          densityGramsPerLiter: material.densityGramsPerLiter,
-        })
-      : null;
-  const secondary =
-    kind != null
-      ? secondaryAmount({
-          kind,
-          grams: remainingWeight,
-          density: densityUsed,
-          diameterUm: material.lager?.filamentDiameterUm,
-        })
-      : null;
+  const { remainingWeight, remainingPercent, secondary, densityUsed } =
+    remainingAmount({
+      nominalWeight: material.nominalWeight,
+      containerTareWeight,
+      boxTareWeight: material.storageBox?.tareWeight,
+      grossWeight: lastWeighing?.grossWeight,
+      materialType: material.materialType,
+      kind: material.lager?.materialKind,
+      densityGramsPerLiter: material.densityGramsPerLiter,
+      diameterUm: material.lager?.filamentDiameterUm,
+    });
   return {
     ...material,
     tareWeight,

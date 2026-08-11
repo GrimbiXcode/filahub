@@ -27,6 +27,25 @@ function material(
     containerType: null,
     storageBox: null,
     containerPresetVariant: null,
+    /*
+      Lager und die drei Spalten aus 2.2.0 gehören in die Vorgabe, sonst ist
+      `material.lager` in jedem Test dieser Datei `undefined` – und damit sind
+      `secondary` und `densityUsed` immer `null`, egal was der Zweig tut. Der
+      abschließende Cast verbirgt das Fehlen, statt es zu melden.
+    */
+    lagerId: 1,
+    texture: null,
+    densityGramsPerLiter: null,
+    lager: {
+      id: 1,
+      userId: 1,
+      name: "Mein Lager",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+      notes: null,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
     ...overrides,
   } as MaterialWithRelations;
 }
@@ -198,5 +217,39 @@ describe("computeMaterialStats", () => {
     );
     expect(stats.remainingWeight).toBe(0);
     expect(stats.remainingPercent).toBe(0);
+  });
+
+  /*
+    Die Zweitanzeige des Besitzers. Sie war bis 2.4.1 unbelegt – die Vorgabe des
+    Fixtures hatte kein `lager`, also war `kind` in jedem Test `null` und der
+    ganze Zweig lief nie. Die Freundesansicht war abgedeckt, der eigene Bestand
+    nicht, obwohl beide dieselbe Rechnung benutzen.
+  */
+  it("rechnet die Zweitanzeige aus dem Lager und nennt die Dichte", () => {
+    const stats = computeMaterialStats(material(), null, 0);
+    expect(stats.secondary?.unit).toBe("m");
+    // 1 kg PLA bei 1,75 mm ≈ 335 m
+    expect(stats.secondary?.value).toBeCloseTo(335.3, 0);
+    expect(stats.densityUsed).toBe(1240);
+  });
+
+  it("liefert bei Pulver keine Zweitanzeige", () => {
+    const stats = computeMaterialStats(
+      material({
+        lager: {
+          id: 1,
+          userId: 1,
+          name: "Pulver",
+          materialKind: "powder",
+          filamentDiameterUm: null,
+          notes: null,
+          createdAt: new Date("2026-01-01"),
+          updatedAt: new Date("2026-01-01"),
+        },
+      }),
+      null,
+      0
+    );
+    expect(stats.secondary).toBeNull();
   });
 });

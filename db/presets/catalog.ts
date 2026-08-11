@@ -1,3 +1,4 @@
+import type { ContainerForm } from "@contracts/materials";
 import type { NameI18n, ContainerMaterial } from "@contracts/presets";
 
 /**
@@ -8,13 +9,13 @@ import type { NameI18n, ContainerMaterial } from "@contracts/presets";
  *
  * Quellen der Leergewichte
  * ------------------------
- * Grundlage ist ContainermanDB (https://github.com/Donkie/ContainermanDB, MIT), die
- * gepflegte Filamentdatenbank hinter Containerman. Sie führt das Leergewicht je
+ * Grundlage ist SpoolmanDB (https://github.com/Donkie/SpoolmanDB, MIT), die
+ * gepflegte Filamentdatenbank hinter Spoolman. Sie führt das Leergewicht je
  * Produktlinie und Spulengröße und wird laufend aus Herstellerangaben und
  * Nachmessungen korrigiert. Gegengeprüft wurde stichprobenartig gegen
- * Herstellerseiten und die Übersichten von ContainerVault
- * (https://www.containervault.com/guides/empty-container-weights.html) und
- * MatterHackers (https://help.matterhackers.com/article/129-empty-container-weights).
+ * Herstellerseiten und die Übersichten von SpoolVault
+ * (https://www.spoolvault.com/guides/empty-spool-weights.html) und
+ * MatterHackers (https://help.matterhackers.com/article/129-empty-spool-weights).
  *
  * Einzelne gut belegte Eckwerte:
  *   - Polymaker Kartonspule 1 kg: 140 ± 7 g, Ø 200 mm, Breite 65,6 mm, Bohrung 55 mm
@@ -56,6 +57,19 @@ export type SeedVersion = {
   /** Grundname (deutsch); Übersetzungen stehen in `nameI18n` */
   name: string;
   nameI18n?: NameI18n;
+  /**
+   * Gebindeform dieser Ausführung.
+   *
+   * Der Startkatalog führt ausschließlich Spulen, also überall `rolle`. Das Feld
+   * fehlte bis 2.4.1 – und weil es fehlte, blieb `form` für jeden mitgelieferten
+   * Eintrag `NULL` und die Formgruppierung in der Gebindeauswahl lag für den
+   * ganzen Katalog still: `containerFits` findet ohne bekannte Form keinen Beleg.
+   *
+   * Optional, weil ein Eintrag ohne belegte Form ehrlich `NULL` bleiben soll –
+   * bei Harz- oder Pulvereinträgen, die später über Vorschläge dazukommen, wäre
+   * eine geratene Form schlechter als keine.
+   */
+  form?: ContainerForm;
   containerMaterial: ContainerMaterial;
   validFrom?: string;
   validTo?: string;
@@ -87,7 +101,7 @@ export type SeedManufacturer = {
  * bereits geseedete Einträge überschrieben – von Administratoren oder aus
  * der Community geänderte Einträge bleiben davon immer unberührt.
  */
-export const PRESET_SEED_REVISION = 4;
+export const PRESET_SEED_REVISION = 5;
 
 export const presetSeedCatalog: SeedManufacturer[] = [
   {
@@ -112,7 +126,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "karton-ab-2021",
             name: "Kartonspule (ab 2021)",
-            nameI18n: { en: "Cardboard container (from 2021)" },
+            nameI18n: { en: "Cardboard spool (from 2021)" },
+            form: "rolle",
             containerMaterial: "karton",
             validFrom: "2021-01-01",
             variants: [
@@ -135,14 +150,16 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule-5-kg",
             name: "Kunststoffspule (5 kg)",
-            nameI18n: { en: "Plastic container (5 kg)" },
+            nameI18n: { en: "Plastic spool (5 kg)" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 5000, tareWeight: 819 }],
           },
           {
             slug: "kunststoff-bis-2020",
             name: "Kunststoffspule (bis 2020)",
-            nameI18n: { en: "Plastic container (until 2020)" },
+            nameI18n: { en: "Plastic spool (until 2020)" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             validTo: "2020-12-31",
             variants: [{ nominalWeight: 1000, tareWeight: 215 }],
@@ -157,7 +174,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             validTo: "2022-12-31",
             variants: [
@@ -174,7 +192,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             validFrom: "2023-01-01",
             variants: [
@@ -197,7 +216,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule-5-kg",
             name: "Kunststoffspule (5 kg)",
-            nameI18n: { en: "Plastic container (5 kg)" },
+            nameI18n: { en: "Plastic spool (5 kg)" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 5000, tareWeight: 819 }],
           },
@@ -211,7 +231,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               { nominalWeight: 750, tareWeight: 125 },
@@ -234,7 +255,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               {
@@ -256,7 +278,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               { nominalWeight: 750, tareWeight: 125 },
@@ -273,7 +296,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               { nominalWeight: 500, tareWeight: 190 },
@@ -297,7 +321,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               {
@@ -319,7 +344,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 1000, tareWeight: 201 },
@@ -336,7 +362,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 800, tareWeight: 201 }],
           },
@@ -350,7 +377,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 201 }],
           },
@@ -364,7 +392,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 500, tareWeight: 220 }],
           },
@@ -380,13 +409,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "filament-mit-spule",
         name: "Filament mit Spule",
-        nameI18n: { en: "Filament with container" },
+        nameI18n: { en: "Filament with spool" },
         materialTypes: [],
         versions: [
           {
             slug: "wiederverwendbare-spule",
             name: "Wiederverwendbare Kunststoffspule",
-            nameI18n: { en: "Reusable plastic container" },
+            nameI18n: { en: "Reusable plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 500, tareWeight: 250 },
@@ -405,13 +435,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ABS"],
         versions: [
           {
             slug: "kunststoffspule-aktuell",
             name: "Kunststoffspule (aktuell)",
-            nameI18n: { en: "Plastic container (current)" },
+            nameI18n: { en: "Plastic spool (current)" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               {
@@ -425,7 +456,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule-aelter",
             name: "Kunststoffspule (ältere Serie)",
-            nameI18n: { en: "Plastic container (older series)" },
+            nameI18n: { en: "Plastic spool (older series)" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             validTo: "2020-12-31",
             variants: [{ nominalWeight: 1000, tareWeight: 224 }],
@@ -433,7 +465,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             validFrom: "2023-01-01",
             variants: [
@@ -457,13 +490,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PLA+", "PETG", "ABS", "TPU"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 130 }],
           },
@@ -477,7 +511,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 168 }],
           },
@@ -499,7 +534,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 155 }],
           },
@@ -514,7 +550,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 132 }],
           },
@@ -528,7 +565,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 147 }],
           },
@@ -542,7 +580,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 174 }],
           },
@@ -558,13 +597,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PLA+", "PETG", "ASA"],
         versions: [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 154 }],
           },
@@ -580,20 +620,22 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PLA+", "PETG", "ABS", "TPU"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 127 }],
           },
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 125 }],
           },
@@ -614,7 +656,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 120 }],
           },
@@ -628,7 +671,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 225 }],
           },
@@ -644,13 +688,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "ABS"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 251 }],
           },
@@ -666,13 +711,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ASA", "ABS", "TPU", "PCTG"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               {
@@ -703,7 +749,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 750, tareWeight: 230 },
@@ -727,7 +774,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               { nominalWeight: 250, tareWeight: 130 },
@@ -746,7 +794,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               { nominalWeight: 500, tareWeight: 130 },
@@ -767,13 +816,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "PCTG", "ASA"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 245 }],
           },
@@ -789,13 +839,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ABS+", "ASA", "HIPS", "TPU"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 260 }],
           },
@@ -816,7 +867,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 800, tareWeight: 212 }],
           },
@@ -830,7 +882,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 800, tareWeight: 250 }],
           },
@@ -852,7 +905,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 240 }],
           },
@@ -867,7 +921,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 231 }],
           },
@@ -883,13 +938,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ABS", "PA", "TPU"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 500, tareWeight: 175 },
@@ -911,13 +967,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "PCTG", "ASA", "ABS", "TPU"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 164 }],
           },
@@ -933,13 +990,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "ABS", "ASA"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 1000, tareWeight: 250 },
@@ -958,19 +1016,20 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG", "ABS", "ASA", "TPU"],
         versions: [
           {
             /*
-             * Nur die Kunststoffspule: ContainermanDB führt daneben eine
+             * Nur die Kunststoffspule: SpoolmanDB führt daneben eine
              * Kartonspule, nennt dafür aber im selben Datensatz 100 g und
              * 140 g – und die anderen Sammlungen kennen für R3D gar keine.
              * Ein widersprüchlicher Startwert wäre schlechter als keiner.
              */
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 1000, tareWeight: 127 },
@@ -989,13 +1048,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PLA+", "PETG", "TPU"],
         versions: [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [
               {
@@ -1022,7 +1082,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "standardspule",
             name: "Standardspule",
-            nameI18n: { en: "Standard container" },
+            nameI18n: { en: "Standard spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 500, tareWeight: 142 },
@@ -1041,13 +1102,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 187 }],
           },
@@ -1067,7 +1129,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 232 }],
           },
@@ -1081,7 +1144,8 @@ export const presetSeedCatalog: SeedManufacturer[] = [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 252 }],
           },
@@ -1097,13 +1161,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG"],
         versions: [
           {
             slug: "kartonspule",
             name: "Kartonspule",
-            nameI18n: { en: "Cardboard container" },
+            nameI18n: { en: "Cardboard spool" },
+            form: "rolle",
             containerMaterial: "karton",
             variants: [{ nominalWeight: 1000, tareWeight: 160 }],
           },
@@ -1119,13 +1184,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PLA", "PETG"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [{ nominalWeight: 1000, tareWeight: 180 }],
           },
@@ -1141,13 +1207,14 @@ export const presetSeedCatalog: SeedManufacturer[] = [
       {
         slug: "standardspule",
         name: "Standardspule",
-        nameI18n: { en: "Standard container" },
+        nameI18n: { en: "Standard spool" },
         materialTypes: ["PETG", "ASA", "PA-CF", "PPS-CF"],
         versions: [
           {
             slug: "kunststoffspule",
             name: "Kunststoffspule",
-            nameI18n: { en: "Plastic container" },
+            nameI18n: { en: "Plastic spool" },
+            form: "rolle",
             containerMaterial: "kunststoff",
             variants: [
               { nominalWeight: 750, tareWeight: 245 },

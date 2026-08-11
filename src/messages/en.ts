@@ -508,7 +508,6 @@ export const en: Messages = {
     seriesRequired: "Please enter a series",
     versionRequired: "Please enter a version",
     nominalInvalid: "Please enter a valid nominal weight in grams",
-    tareTooLarge: "The empty weight has to be smaller than the nominal weight",
   },
 
   import: {
@@ -534,6 +533,9 @@ export const en: Messages = {
     step3: "3. Review and import",
     step3Description:
       "Correct anything that is off and delete broken lines. One material is created per line and per unit.",
+    targetLagerLabel: "Target store",
+    targetLagerHint:
+      "Every position lands in this store. Material kind and filament diameter come from it.",
     purchaseDateLabel: "Purchase date (optional)",
     noPositions: "No lines left.",
     position: (vars: { index: number }) => `Line ${vars.index}`,
@@ -601,7 +603,6 @@ export const en: Messages = {
     savedVariant: "Size saved",
     validRangeInvalid: "“Valid from” has to come before “valid until”",
     nominalInvalid: "Please enter a valid nominal weight in grams",
-    tareTooLarge: "The empty weight has to be smaller than the nominal weight",
     dimensionsInvalid: "Please enter valid dimensions in millimetres",
   },
 
@@ -782,8 +783,6 @@ export const en: Messages = {
       "Keep your stock apart by material kind – filament, powder or resin. One kind per store; filament also gets a diameter.",
     switchLabel: "Store",
     switchAria: "Switch store",
-    manage: "Manage stores",
-
     newLager: "New store",
     firstLager: "Create your first store",
     emptyTitle: "No store yet",
@@ -826,7 +825,6 @@ export const en: Messages = {
     noLagerDescription:
       "Material needs a store. Create one first, then you can stock it.",
 
-    secondaryAbout: "Converted",
     secondaryHint: (vars: { density: string }) =>
       `Calculated with ${vars.density}. Enter a density on the material if you need it more precise.`,
     densityLabel: "Density (g/l)",
@@ -870,7 +868,6 @@ export const en: Messages = {
     incomingTitle: "Requests waiting for you",
     outgoingTitle: "Requests you sent",
     pendingBadge: "Waiting",
-    declinedBadge: "Declined",
     accept: "Accept",
     decline: "Decline",
     accepted: "Request accepted",
@@ -887,7 +884,6 @@ export const en: Messages = {
     visibilityNone: "Nothing",
     visibilitySearch: "Search only",
     visibilityFull: "Whole store",
-    visibilityNoneHint: "This store stays completely hidden.",
     visibilitySearchHint:
       "Matches appear only when something specific is searched for. No browsing.",
     visibilityFullHint:
@@ -907,9 +903,6 @@ export const en: Messages = {
       "You cannot view this stock. The sharing setting may have changed.",
 
     searchTitle: "Found with friends",
-    searchHintShort: (vars: { count: number }) =>
-      `From ${vars.count} characters your friends' stock is searched too.`,
-    searchEmpty: "Your friends have nothing matching this.",
     searchCount: (vars: { count: number }) =>
       vars.count === 1 ? "1 match" : `${vars.count} matches`,
     ownerLabel: (vars: { name: string }) => `at ${vars.name}`,
@@ -931,8 +924,6 @@ export const en: Messages = {
 
     incomingTitle: "Loan requests for you",
     outgoingTitle: "Your loan requests",
-    emptyIncoming: "Nobody is asking for your filament right now.",
-    emptyOutgoing: "You have not asked for anything.",
     fromLabel: (vars: { name: string }) => `from ${vars.name}`,
     toLabel: (vars: { name: string }) => `to ${vars.name}`,
     statusOpen: "Open",

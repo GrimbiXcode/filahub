@@ -135,10 +135,21 @@ export const filamentDiameterSchema = z.union([
   z.literal(2850),
 ]);
 
-/** 1750 → „1,75 mm". Locale-frei: zwei Werte, beide mit Komma im Deutschen. */
-export function formatDiameter(um: number): string {
+/**
+ * 1750 → „1,75 mm“ bzw. „1.75 mm“.
+ *
+ * Das Trennzeichen kommt aus der Locale, nicht aus dem Code. Vorher stand hier
+ * fest das deutsche Komma mit der Begründung „Locale-frei“ – das trug nur,
+ * solange die App deutsch war: In `en-US` liest sich `1,75` als
+ * eintausendsiebenhundertfünfzig, ein 1,75-mm-Filament stand also als
+ * 1750-mm-Filament da.
+ */
+export function formatDiameter(um: number, locale: string): string {
   const mm = um / 1000;
-  return `${mm.toFixed(2).replace(".", ",")} mm`;
+  return `${new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(mm)} mm`;
 }
 
 /**
@@ -326,4 +337,88 @@ export function secondaryAmount(input: {
   const areaMm2 = Math.PI * radiusMm * radiusMm;
   const lengthMm = volumeMm3 / areaMm2;
   return { unit: "m", value: lengthMm / 1000 };
+}
+
+/** Restmenge und Prozentwert, wie sie überall gerechnet werden. */
+export type RemainingAmount = {
+  /** Gebindetara plus Drybox-Tara */
+  tareWeight: number;
+  remainingWeight: number;
+  /** `null`, wenn keine Nennmenge hinterlegt ist */
+  remainingPercent: number | null;
+  secondary: SecondaryAmount | null;
+  /** Welche Dichte in `secondary` eingegangen ist – für den Hinweis daneben */
+  densityUsed: number | null;
+};
+
+/**
+ * Restmenge, Prozentwert und Zweitanzeige aus den Rohwerten.
+ *
+ * **Die einzige Stelle, an der diese vier Zahlen entstehen.** Sie standen
+ * zweimal da: einmal für den Besitzer (`computeMaterialStats`) und einmal für
+ * Freunde (`toFriendMaterial`), jede von einer eigenen Testdatei festgenagelt.
+ * Eine dritte Tara-Quelle, eine andere Rundung oder eine andere Regel für „noch
+ * nicht gewogen“ hätte gereicht, damit dasselbe Material dem Besitzer und dem
+ * Freund verschiedene Gramm und Meter meldet – bei grünen Tests auf beiden
+ * Seiten. Die Zahl, die der Freund sieht, ist die, auf die er eine Leihbitte
+ * stützt.
+ *
+ * Rein und ohne Datenbank, hier neben `secondaryAmount` und `resolveDensity`,
+ * die beide Seiten schon importieren.
+ */
+export function remainingAmount(input: {
+  nominalWeight: number;
+  /** Leergewicht des Gebindes, üblicherweise aus `resolveContainerTare` */
+  containerTareWeight: number;
+  /** Leergewicht der Drybox, falls darin gewogen wurde */
+  boxTareWeight?: number | null;
+  /** Bruttogewicht der jüngsten Wägung; `null` = noch keine */
+  grossWeight?: number | null;
+  materialType: string;
+  /** Materialart des Lagers; `null` = unbekannt, dann keine Zweitanzeige */
+  kind?: MaterialKind | null;
+  densityGramsPerLiter?: number | null;
+  diameterUm?: number | null;
+}): RemainingAmount {
+  const tareWeight = input.containerTareWeight + (input.boxTareWeight ?? 0);
+  const remainingWeight =
+    input.grossWeight != null
+      ? Math.max(0, input.grossWeight - tareWeight)
+      : input.nominalWeight;
+  const remainingPercent =
+    input.nominalWeight > 0
+      ? Math.min(
+          100,
+          Math.max(0, Math.round((remainingWeight / input.nominalWeight) * 100))
+        )
+      : null;
+  /*
+    Ohne Materialart keine Zweitanzeige – und keine geratene. Das kann nur bei
+    einem Material ohne Lager auftreten, also bei kaputtem Datenbestand.
+  */
+  const kind = input.kind ?? null;
+  const densityUsed =
+    kind != null
+      ? resolveDensity({
+          kind,
+          materialType: input.materialType,
+          densityGramsPerLiter: input.densityGramsPerLiter,
+        })
+      : null;
+  const secondary =
+    kind != null
+      ? secondaryAmount({
+          kind,
+          grams: remainingWeight,
+          density: densityUsed,
+          diameterUm: input.diameterUm,
+        })
+      : null;
+  return {
+    tareWeight,
+    remainingWeight,
+    remainingPercent,
+    secondary,
+    densityUsed,
+  };
 }

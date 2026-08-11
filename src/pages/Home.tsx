@@ -1,8 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { skipToken } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
   Archive,
   ArrowDownUp,
+  Boxes,
   ChevronDown,
   ChevronUp,
   Package,
@@ -18,8 +20,8 @@ import { toast } from "sonner";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
 import AuthLayout from "@/components/AuthLayout";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
-import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { LAGER_PATH } from "@/const";
 import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +59,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import type { FriendMaterial, MaterialOverview } from "@/types";
+import type { MaterialOverview } from "@/types";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -104,17 +106,40 @@ function compareBy(
 
 export default function Home() {
   const navigate = useNavigate();
-  const { data: lagerList } = trpc.lager.list.useQuery();
+  const { data: lagerList, isPending: lagerPending } =
+    trpc.lager.list.useQuery();
   const activeLagerId = useActiveLagerId(lagerList);
   /*
-    Auf das gewählte Lager eingeschränkt. `enabled` erst, wenn ein Lager
-    feststeht: Ohne Einschränkung käme der gesamte Bestand, und die Übersicht
-    zeigte kurz alles – ein Aufblitzen, das nach einem Fehler aussieht.
+    Auf das gewählte Lager eingeschränkt. Ohne Einschränkung käme der gesamte
+    Bestand, und die Übersicht zeigte kurz alles – ein Aufblitzen, das nach einem
+    Fehler aussieht.
+
+    `skipToken` statt `enabled`, und das ist kein Geschmack: `{ lagerId:
+    undefined }` und `{}` ergeben denselben Cache-Schlüssel, weil
+    `JSON.stringify` Schlüssel mit `undefined` fallen lässt. Solange kein Lager
+    feststand, las diese Abfrage deshalb den Eintrag der bewusst ungefilterten
+    Abfrage mit – und die Übersicht zeigte fremde Lager samt ihrer Summen.
+    `enabled` verhindert das Holen, nicht das Lesen.
   */
-  const { data: materials, isLoading } = trpc.material.list.useQuery(
-    { lagerId: activeLagerId ?? undefined },
-    { enabled: activeLagerId != null }
-  );
+  const { data: materials, isPending: materialsPending } =
+    trpc.material.list.useQuery(
+      activeLagerId != null ? { lagerId: activeLagerId } : skipToken
+    );
+  /*
+    Über die Kennung wird über **alle** Lager gesucht: Wer eine Kennung von einem
+    Gebinde in der Hand abliest, weiß nicht, welcher Lager-Reiter gerade offen
+    ist – und „nicht gefunden“ für etwas, das man in der Hand hält, ist die
+    schlechteste Antwort. Die Schnellsuche tut dasselbe.
+  */
+  const { data: allMaterials } = trpc.material.list.useQuery({});
+  /*
+    Solange die Lagerliste noch unterwegs ist, ist „kein Material“ nicht wahr,
+    sondern unbekannt. Eine abgeschaltete Abfrage meldet `isLoading === false`
+    (`isPending && isFetching`), weshalb hier `isPending` steht – sonst zeigte die
+    Seite bei jedem Kaltstart erst „Noch keine Materialien“ und danach die Liste.
+  */
+  const isLoading = lagerPending || (activeLagerId != null && materialsPending);
+  const hasNoLager = !lagerPending && (lagerList ?? []).length === 0;
   const {
     formatDate,
     formatGrams,
@@ -296,7 +321,8 @@ export default function Home() {
     event.preventDefault();
     const q = identifierLookup.trim().toLowerCase();
     if (!q) return;
-    const list = materials ?? [];
+    // Über alle Lager – siehe die Begründung an `allMaterials`.
+    const list = allMaterials ?? [];
     const exact = list.find(m => m.identifier?.toLowerCase() === q);
     const candidates = exact
       ? [exact]
@@ -627,6 +653,28 @@ export default function Home() {
               <Skeleton key={i} className="h-20 w-full rounded-xl md:h-12" />
             ))}
           </div>
+        ) : hasNoLager ? (
+          /*
+            Ohne Lager gibt es nichts einzulagern, und „Erstes Material anlegen“
+            führte ins Leere: Das Formular öffnete sich mit leerer Lagerauswahl
+            und konnte nur mit „Material braucht ein Lager“ antworten. Ein neu
+            angemeldetes Konto hat kein Lager – die Migration hat nur die damals
+            bestehenden Konten versorgt –, also ist das der erste Bildschirm, den
+            es sieht. `t.lager.noLagerTitle` gab es schon; verdrahtet war es nicht.
+          */
+          <Card>
+            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+              <Boxes className="h-10 w-10 text-muted-foreground/50" />
+              <p className="font-medium">{t.lager.noLagerTitle}</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {t.lager.noLagerDescription}
+              </p>
+              <Button onClick={() => navigate(LAGER_PATH)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t.lager.firstLager}
+              </Button>
+            </CardContent>
+          </Card>
         ) : sorted.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -843,7 +891,16 @@ export default function Home() {
  */
 function FriendResults({ query }: { query: string }) {
   const t = useT();
-  const [asking, setAsking] = useState<FriendMaterial | null>(null);
+  /*
+    Der Anfragedialog hängt am Modul-Store und wird im Layout gerendert
+    (`QuickActions`), nicht hier. Lokal gehalten verschwand er mitten im Tippen:
+    Dieser Abschnitt gibt bei null Treffern `null` zurück, und ein Nachladen nach
+    30 Sekunden Frische – etwa weil das Fenster wieder den Fokus bekam oder der
+    Freund die Freigabe zurückgenommen hat – nahm den offenen Dialog samt der
+    begonnenen Nachricht mit. `src/lib/quickActions.ts` hat `loanFor` genau
+    deswegen aus einer Komponente herausgezogen.
+  */
+  const { openLoanRequest } = useQuickActions();
   const term = query.trim();
   const debounced = useDebounced(term, 300);
   const ready = debounced.length >= FRIEND_SEARCH_MIN_LENGTH;
@@ -878,14 +935,12 @@ function FriendResults({ query }: { query: string }) {
       </div>
 
       {results.length > 0 && (
-        <FriendMaterialList materials={results} onAsk={setAsking} showOwner />
+        <FriendMaterialList
+          materials={results}
+          onAsk={openLoanRequest}
+          showOwner
+        />
       )}
-
-      <LoanRequestDialog
-        open={asking != null}
-        onOpenChange={open => !open && setAsking(null)}
-        material={asking}
-      />
     </div>
   );
 }

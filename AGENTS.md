@@ -114,7 +114,7 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   `api/queries/filament.ts`).
   **Zwei Ausnahmen:** die `preset_*`-Tabellen sind ein globaler, von
   Administratoren gepflegter Katalog und haben bewusst keine `userId`. Der
-  Benutzerbezug steckt allein in `hidden_spool_presets` (Ausblenden) und
+  Benutzerbezug steckt allein in `hidden_container_presets` (Ausblenden) und
   `preset_proposals` (Einreicher). Die zweite sind die Freundes-Lesepfade –
   siehe den eigenen Abschnitt unten.
 - **Auth-Fluss:** `createContext` ruft `authenticateRequest` auf; nicht
@@ -315,10 +315,10 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   `api/materialRouter.ts`), und zwar immer der Zustand _nach_ dem Patch. Die
   Priorität beim Auflösen der Tara steht in `resolveContainerTare`
   (`contracts/presets.ts`) und wird von Server und Client gemeinsam genutzt.
-- **`displayName` auf der Variante** ist denormalisiert. Nach jeder Umbenennung
-  auf Hersteller-, Serien- oder Versionsebene muss
-  `refreshVariantDisplayNames` laufen (passiert in den `update*`-Funktionen in
-  `api/queries/presets.ts`).
+- **Der Anzeigename einer Variante wird nicht gespeichert**, sondern beim Lesen
+  aus Hersteller + Serie + Ausführung + Nenngewicht erzeugt (Einzelheiten unter
+  „Sprachen"). Es gibt keine `displayName`-Spalte und keinen Auffrisch-Helfer:
+  Nach einer Umbenennung ist nichts nachzuziehen.
 - **Materialarten** (`preset_series_material_types`) und **Gebindeform**
   (`preset_container_versions.form`) sind weiche Sortierhinweise, **kein
   Filter**: `materials.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),

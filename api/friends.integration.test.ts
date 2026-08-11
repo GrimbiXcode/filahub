@@ -710,6 +710,52 @@ describe("Sichtbarkeitsstufen", () => {
   });
 });
 
+/*
+  Die zwei Regeln, die eine Ablehnung erst zu einer Ablehnung machen.
+*/
+describe("Ablehnung", () => {
+  it("lässt nur den Ablehnenden die abgelehnte Zeile entfernen", async () => {
+    const { code } = await callerFor(alex).friend.myCode();
+    const request = await callerFor(bea).friend.request({ code });
+    await callerFor(alex).friend.respond({ id: request.id, accept: false });
+
+    /*
+      Bea hat angefragt und wurde abgelehnt. Dürfte sie die Zeile löschen, wäre
+      der Weg für eine neue Anfrage frei – „nein“ wäre nur eine Verzögerung, und
+      Alex hätte kein Mittel dagegen.
+    */
+    await expect(
+      callerFor(bea).friend.remove({ id: request.id })
+    ).rejects.toThrow(/nicht gefunden/);
+    await expect(callerFor(bea).friend.request({ code })).rejects.toThrow();
+
+    // Alex darf – er hat entschieden und kann es sich anders überlegen.
+    await expect(
+      callerFor(alex).friend.remove({ id: request.id })
+    ).resolves.toEqual({ ok: true });
+  });
+
+  it("gibt den Telegram-Namen erst mit der Annahme heraus", async () => {
+    const { code } = await callerFor(alex).friend.myCode();
+    const request = await callerFor(bea).friend.request({ code });
+
+    /*
+      Ein Freundescode ist zum Weitergeben gedacht. Wer ihn hat, darf anfragen –
+      aber dadurch keine Kennung bekommen, mit der er die Person außerhalb der
+      App direkt anschreibt.
+    */
+    const [pending] = await callerFor(bea).friend.list();
+    expect(pending.status).toBe("pending");
+    expect(pending.friendUsername).toBeNull();
+
+    await callerFor(alex).friend.respond({ id: request.id, accept: true });
+    const [accepted] = await callerFor(bea).friend.list();
+    expect(accepted.friendUsername).toBeNull(); // Alex hat keinen gesetzt
+    const [forAlex] = await callerFor(alex).friend.list();
+    expect(forAlex.friendUsername).toBe("bea_hh");
+  });
+});
+
 describe("Was ein Freund zu sehen bekommt", () => {
   /**
    * Die Zusicherung, die diese ganze Funktion trägt. Geprüft an **jeder**
@@ -933,6 +979,54 @@ describe("Ausleih-Anfragen", () => {
 
     const [request] = await callerFor(bea).friend.loanRequests();
     expect(request.materialName).toBe("PolyTerra PLA Schwarz");
+  });
+});
+
+/*
+  Eine offene Ausleih-Anfrage darf die Freigabe nicht überleben: Sonst könnte der
+  Besitzer noch zusagen und der Materialname ginge per Telegram an jemanden, dem
+  der Zugriff entzogen wurde.
+*/
+describe("Entzogener Zugriff", () => {
+  it("räumt offene Anfragen mit der zurückgenommenen Freigabe ab", async () => {
+    await befriend({ main: "search" });
+    await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
+    expect(await callerFor(alex).friend.loanRequests()).toHaveLength(1);
+
+    await callerFor(alex).friend.setLagerVisibility({
+      friendId: bea.id,
+      lagerId: alexLagerId,
+      visibility: "none",
+    });
+    expect(await callerFor(alex).friend.loanRequests()).toEqual([]);
+    expect(await callerFor(bea).friend.loanRequests()).toEqual([]);
+  });
+
+  it("räumt offene Anfragen mit der aufgelösten Freundschaft ab", async () => {
+    const friendship = await befriend({ main: "search" });
+    await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
+    await callerFor(alex).friend.remove({ id: friendship.id });
+    expect(await callerFor(alex).friend.loanRequests()).toEqual([]);
+  });
+
+  /*
+    Der Riegel für alle Wege, die keine Kaskade abdeckt (etwa ein gelöschtes
+    Lager): Eine Zusage prüft die Freigabe noch einmal.
+  */
+  it("lässt eine Anfrage ohne Freigabe nicht zusagen", async () => {
+    await befriend({ main: "search" });
+    const { id } = await callerFor(bea).friend.requestLoan({
+      materialId: alexMaterialId,
+    });
+    // Freigabe direkt entfernen, ohne die Kaskade zu benutzen.
+    await db().delete(schema.lagerShares);
+    await expect(
+      callerFor(alex).friend.respondLoan({ id, accept: true })
+    ).rejects.toThrow(/nicht gefunden/);
+    // Ablehnen bleibt möglich – es gibt nichts heraus.
+    await expect(
+      callerFor(alex).friend.respondLoan({ id, accept: false })
+    ).resolves.toEqual({ ok: true });
   });
 });
 

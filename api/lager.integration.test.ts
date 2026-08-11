@@ -224,6 +224,81 @@ describe("Löschen", () => {
       callerFor(bert).lager.delete({ id: created!.id })
     ).rejects.toThrow(/nicht gefunden/);
   });
+
+  /*
+    Derselbe Riegel für die Gebindearten und die Dryboxen. Beide zählten die
+    Belegung ohne Besitzerfilter und **vor** der Zugehörigkeitsprüfung, also
+    verriet die Konfliktmeldung, wie viel fremder Bestand daran hängt – und ein
+    `{ ok: true }` auf eine fremde ID war von einem echten Löschen nicht zu
+    unterscheiden.
+  */
+  it("verrät die Belegung einer fremden Gebindeart nicht", async () => {
+    const own = await callerFor(anna).containerType.create({
+      name: "Kartonrolle",
+      form: "rolle",
+      tareWeight: 140,
+    });
+    const annasLager = await callerFor(anna).lager.create(filamentLager());
+    await callerFor(anna).material.create({
+      lagerId: annasLager!.id,
+      name: "PLA",
+      materialType: "PLA",
+      nominalWeight: 1000,
+      containerTypeId: own!.id,
+    });
+    await expect(
+      callerFor(bert).containerType.delete({ id: own!.id })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+
+  it("verrät die Belegung einer fremden Drybox nicht", async () => {
+    const own = await callerFor(anna).storageBox.create({
+      name: "Drybox 1",
+      tareWeight: 800,
+    });
+    await expect(
+      callerFor(bert).storageBox.delete({ id: own!.id })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+});
+
+/*
+  Die Aktualisierung liest die Zeile zurück, um sie an den Aufrufer zu geben.
+  Fehlte dabei der Besitzerfilter, traf das UPDATE keine Zeile, das Rücklesen
+  aber die fremde – und die Antwort trug Name, Notizen und Leergewicht eines
+  anderen Kontos nach draußen. Auf einer fremden ID muss `NOT_FOUND` stehen.
+*/
+describe("Fremde Zeilen bleiben unsichtbar", () => {
+  it("gibt bei `lager.update` auf ein fremdes Lager nichts heraus", async () => {
+    const annas = await callerFor(anna).lager.create(filamentLager("Annas"));
+    await expect(
+      callerFor(bert).lager.update({ id: annas!.id, notes: "x" })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+
+  it("gibt bei `containerType.update` auf eine fremde Zeile nichts heraus", async () => {
+    const annas = await callerFor(anna).containerType.create({
+      name: "Annas Kartonrolle",
+      form: "rolle",
+      tareWeight: 140,
+    });
+    await expect(
+      callerFor(bert).containerType.update({ id: annas!.id, tareWeight: 250 })
+    ).rejects.toThrow(/nicht gefunden/);
+    // Und die Zeile ist unverändert.
+    const [mine] = await callerFor(anna).containerType.list();
+    expect(mine.tareWeight).toBe(140);
+  });
+
+  it("gibt bei `storageBox.update` auf eine fremde Zeile nichts heraus", async () => {
+    const annas = await callerFor(anna).storageBox.create({
+      name: "Annas Drybox",
+      tareWeight: 800,
+    });
+    await expect(
+      callerFor(bert).storageBox.update({ id: annas!.id, tareWeight: 1 })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
 });
 
 describe("Material und Lager", () => {

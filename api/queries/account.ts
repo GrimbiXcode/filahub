@@ -3,6 +3,7 @@ import {
   ACCOUNT_EXPORT_VERSION,
   type AccountExportSection,
 } from "@contracts/account";
+import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
 import { getDb } from "./connection";
 
@@ -150,9 +151,17 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     demselben Grund wie bei den Freundschaften. Bei den bekommenen nicht: Diese
     Person kennt den Namen aus der Freundesliste ohnehin, und der Bezug ist die
     Freundschaft, nicht die Freigabe.
+
+    **Die bekommenen sind verdichtet**, genau wie in `loadReceivedShares`: eine
+    Zeile je Besitzer mit der höchsten Stufe, ohne Lager-Kennungen und ohne
+    Zeitstempel je Lager. Die Rohzeilen herauszugeben hieße, über die Auskunft
+    dieselbe Auskunft zu erteilen, die der Freundes-Lesepfad verweigert – wie
+    viele Lager der Freund hat, welche davon er einzeln freigibt und wann er das
+    geändert hat. Das ist sein Bestand, nicht der dieser Person; was sie betrifft,
+    ist die Stufe, die für sie gilt.
   */
   const ownLagerIds = lager.map(l => l.id);
-  const [grantedShares, receivedShares] = await Promise.all([
+  const [grantedShares, receivedRows] = await Promise.all([
     ownLagerIds.length === 0
       ? []
       : db
@@ -160,22 +169,33 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
           .from(schema.lagerShares)
           .where(inArray(schema.lagerShares.lagerId, ownLagerIds)),
     db
-      .select()
+      .select({
+        ownerId: schema.lager.userId,
+        visibility: schema.lagerShares.visibility,
+      })
       .from(schema.lagerShares)
+      .innerJoin(schema.lager, eq(schema.lager.id, schema.lagerShares.lagerId))
       .where(eq(schema.lagerShares.sharedWithUserId, userId)),
   ]);
   const shareRecipientNames = await loadCounterpartNames(
     grantedShares.map(r => r.sharedWithUserId)
   );
+  const receivedByOwner = new Map<number, FriendVisibility>();
+  for (const row of receivedRows) {
+    const current = receivedByOwner.get(row.ownerId);
+    if (current == null || visibilityAllows(row.visibility, current))
+      receivedByOwner.set(row.ownerId, row.visibility);
+  }
   const lagerShares = [
     ...grantedShares.map(row => ({
       ...row,
       direction: "granted" as const,
       counterpartName: shareRecipientNames.get(row.sharedWithUserId) ?? null,
     })),
-    ...receivedShares.map(row => ({
-      ...row,
+    ...[...receivedByOwner].map(([ownerId, visibility]) => ({
       direction: "received" as const,
+      ownerUserId: ownerId,
+      visibility,
       counterpartName: null,
     })),
   ];

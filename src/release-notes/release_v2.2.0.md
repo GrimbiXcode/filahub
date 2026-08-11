@@ -22,10 +22,9 @@ Pick one of three kinds:
 You can have up to five. Switch between them in the sidebar; the overview, the
 statistics and the filters all follow your choice.
 
-Your existing filament did not go anywhere. On first start after the update every
-account gets a store called **"Mein Lager"** with everything already in it, set to
-filament at 1.75 mm. If you print 2.85 mm, change the diameter once and you are
-done.
+Your existing filament did not go anywhere: it is already in a store called
+**"Mein Lager"**, set to filament at 1.75 mm. If you print 2.85 mm, change the
+diameter once and you are done.
 
 ## Metres and litres, next to grams
 

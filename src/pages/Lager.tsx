@@ -14,7 +14,6 @@ import {
   FILAMENT_DIAMETERS_UM,
   MATERIAL_KINDS,
   MAX_LAGER_PER_USER,
-  formatDiameter,
   type FilamentDiameterUm,
   type MaterialKind,
 } from "@contracts/materials";
@@ -52,6 +51,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { kindHint, kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
@@ -73,9 +73,8 @@ const KIND_ICONS: Record<MaterialKind, typeof Package> = {
 export default function LagerPage() {
   const utils = trpc.useUtils();
   const t = useT();
+  const { formatDiameter } = useFormat();
   const { data: lagerList, isLoading } = trpc.lager.list.useQuery();
-  // Für die Belegung je Lager. Ohne `lagerId` kommt der gesamte Bestand.
-  const { data: materials } = trpc.material.list.useQuery({});
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<LagerItem | null>(null);
@@ -100,9 +99,6 @@ export default function LagerPage() {
     setNotes(item?.notes ?? "");
     setDialogOpen(true);
   };
-
-  const materialCount = (lagerId: number) =>
-    (materials ?? []).filter(m => m.lagerId === lagerId).length;
 
   const invalidate = () => {
     utils.lager.list.invalidate();
@@ -218,7 +214,7 @@ export default function LagerPage() {
           <div className="flex flex-col gap-3">
             {list.map(item => {
               const Icon = KIND_ICONS[item.materialKind];
-              const count = materialCount(item.id);
+              const count = item.materialCount;
               return (
                 <Card key={item.id}>
                   <CardContent className="flex flex-wrap items-start justify-between gap-3 p-4">

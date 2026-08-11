@@ -260,8 +260,10 @@ describe("lagerConfigIsValid", () => {
 
 describe("formatDiameter", () => {
   it("schreibt Mikrometer als Millimeter mit Komma", () => {
-    expect(formatDiameter(1750)).toBe("1,75 mm");
-    expect(formatDiameter(2850)).toBe("2,85 mm");
+    expect(formatDiameter(1750, "de-DE")).toBe("1,75 mm");
+    expect(formatDiameter(2850, "de-DE")).toBe("2,85 mm");
+    // Das Trennzeichen kommt aus der Locale: `1,75` liest sich in en-US als 1750.
+    expect(formatDiameter(1750, "en-US")).toBe("1.75 mm");
   });
 });
 

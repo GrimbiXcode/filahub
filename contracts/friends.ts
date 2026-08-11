@@ -107,7 +107,18 @@ const FRIEND_CODE_PATTERN = new RegExp(
  * Gibt `null` zurück, wenn daraus kein gültiger Code werden kann.
  */
 export function normalizeFriendCode(input: string): string | null {
-  const bare = input.toUpperCase().replace(/[\s-]/g, "").replace(/^FH/, "");
+  const stripped = input.toUpperCase().replace(/[\s-]/g, "");
+  /*
+    Das Präfix nur abschneiden, wenn danach noch ein voller Code übrig bleibt.
+    `F` und `H` stehen beide im Alphabet, also fängt etwa jeder 1024ste Code
+    selbst mit `FH` an – unbedingtes Abschneiden fraß dort echte Stellen, und der
+    Eigentümer bekam für seinen gültigen Code „Zu diesem Freundescode gibt es
+    kein Konto“ zu sehen. Ein `FH` bleibt stehen, wenn es zum Code gehört.
+  */
+  const bare =
+    stripped.length === FRIEND_CODE_LENGTH + 2 && stripped.startsWith("FH")
+      ? stripped.slice(2)
+      : stripped;
   if (bare.length !== FRIEND_CODE_LENGTH) return null;
   if (![...bare].every(c => FRIEND_CODE_ALPHABET.includes(c))) return null;
   return `FH-${bare.slice(0, 4)}-${bare.slice(4)}`;

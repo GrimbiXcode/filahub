@@ -160,6 +160,15 @@ export const presetRouter = createRouter({
             nominalWeight: path.variant.nominalWeight,
           }),
         manufacturer: path.manufacturer.name,
+        /*
+          Die Form der Ausführung wandert mit. Ohne sie fiele die kopierte
+          Gebindeart auf die Spaltenvorgabe `rolle` zurück – eine Harzflasche
+          hieße nach dem Kopieren „Rolle“ und sortierte in der Gebindeauswahl
+          nach unten, weil `formFitsKind("rolle", "resin")` falsch ist. `null`
+          heißt „unbekannt“ und bleibt es; die Vorgabe greift nur beim Anlegen
+          von Hand.
+        */
+        ...(path.version.form != null ? { form: path.version.form } : {}),
         tareWeight: path.variant.tareWeight,
         sourceVariantId: path.variant.id,
       });

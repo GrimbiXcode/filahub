@@ -84,8 +84,11 @@ export function ProposePresetDialog({
     if (!version.trim()) return toast.error(t.proposePreset.versionRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.proposePreset.nominalInvalid);
-    if (containerType.tareWeight >= nominal)
-      return toast.error(t.proposePreset.tareTooLarge);
+    /*
+      Kein Vergleich mit dem Leergewicht – siehe `variantFieldsSchema`: Ein
+      schweres Gebinde mit wenig Inhalt ist eine gültige Angabe, und es
+      vorzuschlagen war der Grund, die Regel zu streichen.
+    */
 
     submit.mutate({
       containerTypeId: containerType.id,

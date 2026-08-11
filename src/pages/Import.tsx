@@ -21,6 +21,13 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
@@ -91,10 +98,20 @@ export default function Import() {
   const [pruefFehler, setPruefFehler] = useState<string | null>(null);
   const [zeilen, setZeilen] = useState<ImportZeile[] | null>(null);
   const [kaufdatum, setKaufdatum] = useState("");
+  /*
+    Ziel-Lager, sichtbar und wählbar. Vorher landete jede Position stumm im
+    aktiven Lager – bei einem frischen Browser das alphabetisch erste –, und die
+    Seite nannte das Ziel nirgends. Eine Filamentbestellung im Harzlager zeigt
+    Liter statt Meter, fehlt in der Filamentübersicht und muss Stück für Stück
+    umgehängt werden; es gibt kein Verschieben in Mengen.
+  */
+  const [zielLager, setZielLager] = useState<string>("");
   const [promptSichtbar, setPromptSichtbar] = useState(false);
 
   const { data: lagerList } = trpc.lager.list.useQuery();
   const aktivesLager = useActiveLagerId(lagerList);
+  const gewaehltesLager =
+    zielLager !== "" ? Number(zielLager) : (aktivesLager ?? null);
   const importMutation = trpc.material.importMany.useMutation({
     onSuccess: async data => {
       toast.success(`${data.created} Materialien importiert`);
@@ -188,14 +205,14 @@ export default function Import() {
 
   const importieren = () => {
     if (!zeilen) return;
-    if (aktivesLager == null) {
+    if (gewaehltesLager == null) {
       toast.error(t.lager.noLagerDescription);
       return;
     }
     importMutation.mutate({
       // Alle Positionen landen im gewählten Lager – ein Modell kann es nicht
       // kennen, deshalb kommt es aus der Oberfläche.
-      lagerId: aktivesLager,
+      lagerId: gewaehltesLager,
       purchaseDate: kaufdatum || undefined,
       items: zeilen.map(z => ({
         typ: z.typ.trim(),
@@ -313,6 +330,28 @@ export default function Import() {
               <CardDescription>{t.import.step3Description}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              <div className="flex min-w-0 max-w-72 flex-col gap-1.5">
+                <Label htmlFor="ziel-lager">{t.import.targetLagerLabel}</Label>
+                <Select
+                  value={gewaehltesLager != null ? String(gewaehltesLager) : ""}
+                  onValueChange={setZielLager}
+                >
+                  <SelectTrigger id="ziel-lager">
+                    <SelectValue placeholder={t.import.targetLagerLabel} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(lagerList ?? []).map(l => (
+                      <SelectItem key={l.id} value={String(l.id)}>
+                        {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t.import.targetLagerHint}
+                </p>
+              </div>
+
               <div className="flex min-w-0 max-w-56 flex-col gap-1.5">
                 <Label htmlFor="kaufdatum">{t.import.purchaseDateLabel}</Label>
                 <Input

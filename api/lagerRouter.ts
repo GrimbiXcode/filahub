@@ -10,8 +10,9 @@ import { createRouter, authedQuery } from "./middleware";
 import { recordAudit } from "./queries/audit";
 import { countSharesByLager } from "./queries/friends";
 import {
+  LAGER_NAME_TAKEN,
   countLagerByUser,
-  countMaterialsInLager,
+  countMaterialsByLager,
   createLager,
   deleteLager,
   findLagerById,
@@ -33,6 +34,28 @@ const lagerInput = z.object({
   filamentDiameterUm: filamentDiameterSchema.nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
+
+/**
+ * Wandelt den Namenskonflikt in eine Meldung um, die man einem Benutzer zeigen
+ * kann.
+ *
+ * `createLager`/`updateLager` melden ihn als `LAGER_NAME_TAKEN`; ohne diese
+ * Umsetzung wäre es ein INTERNAL_SERVER_ERROR und die Oberfläche zeigte die
+ * rohe Postgres-Meldung samt Constraint-Namen.
+ */
+async function withNameConflict<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof Error && error.message === LAGER_NAME_TAKEN) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Ein Lager mit diesem Namen gibt es schon.",
+      });
+    }
+    throw error;
+  }
+}
 
 /**
  * Prüft, dass Materialart und Stärke zusammenpassen.
@@ -67,11 +90,23 @@ export const lagerRouter = createRouter({
    * hinausgehen – ohne dafür jede Freundeskarte durchklicken zu müssen.
    */
   list: authedQuery.query(async ({ ctx }) => {
-    const [rows, shares] = await Promise.all([
+    /*
+      Die Belegung kommt als Zahl mit, nicht als Bestand. Die Lager-Seite lud
+      dafür vorher den gesamten Bestand – hunderte Kilobyte samt Wägungsverlauf
+      für eine Handvoll Zahlen – und zählte im Browser nur die **eigenen** Zeilen,
+      während die Löschsperre alles im Lager zählt. Beide Zahlen konnten sich
+      widersprechen.
+    */
+    const [rows, shares, counts] = await Promise.all([
       findLagerByUser(ctx.user.id),
       countSharesByLager(ctx.user.id),
+      countMaterialsByLager(ctx.user.id),
     ]);
-    return rows.map(row => ({ ...row, sharedWith: shares.get(row.id) ?? 0 }));
+    return rows.map(row => ({
+      ...row,
+      sharedWith: shares.get(row.id) ?? 0,
+      materialCount: counts.get(row.id) ?? 0,
+    }));
   }),
 
   create: authedQuery.input(lagerInput).mutation(async ({ ctx, input }) => {
@@ -92,11 +127,13 @@ export const lagerRouter = createRouter({
       });
     }
     assertConfigValid(input);
-    return createLager({
-      ...input,
-      filamentDiameterUm: input.filamentDiameterUm ?? null,
-      userId: ctx.user.id,
-    });
+    return withNameConflict(() =>
+      createLager({
+        ...input,
+        filamentDiameterUm: input.filamentDiameterUm ?? null,
+        userId: ctx.user.id,
+      })
+    );
   }),
 
   update: authedQuery
@@ -128,10 +165,12 @@ export const lagerRouter = createRouter({
         filamentDiameterUm: diameter,
       });
 
-      const updated = await updateLager(ctx.user.id, id, {
-        ...data,
-        filamentDiameterUm: diameter,
-      });
+      const updated = await withNameConflict(() =>
+        updateLager(ctx.user.id, id, {
+          ...data,
+          filamentDiameterUm: diameter,
+        })
+      );
       if (!updated) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -156,19 +195,21 @@ export const lagerRouter = createRouter({
           message: "Lager nicht gefunden",
         });
       }
-      const used = await countMaterialsInLager(input.id);
-      if (used > 0) {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `In diesem Lager liegen noch ${used} Material(ien). Verschiebe sie oder lösche sie zuerst.`,
-        });
-      }
       /*
         Das letzte Lager darf gehen. Die Materialübersicht kommt mit „kein
         Lager vorhanden" zurecht und lädt zum Anlegen ein – eine Sperre wäre
         eine Bevormundung, und wer neu anfangen will, soll das können.
+
+        Gezählt wird **in** der Transaktion (`deleteLager`), nicht hier davor:
+        Sonst könnte zwischen Zählen und Löschen Material hineinwandern.
       */
-      const { revoked } = await deleteLager(ctx.user.id, input.id);
+      const { revoked, blockedBy } = await deleteLager(ctx.user.id, input.id);
+      if (blockedBy != null) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `In diesem Lager liegen noch ${blockedBy} Material(ien). Verschiebe sie oder lösche sie zuerst.`,
+        });
+      }
       /*
         Je betroffenem Freund ein Eintrag, und zwar derselbe Ereignisname wie
         beim Zurücknehmen von Hand: Für den Betroffenen ist es dasselbe – sein

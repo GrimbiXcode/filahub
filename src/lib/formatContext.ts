@@ -23,6 +23,8 @@ export type FormatHelpers = {
   currencySymbol: string;
   formatNumber: (value: number | null | undefined) => string;
   formatGrams: (grams: number | null | undefined) => string;
+  /** Filamentstärke aus Mikrometern, mit dem Trennzeichen der Locale */
+  formatDiameter: (um: number) => string;
   /**
    * Zweitanzeige (Meter beim Filament, Liter beim Harz) samt Einheit.
    *

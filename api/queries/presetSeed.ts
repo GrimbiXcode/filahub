@@ -144,6 +144,13 @@ export async function seedContainerPresets(
             slug: version.slug,
             name: version.name,
             nameI18n: version.nameI18n ?? null,
+            /*
+              Die Form gehört dazu. Fehlte sie, blieb sie für jeden
+              Katalogeintrag `NULL` – und damit lag die Formgruppierung in der
+              Gebindeauswahl für den gesamten mitgelieferten Katalog still, weil
+              `containerFits` ohne bekannte Form keinen Beleg findet.
+            */
+            form: version.form ?? null,
             containerMaterial: version.containerMaterial,
             validFrom: version.validFrom ?? null,
             validTo: version.validTo ?? null,
@@ -167,6 +174,7 @@ export async function seedContainerPresets(
               .set({
                 name: version.name,
                 nameI18n: version.nameI18n ?? null,
+                form: version.form ?? null,
                 containerMaterial: version.containerMaterial,
                 validFrom: version.validFrom ?? null,
                 validTo: version.validTo ?? null,

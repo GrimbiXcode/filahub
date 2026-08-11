@@ -521,7 +521,6 @@ export const de = {
     seriesRequired: "Bitte eine Serie angeben",
     versionRequired: "Bitte eine Ausführung angeben",
     nominalInvalid: "Bitte ein gültiges Nenngewicht in Gramm angeben",
-    tareTooLarge: "Das Leergewicht muss kleiner als das Nenngewicht sein",
   },
 
   import: {
@@ -548,6 +547,9 @@ export const de = {
     step3: "3. Prüfen und importieren",
     step3Description:
       "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl wird ein eigenes Material angelegt.",
+    targetLagerLabel: "Ziel-Lager",
+    targetLagerHint:
+      "Alle Positionen landen in diesem Lager. Materialart und Filamentstärke kommen von dort.",
     purchaseDateLabel: "Kaufdatum (optional)",
     noPositions: "Keine Positionen mehr vorhanden.",
     position: (vars: { index: number }) => `Position ${vars.index}`,
@@ -617,7 +619,6 @@ export const de = {
     savedVariant: "Größe gespeichert",
     validRangeInvalid: "„Gültig ab“ muss vor „Gültig bis“ liegen",
     nominalInvalid: "Bitte ein gültiges Nenngewicht in Gramm angeben",
-    tareTooLarge: "Das Leergewicht muss kleiner als das Nenngewicht sein",
     dimensionsInvalid: "Bitte gültige Abmessungen in Millimetern angeben",
   },
 
@@ -799,8 +800,6 @@ export const de = {
       "Trenne deinen Bestand nach Materialart – Filament, Pulver oder Harz. Je Lager gilt eine Art; beim Filament zusätzlich eine Stärke.",
     switchLabel: "Lager",
     switchAria: "Lager wechseln",
-    manage: "Lager verwalten",
-
     newLager: "Neues Lager",
     firstLager: "Erstes Lager anlegen",
     emptyTitle: "Noch kein Lager angelegt",
@@ -850,7 +849,6 @@ export const de = {
       "Material braucht ein Lager. Lege zuerst eines an, dann kannst du einlagern.",
 
     // Zweitanzeige
-    secondaryAbout: "Umgerechnet",
     secondaryHint: (vars: { density: string }) =>
       `Gerechnet mit ${vars.density}. Trage am Material eine eigene Dichte ein, wenn du es genauer brauchst.`,
     densityLabel: "Dichte (g/l)",
@@ -897,7 +895,6 @@ export const de = {
     incomingTitle: "Offene Anfragen an dich",
     outgoingTitle: "Von dir gestellte Anfragen",
     pendingBadge: "Wartet",
-    declinedBadge: "Abgelehnt",
     accept: "Annehmen",
     decline: "Ablehnen",
     accepted: "Anfrage angenommen",
@@ -915,7 +912,6 @@ export const de = {
     visibilityNone: "Nichts",
     visibilitySearch: "Nur in der Suche",
     visibilityFull: "Ganzes Lager",
-    visibilityNoneHint: "Dieses Lager bleibt vollständig verborgen.",
     visibilitySearchHint:
       "Treffer erscheinen nur, wenn nach etwas Bestimmtem gesucht wird. Kein Blättern.",
     visibilityFullHint:
@@ -937,9 +933,6 @@ export const de = {
 
     // Suche
     searchTitle: "Bei Freunden gefunden",
-    searchHintShort: (vars: { count: number }) =>
-      `Ab ${vars.count} Zeichen wird auch bei deinen Freunden gesucht.`,
-    searchEmpty: "Bei deinen Freunden gibt es dazu nichts.",
     searchCount: (vars: { count: number }) =>
       vars.count === 1 ? "1 Treffer" : `${vars.count} Treffer`,
     ownerLabel: (vars: { name: string }) => `bei ${vars.name}`,
@@ -961,8 +954,6 @@ export const de = {
 
     incomingTitle: "Ausleih-Anfragen an dich",
     outgoingTitle: "Deine Ausleih-Anfragen",
-    emptyIncoming: "Niemand fragt gerade nach deinem Material.",
-    emptyOutgoing: "Du hast nichts angefragt.",
     fromLabel: (vars: { name: string }) => `von ${vars.name}`,
     toLabel: (vars: { name: string }) => `an ${vars.name}`,
     statusOpen: "Offen",

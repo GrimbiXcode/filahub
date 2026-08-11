@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import {
-  COMMON_TEXTURES,
-  formatDiameter,
-  resolveDensity,
-} from "@contracts/materials";
+import { COMMON_TEXTURES, resolveDensity } from "@contracts/materials";
 import {
   decodeContainerRef,
   encodeContainerRef,
@@ -61,7 +57,13 @@ function buildAutoName(manufacturer: string, type: string, color: string) {
 export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const isEdit = !!material;
   const utils = trpc.useUtils();
-  const { centsToInput, currencySymbol, formatGrams, parseMoney } = useFormat();
+  const {
+    centsToInput,
+    currencySymbol,
+    formatDiameter,
+    formatGrams,
+    parseMoney,
+  } = useFormat();
   const t = useT();
   const { data: containerTypes } = trpc.containerType.list.useQuery();
   const { data: presetOptions } = trpc.preset.options.useQuery();
@@ -110,16 +112,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       setColor(material?.color ?? "");
       setTexture(material?.texture ?? "");
       /*
-        Beim Anlegen das aktive Lager vorbelegen – wer die Übersicht eines
-        Lagers ansieht und dort etwas anlegt, meint fast immer dieses.
+        Beim Anlegen bleibt das Feld leer und `effectiveLagerId` unten setzt das
+        aktive Lager ein. Hier den Wert einzusetzen war ein Schnappschuss auf
+        genau den Renderdurchlauf, in dem `formKey` umsprang – wer den Dialog
+        öffnete, bevor `lager.list` geantwortet hatte, behielt eine leere
+        Lagerauswahl für die ganze Sitzung und bekam beim Speichern „lege zuerst
+        ein Lager an“ zu sehen, obwohl er Lager hat.
       */
-      setLagerId(
-        material?.lagerId != null
-          ? String(material.lagerId)
-          : activeLagerId != null
-            ? String(activeLagerId)
-            : ""
-      );
+      setLagerId(material?.lagerId != null ? String(material.lagerId) : "");
       setDensity(
         material?.densityGramsPerLiter != null
           ? String(material.densityGramsPerLiter)
@@ -186,9 +186,22 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
 
+  /*
+    Das wirksame Lager: was im Feld steht, sonst das aktive. Abgeleitet und nicht
+    in den Zustand kopiert – so wirkt eine später eintreffende Lagerliste sofort,
+    ohne dass der Dialog neu aufgebaut werden muss. Wer die Übersicht eines
+    Lagers ansieht und dort etwas anlegt, meint fast immer dieses.
+  */
+  const effectiveLagerId =
+    lagerId !== ""
+      ? lagerId
+      : activeLagerId != null
+        ? String(activeLagerId)
+        : "";
+
   const selectedLager = useMemo(
-    () => lagerList?.find(l => String(l.id) === lagerId) ?? null,
-    [lagerList, lagerId]
+    () => lagerList?.find(l => String(l.id) === effectiveLagerId) ?? null,
+    [lagerList, effectiveLagerId]
   );
 
   /** Leergewicht des gewählten Gebindes – eigene Art oder Preset-Variante */
@@ -221,7 +234,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
    * Liste, die sie nicht belegt.
    */
   const followLager = () => {
-    const target = Number(lagerId);
+    const target = Number(effectiveLagerId);
     if (Number.isInteger(target) && target > 0) setActiveLagerId(target);
   };
 
@@ -254,7 +267,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     if (!materialType.trim()) return toast.error(t.materialForm.typeRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.materialForm.nominalRequired);
-    const lager = Number(lagerId);
+    const lager = Number(effectiveLagerId);
     if (!Number.isInteger(lager) || lager <= 0)
       return toast.error(t.lager.noLagerDescription);
     /*
@@ -333,7 +346,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             */}
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="m-lager">{t.materialForm.lagerLabel}</Label>
-              <Select value={lagerId} onValueChange={setLagerId}>
+              <Select value={effectiveLagerId} onValueChange={setLagerId}>
                 <SelectTrigger id="m-lager">
                   <SelectValue placeholder={t.lager.switchLabel} />
                 </SelectTrigger>

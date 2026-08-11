@@ -28,6 +28,23 @@ export function findLagerById(userId: number, id: number) {
   });
 }
 
+/**
+ * Fehler des Unique-Index über `(userId, name)`.
+ *
+ * Ohne diese Umwandlung reicht tRPC die rohe Postgres-Meldung durch – es gibt
+ * keinen `errorFormatter` –, und die Lager-Seite zeigt sie wörtlich in einem
+ * Toast: `duplicate key value violates unique constraint …`. Ein doppelter Name
+ * ist ein gewöhnlicher Bedienfehler und gehört als Konflikt beantwortet.
+ */
+export const LAGER_NAME_TAKEN = "LAGER_NAME_TAKEN";
+
+function isDuplicateLagerName(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.message.includes("lager_name_per_user_unique")
+  );
+}
+
 export async function createLager(data: {
   userId: number;
   name: string;
@@ -35,11 +52,21 @@ export async function createLager(data: {
   filamentDiameterUm?: number | null;
   notes?: string | null;
 }) {
-  const [{ id }] = await getDb()
-    .insert(lager)
-    .values(data)
-    .returning({ id: lager.id });
-  return getDb().query.lager.findFirst({ where: eq(lager.id, id) });
+  let id: number;
+  try {
+    const [row] = await getDb()
+      .insert(lager)
+      .values(data)
+      .returning({ id: lager.id });
+    id = row.id;
+  } catch (error) {
+    if (isDuplicateLagerName(error))
+      throw new Error(LAGER_NAME_TAKEN, { cause: error });
+    throw error;
+  }
+  return getDb().query.lager.findFirst({
+    where: and(eq(lager.id, id), eq(lager.userId, data.userId)),
+  });
 }
 
 export async function updateLager(
@@ -52,11 +79,25 @@ export async function updateLager(
     notes: string | null;
   }>
 ) {
-  await getDb()
-    .update(lager)
-    .set(data)
-    .where(and(eq(lager.id, id), eq(lager.userId, userId)));
-  return getDb().query.lager.findFirst({ where: eq(lager.id, id) });
+  try {
+    await getDb()
+      .update(lager)
+      .set(data)
+      .where(and(eq(lager.id, id), eq(lager.userId, userId)));
+  } catch (error) {
+    if (isDuplicateLagerName(error))
+      throw new Error(LAGER_NAME_TAKEN, { cause: error });
+    throw error;
+  }
+  /*
+    Der Besitzerfilter gehört **auch** ans Rücklesen. Ohne ihn trifft das UPDATE
+    keine Zeile, das `findFirst` aber die fremde – und ein Aufrufer, der dem
+    Rückgabewert vertraut statt vorab zu prüfen, gibt Name und Notizen eines
+    fremden Lagers heraus. Freitext, der einen Ort verraten kann.
+  */
+  return getDb().query.lager.findFirst({
+    where: and(eq(lager.id, id), eq(lager.userId, userId)),
+  });
 }
 
 /**
@@ -75,25 +116,44 @@ export async function updateLager(
  * Der Rückgabewert trägt die betroffenen Empfänger zum Aufrufer, weil das
  * Protokoll sie braucht: Ein Eintrag „Lager gelöscht“ beantwortet nicht,
  * **wessen** Zugriff endete.
+ *
+ * **Die Leerprüfung liegt mit drin**, nicht davor. Draußen wäre sie ein
+ * Prüfen-dann-Handeln über zwei Verbindungen: Zählt sie null, während in einem
+ * anderen Reiter gerade Material in dieses Lager geschrieben wird, verschwindet
+ * das Lager unter der neuen Zeile. Es gibt keine Fremdschlüssel, die das
+ * abfangen – das Material bliebe mit einer `lagerId` ins Nichts zurück,
+ * unsichtbar in jeder Übersicht. `FOR UPDATE` auf der Lagerzeile hält den
+ * Prüfzeitpunkt bis zum Löschen.
+ *
+ * `blockedBy` sagt dem Aufrufer, warum nichts geschah: `null` heißt gelöscht,
+ * eine Zahl heißt „so viele Materialien liegen noch darin“.
  */
 export async function deleteLager(
   userId: number,
   id: number
-): Promise<{ revoked: number[] }> {
+): Promise<{ revoked: number[]; blockedBy: number | null }> {
   return getDb().transaction(async tx => {
     const own = await tx
       .select({ id: lager.id })
       .from(lager)
       .where(and(eq(lager.id, id), eq(lager.userId, userId)))
-      .limit(1);
-    if (own.length === 0) return { revoked: [] };
+      .limit(1)
+      .for("update");
+    if (own.length === 0) return { revoked: [], blockedBy: null };
+
+    const used = await tx
+      .select({ value: count() })
+      .from(materials)
+      .where(eq(materials.lagerId, id));
+    const inside = Number(used.at(0)?.value ?? 0);
+    if (inside > 0) return { revoked: [], blockedBy: inside };
 
     const removed = await tx
       .delete(lagerShares)
       .where(eq(lagerShares.lagerId, id))
       .returning({ sharedWithUserId: lagerShares.sharedWithUserId });
     await tx.delete(lager).where(eq(lager.id, id));
-    return { revoked: removed.map(r => r.sharedWithUserId) };
+    return { revoked: removed.map(r => r.sharedWithUserId), blockedBy: null };
   });
 }
 
@@ -118,6 +178,24 @@ export async function countLagerByUser(userId: number): Promise<number> {
  * gezählt werden muss **alles** darin, nicht nur die eigenen Zeilen (die es
  * mangels Freigabe heute ohnehin nur gibt).
  */
+/**
+ * Belegung aller eigenen Lager auf einmal – für die Lager-Seite.
+ *
+ * Eine Abfrage statt einer je Lager, und eine Zahl statt des Bestands: Die Seite
+ * braucht `MAX_LAGER_PER_USER` Ganzzahlen, nicht jedes Material mit Gebinde,
+ * Drybox, Preset-Pfad und Wägungsverlauf.
+ */
+export async function countMaterialsByLager(
+  userId: number
+): Promise<Map<number, number>> {
+  const rows = await getDb()
+    .select({ lagerId: materials.lagerId, value: count() })
+    .from(materials)
+    .where(eq(materials.userId, userId))
+    .groupBy(materials.lagerId);
+  return new Map(rows.map(r => [r.lagerId, Number(r.value)]));
+}
+
 export async function countMaterialsInLager(id: number): Promise<number> {
   const rows = await getDb()
     .select({ value: count() })

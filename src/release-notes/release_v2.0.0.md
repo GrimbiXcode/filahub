@@ -74,9 +74,9 @@ Signing out normally still only affects the device you are on.
   automatically after a day. They also cannot be redeemed twice any more, even
   when two attempts arrive at the same moment.
 - Repeated sign-in attempts from the same address are throttled.
-- A security log records sign-ins, failed attempts, deletions and moderation
-  decisions. Addresses are stored as an encrypted fingerprint, never in the
-  clear, and entries are deleted after 90 days.
+- A security log records sign-ins, failed attempts and deletions. Addresses are
+  stored as an encrypted fingerprint, never in the clear, and entries are deleted
+  after 90 days.
 
 ## A warning on the import page
 

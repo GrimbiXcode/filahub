@@ -3,6 +3,7 @@ import { z } from "zod";
 import { containerFormSchema } from "@contracts/materials";
 import { createRouter, authedQuery } from "./middleware";
 import {
+  containerTypeBelongsToUser,
   countMaterialsWithContainerType,
   createContainerType,
   deleteContainerType,
@@ -54,7 +55,19 @@ export const containerTypeRouter = createRouter({
   delete: authedQuery
     .input(z.object({ id: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => {
-      const used = await countMaterialsWithContainerType(input.id);
+      /*
+        Erst die Zugehörigkeit, dann der Inhalt – wie bei `lager.delete`: Sonst
+        verriete die Konfliktmeldung („noch 3 Materialien“) die Belegung einer
+        fremden Gebindeart, und ein `{ ok: true }` auf eine fremde ID ließe sich
+        nicht von einem echten Löschen unterscheiden.
+      */
+      if (!(await containerTypeBelongsToUser(ctx.user.id, input.id))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Gebindeart nicht gefunden",
+        });
+      }
+      const used = await countMaterialsWithContainerType(ctx.user.id, input.id);
       if (used > 0) {
         throw new TRPCError({
           code: "CONFLICT",

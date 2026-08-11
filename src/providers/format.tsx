@@ -17,6 +17,7 @@ import {
   type CurrencyCode,
   type LocaleCode,
 } from "@contracts/locale";
+import { formatDiameter } from "@contracts/materials";
 import {
   browserLocale,
   FormatContext,
@@ -49,6 +50,7 @@ export function FormatProvider({ children }: { children: ReactNode }) {
       currencySymbol: currencySymbolFor(locale, currency),
       formatNumber: n => formatNumber(n, locale),
       formatGrams: grams => formatGrams(grams, locale),
+      formatDiameter: um => formatDiameter(um, locale),
       formatSecondary: amount => {
         if (amount == null) return "–";
         return amount.unit === "m"

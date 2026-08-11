@@ -285,6 +285,18 @@ export const friendRouter = createRouter({
    * beiden Prüfungen könnte man beim Umbauen verlieren.
    */
   searchMaterials: authedQuery
+    /*
+      Zugriffsbegrenzung, und zwar aus demselben Grund wie der Pflicht-Suchbegriff:
+      Mit zwei Zeichen und Teilstring-Suche über sechs Spalten lässt sich ein
+      freigegebenes Lager mit einigen hundert Anfragen vollständig
+      zusammensetzen – „nur in der Suche“ wäre dann in der Wirkung „ganzes
+      Lager“, also genau die Lüge, die der Pflichtbegriff verhindern soll.
+
+      Die Grenze ist bewusst hoch: Tippen erzeugt (nach dem Entprellen) echte
+      Anfragen, und wer suchend arbeitet, soll nicht anstoßen. Sie schneidet das
+      systematische Durchprobieren ab, nicht das Suchen.
+    */
+    .use(rateLimited({ key: "friend.search", limit: 120, windowMs: 60_000 }))
     .input(
       z.object({
         query: z
