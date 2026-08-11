@@ -186,19 +186,20 @@ Known gaps, deliberately recorded rather than glossed over:
 
 ## Erasure concept
 
-| Data                                                                        | On account deletion                                                              |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Own stock: materials, weigh-ins, spool types, storage boxes, hidden presets | deleted                                                                          |
-| Proposals — pending, rejected, withdrawn                                    | deleted                                                                          |
-| Proposals — accepted                                                        | anonymised: `userId` and comment set to NULL                                     |
-| Global catalogue entries                                                    | kept; they carry no personal data                                                |
-| Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                                                         |
-| Sign-in codes                                                               | deleted                                                                          |
-| Friendships — in both directions                                            | deleted                                                                          |
-| Loan requests — asked and been asked                                        | deleted                                                                          |
-| Friend code                                                                 | deleted with the account row                                                     |
-| Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
-| Account                                                                     | deleted                                                                          |
+| Data                                                                   | On account deletion                                                              |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Own stock: materials, weigh-ins, spool types, dryboxes, hidden presets | deleted                                                                          |
+| Stores (`lager`) — deleted **after** the materials that point at them  | deleted                                                                          |
+| Proposals — pending, rejected, withdrawn                               | deleted                                                                          |
+| Proposals — accepted                                                   | anonymised: `userId` and comment set to NULL                                     |
+| Global catalogue entries                                               | kept; they carry no personal data                                                |
+| Moderation record where the deleted user reviewed                      | `reviewedBy` set to NULL                                                         |
+| Sign-in codes                                                          | deleted                                                                          |
+| Friendships — in both directions                                       | deleted                                                                          |
+| Loan requests — asked and been asked                                   | deleted                                                                          |
+| Friend code                                                            | deleted with the account row                                                     |
+| Security log entries                                                   | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
+| Account                                                                | deleted                                                                          |
 
 Sign-in codes are additionally purged after 24 hours, and security log entries
 after 90 days, regardless of any deletion request

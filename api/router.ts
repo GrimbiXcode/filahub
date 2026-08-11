@@ -2,6 +2,7 @@ import { accountRouter } from "./accountRouter";
 import { adminRouter } from "./adminRouter";
 import { authRouter } from "./auth-router";
 import { friendRouter } from "./friendRouter";
+import { lagerRouter } from "./lagerRouter";
 import { legalRouter } from "./legalRouter";
 import { createRouter, publicQuery } from "./middleware";
 import { materialRouter } from "./materialRouter";
@@ -13,6 +14,7 @@ export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
   auth: authRouter,
   account: accountRouter,
+  lager: lagerRouter,
   spoolType: spoolTypeRouter,
   storageBox: storageBoxRouter,
   material: materialRouter,

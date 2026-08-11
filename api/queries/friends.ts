@@ -10,6 +10,12 @@ import {
   visibilityAllows,
   type FriendVisibility,
 } from "@contracts/friends";
+import {
+  resolveDensity,
+  secondaryAmount,
+  type MaterialKind,
+  type SecondaryAmount,
+} from "@contracts/materials";
 import { resolveSpoolTare } from "@contracts/presets";
 import {
   friendships,
@@ -208,6 +214,12 @@ async function loadDisplayNames(ids: number[]): Promise<Map<number, string>> {
  *  - `storageBoxId` und die Lagerbox selbst – eine Ortsangabe in der Wohnung.
  *  - Der Wägungsverlauf – daraus ließe sich ablesen, wann jemand druckt.
  *    Restmenge und Prozent bleiben sichtbar, sonst wäre die Suche sinnlos.
+ *  - `lagerId` und der Lagername – ein Lagername ist Freitext, der einen Ort
+ *    verraten kann („Keller Müllerstraße“); dieselbe Erwägung schließt die
+ *    Drybox aus. Zur Einheit der Freigabe wird das Lager erst später, dann
+ *    braucht der Empfänger seine Kennung – heute nicht.
+ *  - `densityGramsPerLiter` – steckt bereits in `secondary`; sie zusätzlich
+ *    herauszugeben brächte nichts.
  */
 export type FriendMaterial = {
   id: number;
@@ -218,9 +230,21 @@ export type FriendMaterial = {
   materialType: string;
   manufacturer: string | null;
   color: string | null;
+  /** Oberfläche – Teil der Materialidentität wie die Farbe. */
+  texture: string | null;
   nominalWeight: number;
   remainingWeight: number;
   remainingPercent: number | null;
+  /**
+   * Zweitanzeige, fertig gerechnet.
+   *
+   * Genau deshalb rechnet der Server und nicht der Client: Die Rechnung
+   * braucht Materialart und Filamentstärke, und beide hängen am Lager. Wanderte
+   * sie in den Browser, müsste die Projektion Art und Stärke einzeln
+   * herausgeben – zwei Felder mehr, nur damit der Browser eine Division
+   * ausführt.
+   */
+  secondary: SecondaryAmount | null;
 };
 
 /**
@@ -237,7 +261,13 @@ const FRIEND_MATERIAL_COLUMNS = {
   materialType: true,
   manufacturer: true,
   color: true,
+  texture: true,
   nominalWeight: true,
+  /*
+    Die Dichte geht in die Zweitanzeige ein, aber nicht hinaus – siehe die
+    Begründung an `FriendMaterial`.
+  */
+  densityGramsPerLiter: true,
 } as const;
 
 /*
@@ -263,6 +293,15 @@ const FRIEND_MATERIAL_WITH = {
   spoolType: TARE_ONLY,
   spoolPresetVariant: TARE_ONLY,
   storageBox: TARE_ONLY,
+  /*
+    Vom Lager nur Materialart und Stärke – die beiden Angaben, die die
+    Zweitanzeige braucht. Der Name bleibt ungeladen, damit er nicht aus
+    Versehen mit hinausgeht: Was nicht in der Zeile steht, kann keine
+    Projektion durchlassen.
+  */
+  lager: {
+    columns: { materialKind: true, filamentDiameterUm: true } as const,
+  },
   weighings: {
     columns: { grossWeight: true } as const,
     orderBy: [desc(weighings.weighedAt), desc(weighings.id)],
@@ -289,10 +328,16 @@ export type FriendMaterialRow = {
   materialType: string;
   manufacturer: string | null;
   color: string | null;
+  texture: string | null;
   nominalWeight: number;
+  densityGramsPerLiter: number | null;
   spoolType: { tareWeight: number } | null;
   spoolPresetVariant: { tareWeight: number } | null;
   storageBox: { tareWeight: number } | null;
+  lager: {
+    materialKind: MaterialKind;
+    filamentDiameterUm: number | null;
+  } | null;
   weighings: { grossWeight: number }[];
 };
 
@@ -319,6 +364,23 @@ export function toFriendMaterial(
           Math.max(0, Math.round((remainingWeight / row.nominalWeight) * 100))
         )
       : null;
+  /*
+    Ohne Lager keine Zweitanzeige. Nach der Migration hat jedes Material eines,
+    aber der Typ lässt `null` zu und eine geratene Länge wäre schlimmer als
+    keine – dieselbe Regel wie in `secondaryAmount` selbst.
+  */
+  const secondary = row.lager
+    ? secondaryAmount({
+        kind: row.lager.materialKind,
+        grams: remainingWeight,
+        density: resolveDensity({
+          kind: row.lager.materialKind,
+          materialType: row.materialType,
+          densityGramsPerLiter: row.densityGramsPerLiter,
+        }),
+        diameterUm: row.lager.filamentDiameterUm,
+      })
+    : null;
   return {
     id: row.id,
     ownerId: row.userId,
@@ -328,9 +390,11 @@ export function toFriendMaterial(
     materialType: row.materialType,
     manufacturer: row.manufacturer,
     color: row.color,
+    texture: row.texture,
     nominalWeight: row.nominalWeight,
     remainingWeight,
     remainingPercent,
+    secondary,
   };
 }
 
@@ -375,7 +439,10 @@ export async function findFriendMaterialsForSearch(
         ilike(materials.identifier, pattern),
         ilike(materials.materialType, pattern),
         ilike(materials.manufacturer, pattern),
-        ilike(materials.color, pattern)
+        ilike(materials.color, pattern),
+        // Wer „mattes PETG“ sucht, sucht nach der Oberfläche – sie ist ein
+        // eigenes Feld, seit sie nicht mehr in der Materialart steckt.
+        ilike(materials.texture, pattern)
       )
     ),
     orderBy: [asc(materials.name), asc(materials.id)],

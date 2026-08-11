@@ -60,8 +60,16 @@ export const importItemSchema = z.object({
     .default(1),
 });
 
-/** Input der importMany-Mutation. */
+/**
+ * Input der importMany-Mutation.
+ *
+ * `lagerId` gehört hierher und **nicht** in `importPositionSchema`: Das dort
+ * beschriebene JSON kommt aus einem Sprachmodell und hat deutsche Schlüssel als
+ * festen Vertrag (siehe AGENTS.md). Das Ziel-Lager wählt der Benutzer in der
+ * Oberfläche – ein Modell kann es nicht kennen.
+ */
 export const importManyInputSchema = z.object({
+  lagerId: z.number().int().positive("Bitte ein Lager wählen"),
   purchaseDate: importDatumSchema.optional(),
   items: z
     .array(importItemSchema)

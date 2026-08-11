@@ -48,7 +48,8 @@ export const en: Messages = {
     overview: "Materials",
     import: "Import",
     spoolTypes: "Spool types",
-    storageBoxes: "Storage boxes",
+    storageBoxes: "Dryboxes",
+    lager: "Stores",
     friends: "Friends",
     friendsPending: (vars: { count: number }) =>
       `Friends (${vars.count} pending)`,
@@ -265,8 +266,10 @@ export const en: Messages = {
     filterLowStock: (vars: { percent: number }) => `≤ ${vars.percent} % left`,
     materialType: "Material type",
     allMaterialTypes: "All material types",
+    texture: "Finish",
+    allTextures: "All finishes",
     allManufacturers: "All manufacturers",
-    storageBox: "Storage box",
+    storageBox: "Drybox",
     allBoxes: "All boxes",
     noBox: "No box",
     sorting: "Sort by",
@@ -310,7 +313,7 @@ export const en: Messages = {
     purchaseDate: "Purchased",
     spool: "Spool / packaging",
     fromCatalog: "Catalogue",
-    storageBox: "Storage box / drybox",
+    storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} tare)`,
     history: "Weighing history",
     newWeighing: "New weigh-in",
@@ -334,12 +337,12 @@ export const en: Messages = {
   },
 
   storageBoxes: {
-    title: "Storage boxes",
+    title: "Dryboxes",
     description:
       "Dryboxes and storage boxes with their empty weight – weighing a spool inside one subtracts its tare automatically",
-    newBox: "New storage box",
+    newBox: "New drybox",
     firstBox: "Add your first storage box",
-    emptyTitle: "No storage boxes yet",
+    emptyTitle: "No dryboxes yet",
     emptyDescription:
       "Weigh your empty drybox, enter the empty weight and assign it to a material – filahub takes the box tare out of the result for you.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} tare`,
@@ -348,8 +351,8 @@ export const en: Messages = {
     free: "free",
     location: "Location",
     occupancy: "In use",
-    editBox: "Edit storage box",
-    deleteBox: "Delete storage box",
+    editBox: "Edit drybox",
+    deleteBox: "Delete drybox",
     deleteTitle: "Delete this storage box?",
     deleteDescription: (vars: { name: string }) =>
       `“${vars.name}” will be deleted. It must not be assigned to any material.`,
@@ -357,9 +360,9 @@ export const en: Messages = {
     locationPlaceholder: "e.g. left shelf, workshop",
     tareLabel: "Empty weight (g) *",
     tarePlaceholder: "e.g. 850",
-    created: "Storage box created",
-    saved: "Storage box saved",
-    deleted: "Storage box deleted",
+    created: "Drybox created",
+    saved: "Drybox saved",
+    deleted: "Drybox deleted",
   },
 
   spoolTypes: {
@@ -403,10 +406,12 @@ export const en: Messages = {
     createTitle: "New material",
     editTitle: "Edit material",
     createDescription:
-      "Add a new filament. The name is suggested from manufacturer, type and colour.",
+      "Add a new material. The name is suggested from manufacturer, type and colour.",
     editDescription:
       "Adjust the material's properties. The remaining quantity comes from the weigh-ins.",
     materialTypeLabel: "Material type *",
+    textureLabel: "Finish",
+    texturePlaceholder: "e.g. matte, silk, glossy",
     identifier: "Identifier",
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
@@ -415,11 +420,16 @@ export const en: Messages = {
     purchaseDate: "Purchase date",
     nominalLabel: "Nominal quantity (g) *",
     nominalPlaceholder: "e.g. 1000",
+    lagerLabel: "Store *",
+    lagerHint: (vars: { kind: string; diameter: string | null }) =>
+      vars.diameter ? `${vars.kind}, ${vars.diameter}` : vars.kind,
+    lagerChangeHint:
+      "A different store may use a different diameter – the conversion to metres changes with it.",
     spool: "Spool / packaging",
-    storageBox: "Storage box / drybox",
-    chooseBox: "Pick a storage box",
+    storageBox: "Drybox",
+    chooseBox: "Pick a drybox",
     noBox: "No box",
-    noBoxesHint: "No storage boxes yet – add one under “Storage boxes”.",
+    noBoxesHint: "No dryboxes yet – add one under “Dryboxes”.",
     initialLabel: (vars: { withBox: boolean }) =>
       `First weigh-in incl. spool${vars.withBox ? " + box" : ""} (g, optional)`,
     initialPlaceholder: "Total weight measured at purchase",
@@ -742,6 +752,61 @@ export const en: Messages = {
     invalidTare: "Please enter a valid empty weight in grams",
     invalidDimensions: "Please enter valid dimensions in millimetres",
     noChanges: "The suggestion does not contain any changes",
+  },
+
+  lager: {
+    title: "Stores",
+    description:
+      "Keep your stock apart by material kind – filament, powder or resin. One kind per store; filament also gets a diameter.",
+    switchLabel: "Store",
+    switchAria: "Switch store",
+    manage: "Manage stores",
+
+    newLager: "New store",
+    firstLager: "Create your first store",
+    emptyTitle: "No store yet",
+    emptyDescription:
+      "A store groups what belongs together. Create one for filament – powder and resin get their own.",
+
+    nameLabel: "Name *",
+    namePlaceholder: "e.g. Filament 1.75 mm",
+    kindLabel: "Material kind *",
+    kindHint: "Determines which fields a material has and how it is converted.",
+    diameterLabel: "Filament diameter *",
+    diameterHint:
+      "Applies to everything in this store. If you keep both diameters, create two stores.",
+
+    kindFilament: "Filament",
+    kindPowder: "Powder",
+    kindResin: "Resin",
+    kindFilamentHint: "Spools and reels; remaining amount also in metres.",
+    kindPowderHint: "Sintering powder in bags or buckets; grams only.",
+    kindResinHint: "Liquid resin; remaining amount also in litres.",
+
+    editLager: "Edit store",
+    deleteLager: "Delete store",
+    deleteTitle: "Delete this store?",
+    deleteDescription: (vars: { name: string }) =>
+      `“${vars.name}” will be deleted. It must not contain any material.`,
+    created: "Store created",
+    saved: "Store saved",
+    deleted: "Store deleted",
+
+    materialCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 material" : `${vars.count} materials`,
+    limitReached: (vars: { max: number }) =>
+      `More than ${vars.max} stores are not possible at the moment.`,
+    noLagerTitle: "No store available",
+    noLagerDescription:
+      "Material needs a store. Create one first, then you can stock it.",
+
+    secondaryAbout: "Converted",
+    secondaryHint: (vars: { density: string }) =>
+      `Calculated with ${vars.density}. Enter a density on the material if you need it more precise.`,
+    densityLabel: "Density (g/l)",
+    densityHint:
+      "Only used to convert to metres or litres. Leave empty to use the value for the material type.",
+    approx: (vars: { value: string }) => `approx. ${vars.value}`,
   },
 
   friends: {

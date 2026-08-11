@@ -17,6 +17,7 @@ import {
   storageBoxBelongsToUser,
   updateMaterial,
 } from "./queries/filament";
+import { lagerBelongsToUser } from "./queries/lager";
 
 const dateString = z
   .string()
@@ -25,14 +26,29 @@ const dateString = z
   .optional();
 
 const materialInput = z.object({
+  /** Pflicht: Ein Material liegt immer in genau einem Lager. */
+  lagerId: z.number().int().positive("Bitte ein Lager wählen"),
   name: z.string().min(1, "Name ist erforderlich"),
   identifier: z.string().max(50).nullable().optional(),
   materialType: z.string().min(1, "Materialart ist erforderlich"),
   manufacturer: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
+  /** Oberfläche als Freitext („Matt", „Silk") – Vorschläge im Formular */
+  texture: z.string().max(100).nullable().optional(),
   priceCents: z.number().int().min(0).nullable().optional(),
   purchaseDate: dateString,
   nominalWeight: z.number().int().positive("Nennmenge muss > 0 sein"),
+  /**
+   * Dichte in Gramm je Liter, nur für die Zweitanzeige. Die Obergrenze ist
+   * großzügig: Metallpulver liegt weit über Kunststoff.
+   */
+  densityGramsPerLiter: z
+    .number()
+    .int()
+    .positive()
+    .max(25000, "Dichte ist unplausibel hoch")
+    .nullable()
+    .optional(),
   spoolTypeId: z.number().int().positive().nullable().optional(),
   spoolPresetVariantId: z.number().int().positive().nullable().optional(),
   storageBoxId: z.number().int().positive().nullable().optional(),
@@ -49,8 +65,20 @@ async function validateForeignKeys(
   userId: number,
   spoolTypeId?: number | null,
   spoolPresetVariantId?: number | null,
-  storageBoxId?: number | null
+  storageBoxId?: number | null,
+  lagerId?: number | null
 ) {
+  /*
+    Das Lager zuerst: Ohne gültiges Lager hat das Material keinen Ort, und die
+    Materialart – die über Felder und Zweitanzeige entscheidet – wäre unbekannt.
+
+    Eine Konsistenzprüfung zwischen Material und Lager gibt es bewusst nicht:
+    Materialart und Filamentstärke stehen **nur** am Lager, es kann also nichts
+    auseinanderlaufen. Genau das ist der Gewinn dieser Modellierung.
+  */
+  if (lagerId != null && !(await lagerBelongsToUser(userId, lagerId))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiges Lager" });
+  }
   if (spoolTypeId != null && spoolPresetVariantId != null) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -85,9 +113,20 @@ async function validateForeignKeys(
 }
 
 export const materialRouter = createRouter({
-  list: authedQuery.query(({ ctx }) =>
-    findMaterialsByUser(ctx.user.id, ctx.language)
-  ),
+  /**
+   * Materialien des Benutzers, auf Wunsch auf ein Lager eingeschränkt.
+   *
+   * Ohne `lagerId` kommt der gesamte Bestand – die Schnellsuche braucht das,
+   * sie soll über alle Lager finden. Die Übersicht schickt das gewählte Lager
+   * mit.
+   */
+  list: authedQuery
+    .input(
+      z.object({ lagerId: z.number().int().positive().optional() }).optional()
+    )
+    .query(({ ctx, input }) =>
+      findMaterialsByUser(ctx.user.id, ctx.language, input?.lagerId)
+    ),
 
   byId: authedQuery
     .input(z.object({ id: z.number().int().positive() }))
@@ -122,7 +161,8 @@ export const materialRouter = createRouter({
         ctx.user.id,
         data.spoolTypeId,
         data.spoolPresetVariantId,
-        data.storageBoxId
+        data.storageBoxId,
+        data.lagerId
       );
       const id = await createMaterial(
         {
@@ -162,7 +202,8 @@ export const materialRouter = createRouter({
         ctx.user.id,
         nextSpoolTypeId,
         nextPresetVariantId,
-        data.storageBoxId
+        data.storageBoxId,
+        data.lagerId
       );
       await updateMaterial(ctx.user.id, id, data);
       return { ok: true };
@@ -195,6 +236,8 @@ export const materialRouter = createRouter({
           message: "Maximal 200 Datensätze pro Import",
         });
       }
+      // Einmal vorab statt je Position – es ist für alle dasselbe Lager.
+      await validateForeignKeys(ctx.user.id, null, null, null, input.lagerId);
       let created = 0;
       for (const item of input.items) {
         // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
@@ -205,6 +248,7 @@ export const materialRouter = createRouter({
         for (let i = 0; i < item.anzahl; i++) {
           await createMaterial({
             userId: ctx.user.id,
+            lagerId: input.lagerId,
             name,
             materialType: item.typ,
             manufacturer: item.hersteller || undefined,

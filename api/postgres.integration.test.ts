@@ -55,6 +55,7 @@ describe("Migrationen", () => {
 
     for (const table of [
       "users",
+      "lager",
       "materials",
       "weighings",
       "spool_types",
@@ -107,6 +108,7 @@ describe("Migrationen", () => {
       "friend_visibility",
       "friendship_status",
       "loan_request_status",
+      "material_kind",
     ]) {
       expect(names).toContain(type);
     }
@@ -490,7 +492,13 @@ describe("Materialien und Wiegungen", () => {
     });
     expect(box?.id).toBeTypeOf("number");
 
+    const lager = await asUser.lager.create({
+      name: "IT Lager",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
     const material = await asUser.material.create({
+      lagerId: lager!.id,
       name: "IT Filament",
       materialType: "PLA",
       nominalWeight: 1000,
@@ -576,6 +584,8 @@ describe("Postgres-Eigenheiten", () => {
     await expect(
       db().insert(schema.materials).values({
         userId: admin.id,
+        // Beliebige ID – geprüft wird der int-Überlauf, nicht die Zuordnung.
+        lagerId: 1,
         name: "Überlauf",
         materialType: "PLA",
         nominalWeight: 2_147_483_648,

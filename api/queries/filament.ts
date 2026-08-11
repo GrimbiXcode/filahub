@@ -6,11 +6,17 @@ import {
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
+  resolveDensity,
+  secondaryAmount,
+  type SecondaryAmount,
+} from "@contracts/materials";
+import {
   materials,
   presetSpoolVariants,
   spoolTypes,
   storageBoxes,
   weighings,
+  type Lager,
   type Material,
   type PresetManufacturer,
   type PresetSpoolSeries,
@@ -152,6 +158,11 @@ export type MaterialWithRelations = Material & {
    * Aufrufers erzeugt, statt wie früher vorberechnet in der Spalte zu liegen.
    */
   spoolPresetVariant: PresetVariantWithPath | null;
+  /**
+   * Das Lager, in dem das Material liegt. Wird mitgeladen, weil Materialart und
+   * Filamentstärke dort stehen – die Zweitanzeige braucht beides.
+   */
+  lager: Lager | null;
 };
 
 /** Preset-Variante samt der drei Ebenen über ihr */
@@ -183,6 +194,18 @@ export type MaterialOverview = MaterialWithRelations & {
   lastWeighing: Weighing | null;
   /** Anzahl aller Wägungen */
   weighingCount: number;
+  /**
+   * Restmenge in der Zweiteinheit der Materialart: Meter beim Filament, Liter
+   * beim Harz, `null` beim Pulver und immer dann, wenn eine nötige Angabe
+   * fehlt.
+   *
+   * Serverseitig gerechnet, weil die Rechnung Materialart und Stärke braucht
+   * und beide am Lager hängen – der Client müsste sich sonst beides zusätzlich
+   * holen. Reine Anzeige; `remainingWeight` in Gramm bleibt die Wahrheit.
+   */
+  secondary: SecondaryAmount | null;
+  /** Verwendete Dichte in g/l – für den Hinweis, woher die Zweitanzeige kommt */
+  densityUsed: number | null;
 };
 
 /**
@@ -227,6 +250,30 @@ export function computeMaterialStats(
           )
         )
       : null;
+  /*
+    Zweitanzeige. Materialart und Filamentstärke kommen aus dem Lager, die
+    Dichte vom Material oder aus der Vorgabe. Fehlt das Lager (kann nur bei
+    einem kaputten Datenbestand passieren), gibt es keine zweite Zahl statt
+    einer geratenen.
+  */
+  const kind = material.lager?.materialKind ?? null;
+  const densityUsed =
+    kind != null
+      ? resolveDensity({
+          kind,
+          materialType: material.materialType,
+          densityGramsPerLiter: material.densityGramsPerLiter,
+        })
+      : null;
+  const secondary =
+    kind != null
+      ? secondaryAmount({
+          kind,
+          grams: remainingWeight,
+          density: densityUsed,
+          diameterUm: material.lager?.filamentDiameterUm,
+        })
+      : null;
   return {
     ...material,
     tareWeight,
@@ -236,20 +283,32 @@ export function computeMaterialStats(
     remainingPercent,
     lastWeighing,
     weighingCount,
+    secondary,
+    densityUsed,
   };
 }
 
 export async function findMaterialsByUser(
   userId: number,
-  language: LanguageCode = FALLBACK_LANGUAGE
+  language: LanguageCode = FALLBACK_LANGUAGE,
+  /**
+   * Auf ein Lager einschränken. `undefined` = alle Lager des Benutzers – so
+   * bleibt die Schnellsuche über den gesamten Bestand möglich, während die
+   * Übersicht auf das gewählte Lager filtert.
+   */
+  lagerId?: number
 ): Promise<MaterialOverview[]> {
   const db = getDb();
   const rows = await db.query.materials.findMany({
-    where: eq(materials.userId, userId),
+    where:
+      lagerId != null
+        ? and(eq(materials.userId, userId), eq(materials.lagerId, lagerId))
+        : eq(materials.userId, userId),
     with: {
       spoolType: true,
       storageBox: true,
       spoolPresetVariant: withPresetPath,
+      lager: true,
       weighings: true,
     },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
@@ -266,6 +325,7 @@ export async function findMaterialsByUser(
         spoolType: normalizeRelation(row.spoolType),
         storageBox: normalizeRelation(row.storageBox),
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
+        lager: normalizeRelation(row.lager),
       },
       last,
       row.weighings.length,
@@ -285,6 +345,7 @@ export async function findMaterialById(
       spoolType: true,
       storageBox: true,
       spoolPresetVariant: withPresetPath,
+      lager: true,
       weighings: { orderBy: (t, { desc: d }) => [d(t.weighedAt), d(t.id)] },
     },
   });
@@ -298,6 +359,7 @@ export async function findMaterialById(
         spoolType: normalizeRelation(row.spoolType),
         storageBox: normalizeRelation(row.storageBox),
         spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
+        lager: normalizeRelation(row.lager),
       },
       last,
       list.length,
@@ -310,14 +372,17 @@ export async function findMaterialById(
 export async function createMaterial(
   data: {
     userId: number;
+    lagerId: number;
     name: string;
     identifier?: string | null;
     materialType: string;
     manufacturer?: string;
     color?: string;
+    texture?: string | null;
     priceCents?: number | null;
     purchaseDate?: string | null;
     nominalWeight: number;
+    densityGramsPerLiter?: number | null;
     spoolTypeId?: number | null;
     spoolPresetVariantId?: number | null;
     storageBoxId?: number | null;
@@ -342,14 +407,17 @@ export async function updateMaterial(
   userId: number,
   id: number,
   data: Partial<{
+    lagerId: number;
     name: string;
     identifier: string | null;
     materialType: string;
     manufacturer: string | null;
     color: string | null;
+    texture: string | null;
     priceCents: number | null;
     purchaseDate: string | null;
     nominalWeight: number;
+    densityGramsPerLiter: number | null;
     spoolTypeId: number | null;
     spoolPresetVariantId: number | null;
     storageBoxId: number | null;

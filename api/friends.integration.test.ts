@@ -38,6 +38,14 @@ const FORBIDDEN_FIELDS = [
   "spoolTypeId",
   "createdAt",
   "updatedAt",
+  /*
+    Seit 2.2.0: Das Lager ist die Einheit, an der später die Freigabe hängt –
+    heute hat der Empfänger dort nichts zu suchen. Sein Name ist Freitext und
+    kann einen Ort verraten, die Dichte steckt fertig in `secondary`.
+  */
+  "lagerId",
+  "lager",
+  "densityGramsPerLiter",
 ];
 
 let alex: User;
@@ -76,6 +84,15 @@ beforeEach(async () => {
   bea = (await findUserByUnionId("bea-1"))!;
   stranger = (await findUserByUnionId("stranger-1"))!;
 
+  const [alexLager] = await db()
+    .insert(schema.lager)
+    .values({
+      userId: alex.id,
+      name: "Mein Lager",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    })
+    .returning();
   const [spoolType] = await db()
     .insert(schema.spoolTypes)
     .values({ userId: alex.id, name: "Kartonrolle", tareWeight: 140 })
@@ -93,6 +110,7 @@ beforeEach(async () => {
     .insert(schema.materials)
     .values({
       userId: alex.id,
+      lagerId: alexLager.id,
       name: "PolyTerra PLA Schwarz",
       identifier: "P01",
       materialType: "PLA",
@@ -115,6 +133,7 @@ beforeEach(async () => {
   // Ein zweites Material, das auf „PETG“ hört – für die Trennschärfe der Suche
   await db().insert(schema.materials).values({
     userId: alex.id,
+    lagerId: alexLager.id,
     name: "Prusament PETG Orange",
     materialType: "PETG",
     nominalWeight: 1000,
@@ -441,8 +460,43 @@ describe("Was ein Freund zu sehen bekommt", () => {
         "ownerName",
         "remainingPercent",
         "remainingWeight",
+        "secondary",
+        "texture",
       ]);
     }
+  });
+
+  /**
+   * Die Zweitanzeige kommt fertig gerechnet aus dem Server – und darf die
+   * Angaben, aus denen sie entsteht, nicht mitbringen.
+   *
+   * Alex' Lager führt 1,75 mm; 500 g PLA (nach Abzug von Rolle und Box) sind
+   * dort rund 168 m. Käme die Stärke des Lagers nicht an, stünde hier eine
+   * andere Zahl – bei 2,85 mm etwa 63 m.
+   */
+  it("liefert die Zweitanzeige aus dem Lager des Besitzers", async () => {
+    await befriend({ fromAlex: "full", fromBea: "none" });
+    const hits = await callerFor(bea).friend.searchMaterials({ query: "P01" });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].secondary?.unit).toBe("m");
+    expect(hits[0].secondary?.value).toBeCloseTo(167.6, 0);
+  });
+
+  /**
+   * Die Oberfläche ist Teil der Materialidentität – und muss auffindbar sein,
+   * seit sie nicht mehr in der Materialart steckt. Ohne sie im Suchprädikat
+   * fände „wer mattes PETG sucht“ nichts.
+   */
+  it("findet fremdes Material über die Oberfläche", async () => {
+    await befriend({ fromAlex: "search", fromBea: "none" });
+    await db()
+      .update(schema.materials)
+      .set({ texture: "Silk" })
+      .where(eq(schema.materials.id, alexMaterialId));
+
+    const hits = await callerFor(bea).friend.searchMaterials({ query: "Silk" });
+    expect(hits.map(h => h.id)).toEqual([alexMaterialId]);
+    expect(hits[0].texture).toBe("Silk");
   });
 
   /**

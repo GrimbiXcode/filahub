@@ -59,6 +59,15 @@ beforeEach(async () => {
   stranger = (await findUserByUnionId("stranger-1"))!;
 
   for (const user of [owner, stranger]) {
+    const [lager] = await db()
+      .insert(schema.lager)
+      .values({
+        userId: user.id,
+        name: "Mein Lager",
+        materialKind: "filament",
+        filamentDiameterUm: 1750,
+      })
+      .returning();
     const [spoolType] = await db()
       .insert(schema.spoolTypes)
       .values({ userId: user.id, name: "Kartonrolle", tareWeight: 140 })
@@ -71,6 +80,7 @@ beforeEach(async () => {
       .insert(schema.materials)
       .values({
         userId: user.id,
+        lagerId: lager.id,
         name: "PLA schwarz",
         materialType: "PLA",
         nominalWeight: 1000,
@@ -126,6 +136,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     expect(withUserId).toEqual([
       "friendships",
       "hidden_spool_presets",
+      "lager",
       "loan_requests",
       "materials",
       "preset_proposals",
@@ -134,7 +145,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese sieben plus vier, die den Personenbezug über eine andere Spalte
+      Diese acht plus vier, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` (über das Material),
       `loginCodes` (Telegram-ID) und `auditLog` (actorUserId). Ändert sich
       die linke Seite, muss die rechte nachziehen.
@@ -150,6 +161,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "auditLog",
         "friendships",
         "hiddenSpoolPresets",
+        "lager",
         "loanRequests",
         "loginCodes",
         "materials",

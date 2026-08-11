@@ -3,6 +3,7 @@ import {
   FRIENDSHIP_STATUSES,
   LOAN_REQUEST_STATUSES,
 } from "@contracts/friends";
+import { MATERIAL_KINDS } from "@contracts/materials";
 import type { NameI18n } from "@contracts/presets";
 import {
   pgTable,
@@ -95,8 +96,8 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Filament-Lager: Rollentypen (Verpackung/Spule), Lagerboxen (Drybox),
-// Materialien und Wägungen
+// Materiallager: Lager, Gebinde (Rollentypen), Dryboxen, Materialien und
+// Wägungen
 // ---------------------------------------------------------------------------
 
 /** Einmal-Codes für den Telegram-Login (vom Bot erzeugt, auf der Website eingelöst) */
@@ -114,6 +115,74 @@ export const loginCodes = pgTable("login_codes", {
 });
 
 export type LoginCode = typeof loginCodes.$inferSelect;
+
+/*
+  Die Werte stehen in `contracts/materials.ts` und werden hier nur zu einem
+  Postgres-Enum gemacht – nicht wie bei den Preset-Ebenen gespiegelt. Client und
+  Server lesen damit dieselbe Liste.
+*/
+export const materialKindEnum = pgEnum("material_kind", MATERIAL_KINDS);
+
+/**
+ * Lager: die Ebene über den Materialien.
+ *
+ * Ein Lager fasst zusammen, was zusammen gehört, und trägt die Konfiguration,
+ * die für alles darin gilt – welche Materialart, und beim Filament welche
+ * Stärke. Bis 2.1.0 gab es diese Ebene nicht; jeder Benutzer hatte genau einen
+ * ungenannten Bestand.
+ *
+ * **Materialart und Durchmesser stehen bewusst hier und nicht am Material.**
+ * Eine Kopie am Material wäre eine zweite Wahrheit, die irgendwann widerspricht
+ * – und die Abfragen laden das Lager ohnehin, wenn sie die Zweitanzeige
+ * brauchen.
+ *
+ * Nicht verwechseln mit `storage_boxes` (Drybox): Das ist ein physischer
+ * Behälter *innerhalb* eines Lagers, der beim Wiegen mit auf die Waage kommt.
+ */
+export const lager = pgTable(
+  "lager",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    name: varchar("name", { length: 255 }).notNull(),
+    /** Welche Materialart hier liegt – steuert Felder und Zweiteinheit */
+    materialKind: materialKindEnum("materialKind").notNull(),
+    /**
+     * Nur bei `filament`: die Stärke dieses Lagers in **Mikrometern**
+     * (1750 oder 2850); `NULL` bei allen anderen Materialarten. Geprüft wird
+     * das in `lagerConfigIsValid` (`contracts/materials.ts`).
+     *
+     * Ein Wert, keine Liste: Wer beide Stärken vorrätig hat, legt zwei Lager an
+     * – genau dafür sind sie da. Eine Mehrfachauswahl würde die Frage „welche
+     * Stärke gilt für dieses Material?" wieder offen lassen, und dann bräuchte
+     * das Material doch eine eigene Spalte.
+     *
+     * Mikrometer und nicht Millimeter (Projektregel „Abmessungen in ganzen
+     * Millimetern"): 1,75 mm ist als Integer-Millimeter nicht darstellbar, und
+     * ein Gleitkommawert für eine Größe, die in die Längenrechnung eingeht,
+     * wäre die schlechtere Wahl.
+     */
+    filamentDiameterUm: integer("filamentDiameterUm"),
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    /*
+      Namen sind je Benutzer eindeutig – zwei Lager „Harz" wären in der Auswahl
+      nicht unterscheidbar. Die Obergrenze von fünf steht dagegen **nicht** hier:
+      Ein Zähler ist als Index nicht ausdrückbar, siehe MAX_LAGER_PER_USER.
+    */
+    unique("lager_name_per_user_unique").on(t.userId, t.name),
+    index("lager_user_idx").on(t.userId),
+  ]
+);
+
+export type Lager = typeof lager.$inferSelect;
+export type InsertLager = typeof lager.$inferInsert;
 
 /** Rollentyp / Verpackung mit hinterlegtem Leergewicht (Tara) */
 export const spoolTypes = pgTable("spool_types", {
@@ -151,12 +220,22 @@ export const storageBoxes = pgTable("storage_boxes", {
 export type StorageBox = typeof storageBoxes.$inferSelect;
 export type InsertStorageBox = typeof storageBoxes.$inferInsert;
 
-/** 3D-Druckmaterial (Filament-Rolle im Lager) */
+/** 3D-Druckmaterial (Gebinde in einem Lager) */
 export const materials = pgTable(
   "materials",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     userId: bigint("userId", { mode: "number" }).notNull(),
+    /**
+     * Zugehöriges Lager. Pflicht – die Migration `0009_lager.sql` legt für jeden
+     * bestehenden Benutzer ein Lager an und trägt es hier ein.
+     *
+     * `userId` bleibt daneben stehen, obwohl es über das Lager erreichbar wäre:
+     * Jede Abfrage filtert darauf (siehe `materials_user_idx`), und ein Join für
+     * die Mandantenprüfung wäre an der heikelsten Stelle der Anwendung ein
+     * Rückschritt.
+     */
+    lagerId: bigint("lagerId", { mode: "number" }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
     /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
     identifier: varchar("identifier", { length: 50 }),
@@ -164,12 +243,33 @@ export const materials = pgTable(
     materialType: varchar("materialType", { length: 100 }).notNull(),
     manufacturer: varchar("manufacturer", { length: 255 }),
     color: varchar("color", { length: 100 }),
+    /**
+     * Oberfläche als Freitext („Matt", „Silk", „Glänzend").
+     *
+     * Freitext und kein Enum, aus demselben Grund wie `materialType`: Der
+     * Hersteller, der sich „Sparkle" ausdenkt, muss eintragbar bleiben.
+     * Vorschläge liefert `COMMON_TEXTURES` (`contracts/materials.ts`).
+     *
+     * Bis 2.1.0 landete das in `materialType` („PLA Silk"). Das hatte einen
+     * sichtbaren Preis: Der Materialart-Filter vergleicht exakt, also waren
+     * „PLA" und „PLA Silk" zwei Einträge, die sich nie fanden.
+     */
+    texture: varchar("texture", { length: 100 }),
     /** Preis in Cent (z. B. 2499 = 24,99 €) */
     priceCents: integer("priceCents"),
     /** Kaufdatum als ISO-String YYYY-MM-DD */
     purchaseDate: date("purchaseDate", { mode: "string" }),
     /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
     nominalWeight: integer("nominalWeight").notNull(),
+    /**
+     * Dichte in Gramm je Liter. `NULL` = Vorgabe benutzen, siehe
+     * `resolveDensity` (`contracts/materials.ts`).
+     *
+     * Ausschließlich für die Zweitanzeige (Meter beim Filament, Liter beim
+     * Harz). Geht **nie** in die Restmengenrechnung ein – die bleibt bei
+     * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
+     */
+    densityGramsPerLiter: integer("densityGramsPerLiter"),
     /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
     spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
     /**
@@ -186,9 +286,17 @@ export const materials = pgTable(
       .notNull()
       .$onUpdate(() => new Date()),
   },
-  // Jede Abfrage filtert nach Besitzer; der Löschlauf beim Kontolöschen
-  // ebenfalls.
-  t => [index("materials_user_idx").on(t.userId)]
+  t => [
+    // Jede Abfrage filtert nach Besitzer; der Löschlauf beim Kontolöschen
+    // ebenfalls.
+    index("materials_user_idx").on(t.userId),
+    /*
+      Seit 2.2.0 filtert der Lesepfad zusätzlich auf das Lager, und die Prüfung
+      „ist dieses Lager leer?" beim Löschen ebenso. Ohne Index wäre beides ein
+      Full Scan über den gesamten Bestand aller Benutzer.
+    */
+    index("materials_lager_idx").on(t.lagerId),
+  ]
 );
 
 export type Material = typeof materials.$inferSelect;

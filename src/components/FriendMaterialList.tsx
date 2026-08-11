@@ -16,12 +16,21 @@ import type { FriendMaterial } from "@/types";
 
 /** Restmenge in Gramm und Prozent, mit Balken. */
 function RemainingBar({ material }: { material: FriendMaterial }) {
-  const { formatGrams, formatPercent } = useFormat();
+  const { formatGrams, formatPercent, formatSecondary } = useFormat();
+  const t = useT();
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="text-muted-foreground">
           {formatGrams(material.remainingWeight)}
+          {/*
+            Dieselbe Zweitanzeige wie am eigenen Bestand – sie ist der Grund,
+            warum jemand fragt: „reicht das für mein Teil?“ beantwortet sich in
+            Metern, nicht in Gramm. Gerechnet hat der Server, mit der Stärke aus
+            dem Lager des Besitzers.
+          */}
+          {material.secondary &&
+            ` · ${t.lager.approx({ value: formatSecondary(material.secondary) })}`}
         </span>
         {material.remainingPercent != null && (
           <span className="text-muted-foreground">
@@ -73,6 +82,9 @@ export function FriendMaterialList({
                   <span className="truncate font-medium">{material.name}</span>
                   <span className="truncate text-xs text-muted-foreground">
                     {material.materialType}
+                    {/* Die Oberfläche gehört zur Identität wie die Farbe –
+                        „PETG matt“ ist etwas anderes als „PETG glänzend“. */}
+                    {material.texture ? ` ${material.texture}` : ""}
                     {material.manufacturer ? ` · ${material.manufacturer}` : ""}
                     {material.color ? ` · ${material.color}` : ""}
                   </span>
@@ -132,6 +144,7 @@ export function FriendMaterialList({
                       <span className="font-medium">{material.name}</span>
                       <span className="text-xs text-muted-foreground">
                         {material.materialType}
+                        {material.texture ? ` ${material.texture}` : ""}
                         {material.identifier ? ` · ${material.identifier}` : ""}
                       </span>
                     </div>

@@ -22,6 +22,11 @@ export const ACCOUNT_EXPORT_VERSION = 1;
  */
 export const ACCOUNT_EXPORT_SECTIONS = [
   "profile",
+  /*
+    Die Lager des Benutzers. Name und Notizen sind Freitext, also seine Angaben;
+    die Konfiguration (Materialart, Filamentstärke) beschreibt seinen Bestand.
+  */
+  "lager",
   "materials",
   "weighings",
   "spoolTypes",

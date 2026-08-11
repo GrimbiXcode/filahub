@@ -78,6 +78,7 @@ describe("importPayloadSchema", () => {
 describe("importManyInputSchema", () => {
   it("akzeptiert Items mit Preis in Cent", () => {
     const ergebnis = importManyInputSchema.safeParse({
+      lagerId: 1,
       purchaseDate: "2026-07-20",
       items: [{ typ: "PETG", nenngewicht: 1000, priceCents: 2999, anzahl: 3 }],
     });
@@ -88,7 +89,33 @@ describe("importManyInputSchema", () => {
   });
 
   it("lehnt ein leeres items-Array ab", () => {
-    const ergebnis = importManyInputSchema.safeParse({ items: [] });
+    const ergebnis = importManyInputSchema.safeParse({ lagerId: 1, items: [] });
     expect(ergebnis.success).toBe(false);
+  });
+
+  /**
+   * Seit 2.2.0 braucht der Import ein Ziel-Lager. Ohne diese Prüfung wäre der
+   * Wechsel still: Ein alter Aufrufer bekäme einen Validierungsfehler, aber
+   * niemand hätte festgehalten, dass das Feld Pflicht ist.
+   *
+   * Wichtig ist die Trennung: Das Ziel-Lager gehört in den Mutations-Input,
+   * **nicht** in `importPositionSchema` – jenes JSON kommt aus einem
+   * Sprachmodell, das kein Lager kennen kann (siehe contracts/import.ts).
+   */
+  it("verlangt ein Ziel-Lager", () => {
+    const ergebnis = importManyInputSchema.safeParse({
+      items: [{ typ: "PLA", nenngewicht: 1000, anzahl: 1 }],
+    });
+    expect(ergebnis.success).toBe(false);
+  });
+
+  it("lässt das Ziel-Lager aus dem Modell-JSON heraus", () => {
+    // `importPositionSchema` beschreibt die Antwort des Sprachmodells und darf
+    // deshalb kein Lager verlangen.
+    const ergebnis = importPositionSchema.safeParse({
+      typ: "PLA",
+      nenngewicht: 1000,
+    });
+    expect(ergebnis.success).toBe(true);
   });
 });

@@ -45,6 +45,7 @@ export default function MaterialDetail() {
     formatGrams,
     formatMoney,
     formatPercent,
+    formatSecondary,
   } = useFormat();
   const t = useT();
 
@@ -176,6 +177,27 @@ export default function MaterialDetail() {
                     amount: formatGrams(material.nominalWeight),
                   })}
                 </p>
+                {/*
+                  Zweitanzeige: Meter beim Filament, Liter beim Harz, beim
+                  Pulver nichts. Das „ca." ist Absicht – der Wert hängt an einer
+                  Dichte, die meist eine Vorgabe ist; der Titel nennt sie.
+                */}
+                {material.secondary && (
+                  <p
+                    className="mt-0.5 text-sm text-muted-foreground"
+                    title={
+                      material.densityUsed != null
+                        ? t.lager.secondaryHint({
+                            density: `${material.densityUsed} g/l`,
+                          })
+                        : undefined
+                    }
+                  >
+                    {t.lager.approx({
+                      value: formatSecondary(material.secondary),
+                    })}
+                  </p>
+                )}
               </div>
               {material.remainingPercent != null && (
                 <span className="shrink-0 text-2xl font-semibold tabular-nums text-muted-foreground">

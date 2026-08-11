@@ -29,7 +29,9 @@ import {
 } from "@/components/ui/sidebar";
 import {
   APP_NAME,
+  DRYBOXES_PATH,
   FRIENDS_PATH,
+  LAGER_PATH,
   LEGAL_DOCUMENTS,
   LEGAL_PATHS,
   LOGIN_PATH,
@@ -38,6 +40,7 @@ import {
 } from "@/const";
 import {
   Archive,
+  Boxes,
   Database,
   Disc3,
   FileUp,
@@ -67,7 +70,15 @@ import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
 import { Wordmark } from "./Logo";
 import { QuickActionsHost } from "./QuickActions";
 import { useQuickActions } from "@/lib/quickActions";
+import { setActiveLagerId, useActiveLagerId } from "@/lib/activeLager";
 import { useReleaseNotes } from "@/hooks/useReleaseNotes";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
 import { ThemeToggle } from "./ThemeToggle";
 import { useT, type TextKey } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
@@ -88,8 +99,9 @@ const menuItems: {
 }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
   { icon: FileUp, label: "import", path: "/import" },
+  { icon: Boxes, label: "lager", path: LAGER_PATH },
   { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
-  { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
+  { icon: Archive, label: "storageBoxes", path: DRYBOXES_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
 ];
 
@@ -281,6 +293,8 @@ function AuthLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            <LagerSwitcher />
+
             {/* Häufigste Aktionen ganz oben: wiegen und suchen */}
             <SidebarMenu className="px-2 py-1">
               <SidebarMenuItem>
@@ -576,5 +590,71 @@ function AuthLayoutContent({
 
       <QuickActionsHost />
     </>
+  );
+}
+
+/**
+ * Auswahl des aktiven Lagers – gehört ins Layout, nicht auf die Seiten.
+ *
+ * Die Wahl gilt für alles: Materialübersicht, Statistik, Filter, neues
+ * Material. Läge sie auf der Übersicht, wäre sie beim Wiegen aus einem Dialog
+ * heraus nicht erreichbar.
+ *
+ * Erscheint erst ab **zwei** Lagern. Mit einem einzigen wäre es ein Auswahlfeld
+ * ohne Auswahl, und mit keinem hätte es nichts anzuzeigen – dann führt der
+ * Verweis auf die Verwaltung weiter.
+ */
+function LagerSwitcher() {
+  const t = useT();
+  const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
+  const { data: lagerList } = trpc.lager.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+  const activeId = useActiveLagerId(lagerList);
+
+  if (!lagerList || lagerList.length === 0) {
+    return (
+      <div className="px-3 py-2 group-data-[collapsible=icon]:hidden">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => {
+            setOpenMobile(false);
+            navigate(LAGER_PATH);
+          }}
+        >
+          <Boxes className="mr-2 h-4 w-4" />
+          {t.lager.firstLager}
+        </Button>
+      </div>
+    );
+  }
+
+  if (lagerList.length === 1) return null;
+
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2 group-data-[collapsible=icon]:hidden">
+      <span className="text-xs font-medium text-muted-foreground">
+        {t.lager.switchLabel}
+      </span>
+      <Select
+        value={activeId != null ? String(activeId) : undefined}
+        onValueChange={value => setActiveLagerId(Number(value))}
+      >
+        <SelectTrigger className="h-9 w-full" aria-label={t.lager.switchAria}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {lagerList.map(item => (
+            <SelectItem key={item.id} value={String(item.id)}>
+              {item.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   );
 }

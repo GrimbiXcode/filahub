@@ -5,6 +5,8 @@ import {
   formatDate,
   formatDateTime,
   formatGrams,
+  formatLiters,
+  formatMeters,
   formatMoney,
   formatNumber,
   formatPercent,
@@ -47,6 +49,12 @@ export function FormatProvider({ children }: { children: ReactNode }) {
       currencySymbol: currencySymbolFor(locale, currency),
       formatNumber: n => formatNumber(n, locale),
       formatGrams: grams => formatGrams(grams, locale),
+      formatSecondary: amount => {
+        if (amount == null) return "–";
+        return amount.unit === "m"
+          ? formatMeters(amount.value, locale)
+          : formatLiters(amount.value, locale);
+      },
       formatPercent: percent => formatPercent(percent, locale),
       formatMoney: cents => formatMoney(cents, locale, currency),
       formatDate: date => formatDate(date, locale),

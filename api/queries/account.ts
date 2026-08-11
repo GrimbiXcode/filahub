@@ -35,6 +35,10 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     throw new Error(`Benutzer ${userId} existiert nicht`);
   }
 
+  const lager = await db.query.lager.findMany({
+    where: eq(schema.lager.userId, userId),
+  });
+
   const materials = await db.query.materials.findMany({
     where: eq(schema.materials.userId, userId),
   });
@@ -149,6 +153,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     formatVersion: ACCOUNT_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     profile,
+    lager,
     materials,
     weighings,
     spoolTypes,
@@ -234,6 +239,13 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.materials)
       .where(eq(schema.materials.userId, userId));
+    /*
+      Lager **nach** den Materialien: Ein `materials.lagerId` zeigt mangels
+      Fremdschlüssel sonst auf eine später neu vergebene Lager-ID – also auf den
+      Bestand eines fremden Menschen. Dieselbe Falle behandelt Schritt 1 für
+      `preset_proposals.sourceSpoolTypeId`.
+    */
+    await tx.delete(schema.lager).where(eq(schema.lager.userId, userId));
     await tx
       .delete(schema.hiddenSpoolPresets)
       .where(eq(schema.hiddenSpoolPresets.userId, userId));

@@ -1,12 +1,13 @@
 # filahub
 
-Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filamente mit
-Rollentypen (Spule/Verpackung) und Lagerboxen (Drybox) inkl. Leergewicht
-(Tara), Wägungen mit automatischer Restmengenberechnung, Kurz-Kennungen zum
-schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können
-sich als Freunde verbinden, ihr Lager abgestuft freigeben und Material
-untereinander anfragen. Die Oberfläche spricht Deutsch und Englisch
-(umschaltbar pro Benutzer).
+Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filament, Pulver
+und Harz in **Lagern** (bis fünf je Benutzer, je Lager eine Materialart),
+Rollentypen (Spule/Verpackung) und Dryboxen inkl. Leergewicht (Tara), Wägungen
+mit automatischer Restmengenberechnung, Kurz-Kennungen zum schnellen
+Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
+Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
+anfragen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
+Benutzer).
 
 ## Tech-Stack
 
@@ -22,8 +23,8 @@ untereinander anfragen. Die Oberfläche spricht Deutsch und Englisch
 
 ```
 src/            React-Frontend
-  pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
-                Friends, FriendInventory, Settings, AdminPresets,
+  pages/        Routen: Home, MaterialDetail, Lager, SpoolTypes, StorageBoxes,
+                Import, Friends, FriendInventory, Settings, AdminPresets,
                 AdminProposals, AdminSystem, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
@@ -43,14 +44,15 @@ src/            React-Frontend
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
-  router.ts     appRouter: ping, auth, spoolType, storageBox, material, friend, preset,
-                admin (admin: preset, proposal, system)
+  router.ts     appRouter: ping, auth, lager, spoolType, storageBox, material,
+                friend, preset, admin (admin: preset, proposal, system)
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
+                lager.ts (Lager-CRUD, Obergrenze, Belegung),
                 friends.ts (Sichtbarkeit, Projektion, Ausleih-Vorgänge),
                 presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
                 systemStatus.ts (Zustand für /verwaltung/system)
@@ -58,6 +60,7 @@ db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatal
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, friends.ts (Stufen, Freundescode),
+                materials.ts (Materialarten, Dichte, Zweiteinheiten),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -120,6 +123,54 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   Cookie `filament_sid`. Außerhalb von localhost wird das Cookie als
   `Secure; SameSite=None` gesetzt → HTTPS ist im Produktivbetrieb Pflicht.
 
+## Lager, Materialarten und Zweiteinheiten
+
+Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
+`NOT NULL`). Das Lager trägt die Konfiguration, die für alles darin gilt.
+
+- **Materialart und Filamentstärke stehen am Lager, nicht am Material.** Eine
+  Kopie am Material wäre eine zweite Wahrheit; wer sie braucht, liest sie über
+  `lagerId` – die Materialabfragen laden das Lager ohnehin mit. Folge: Ein
+  Lagerwechsel verändert die Zweitanzeige eines Materials, und das ist richtig
+  so. Deshalb gibt es in `validateForeignKeys` auch **keine** Konsistenzregel
+  zwischen Material und Lager – es kann nichts auseinanderlaufen.
+- **`filamentDiameterUm` in Mikrometern** (1750/2850), nicht in Millimetern:
+  1,75 mm ist als Integer-Millimeter nicht darstellbar, und ein Gleitkommawert
+  für eine Größe, die in die Längenrechnung eingeht, wäre die schlechtere Wahl.
+  Ein Wert je Lager, keine Liste – wer beide Stärken führt, legt zwei Lager an.
+  Geprüft wird das in `lagerConfigIsValid` (`contracts/materials.ts`).
+- **Die Obergrenze von fünf (`MAX_LAGER_PER_USER`) ist die einzige Zusicherung
+  dieser Funktion, die nicht die Datenbank garantiert.** Ein Zähler ist weder
+  als Unique- noch als partieller Index ausdrückbar; geprüft wird in
+  `lager.create`. Zwei gleichzeitige Anfragen können ein Lager zu viel erzeugen.
+  Der Wert gilt vorerst global für alle Konten; soll er später pro Konto
+  steigen, wird aus der Konstante eine Vorgabe.
+- **Löschen nur, wenn leer** – wie bei den Dryboxen. Sonst hinge Material an
+  einer neu vergebenen ID; es gibt keine Fremdschlüssel.
+- **Zweiteinheit je Materialart:** Filament → Meter, Harz → Liter, Pulver →
+  nichts. Gerechnet wird in `secondaryAmount` (`contracts/materials.ts`),
+  serverseitig in `computeMaterialStats`, weil die Rechnung Materialart und
+  Stärke braucht. **Gramm bleiben die gespeicherte und die eingegebene
+  Einheit**; die Zweitanzeige geht nie in die Restmengenrechnung ein.
+- **Dichte**: optional am Material, sonst Vorgabe nach Materialart-Bezeichnung
+  („PLA Silk" trifft „PLA"), sonst nach Materialart. Die Priorität steht an
+  genau einer Stelle: `resolveDensity`. Bei Pulver gibt es bewusst keinen Wert –
+  Schüttdichte wäre geraten, und eine falsche Zahl ist schlimmer als keine.
+- **`materials.texture`** ist Freitext mit Vorschlagsliste (`COMMON_TEXTURES`),
+  kein Enum – aus demselben Grund wie `materialType`. Bis 2.1.0 wurde die
+  Oberfläche in `materialType` geschmuggelt („PLA Silk"), was den
+  Materialart-Filter zersplitterte: Er vergleicht exakt, also fanden sich „PLA"
+  und „PLA Silk" gegenseitig nie.
+- **Die Migration `0009_lager.sql` ist von Hand ergänzt.** drizzle-kit erzeugt
+  ein nacktes `ADD COLUMN ... NOT NULL`, das auf jeder Datenbank mit Daten
+  scheitert. Der Backfill legt je Benutzer ein Lager „Mein Lager" an, füllt
+  `lagerId` und zieht die Spalte erst danach fest. Er läuft in Produktion genau
+  einmal; abgedeckt ist er in `api/lager.integration.test.ts`.
+- **Bis Schritt 2 (2.3.0)** heißt die Gebindeauswahl auch in einem Harz- oder
+  Pulverlager „Rolle / Verpackung", und der Preset-Katalog bietet dort nichts
+  an. Eigene Gebinde („Harzflasche 250 g") funktionieren, weil sie nur ein Name
+  und ein Leergewicht sind.
+
 ## Freunde und geteiltes Lager
 
 Die einzige Funktion, die die Mandantengrenze absichtlich überschreitet. Ein
@@ -142,7 +193,15 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
   eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
   nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
-  `notes`, `purchaseDate`, alles zur Lagerbox und der Wägungsverlauf.
+  `notes`, `purchaseDate`, alles zur Lagerbox, der Wägungsverlauf, `lagerId` und
+  der Lagername (Freitext, kann einen Ort verraten) sowie
+  `densityGramsPerLiter`.
+- **Die Zweitanzeige rechnet der Server, auch für Freunde.** Sie braucht
+  Materialart und Filamentstärke, und beide hängen am Lager; im Browser
+  gerechnet müsste die Projektion sie einzeln herausgeben – zwei Felder mehr für
+  eine Division. Deshalb lädt `FRIEND_MATERIAL_WITH` vom Lager **nur**
+  `materialKind` und `filamentDiameterUm`: Was nicht in der Zeile steht, kann
+  keine Projektion durchlassen.
 - **Die Lagerbox ist unsichtbar, ihr Leergewicht zählt trotzdem.** Wird eine
   Rolle in ihrer Drybox gewogen, ist die Restmenge
   `grossWeight − Rollentara − Boxtara`. Wer den Box-Join weglässt, „weil Freunde
@@ -375,7 +434,10 @@ Entwicklungsdatenbank.
   `$inferSelect` / `$inferInsert` ableiten, nicht manuell duplizieren.
 - Preise in Cent (`priceCents`), Gewichte in Gramm, Abmessungen in ganzen
   Millimetern, Kaufdatum als `YYYY-MM-DD`-String
-  (`date(..., { mode: "string" })`).
+  (`date(..., { mode: "string" })`). **Eine Ausnahme:**
+  `lager.filamentDiameterUm` steht in Mikrometern, weil 1,75 mm sonst nicht
+  ganzzahlig wäre – Begründung im Abschnitt „Lager, Materialarten und
+  Zweiteinheiten".
 - **Währung und Regionalformat hängen am Benutzer**, nicht an der App:
   `users.currency` (ISO-4217) und `users.locale` (BCP-47, `NULL` = Locale des
   Browsers). `priceCents` bleibt währungsneutral – ein Währungswechsel ändert
@@ -398,8 +460,8 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `format`, `releaseNotes`, `friendVisibility` und
-  `friendCode`. Alle laufen ohne Datenbank – reine zod- und Funktionstests. Bei
+  `materialStats`, `materialUnits`, `format`, `releaseNotes`, `friendVisibility`
+  und `friendCode`. Alle laufen ohne Datenbank – reine zod- und Funktionstests. Bei
   neuen Backend-Features Tests in `api/` anlegen.
 - `api/friendVisibility.test.ts` ist mehr als ein Funktionstest: Die Zusicherung
   über die Schlüsselmenge von `toFriendMaterial` ist der Riegel dagegen, dass
@@ -414,8 +476,9 @@ Datenbank.
 
 ### Integrationstests (`npm run test:integration`)
 
-- `api/postgres.integration.test.ts`, `api/account.integration.test.ts` und
-  `api/friends.integration.test.ts`, konfiguriert in
+- `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
+  `api/friends.integration.test.ts` und `api/lager.integration.test.ts`,
+  konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in

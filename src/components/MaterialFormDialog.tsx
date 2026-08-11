@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
+  COMMON_TEXTURES,
+  formatDiameter,
+  resolveDensity,
+} from "@contracts/materials";
+import {
   decodeSpoolRef,
   encodeSpoolRef,
   formatNominalWeight,
@@ -26,8 +31,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { setActiveLagerId, useActiveLagerId } from "@/lib/activeLager";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
+import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 
@@ -59,13 +66,18 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const { data: spoolTypes } = trpc.spoolType.list.useQuery();
   const { data: presetOptions } = trpc.preset.options.useQuery();
   const { data: storageBoxes } = trpc.storageBox.list.useQuery();
-  const { data: allMaterials } = trpc.material.list.useQuery();
+  const { data: allMaterials } = trpc.material.list.useQuery({});
+  const { data: lagerList } = trpc.lager.list.useQuery();
+  const activeLagerId = useActiveLagerId(lagerList);
 
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
   const [materialType, setMaterialType] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [color, setColor] = useState("");
+  const [texture, setTexture] = useState("");
+  const [lagerId, setLagerId] = useState<string>("");
+  const [density, setDensity] = useState("");
   const [price, setPrice] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [nominalWeight, setNominalWeight] = useState("1000");
@@ -96,6 +108,23 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       setMaterialType(material?.materialType ?? "");
       setManufacturer(material?.manufacturer ?? "");
       setColor(material?.color ?? "");
+      setTexture(material?.texture ?? "");
+      /*
+        Beim Anlegen das aktive Lager vorbelegen – wer die Übersicht eines
+        Lagers ansieht und dort etwas anlegt, meint fast immer dieses.
+      */
+      setLagerId(
+        material?.lagerId != null
+          ? String(material.lagerId)
+          : activeLagerId != null
+            ? String(activeLagerId)
+            : ""
+      );
+      setDensity(
+        material?.densityGramsPerLiter != null
+          ? String(material.densityGramsPerLiter)
+          : ""
+      );
       setPrice(centsToInput(material?.priceCents));
       setPurchaseDate(material?.purchaseDate ?? "");
       setNominalWeight(material ? String(material.nominalWeight) : "1000");
@@ -146,6 +175,22 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
 
+  /*
+    Vorschläge für die Oberfläche: die gepflegte Liste plus alles, was der
+    Benutzer schon eingetragen hat – dasselbe Muster wie bei der Materialart.
+    Es bleibt ein Freitextfeld, die Liste hilft nur beim Tippen.
+  */
+  const textureSuggestions = useMemo(() => {
+    const set = new Set<string>(COMMON_TEXTURES);
+    (allMaterials ?? []).forEach(m => m.texture && set.add(m.texture));
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [allMaterials]);
+
+  const selectedLager = useMemo(
+    () => lagerList?.find(l => String(l.id) === lagerId) ?? null,
+    [lagerList, lagerId]
+  );
+
   /** Leergewicht der gewählten Rolle – eigener Typ oder Preset-Variante */
   const selectedSpoolTare = useMemo(() => {
     const ref = decodeSpoolRef(spoolRef);
@@ -166,10 +211,25 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     utils.material.recentWeighings.invalidate();
   };
 
+  /**
+   * Dem Material in sein Lager folgen.
+   *
+   * Ohne das verschwindet ein gerade gespeichertes Material vor den Augen des
+   * Benutzers: Die Übersicht zeigt nur das gewählte Lager, und wer beim
+   * Anlegen ein anderes ausgewählt hat, sieht danach eine Liste ohne den
+   * Eintrag, den er eben angelegt hat. Die Erfolgsmeldung stünde über einer
+   * Liste, die sie nicht belegt.
+   */
+  const followLager = () => {
+    const target = Number(lagerId);
+    if (Number.isInteger(target) && target > 0) setActiveLagerId(target);
+  };
+
   const createMutation = trpc.material.create.useMutation({
     onSuccess: () => {
       toast.success(t.materialForm.created);
       invalidate();
+      followLager();
       onOpenChange(false);
     },
     onError: e => toast.error(e.message),
@@ -178,6 +238,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     onSuccess: () => {
       toast.success(t.materialForm.saved);
       invalidate();
+      followLager();
       onOpenChange(false);
     },
     onError: e => toast.error(e.message),
@@ -193,14 +254,31 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     if (!materialType.trim()) return toast.error(t.materialForm.typeRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.materialForm.nominalRequired);
+    const lager = Number(lagerId);
+    if (!Number.isInteger(lager) || lager <= 0)
+      return toast.error(t.lager.noLagerDescription);
+    /*
+      Leer lassen ist erlaubt (dann greift die Vorgabe der Materialart); ein
+      eingetragener Unsinn nicht – sonst stünde eine Meter-Angabe daneben, die
+      niemand nachvollziehen kann.
+    */
+    const densityValue = density.trim() ? parseInt(density, 10) : null;
+    if (
+      densityValue != null &&
+      (!Number.isFinite(densityValue) || densityValue <= 0)
+    )
+      return toast.error(t.lager.densityLabel);
 
     const spoolSelection = decodeSpoolRef(spoolRef);
     const base = {
+      lagerId: lager,
       name: finalName,
       identifier: identifier.trim() || null,
       materialType: materialType.trim(),
       manufacturer: manufacturer.trim() || null,
       color: color.trim() || null,
+      texture: texture.trim() || null,
+      densityGramsPerLiter: densityValue,
       priceCents: parseMoney(price),
       purchaseDate: purchaseDate || null,
       nominalWeight: nominal,
@@ -247,6 +325,40 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
+            {/*
+              Das Lager zuerst und über die ganze Breite: Es bestimmt Materialart
+              und – beim Filament – die Stärke, aus denen die Zweitanzeige
+              entsteht. Wer es wechselt, ändert damit mehr als eine Zuordnung.
+            */}
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="m-lager">{t.materialForm.lagerLabel}</Label>
+              <Select value={lagerId} onValueChange={setLagerId}>
+                <SelectTrigger id="m-lager">
+                  <SelectValue placeholder={t.lager.switchLabel} />
+                </SelectTrigger>
+                <SelectContent>
+                  {(lagerList ?? []).map(item => (
+                    <SelectItem key={item.id} value={String(item.id)}>
+                      {item.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedLager && (
+                <p className="text-xs text-muted-foreground">
+                  {t.materialForm.lagerHint({
+                    kind: kindLabel(t, selectedLager.materialKind),
+                    diameter:
+                      selectedLager.filamentDiameterUm != null
+                        ? formatDiameter(selectedLager.filamentDiameterUm)
+                        : null,
+                  })}
+                  {isEdit && selectedLager.materialKind === "filament"
+                    ? ` · ${t.materialForm.lagerChangeHint}`
+                    : ""}
+                </p>
+              )}
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="m-type">{t.materialForm.materialTypeLabel}</Label>
               <AutocompleteInput
@@ -275,6 +387,16 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 onChange={setColor}
                 suggestions={colorSuggestions}
                 placeholder="z. B. Schwarz"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="m-texture">{t.materialForm.textureLabel}</Label>
+              <AutocompleteInput
+                id="m-texture"
+                value={texture}
+                onChange={setTexture}
+                suggestions={textureSuggestions}
+                placeholder={t.materialForm.texturePlaceholder}
               />
             </div>
             <div className="grid gap-2">
@@ -353,6 +475,32 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 ))}
               </div>
             </div>
+            {/*
+              Dichte nur, wo sie etwas bewirkt: Beim Pulver gibt es keine
+              Zweitanzeige, also wäre das Feld dort eine Angabe ohne Wirkung.
+            */}
+            {selectedLager && selectedLager.materialKind !== "powder" && (
+              <div className="grid gap-2">
+                <Label htmlFor="m-density">{t.lager.densityLabel}</Label>
+                <Input
+                  id="m-density"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  value={density}
+                  onChange={e => setDensity(e.target.value)}
+                  placeholder={String(
+                    resolveDensity({
+                      kind: selectedLager.materialKind,
+                      materialType,
+                    }) ?? ""
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t.lager.densityHint}
+                </p>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label>{t.materialForm.spool}</Label>
               <SpoolPicker

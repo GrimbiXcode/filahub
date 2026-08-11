@@ -31,6 +31,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { importPayloadSchema } from "@contracts/import";
+import { useActiveLagerId } from "@/lib/activeLager";
 import { buildImportPrompt } from "@/lib/importPrompt";
 import { useFormat } from "@/lib/formatContext";
 import { useI18n } from "@/lib/i18nContext";
@@ -92,6 +93,8 @@ export default function Import() {
   const [kaufdatum, setKaufdatum] = useState("");
   const [promptSichtbar, setPromptSichtbar] = useState(false);
 
+  const { data: lagerList } = trpc.lager.list.useQuery();
+  const aktivesLager = useActiveLagerId(lagerList);
   const importMutation = trpc.material.importMany.useMutation({
     onSuccess: async data => {
       toast.success(`${data.created} Materialien importiert`);
@@ -185,7 +188,14 @@ export default function Import() {
 
   const importieren = () => {
     if (!zeilen) return;
+    if (aktivesLager == null) {
+      toast.error(t.lager.noLagerDescription);
+      return;
+    }
     importMutation.mutate({
+      // Alle Positionen landen im gewählten Lager – ein Modell kann es nicht
+      // kennen, deshalb kommt es aus der Oberfläche.
+      lagerId: aktivesLager,
       purchaseDate: kaufdatum || undefined,
       items: zeilen.map(z => ({
         typ: z.typ.trim(),

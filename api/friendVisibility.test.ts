@@ -108,10 +108,13 @@ function materialRow(
     materialType: "PLA",
     manufacturer: "Polymaker",
     color: "Schwarz",
+    texture: null,
     nominalWeight: 1000,
+    densityGramsPerLiter: null,
     spoolType: { tareWeight: 140 },
     spoolPresetVariant: null,
     storageBox: null,
+    lager: { materialKind: "filament", filamentDiameterUm: 1750 },
     weighings: [],
     ...overrides,
   };
@@ -129,7 +132,9 @@ describe("toFriendMaterial", () => {
    *
    * Verboten sind namentlich `priceCents` (Geldbeträge nie), `notes`
    * (Freitext), `purchaseDate` (Kaufverhalten), alles zur Lagerbox
-   * (Ortsangabe) und der Wägungsverlauf (Druckzeiten).
+   * (Ortsangabe), der Wägungsverlauf (Druckzeiten) – und seit 2.2.0 `lagerId`,
+   * der Lagername (Freitext, kann einen Ort verraten) sowie die Dichte (steckt
+   * in `secondary`).
    */
   it("gibt genau die erlaubten Felder heraus", () => {
     const result = toFriendMaterial(materialRow(), "Alex");
@@ -145,7 +150,44 @@ describe("toFriendMaterial", () => {
       "ownerName",
       "remainingPercent",
       "remainingWeight",
+      "secondary",
+      "texture",
     ]);
+  });
+
+  /*
+    Die Zweitanzeige geht fertig gerechnet hinaus – die Angaben, aus denen sie
+    entsteht, bleiben drinnen. Die Prüfung nagelt beides zugleich fest, weil
+    ein durchgeschleiftes `lager`-Objekt sonst unbemerkt bliebe.
+  */
+  it("rechnet die Zweitanzeige, ohne Lager oder Dichte zu verraten", () => {
+    const result = toFriendMaterial(
+      materialRow({ densityGramsPerLiter: 1240 }),
+      "Alex"
+    );
+    expect(result.secondary?.unit).toBe("m");
+    expect(result.secondary?.value).toBeCloseTo(335.3, 0);
+    expect(JSON.stringify(result)).not.toContain("lager");
+    expect(JSON.stringify(result)).not.toContain("1240");
+  });
+
+  it("liefert bei der Materialart Pulver keine Zweitanzeige", () => {
+    const result = toFriendMaterial(
+      materialRow({
+        lager: { materialKind: "powder", filamentDiameterUm: null },
+      }),
+      "Alex"
+    );
+    expect(result.secondary).toBeNull();
+  });
+
+  /**
+   * Die Oberfläche ist Teil der Materialidentität wie die Farbe – und der
+   * Grund, warum die Freundes-Suche auch auf sie prüft.
+   */
+  it("gibt die Oberfläche heraus", () => {
+    const result = toFriendMaterial(materialRow({ texture: "Silk" }), "Alex");
+    expect(result.texture).toBe("Silk");
   });
 
   it("nimmt ohne Wägung die Nennmenge an", () => {

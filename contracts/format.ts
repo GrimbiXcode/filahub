@@ -94,6 +94,29 @@ export function formatGrams(
   return `${numberFormat(locale).format(grams)} g`;
 }
 
+/**
+ * Länge in Metern – die Zweitanzeige beim Filament.
+ *
+ * Eine Dezimalstelle: Der Wert stammt aus einer Dichte, die meist eine Vorgabe
+ * ist. Mehr Stellen wären eine Genauigkeit, die die Eingangsdaten nicht haben.
+ */
+export function formatMeters(
+  meters: number | null | undefined,
+  locale: string
+): string {
+  if (meters == null || !Number.isFinite(meters)) return "–";
+  return `${numberFormat(locale, { maximumFractionDigits: 1 }).format(meters)} m`;
+}
+
+/** Volumen in Litern – die Zweitanzeige beim Harz. Zwei Stellen (0,45 l). */
+export function formatLiters(
+  liters: number | null | undefined,
+  locale: string
+): string {
+  if (liters == null || !Number.isFinite(liters)) return "–";
+  return `${numberFormat(locale, { maximumFractionDigits: 2 }).format(liters)} l`;
+}
+
 /** Prozentwert von 0–100 (nicht 0–1) */
 export function formatPercent(
   percent: number | null | undefined,

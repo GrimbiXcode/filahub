@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  lager,
   materials,
   presetManufacturers,
   presetSpoolSeries,
@@ -15,6 +16,12 @@ export const usersRelations = relations(users, ({ many }) => ({
   materials: many(materials),
   spoolTypes: many(spoolTypes),
   storageBoxes: many(storageBoxes),
+  lager: many(lager),
+}));
+
+export const lagerRelations = relations(lager, ({ one, many }) => ({
+  user: one(users, { fields: [lager.userId], references: [users.id] }),
+  materials: many(materials),
 }));
 
 export const spoolTypesRelations = relations(spoolTypes, ({ one, many }) => ({
@@ -32,6 +39,11 @@ export const storageBoxesRelations = relations(
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({
   user: one(users, { fields: [materials.userId], references: [users.id] }),
+  /*
+    Wird mitgeladen, wo die Zweitanzeige gebraucht wird: Materialart und
+    Filamentstärke stehen am Lager, nicht am Material.
+  */
+  lager: one(lager, { fields: [materials.lagerId], references: [lager.id] }),
   spoolType: one(spoolTypes, {
     fields: [materials.spoolTypeId],
     references: [spoolTypes.id],

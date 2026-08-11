@@ -4,6 +4,7 @@ import {
   type CurrencyCode,
   type LocaleCode,
 } from "@contracts/locale";
+import type { SecondaryAmount } from "@contracts/materials";
 
 /**
  * Kontext für die an den Benutzer gebundenen Formatierer.
@@ -22,6 +23,14 @@ export type FormatHelpers = {
   currencySymbol: string;
   formatNumber: (value: number | null | undefined) => string;
   formatGrams: (grams: number | null | undefined) => string;
+  /**
+   * Zweitanzeige (Meter beim Filament, Liter beim Harz) samt Einheit.
+   *
+   * Eine Funktion für beide Einheiten und nicht zwei: So kann an keiner
+   * Aufrufstelle die falsche Einheit zum falschen Formatierer geraten. `null`
+   * ergibt „–", wie bei den übrigen Formatierern.
+   */
+  formatSecondary: (amount: SecondaryAmount | null | undefined) => string;
   /** Prozentwert von 0–100 (nicht 0–1) */
   formatPercent: (percent: number | null | undefined) => string;
   formatMoney: (cents: number | null | undefined) => string;

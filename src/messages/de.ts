@@ -57,7 +57,8 @@ export const de = {
     overview: "Materialübersicht",
     import: "Import",
     spoolTypes: "Rollentypen",
-    storageBoxes: "Lagerboxen",
+    storageBoxes: "Dryboxen",
+    lager: "Lager",
     friends: "Freunde",
     friendsPending: (vars: { count: number }) =>
       `Freunde (${vars.count} offen)`,
@@ -265,7 +266,7 @@ export const de = {
     statValue: "Restwert",
     statValueHint: "anteilig nach Restmenge",
     statInBox: "In Drybox",
-    statInBoxHint: "Materialien mit Lagerbox",
+    statInBoxHint: "Materialien mit Drybox",
     searchAria: "Materialien durchsuchen",
     clearSearch: "Suche leeren",
     filterSheetTitle: "Filter und Sortierung",
@@ -279,8 +280,10 @@ export const de = {
       `≤ ${vars.percent} % Restbestand`,
     materialType: "Materialart",
     allMaterialTypes: "Alle Materialarten",
+    texture: "Oberfläche",
+    allTextures: "Alle Oberflächen",
     allManufacturers: "Alle Hersteller",
-    storageBox: "Lagerbox",
+    storageBox: "Drybox",
     allBoxes: "Alle Boxen",
     noBox: "Ohne Box",
     sorting: "Sortierung",
@@ -295,7 +298,7 @@ export const de = {
     sortPurchase: "Kaufdatum",
     emptyTitle: "Noch keine Materialien im Lager",
     emptyFiltered: "Keine Treffer für die aktuellen Filter",
-    emptyHint: "Lege dein erstes Filament an – mit Rolle, Gewicht und Preis.",
+    emptyHint: "Lege dein erstes Material an – mit Gebinde, Gewicht und Preis.",
     emptyFilteredHint: "Passe Suche oder Filter an.",
     colIdentifier: "Kennung",
     colMaterial: "Material",
@@ -324,7 +327,7 @@ export const de = {
     purchaseDate: "Kaufdatum",
     spool: "Rolle / Verpackung",
     fromCatalog: "Katalog",
-    storageBox: "Lagerbox / Drybox",
+    storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} Tara)`,
     history: "Wägungsverlauf",
     newWeighing: "Neue Wägung",
@@ -348,12 +351,12 @@ export const de = {
   },
 
   storageBoxes: {
-    title: "Lagerboxen",
+    title: "Dryboxen",
     description:
       "Dryboxen und Aufbewahrungsboxen mit Leergewicht – beim Wiegen in der Box wird deren Tara automatisch abgezogen",
-    newBox: "Neue Lagerbox",
-    firstBox: "Erste Lagerbox anlegen",
-    emptyTitle: "Noch keine Lagerboxen angelegt",
+    newBox: "Neue Drybox",
+    firstBox: "Erste Drybox anlegen",
+    emptyTitle: "Noch keine Dryboxen angelegt",
     emptyDescription:
       "Wiege deine leere Drybox, trage das Leergewicht ein und weise sie einem Material zu – die App rechnet die Box-Tara automatisch heraus.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} Tara`,
@@ -362,18 +365,18 @@ export const de = {
     free: "frei",
     location: "Standort",
     occupancy: "Belegung",
-    editBox: "Lagerbox bearbeiten",
-    deleteBox: "Lagerbox löschen",
-    deleteTitle: "Lagerbox löschen?",
+    editBox: "Drybox bearbeiten",
+    deleteBox: "Drybox löschen",
+    deleteTitle: "Drybox löschen?",
     deleteDescription: (vars: { name: string }) =>
       `„${vars.name}“ wird gelöscht. Sie darf aktuell keinem Material zugewiesen sein.`,
     namePlaceholder: "z. B. Drybox 1",
     locationPlaceholder: "z. B. Regal links, Werkstatt",
     tareLabel: "Leergewicht (g) *",
     tarePlaceholder: "z. B. 850",
-    created: "Lagerbox angelegt",
-    saved: "Lagerbox gespeichert",
-    deleted: "Lagerbox gelöscht",
+    created: "Drybox angelegt",
+    saved: "Drybox gespeichert",
+    deleted: "Drybox gelöscht",
   },
 
   spoolTypes: {
@@ -417,10 +420,12 @@ export const de = {
     createTitle: "Neues Material",
     editTitle: "Material bearbeiten",
     createDescription:
-      "Lege ein neues Filament an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen.",
+      "Lege ein neues Material an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen.",
     editDescription:
       "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet.",
     materialTypeLabel: "Materialart *",
+    textureLabel: "Oberfläche",
+    texturePlaceholder: "z. B. Matt, Silk, Glänzend",
     identifier: "Kennung",
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
@@ -429,12 +434,16 @@ export const de = {
     purchaseDate: "Kaufdatum",
     nominalLabel: "Nennmenge (g) *",
     nominalPlaceholder: "z. B. 1000",
+    lagerLabel: "Lager *",
+    lagerHint: (vars: { kind: string; diameter: string | null }) =>
+      vars.diameter ? `${vars.kind}, ${vars.diameter}` : vars.kind,
+    lagerChangeHint:
+      "Ein anderes Lager kann eine andere Stärke haben – die Umrechnung in Meter ändert sich dann mit.",
     spool: "Rolle / Verpackung",
-    storageBox: "Lagerbox / Drybox",
-    chooseBox: "Lagerbox wählen",
+    storageBox: "Drybox",
+    chooseBox: "Drybox wählen",
     noBox: "Keine Box",
-    noBoxesHint:
-      "Noch keine Lagerboxen angelegt – unter „Lagerboxen“ hinzufügen.",
+    noBoxesHint: "Noch keine Dryboxen angelegt – unter „Dryboxen“ hinzufügen.",
     initialLabel: (vars: { withBox: boolean }) =>
       `Erstwägung inkl. Rolle${vars.withBox ? " + Box" : ""} (g, optional)`,
     initialPlaceholder: "Gemessenes Gesamtgewicht beim Kauf",
@@ -759,6 +768,63 @@ export const de = {
     invalidTare: "Bitte ein gültiges Leergewicht in Gramm angeben",
     invalidDimensions: "Bitte gültige Abmessungen in Millimetern angeben",
     noChanges: "Der Vorschlag enthält keine Änderungen",
+  },
+
+  lager: {
+    title: "Lager",
+    description:
+      "Trenne deinen Bestand nach Materialart – Filament, Pulver oder Harz. Je Lager gilt eine Art; beim Filament zusätzlich eine Stärke.",
+    switchLabel: "Lager",
+    switchAria: "Lager wechseln",
+    manage: "Lager verwalten",
+
+    newLager: "Neues Lager",
+    firstLager: "Erstes Lager anlegen",
+    emptyTitle: "Noch kein Lager angelegt",
+    emptyDescription:
+      "Ein Lager fasst zusammen, was zusammengehört. Lege eines für Filament an – Pulver und Harz bekommen ihre eigenen.",
+
+    nameLabel: "Name *",
+    namePlaceholder: "z. B. Filament 1,75 mm",
+    kindLabel: "Materialart *",
+    kindHint:
+      "Bestimmt, welche Felder ein Material hat und wie gerechnet wird.",
+    diameterLabel: "Filamentstärke *",
+    diameterHint:
+      "Gilt für alles in diesem Lager. Wer beide Stärken führt, legt zwei Lager an.",
+
+    kindFilament: "Filament",
+    kindPowder: "Pulver",
+    kindResin: "Harz",
+    kindFilamentHint: "Rollen und Spulen; Restmenge zusätzlich in Metern.",
+    kindPowderHint: "Sinter-Pulver in Beuteln oder Eimern; nur Gramm.",
+    kindResinHint: "Flüssiges Kunstharz; Restmenge zusätzlich in Litern.",
+
+    editLager: "Lager bearbeiten",
+    deleteLager: "Lager löschen",
+    deleteTitle: "Lager löschen?",
+    deleteDescription: (vars: { name: string }) =>
+      `„${vars.name}“ wird gelöscht. Es darf kein Material mehr enthalten.`,
+    created: "Lager angelegt",
+    saved: "Lager gespeichert",
+    deleted: "Lager gelöscht",
+
+    materialCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+    limitReached: (vars: { max: number }) =>
+      `Mehr als ${vars.max} Lager sind derzeit nicht möglich.`,
+    noLagerTitle: "Kein Lager vorhanden",
+    noLagerDescription:
+      "Material braucht ein Lager. Lege zuerst eines an, dann kannst du einlagern.",
+
+    // Zweitanzeige
+    secondaryAbout: "Umgerechnet",
+    secondaryHint: (vars: { density: string }) =>
+      `Gerechnet mit ${vars.density}. Trage am Material eine eigene Dichte ein, wenn du es genauer brauchst.`,
+    densityLabel: "Dichte (g/l)",
+    densityHint:
+      "Nur für die Umrechnung in Meter bzw. Liter. Leer lassen übernimmt den Wert der Materialart.",
+    approx: (vars: { value: string }) => `ca. ${vars.value}`,
   },
 
   friends: {

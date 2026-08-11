@@ -20,6 +20,16 @@ export const LOGIN_PATH = "/login";
 export const SETTINGS_PATH = "/einstellungen";
 export const RELEASE_NOTES_PATH = "/neuerungen";
 export const FRIENDS_PATH = "/freunde";
+export const LAGER_PATH = "/lager";
+
+/**
+ * Dryboxen. Bis 2.1.0 hieß die Seite „Lagerboxen" und lag unter
+ * `/lagerboxen`; mit dem neuen Lager-Begriff wäre das zum Verwechseln
+ * ähnlich gewesen. Der alte Pfad leitet weiter, damit gesetzte Lesezeichen
+ * nicht ins Leere laufen.
+ */
+export const DRYBOXES_PATH = "/dryboxen";
+export const LEGACY_DRYBOXES_PATH = "/lagerboxen";
 
 /** Lager eines Freundes – nur bei Sichtbarkeitsstufe `full` erreichbar. */
 export function friendInventoryPath(friendId: number): string {

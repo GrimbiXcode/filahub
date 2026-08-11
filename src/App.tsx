@@ -1,6 +1,13 @@
-import { Routes, Route } from "react-router";
+import { Navigate, Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { LEGAL_PATHS, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
+import {
+  DRYBOXES_PATH,
+  LAGER_PATH,
+  LEGACY_DRYBOXES_PATH,
+  LEGAL_PATHS,
+  RELEASE_NOTES_PATH,
+  SETTINGS_PATH,
+} from "@/const";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
@@ -9,6 +16,7 @@ import AdminSystem from "./pages/AdminSystem";
 import FriendInventory from "./pages/FriendInventory";
 import Friends from "./pages/Friends";
 import Home from "./pages/Home";
+import LagerPage from "./pages/Lager";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
 import SpoolTypes from "./pages/SpoolTypes";
@@ -29,7 +37,13 @@ export default function App() {
         <Route path="/import" element={<Import />} />
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
-        <Route path="/lagerboxen" element={<StorageBoxes />} />
+        <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />
+        {/* Alter Pfad aus 2.1.0 – gesetzte Lesezeichen sollen nicht brechen. */}
+        <Route
+          path={LEGACY_DRYBOXES_PATH}
+          element={<Navigate to={DRYBOXES_PATH} replace />}
+        />
+        <Route path={LAGER_PATH} element={<LagerPage />} />
         <Route path="/freunde" element={<Friends />} />
         <Route path="/freunde/:id" element={<FriendInventory />} />
         <Route path={RELEASE_NOTES_PATH} element={<ReleaseNotes />} />

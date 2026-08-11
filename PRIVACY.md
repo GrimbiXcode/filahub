@@ -32,7 +32,8 @@ details into the Markdown** — the next person to pull the image would ship the
 | Telegram ID, display name, Telegram username                                                                                            | `users`            | until the account is deleted           |
 | Last sign-in timestamp                                                                                                                  | `users`            | until the account is deleted           |
 | Display settings (language, currency, format)                                                                                           | `users`            | until the account is deleted           |
-| Spools, weigh-ins, spool types, storage boxes — including prices, purchase dates, locations and free-text notes                         | own tables         | until the account is deleted           |
+| Stores (name, material kind, filament diameter, free-text notes)                                                                        | `lager`            | until the account is deleted           |
+| Spools, weigh-ins, spool types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes              | own tables         | until the account is deleted           |
 | Friendships: who is connected to whom, who asked, and each side's sharing level                                                         | `friendships`      | until either account is deleted        |
 | Loan requests: who asked whom for which spool, the spool's name at the time, and a free-text message                                    | `loan_requests`    | until either account is deleted        |
 | Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`            | until the account is deleted           |
@@ -75,13 +76,15 @@ friend and independently of the other direction: nothing, search only, or the
 whole stock. There is no symmetric setting, so nobody can widen what someone
 else shares.
 
-What a friend can see, at most: name, short identifier, material type,
-manufacturer, colour, nominal weight, remaining amount and percentage. What they
-can never see, at any level: prices, free-text notes, purchase dates, storage box
-and its location, and the weigh-in history. That list is enforced in one place
-(`toFriendMaterial` in `api/queries/friends.ts`) and pinned by a test that
-asserts the exact set of fields; nothing else in the code assembles a spool for
-another user.
+What a friend can see, at most: name, short identifier, material type, surface
+finish, manufacturer, colour, nominal weight, remaining amount and percentage,
+and the remaining amount converted to metres or litres. What they can never see,
+at any level: prices, free-text notes, purchase dates, storage box and its
+location, the weigh-in history, and which store a material sits in — a store
+name is free text and can name a place, the same reason the storage box is
+excluded. That list is enforced in one place (`toFriendMaterial` in
+`api/queries/friends.ts`) and pinned by a test that asserts the exact set of
+fields; nothing else in the code assembles a spool for another user.
 
 Be honest with your users about one limit: **"search only" is a courtesy
 boundary, not a security boundary.** It stops browsing — matches are returned

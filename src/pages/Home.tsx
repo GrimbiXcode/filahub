@@ -51,6 +51,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useDebounced } from "@/hooks/useDebounced";
+import { useActiveLagerId } from "@/lib/activeLager";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -103,8 +104,24 @@ function compareBy(
 
 export default function Home() {
   const navigate = useNavigate();
-  const { data: materials, isLoading } = trpc.material.list.useQuery();
-  const { formatDate, formatGrams, formatMoney, formatPercent } = useFormat();
+  const { data: lagerList } = trpc.lager.list.useQuery();
+  const activeLagerId = useActiveLagerId(lagerList);
+  /*
+    Auf das gewählte Lager eingeschränkt. `enabled` erst, wenn ein Lager
+    feststeht: Ohne Einschränkung käme der gesamte Bestand, und die Übersicht
+    zeigte kurz alles – ein Aufblitzen, das nach einem Fehler aussieht.
+  */
+  const { data: materials, isLoading } = trpc.material.list.useQuery(
+    { lagerId: activeLagerId ?? undefined },
+    { enabled: activeLagerId != null }
+  );
+  const {
+    formatDate,
+    formatGrams,
+    formatMoney,
+    formatPercent,
+    formatSecondary,
+  } = useFormat();
   const { openMaterialForm, openWeighing } = useQuickActions();
   const t = useT();
 
@@ -112,6 +129,7 @@ export default function Home() {
   const [identifierLookup, setIdentifierLookup] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [manufacturerFilter, setManufacturerFilter] = useState(ALL);
+  const [textureFilter, setTextureFilter] = useState(ALL);
   const [boxFilter, setBoxFilter] = useState(ALL);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -133,6 +151,16 @@ export default function Home() {
       ].sort(),
     [materials]
   );
+  const textures = useMemo(
+    () =>
+      [
+        ...new Set(
+          (materials ?? []).map(m => m.texture).filter((x): x is string => !!x)
+        ),
+      ].sort(),
+    [materials]
+  );
+
   const boxes = useMemo(() => {
     const map = new Map<number, string>();
     (materials ?? []).forEach(m => {
@@ -151,6 +179,7 @@ export default function Home() {
           m.materialType,
           m.manufacturer,
           m.color,
+          m.texture,
           m.notes,
         ]
           .filter(Boolean)
@@ -159,6 +188,7 @@ export default function Home() {
         if (!haystack.includes(q)) return false;
       }
       if (typeFilter !== ALL && m.materialType !== typeFilter) return false;
+      if (textureFilter !== ALL && m.texture !== textureFilter) return false;
       if (manufacturerFilter !== ALL && m.manufacturer !== manufacturerFilter)
         return false;
       if (boxFilter === NO_BOX && m.storageBoxId != null) return false;
@@ -179,6 +209,7 @@ export default function Home() {
     materials,
     search,
     typeFilter,
+    textureFilter,
     manufacturerFilter,
     boxFilter,
     onlyLowStock,
@@ -219,6 +250,12 @@ export default function Home() {
       label: typeFilter,
       clear: () => setTypeFilter(ALL),
     });
+  if (textureFilter !== ALL)
+    activeFilters.push({
+      key: "texture",
+      label: textureFilter,
+      clear: () => setTextureFilter(ALL),
+    });
   if (manufacturerFilter !== ALL)
     activeFilters.push({
       key: "manufacturer",
@@ -245,6 +282,7 @@ export default function Home() {
   const resetFilters = () => {
     setSearch("");
     setTypeFilter(ALL);
+    setTextureFilter(ALL);
     setManufacturerFilter(ALL);
     setBoxFilter(ALL);
     setOnlyLowStock(false);
@@ -305,6 +343,28 @@ export default function Home() {
           </SelectContent>
         </Select>
       </div>
+      {/*
+        Nur zeigen, wenn im Bestand überhaupt Oberflächen erfasst sind – sonst
+        wäre es ein Auswahlfeld mit einem einzigen Eintrag „Alle".
+      */}
+      {textures.length > 0 && (
+        <div className="grid gap-2">
+          <Label htmlFor="f-texture">{t.home.texture}</Label>
+          <Select value={textureFilter} onValueChange={setTextureFilter}>
+            <SelectTrigger id="f-texture">
+              <SelectValue placeholder={t.home.texture} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t.home.allTextures}</SelectItem>
+              {textures.map(value => (
+                <SelectItem key={value} value={value}>
+                  {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       <div className="grid gap-2">
         <Label htmlFor="f-manufacturer">{t.common.manufacturer}</Label>
         <Select
@@ -711,6 +771,15 @@ export default function Home() {
                                   ({formatPercent(m.remainingPercent)})
                                 </span>
                               )}
+                              {/* Meter beim Filament, Liter beim Harz */}
+                              {m.secondary && (
+                                <span className="font-normal text-muted-foreground">
+                                  {" · "}
+                                  {t.lager.approx({
+                                    value: formatSecondary(m.secondary),
+                                  })}
+                                </span>
+                              )}
                             </span>
                           </div>
                         </TableCell>
@@ -933,7 +1002,7 @@ function MaterialCard({
   onOpen: () => void;
   onWeigh: () => void;
 }) {
-  const { formatGrams, formatPercent } = useFormat();
+  const { formatGrams, formatPercent, formatSecondary } = useFormat();
   const t = useT();
 
   return (
@@ -980,6 +1049,13 @@ function MaterialCard({
             {t.home.remaining({
               amount: formatGrams(material.remainingWeight),
             })}
+            {/* Meter beim Filament, Liter beim Harz – auf dem Telefon knapp */}
+            {material.secondary && (
+              <span className="font-normal text-muted-foreground">
+                {" · "}
+                {formatSecondary(material.secondary)}
+              </span>
+            )}
           </span>
           {material.storageBox && (
             <span className="flex min-w-0 items-center gap-1">
