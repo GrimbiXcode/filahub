@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sidebar";
 import {
   APP_NAME,
+  FRIENDS_PATH,
   LEGAL_DOCUMENTS,
   LEGAL_PATHS,
   LOGIN_PATH,
@@ -52,6 +53,7 @@ import {
   Settings,
   Sparkles,
   Sun,
+  Users,
 } from "lucide-react";
 import {
   type CSSProperties,
@@ -68,6 +70,7 @@ import { useQuickActions } from "@/lib/quickActions";
 import { useReleaseNotes } from "@/hooks/useReleaseNotes";
 import { ThemeToggle } from "./ThemeToggle";
 import { useT, type TextKey } from "@/lib/i18nContext";
+import { trpc } from "@/lib/trpc";
 import type { Messages } from "@/messages/de";
 import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
 import { Button } from "./ui/button";
@@ -87,6 +90,7 @@ const menuItems: {
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
   { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
+  { icon: Users, label: "friends", path: FRIENDS_PATH },
 ];
 
 /** Nur für Administratoren sichtbar; abgesichert wird serverseitig (adminQuery) */
@@ -202,6 +206,17 @@ function AuthLayoutContent({
   const { openPalette } = useQuickActions();
   const { theme, setTheme } = useAppTheme();
   const { unreadCount } = useReleaseNotes();
+  /*
+    Offene Anfragen für das Abzeichen. `AuthLayout` rendert auf **jeder** Seite,
+    deshalb hinter einem `staleTime` – ohne das wäre es eine Abfrage pro
+    Seitenwechsel für eine Zahl, die sich selten ändert. Vorbild ist
+    `trpc.auth.me` in `src/providers/i18n.tsx`.
+  */
+  const { data: pending } = trpc.friend.pendingCount.useQuery(undefined, {
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+  const pendingFriends = pending?.count ?? 0;
   const t = useT();
   const isCollapsed = state === "collapsed";
   const [isDragging, setIsDragging] = useState(false);
@@ -306,19 +321,45 @@ function AuthLayoutContent({
             <SidebarMenu className="px-2 py-1">
               {menuItems.map(item => {
                 const isActive = location.pathname === item.path;
+                /*
+                  Offene Freundschafts- und Ausleih-Anfragen als Zähler. Nur
+                  dieser Eintrag trägt einen – deshalb die Abfrage hier statt
+                  eines `badge`-Feldes in der Tabelle oben, das bei allen
+                  anderen leer bliebe.
+                */
+                const badge = item.path === FRIENDS_PATH ? pendingFriends : 0;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => go(item.path)}
-                      tooltip={t.nav[item.label]}
+                      tooltip={
+                        badge > 0
+                          ? t.nav.friendsPending({ count: badge })
+                          : t.nav[item.label]
+                      }
                       className="h-10 font-normal transition-all"
                     >
-                      <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                      />
+                      <span className="relative flex shrink-0 items-center justify-center">
+                        <item.icon
+                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        />
+                        {/* Wie bei den Neuerungen: In der eingeklappten Leiste
+                            blendet SidebarMenuBadge aus, dort bleibt der Punkt. */}
+                        {badge > 0 && (
+                          <span
+                            aria-hidden
+                            className="absolute -right-1 -top-1 hidden h-2 w-2 rounded-full bg-primary group-data-[collapsible=icon]:block"
+                          />
+                        )}
+                      </span>
                       <span>{t.nav[item.label]}</span>
                     </SidebarMenuButton>
+                    {badge > 0 && (
+                      <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground">
+                        {badge}
+                      </SidebarMenuBadge>
+                    )}
                   </SidebarMenuItem>
                 );
               })}

@@ -8,6 +8,18 @@ export type MaterialDetail = RouterOutputs["material"]["byId"];
 export type SpoolTypeItem = RouterOutputs["spoolType"]["list"][number];
 export type StorageBoxItem = RouterOutputs["storageBox"]["list"][number];
 
+/**
+ * Freunde und geteiltes Lager.
+ *
+ * `FriendMaterial` ist absichtlich schmaler als `MaterialOverview` – die
+ * Projektion in `api/queries/friends.ts` lässt Preise, Notizen, Kaufdatum,
+ * Lagerort und Wägungen weg. Wer hier ein Feld sucht und nicht findet, hat es
+ * mit gutem Grund nicht.
+ */
+export type FriendshipItem = RouterOutputs["friend"]["list"][number];
+export type FriendMaterial = RouterOutputs["friend"]["searchMaterials"][number];
+export type LoanRequestItem = RouterOutputs["friend"]["loanRequests"][number];
+
 /** Preset-Katalog: Baum und flache Auswahlliste */
 export type PresetCatalog = RouterOutputs["preset"]["tree"];
 export type PresetManufacturerNode = PresetCatalog[number];

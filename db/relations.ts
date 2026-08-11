@@ -57,9 +57,10 @@ export const weighingsRelations = relations(weighings, ({ one }) => ({
 // ---------------------------------------------------------------------------
 // Preset-Katalog: Hersteller → Serie → Version → Variante
 //
-// Für `preset_proposals`, `preset_series_material_types` und
-// `hidden_spool_presets` gibt es bewusst keine Relations: die ersten beiden
-// zeigen polymorph bzw. doppelt auf `users`, die letzten beiden sind
+// Für `preset_proposals`, `preset_series_material_types`,
+// `hidden_spool_presets`, `friendships` und `loan_requests` gibt es bewusst
+// keine Relations: die meisten zeigen polymorph bzw. doppelt auf `users`
+// (`friendships` gleich mit beiden Spalten), die übrigen sind
 // Zuordnungstabellen. Sie werden per select() geladen und in JS verknüpft
 // (Muster wie `findRecentWeighings`).
 // ---------------------------------------------------------------------------

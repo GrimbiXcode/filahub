@@ -30,6 +30,16 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "presetProposals",
   "loginCodes",
   /*
+    Freundschaften und Ausleih-Vorgänge, jeweils in **beiden** Richtungen: Eine
+    Freundschaft betrifft die Person auch dann, wenn die Anfrage von der anderen
+    Seite kam. Enthalten ist der Anzeigename der Gegenseite, ohne den die Zeile
+    für die betroffene Person eine sinnlose Zahlenkolonne wäre – anders als beim
+    `ipHash` unten hilft der Name hier ihr und nicht einem Dritten, und aus der
+    Oberfläche kennt sie ihn ohnehin.
+  */
+  "friendships",
+  "loanRequests",
+  /*
     Das Sicherheitsprotokoll gehört dazu: Es enthält Ereignisse über diese
     Person, also ihre Daten. Auskunft heißt Auskunft – auch über das, was
     unbequem sein könnte. Die gehashte Adresse bleibt draußen, sie sagt der

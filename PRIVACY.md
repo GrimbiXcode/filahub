@@ -33,6 +33,9 @@ details into the Markdown** — the next person to pull the image would ship the
 | Last sign-in timestamp                                                                                                                  | `users`            | until the account is deleted           |
 | Display settings (language, currency, format)                                                                                           | `users`            | until the account is deleted           |
 | Spools, weigh-ins, spool types, storage boxes — including prices, purchase dates, locations and free-text notes                         | own tables         | until the account is deleted           |
+| Friendships: who is connected to whom, who asked, and each side's sharing level                                                         | `friendships`      | until either account is deleted        |
+| Loan requests: who asked whom for which spool, the spool's name at the time, and a free-text message                                    | `loan_requests`    | until either account is deleted        |
+| Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`            | until the account is deleted           |
 | Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals` | see "Deletion" below                   |
 | Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`      | **purged automatically after 24 h**    |
 | Security log: sign-ins, failed attempts, deletions, moderation decisions — with an HMAC of the client address, never the address itself | `audit_log`        | **purged automatically after 90 days** |
@@ -63,6 +66,38 @@ is currently no login method that avoids Telegram.
 data processing agreement with them (Art. 28(3) GDPR). Most providers offer one
 in their account settings; concluding it is your job, not the software's.
 
+**Other users**, but only the ones a user has accepted as a friend, and only as
+much as that user chose. Since 2.1.0 filahub is not purely single-tenant any
+more, and this section is where that shows.
+
+Each side of a friendship picks one of three levels for **their own** stock, per
+friend and independently of the other direction: nothing, search only, or the
+whole stock. There is no symmetric setting, so nobody can widen what someone
+else shares.
+
+What a friend can see, at most: name, short identifier, material type,
+manufacturer, colour, nominal weight, remaining amount and percentage. What they
+can never see, at any level: prices, free-text notes, purchase dates, storage box
+and its location, and the weigh-in history. That list is enforced in one place
+(`toFriendMaterial` in `api/queries/friends.ts`) and pinned by a test that
+asserts the exact set of fields; nothing else in the code assembles a spool for
+another user.
+
+Be honest with your users about one limit: **"search only" is a courtesy
+boundary, not a security boundary.** It stops browsing — matches are returned
+only for a query of at least two characters, never as a list — but somebody who
+tries many queries can map a stock piece by piece. If that matters to them, the
+answer is "nothing", not "search only".
+
+Requesting a loan sends a message through the Telegram bot API to the owner,
+containing the requester's display name, the spool's name and the optional
+message. Same channel as the sign-in codes, same third country.
+
+Granting, changing and withdrawing access is recorded in the security log
+(`friend.*` events, purged after 90 days). Loan requests are deliberately **not**
+logged there — they are usage, not security, and logging them would build the
+movement profile the log is designed to avoid.
+
 **Nobody else.** No analytics, no tracking, no CDN, no external fonts, no error
 reporting service. Verifiable: the only third-party host in the codebase is
 `telegram.org`.
@@ -84,6 +119,13 @@ Proposals accepted into the shared catalogue survive, with `userId` and the
 free-text comment set to NULL. The catalogue is shared, and other users'
 materials reference those entries — removing them would damage stock that is not
 the deleting user's. The remaining row allows no conclusion about the person.
+
+Friendships and loan requests do **not** survive. They are deleted in both
+directions — where the leaving user asked and where they were asked — because
+there is no moderation purpose that would justify keeping them. This does remove
+the other person's side of a shared row; that is unavoidable, since the row is
+joint data about both of them, and the erasure right of the person leaving wins
+here.
 
 If you find that unacceptable for your instance, the logic is in
 `deleteUserAccount` (`api/queries/account.ts`) and the reasoning is in the

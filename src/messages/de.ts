@@ -58,6 +58,9 @@ export const de = {
     import: "Import",
     spoolTypes: "Rollentypen",
     storageBoxes: "Lagerboxen",
+    friends: "Freunde",
+    friendsPending: (vars: { count: number }) =>
+      `Freunde (${vars.count} offen)`,
     administration: "Verwaltung",
     presetCatalog: "Preset-Katalog",
     proposals: "Vorschläge",
@@ -756,6 +759,120 @@ export const de = {
     invalidTare: "Bitte ein gültiges Leergewicht in Gramm angeben",
     invalidDimensions: "Bitte gültige Abmessungen in Millimetern angeben",
     noChanges: "Der Vorschlag enthält keine Änderungen",
+  },
+
+  friends: {
+    title: "Freunde",
+    description:
+      "Material mit Freunden teilen – du entscheidest für jeden einzeln, wie viel von deinem Lager er sieht. Geldbeträge nie.",
+
+    // Eigener Code
+    myCodeTitle: "Dein Freundescode",
+    myCodeHint:
+      "Gib den Code an jemanden weiter, mit dem du Material teilen willst. Nur wer ihn kennt, kann dir eine Anfrage schicken.",
+    copyCode: "Code kopieren",
+    codeCopied: "Freundescode kopiert",
+    rotateCode: "Neuen Code erzeugen",
+    rotateCodeTitle: "Neuen Freundescode erzeugen?",
+    rotateCodeDescription:
+      "Der alte Code funktioniert danach nicht mehr. Bestehende Freundschaften bleiben unberührt.",
+    codeRotated: "Neuer Freundescode erzeugt",
+
+    // Hinzufügen
+    addTitle: "Freund hinzufügen",
+    addHint:
+      "Freundescode oder Telegram-Name. Der Code ist der zuverlässigere Weg – nicht jeder hat einen Telegram-Namen gesetzt.",
+    codeLabel: "Freundescode",
+    codePlaceholder: "FH-A2B3-C4D5",
+    usernameLabel: "Telegram-Name",
+    usernamePlaceholder: "@name",
+    sendRequest: "Anfrage senden",
+    requestSent: "Anfrage gesendet",
+    requestSentUnreachable:
+      "Anfrage gesendet. Über Telegram war die Person nicht erreichbar – sie sieht die Anfrage beim nächsten Besuch.",
+
+    // Liste
+    listTitle: "Deine Freunde",
+    emptyTitle: "Noch keine Freunde",
+    emptyDescription:
+      "Tausche Freundescodes aus, dann findest du das freigegebene Material deiner Freunde in der Suche.",
+    incomingTitle: "Offene Anfragen an dich",
+    outgoingTitle: "Von dir gestellte Anfragen",
+    pendingBadge: "Wartet",
+    declinedBadge: "Abgelehnt",
+    accept: "Annehmen",
+    decline: "Ablehnen",
+    accepted: "Anfrage angenommen",
+    declined: "Anfrage abgelehnt",
+    removeFriend: "Freundschaft auflösen",
+    removeTitle: "Freundschaft auflösen?",
+    removeDescription: (vars: { name: string }) =>
+      `Du siehst danach kein Material von ${vars.name} mehr und ${vars.name} keines von dir. Laufende Ausleih-Anfragen verschwinden mit.`,
+    removed: "Freundschaft aufgelöst",
+
+    // Sichtbarkeit
+    sharedByMe: "Du zeigst",
+    sharedWithMe: "Du siehst",
+    theirChoice: "Entscheidung deines Freundes",
+    visibilityNone: "Nichts",
+    visibilitySearch: "Nur in der Suche",
+    visibilityFull: "Ganzes Lager",
+    visibilityNoneHint: "Dein Lager bleibt vollständig verborgen.",
+    visibilitySearchHint:
+      "Treffer erscheinen nur, wenn nach etwas Bestimmtem gesucht wird. Kein Blättern durch dein Lager.",
+    visibilityFullHint:
+      "Das ganze Lager ist einsehbar – ohne Preise, Notizen, Kaufdaten, Lagerort und Wägungen.",
+    visibilitySaved: "Sichtbarkeit gespeichert",
+    openInventory: "Lager ansehen",
+
+    // Lager eines Freundes
+    inventoryTitle: (vars: { name: string }) => `Lager von ${vars.name}`,
+    inventoryDescription:
+      "Freigegebenes Material. Preise, Notizen, Kaufdaten, Lagerort und Wägungen sind nicht enthalten.",
+    inventoryEmpty: "Dieses Lager ist leer.",
+    inventoryDenied:
+      "Dieses Lager ist für dich nicht einsehbar. Vielleicht hat sich die Freigabe geändert.",
+
+    // Suche
+    searchTitle: "Bei Freunden gefunden",
+    searchHintShort: (vars: { count: number }) =>
+      `Ab ${vars.count} Zeichen wird auch bei deinen Freunden gesucht.`,
+    searchEmpty: "Bei deinen Freunden gibt es dazu nichts.",
+    searchCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 Treffer" : `${vars.count} Treffer`,
+    ownerLabel: (vars: { name: string }) => `bei ${vars.name}`,
+    ownerColumn: "Bei",
+  },
+
+  loan: {
+    ask: "Anfragen",
+    askTitle: "Material anfragen",
+    askDescription: (vars: { material: string; name: string }) =>
+      `${vars.name} bekommt eine Nachricht, dass du „${vars.material}“ ausleihen möchtest.`,
+    messageLabel: "Nachricht (optional)",
+    messagePlaceholder: "z. B. „Bräuchte etwa 200 g, gebe den Rest zurück.“",
+    send: "Anfrage senden",
+    sending: "Wird gesendet …",
+    sent: "Anfrage gesendet",
+    sentUnreachable:
+      "Anfrage gesendet. Über Telegram war die Person nicht erreichbar – sie sieht die Anfrage beim nächsten Besuch.",
+
+    incomingTitle: "Ausleih-Anfragen an dich",
+    outgoingTitle: "Deine Ausleih-Anfragen",
+    emptyIncoming: "Niemand fragt gerade nach deinem Material.",
+    emptyOutgoing: "Du hast nichts angefragt.",
+    fromLabel: (vars: { name: string }) => `von ${vars.name}`,
+    toLabel: (vars: { name: string }) => `an ${vars.name}`,
+    statusOpen: "Offen",
+    statusAccepted: "Zugesagt",
+    statusDeclined: "Abgelehnt",
+    statusWithdrawn: "Zurückgezogen",
+    accept: "Zusagen",
+    decline: "Ablehnen",
+    accepted: "Zugesagt",
+    declined: "Abgelehnt",
+    withdraw: "Zurückziehen",
+    withdrawn: "Anfrage zurückgezogen",
   },
 };
 

@@ -119,11 +119,17 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
 
 - **Controller**: from `LEGAL_OPERATOR_*`
 - **Purposes**: managing a personal filament stock; authentication; maintaining
-  the shared preset catalogue
+  the shared preset catalogue; sharing stock between users who have connected as
+  friends, and passing on loan requests between them
 - **Categories of data subjects**: registered users of this instance
 - **Categories of data**: see the table in [PRIVACY.md](PRIVACY.md)
-- **Recipients**: Telegram FZ-LLC (authentication); the hosting provider
-  (processor)
+- **Recipients**: Telegram FZ-LLC (authentication, loan notifications); the
+  hosting provider (processor); **other users of this instance**, limited to what
+  the data subject shared with an accepted friend and never including monetary
+  amounts (see "Who else gets data" in [PRIVACY.md](PRIVACY.md))
+- **Legal basis for sharing between users**: Art. 6(1)(a) GDPR — the sharing
+  level is a per-friend choice by the data subject, defaults to the narrowest
+  useful setting, and is revocable at any time with immediate effect
 - **Third-country transfers**: Telegram, United Arab Emirates — no adequacy
   decision; based on explicit consent (Art. 49(1)(a) GDPR / Art. 17(1)(a)
   revFADP), obtained through the click-to-load gate on the login page
@@ -188,6 +194,9 @@ Known gaps, deliberately recorded rather than glossed over:
 | Global catalogue entries                                                    | kept; they carry no personal data                                                |
 | Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                                                         |
 | Sign-in codes                                                               | deleted                                                                          |
+| Friendships — in both directions                                            | deleted                                                                          |
+| Loan requests — asked and been asked                                        | deleted                                                                          |
+| Friend code                                                                 | deleted with the account row                                                     |
 | Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
 | Account                                                                     | deleted                                                                          |
 
@@ -206,13 +215,25 @@ The reasoning for keeping accepted proposals is in
 Art. 17(3): other users' stock references those catalogue entries, and the
 remaining row no longer identifies anyone.
 
+Friendships and loan requests get the opposite treatment — deleted outright, in
+both directions. Nothing in Art. 17(3) covers keeping them: there is no
+moderation record, no other user's stock depends on them, and an anonymised
+friendship would be meaningless. Deleting them does remove the counterparty's
+side of a row that describes both people; that is inherent to joint data, and the
+erasure right of the person leaving takes precedence over the other's
+convenience.
+
 ## Decisions on record
 
 Add entries here as they are made, with dates. This section is the point of the
 document — a position that is not written down gets re-litigated.
 
-| Date           | Decision                                                   | Rationale                   |
-| -------------- | ---------------------------------------------------------- | --------------------------- |
-| _to be filled_ | Registration open or restricted on the public instance     | affects Art. 27 and Art. 30 |
-| _to be filled_ | GDPR Art. 27 representative appointed / reasoned exemption | see above                   |
-| _to be filled_ | Donation model confirmed non-commercial                    | keeps the CRA exemption     |
+| Date           | Decision                                                   | Rationale                                                                                                                                                                                          |
+| -------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| _to be filled_ | Registration open or restricted on the public instance     | affects Art. 27 and Art. 30                                                                                                                                                                        |
+| _to be filled_ | GDPR Art. 27 representative appointed / reasoned exemption | see above                                                                                                                                                                                          |
+| _to be filled_ | Donation model confirmed non-commercial                    | keeps the CRA exemption                                                                                                                                                                            |
+| 2026-08-11     | Sharing between users is per-direction, never symmetric    | a symmetric level would let one user widen what another discloses; each person must control their own stock alone                                                                                  |
+| 2026-08-11     | Access exports include the counterparty's display name     | the mirror image of stripping `ipHash`: the name is what makes the row meaningful to the data subject, who already sees it in the interface, and IDs alone would be a useless answer under Art. 15 |
+| 2026-08-11     | "Search only" is documented as a courtesy, not a guarantee | server-side search with a mandatory query prevents browsing, but repeated queries can still map a stock; users who need a hard boundary must pick "nothing"                                        |
+| 2026-08-11     | Loan requests are not written to the security log          | they are usage data; logging them would create the movement profile `contracts/audit.ts` explicitly excludes                                                                                       |

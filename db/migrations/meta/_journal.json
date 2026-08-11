@@ -57,6 +57,13 @@
       "when": 1786309181921,
       "tag": "0007_drop_migration_state",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786424889175,
+      "tag": "0008_friends",
+      "breakpoints": true
     }
   ]
 }

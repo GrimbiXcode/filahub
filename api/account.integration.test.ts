@@ -124,7 +124,9 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     const withUserId = result.rows.map(r => r.table_name);
 
     expect(withUserId).toEqual([
+      "friendships",
       "hidden_spool_presets",
+      "loan_requests",
       "materials",
       "preset_proposals",
       "spool_types",
@@ -132,15 +134,23 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese fünf plus vier, die den Personenbezug über eine andere Spalte
+      Diese sieben plus vier, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` (über das Material),
       `loginCodes` (Telegram-ID) und `auditLog` (actorUserId). Ändert sich
       die linke Seite, muss die rechte nachziehen.
+
+      `friendships` und `loan_requests` tragen den Personenbezug in **zwei**
+      Spalten – die zweite (`friendUserId` bzw. `ownerUserId`) fällt oben durchs
+      Raster, weil die Abfrage auf den Namen `userId` prüft. Genau deshalb heißt
+      die Antragsteller-Spalte in beiden Tabellen so: Ein hübscheres
+      `requesterId` wäre hier still durchgerutscht.
     */
     expect([...ACCOUNT_EXPORT_SECTIONS].sort()).toEqual(
       [
         "auditLog",
+        "friendships",
         "hiddenSpoolPresets",
+        "loanRequests",
         "loginCodes",
         "materials",
         "presetProposals",

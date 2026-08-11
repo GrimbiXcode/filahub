@@ -34,6 +34,28 @@ export const AUDIT_EVENTS = [
   "proposal.approved",
   /** Preset-Vorschlag abgelehnt */
   "proposal.rejected",
+  /*
+    Freundschaften. Sie stehen hier, weil sie Zugriffsrechte verändern: Wer wann
+    Einsicht in ein fremdes Lager bekam und wer sie wieder entzogen hat, muss
+    rekonstruierbar sein – es ist die einzige Stelle, an der Fachdaten den
+    Benutzer wechseln.
+
+    Ausleih-Anfragen stehen bewusst **nicht** hier. Sie sind Nutzung, nicht
+    Sicherheit, und würden aus dem Protokoll das Bewegungsprofil machen, das der
+    Absatz oben ausschließt.
+  */
+  /** Freundschaftsanfrage gestellt */
+  "friend.requested",
+  /** Freundschaftsanfrage angenommen */
+  "friend.accepted",
+  /** Freundschaftsanfrage abgelehnt */
+  "friend.declined",
+  /** Freundschaft aufgelöst */
+  "friend.removed",
+  /** Sichtbarkeit des eigenen Lagers für einen Freund geändert */
+  "friend.visibility_changed",
+  /** Freundescode neu erzeugt, alter damit entwertet */
+  "friend.code_rotated",
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

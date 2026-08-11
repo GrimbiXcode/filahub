@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Archive,
@@ -14,7 +14,10 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   Sun,
+  Users,
 } from "lucide-react";
+import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
 import { WeighingDialog } from "@/components/WeighingDialog";
 import { Badge } from "@/components/ui/badge";
@@ -28,8 +31,9 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
-import { RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
+import { FRIENDS_PATH, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
 import { useAuth } from "@/hooks/useAuth";
+import { useDebounced } from "@/hooks/useDebounced";
 import { useFormat } from "@/lib/formatContext";
 import {
   getQuickActionsState,
@@ -80,6 +84,11 @@ export function QuickActionsHost() {
         }
         material={current.weighingFor}
       />
+      <LoanRequestDialog
+        open={current.loanFor != null}
+        onOpenChange={open => !open && setQuickActionsState({ loanFor: null })}
+        material={current.loanFor}
+      />
       <CommandPalette
         open={current.paletteOpen}
         mode={current.paletteMode}
@@ -102,6 +111,7 @@ const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
   { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
   { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
+  { icon: Users, label: "friends", path: FRIENDS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Sparkles, label: "releaseNotes", path: RELEASE_NOTES_PATH },
   { icon: SettingsIcon, label: "settings", path: SETTINGS_PATH },
@@ -134,6 +144,31 @@ function CommandPalette({
   const { data: materials } = trpc.material.list.useQuery(undefined, {
     enabled: open,
   });
+
+  /*
+    Der Suchbegriff liegt im Zustand, weil das eigene Lager und das der Freunde
+    unterschiedlich gesucht werden: Das eigene filtert cmdk im Browser über die
+    vollständig geladene Liste, das der Freunde muss der Server durchsuchen –
+    sonst wäre die Sichtbarkeitsstufe „nur in der Suche“ wirkungslos, weil die
+    Liste ohnehin im Browser läge.
+  */
+  const [query, setQuery] = useState("");
+  const debounced = useDebounced(query.trim(), 300);
+  const { data: friendMaterials } = trpc.friend.searchMaterials.useQuery(
+    { query: debounced },
+    {
+      enabled: open && debounced.length >= FRIEND_SEARCH_MIN_LENGTH,
+      staleTime: 1000 * 30,
+    }
+  );
+
+  // Beim Öffnen mit leerem Feld beginnen, damit nicht die letzte Suche
+  // stehenbleibt. Wie im WeighingDialog bewusst während des Renderns.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setQuery("");
+  }
 
   const run = (action: () => void) => {
     onOpenChange(false);
@@ -180,6 +215,43 @@ function CommandPalette({
     </CommandItem>
   ));
 
+  /*
+    Treffer bei Freunden. Der rohe Suchbegriff steht mit im `value`, damit
+    cmdk sie nicht ein zweites Mal wegfiltert: Die Zeilen kommen schon passend
+    vom Server, cmdk kennt aber nur seinen eigenen Filter über `value`.
+  */
+  const friendItems = (friendMaterials ?? []).map(material => (
+    <CommandItem
+      key={`friend-${material.id}`}
+      value={[
+        debounced,
+        material.name,
+        material.materialType,
+        material.manufacturer,
+        material.color,
+        material.ownerName,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onSelect={() => run(() => quickActions.openLoanRequest(material))}
+    >
+      <Users className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate leading-tight">{material.name}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {t.friends.ownerLabel({ name: material.ownerName })} ·{" "}
+          {material.materialType} ·{" "}
+          {t.quick.remaining({
+            amount: formatGrams(material.remainingWeight),
+          })}
+        </span>
+      </div>
+      <Badge variant="secondary" className="ml-2 shrink-0 text-xs">
+        {t.loan.ask}
+      </Badge>
+    </CommandItem>
+  ));
+
   return (
     <CommandDialog
       open={open}
@@ -191,6 +263,8 @@ function CommandPalette({
       className="sm:max-w-xl"
     >
       <CommandInput
+        value={query}
+        onValueChange={setQuery}
         placeholder={
           mode === "weigh"
             ? t.quick.weighPlaceholder
@@ -291,6 +365,15 @@ function CommandPalette({
                 <CommandSeparator />
                 <CommandGroup heading={t.quick.groupMaterials}>
                   {materialItems}
+                </CommandGroup>
+              </>
+            )}
+
+            {friendItems.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading={t.friends.searchTitle}>
+                  {friendItems}
                 </CommandGroup>
               </>
             )}

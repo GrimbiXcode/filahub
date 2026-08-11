@@ -3,8 +3,10 @@
 Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filamente mit
 Rollentypen (Spule/Verpackung) und Lagerboxen (Drybox) inkl. Leergewicht
 (Tara), Wägungen mit automatischer Restmengenberechnung, Kurz-Kennungen zum
-schnellen Wiederfinden, Login ausschließlich über Telegram. Die Oberfläche
-spricht Deutsch und Englisch (umschaltbar pro Benutzer).
+schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können
+sich als Freunde verbinden, ihr Lager abgestuft freigeben und Material
+untereinander anfragen. Die Oberfläche spricht Deutsch und Englisch
+(umschaltbar pro Benutzer).
 
 ## Tech-Stack
 
@@ -21,8 +23,8 @@ spricht Deutsch und Englisch (umschaltbar pro Benutzer).
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, SpoolTypes, StorageBoxes, Import,
-                Settings, AdminPresets, AdminProposals, AdminSystem, Login,
-                NotFound
+                Friends, FriendInventory, Settings, AdminPresets,
+                AdminProposals, AdminSystem, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
                 (Dialoge + Schnellsuche), ThemeToggle
@@ -41,19 +43,23 @@ src/            React-Frontend
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
-  router.ts     appRouter: ping, auth, spoolType, storageBox, material, preset, admin
-                (admin: preset, proposal, system)
+  router.ts     appRouter: ping, auth, spoolType, storageBox, material, friend, preset,
+                admin (admin: preset, proposal, system)
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
-  telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login)
+  telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
+                send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
+                friends.ts (Sichtbarkeit, Projektion, Ausleih-Vorgänge),
                 presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
-                types.ts, import.ts, presets.ts (Preset-Schemas + reine Hilfsfunktionen),
+                types.ts, import.ts, friends.ts (Stufen, Freundescode),
+                notifications.ts (Texte der Telegram-Nachrichten),
+                presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
                 releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik)
 ```
@@ -103,15 +109,65 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   `ctx.user.id` berücksichtigen (siehe Muster in `api/materialRouter.ts` mit
   `validateForeignKeys` und den `*BelongsToUser`-Hilfsfunktionen in
   `api/queries/filament.ts`).
-  **Einzige Ausnahme:** die `preset_*`-Tabellen sind ein globaler, von
+  **Zwei Ausnahmen:** die `preset_*`-Tabellen sind ein globaler, von
   Administratoren gepflegter Katalog und haben bewusst keine `userId`. Der
   Benutzerbezug steckt allein in `hidden_spool_presets` (Ausblenden) und
-  `preset_proposals` (Einreicher).
+  `preset_proposals` (Einreicher). Die zweite sind die Freundes-Lesepfade –
+  siehe den eigenen Abschnitt unten.
 - **Auth-Fluss:** `createContext` ruft `authenticateRequest` auf; nicht
   angemeldete Requests bekommen `user: undefined` statt eines Fehlers –
   die Prozedur-Middleware entscheidet. Session = JWT (HS256, 1 Jahr) im
   Cookie `filament_sid`. Außerhalb von localhost wird das Cookie als
   `Secure; SameSite=None` gesetzt → HTTPS ist im Produktivbetrieb Pflicht.
+
+## Freunde und geteiltes Lager
+
+Die einzige Funktion, die die Mandantengrenze absichtlich überschreitet. Ein
+Fehler hier ist keine kaputte Ansicht, sondern eine Datenpanne – entsprechend
+eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
+
+- **Eine Zeile je Paar** (`friendships`), mit **zwei** Sichtbarkeitsstufen:
+  `visibilityFromUser` ist die Freigabe von `userId`, `visibilityFromFriend` die
+  von `friendUserId`. Jede Seite entscheidet allein über ihr eigenes Lager; eine
+  gemeinsame Stufe wäre einfacher und falsch, weil sie den einen über das Lager
+  des anderen bestimmen ließe.
+- **Die Richtung löst genau eine Funktion auf:** `resolveVisibility`. Sie ist
+  rein und ohne Datenbank testbar, weil das Vertauschen der beiden Spalten der
+  wahrscheinlichste schwere Fehler ist. Kein zweiter Vergleich über
+  `userId`/`friendUserId` irgendwo sonst, auch nicht im SQL.
+- **Jede Lesefunktion nimmt `viewerId` als ersten Parameter** und ermittelt die
+  erlaubten Besitzer selbst. Keine nimmt eine Besitzerliste von außen an –
+  sonst wäre die Prüfung eine Frage der Disziplin am Aufrufort.
+- **`FriendMaterial` ist handgeschrieben**, nicht aus dem Schema abgeleitet, und
+  `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
+  eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
+  nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
+  `notes`, `purchaseDate`, alles zur Lagerbox und der Wägungsverlauf.
+- **Die Lagerbox ist unsichtbar, ihr Leergewicht zählt trotzdem.** Wird eine
+  Rolle in ihrer Drybox gewogen, ist die Restmenge
+  `grossWeight − Rollentara − Boxtara`. Wer den Box-Join weglässt, „weil Freunde
+  die Box nicht sehen dürfen“, meldet eine zu hohe Restmenge – also genau die
+  Zahl falsch, um die es geht.
+- **Die Suche bei Freunden läuft serverseitig**, anders als die im eigenen Lager
+  (`Home.tsx`, `QuickActions.tsx`). Das ist der Kern der Stufe `search`: Läge
+  die Liste im Browser, wäre die Stufe mit einem Blick in die
+  Entwicklerwerkzeuge ausgehebelt. Der Pflicht-Suchbegriff (zwei Zeichen) steht
+  deshalb an **zwei** Stellen – im Router und in
+  `findFriendMaterialsForSearch` –, und `%`/`_` werden maskiert. `notes` wird
+  nicht durchsucht: keine Treffer über Text, den man nicht sehen darf.
+- **Zwei Riegel liegen in der Datenbank** und nur in der Migration
+  `0008_friends.sql`, weil drizzle-kit sie nicht erzeugen kann: ein
+  Ausdrucks-Index über `LEAST/GREATEST` gegen die gespiegelte Freundschaft und
+  ein partieller Unique-Index für „höchstens eine _offene_ Anfrage je Person und
+  Material“. Bei künftigen Schema-Änderungen in die neue Migration übernehmen;
+  `api/friends.integration.test.ts` prüft, dass beide existieren.
+- **Freundschaften werden protokolliert, Ausleih-Anfragen nicht** (`friend.*` in
+  `contracts/audit.ts`). Erstere ändern Zugriffsrechte, letztere sind Nutzung –
+  die Grenze zieht der Kommentar in `contracts/audit.ts`.
+- **`sendTelegramMessage` gibt `boolean` zurück** (`api/telegram/send.ts`).
+  Telegram lässt einen Bot nur schreiben, wenn der Empfänger den Chat einmal
+  geöffnet hat; wer nur das Login-Widget benutzt hat, ist unerreichbar. Der
+  Vorgang liegt trotzdem in der App, und die Oberfläche sagt das (`notified`).
 
 ## Preset-Katalog
 
@@ -251,8 +307,12 @@ Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
 `.env.example`). Erforderlich: `APP_SECRET` (Session-Signatur),
 `DATABASE_URL` (PostgreSQL), dazu `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
 `TELEGRAM_ALLOWED_IDS` (kommagetrennte Whitelist; leer = offene Registrierung),
-`OWNER_TELEGRAM_ID` (Admin). `drizzle.config.ts` benötigt ebenfalls
-`DATABASE_URL`.
+`OWNER_TELEGRAM_ID` (Admin). Optional `APP_BASE_URL` – die öffentliche Adresse
+der Instanz, nur für Links in Telegram-Nachrichten; fehlt sie, nennen die
+Nachrichten bloß den Ort in der App. Bewusst konfiguriert und nicht aus den
+Anfrage-Kopfzeilen abgeleitet: Die kann ein Aufrufer setzen, und daraus einen
+Link zu bauen, den wir an Dritte verschicken, wäre eine offene Weiterleitung.
+`drizzle.config.ts` benötigt ebenfalls `DATABASE_URL`.
 
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
 
@@ -338,9 +398,12 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `format` und `releaseNotes`. Alle laufen ohne Datenbank –
-  reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
-  anlegen.
+  `materialStats`, `format`, `releaseNotes`, `friendVisibility` und
+  `friendCode`. Alle laufen ohne Datenbank – reine zod- und Funktionstests. Bei
+  neuen Backend-Features Tests in `api/` anlegen.
+- `api/friendVisibility.test.ts` ist mehr als ein Funktionstest: Die Zusicherung
+  über die Schlüsselmenge von `toFriendMaterial` ist der Riegel dagegen, dass
+  eine später zu `materials` ergänzte Spalte still bei Freunden landet.
 - `api/releaseNotes.test.ts` prüft zusätzlich die echten Dateien in
   `src/release-notes/` (Namen, Frontmatter, Bildverweise, Alternativtexte).
   Das ist Absicht: `vite build` führt die Module nicht aus, eine kaputte
@@ -351,15 +414,19 @@ Datenbank.
 
 ### Integrationstests (`npm run test:integration`)
 
-- `api/postgres.integration.test.ts` und `api/account.integration.test.ts`,
-  konfiguriert in `vitest.integration.config.ts`; aus `vitest.config.ts`
-  ausgeschlossen, damit `npm run test` ohne Datenbank lauffähig bleibt.
+- `api/postgres.integration.test.ts`, `api/account.integration.test.ts` und
+  `api/friends.integration.test.ts`, konfiguriert in
+  `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
+  `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in
   `docker-compose.yml`.
 - Abgedeckt: Migrationen, Enum-Typen, `jsonb`, `timestamptz`, Idempotenz des
   Seedings, Katalog- und Vorschlagsfluss über die tRPC-Router, Unique-Keys,
   `RETURNING`, die optimistische Sperre, Zeitstempel und der Systemzustand für
-  `/verwaltung/system`.
+  `/verwaltung/system`. Dazu der ganze Freundes-Fluss: beide
+  Sichtbarkeitsrichtungen, alle drei Stufen, die Abwesenheit der verbotenen
+  Felder in **jeder** Antwort, die zwei handgeschriebenen Indizes und die
+  Löschung in beiden Richtungen.
 - Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
   mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **das gesamte Schema**
   der Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).

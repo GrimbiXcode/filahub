@@ -74,6 +74,20 @@ export const env = {
   /** Telegram-User-ID des ersten Admins */
   ownerTelegramId: process.env.OWNER_TELEGRAM_ID ?? "",
   /*
+    Öffentliche Adresse dieser Instanz, z. B. „https://filahub.example“.
+
+    Gebraucht nur für Links in Telegram-Nachrichten: Der Server kennt seine
+    eigene Adresse nicht: Hinter einem Reverse Proxy stehen in der Anfrage
+    Kopfzeilen, die ein Aufrufer setzen kann – daraus einen Link zu bauen, den
+    wir an Dritte verschicken, wäre eine offene Weiterleitung. Deshalb
+    ausdrücklich konfiguriert oder eben nicht: Fehlt der Wert, lässt die
+    Nachricht den Link weg und nennt nur den Ort in der App.
+
+    Abschließende Schrägstriche fallen weg, damit `${appBaseUrl}/freunde` nicht
+    zu einem doppelten Schrägstrich führt.
+  */
+  appBaseUrl: (process.env.APP_BASE_URL ?? "").trim().replace(/\/+$/, ""),
+  /*
     Registrierung für jeden Telegram-Nutzer öffnen.
 
     Bis 1.1.1 war das der stille Standard: leere `TELEGRAM_ALLOWED_IDS`

@@ -6,6 +6,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
 import AdminProposals from "./pages/AdminProposals";
 import AdminSystem from "./pages/AdminSystem";
+import FriendInventory from "./pages/FriendInventory";
+import Friends from "./pages/Friends";
 import Home from "./pages/Home";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
@@ -28,6 +30,8 @@ export default function App() {
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path="/rollentypen" element={<SpoolTypes />} />
         <Route path="/lagerboxen" element={<StorageBoxes />} />
+        <Route path="/freunde" element={<Friends />} />
+        <Route path="/freunde/:id" element={<FriendInventory />} />
         <Route path={RELEASE_NOTES_PATH} element={<ReleaseNotes />} />
         <Route path={SETTINGS_PATH} element={<Settings />} />
         <Route path="/verwaltung/presets" element={<AdminPresets />} />

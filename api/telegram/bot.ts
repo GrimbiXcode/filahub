@@ -4,6 +4,7 @@ import { loginCodes } from "@db/schema";
 import { getDb } from "../queries/connection";
 import { runRetentionSweep } from "../queries/retention";
 import { env } from "../lib/env";
+import { sendTelegramMessage } from "./send";
 
 type TelegramUser = {
   id: number;
@@ -20,20 +21,16 @@ type TelegramUpdate = {
   };
 };
 
-/** Antwortet auf eine Bot-Nachricht (Fehler werden nur geloggt). */
+/**
+ * Antwortet auf eine Bot-Nachricht.
+ *
+ * Der Versand selbst liegt in `send.ts`, damit ihn auch Router nutzen können,
+ * ohne die Polling-Schleife mitzuziehen. Hier interessiert der Rückgabewert
+ * nicht: Wem seine Antwort auf `/login` nicht zugestellt werden kann, dem
+ * können wir es auch nicht mitteilen.
+ */
 async function sendMessage(chatId: number, text: string) {
-  try {
-    await fetch(
-      `https://api.telegram.org/bot${env.telegramBotToken}/sendMessage`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chat_id: chatId, text }),
-      }
-    );
-  } catch (e) {
-    console.warn("[telegram] sendMessage fehlgeschlagen:", e);
-  }
+  await sendTelegramMessage(chatId, text);
 }
 
 /** Gültigkeitsdauer eines Login-Codes. Kurz, weil er nur abgetippt wird. */

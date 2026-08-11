@@ -47,6 +47,7 @@ cp .env.example .env
 | `TELEGRAM_ALLOWED_IDS`       | Allowed Telegram IDs (comma-separated); empty = nobody, unless opened below |
 | `TELEGRAM_OPEN_REGISTRATION` | Set to `1` to let any Telegram account register                             |
 | `OWNER_TELEGRAM_ID`          | Telegram ID of the admin                                                    |
+| `APP_BASE_URL`               | Public address of this instance — links in Telegram messages; optional      |
 | `LEGAL_OPERATOR_NAME`        | Who runs this instance — shown in the imprint and privacy policy            |
 | `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator — multi-line, see below                      |
 | `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |

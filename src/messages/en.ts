@@ -49,6 +49,9 @@ export const en: Messages = {
     import: "Import",
     spoolTypes: "Spool types",
     storageBoxes: "Storage boxes",
+    friends: "Friends",
+    friendsPending: (vars: { count: number }) =>
+      `Friends (${vars.count} pending)`,
     administration: "Administration",
     presetCatalog: "Preset catalogue",
     proposals: "Suggestions",
@@ -739,5 +742,113 @@ export const en: Messages = {
     invalidTare: "Please enter a valid empty weight in grams",
     invalidDimensions: "Please enter valid dimensions in millimetres",
     noChanges: "The suggestion does not contain any changes",
+  },
+
+  friends: {
+    title: "Friends",
+    description:
+      "Share filament with friends – you decide for each of them how much of your stock they see. Never any prices.",
+
+    myCodeTitle: "Your friend code",
+    myCodeHint:
+      "Pass the code to someone you want to share filament with. Only those who know it can send you a request.",
+    copyCode: "Copy code",
+    codeCopied: "Friend code copied",
+    rotateCode: "Generate a new code",
+    rotateCodeTitle: "Generate a new friend code?",
+    rotateCodeDescription:
+      "The old code stops working afterwards. Existing friendships are unaffected.",
+    codeRotated: "New friend code generated",
+
+    addTitle: "Add a friend",
+    addHint:
+      "Friend code or Telegram name. The code is the more reliable route – not everyone has set a Telegram name.",
+    codeLabel: "Friend code",
+    codePlaceholder: "FH-A2B3-C4D5",
+    usernameLabel: "Telegram name",
+    usernamePlaceholder: "@name",
+    sendRequest: "Send request",
+    requestSent: "Request sent",
+    requestSentUnreachable:
+      "Request sent. The person could not be reached on Telegram – they will see it on their next visit.",
+
+    listTitle: "Your friends",
+    emptyTitle: "No friends yet",
+    emptyDescription:
+      "Exchange friend codes, and you will find your friends' shared filament in search.",
+    incomingTitle: "Requests waiting for you",
+    outgoingTitle: "Requests you sent",
+    pendingBadge: "Waiting",
+    declinedBadge: "Declined",
+    accept: "Accept",
+    decline: "Decline",
+    accepted: "Request accepted",
+    declined: "Request declined",
+    removeFriend: "End friendship",
+    removeTitle: "End this friendship?",
+    removeDescription: (vars: { name: string }) =>
+      `Afterwards you will no longer see any filament from ${vars.name}, and ${vars.name} none of yours. Pending loan requests go with it.`,
+    removed: "Friendship ended",
+
+    sharedByMe: "You show",
+    sharedWithMe: "You see",
+    theirChoice: "Your friend's choice",
+    visibilityNone: "Nothing",
+    visibilitySearch: "Search only",
+    visibilityFull: "Whole stock",
+    visibilityNoneHint: "Your stock stays completely hidden.",
+    visibilitySearchHint:
+      "Matches appear only when something specific is searched for. No browsing your stock.",
+    visibilityFullHint:
+      "The whole stock can be viewed – without prices, notes, purchase dates, location and weigh-ins.",
+    visibilitySaved: "Visibility saved",
+    openInventory: "View stock",
+
+    inventoryTitle: (vars: { name: string }) => `${vars.name}'s stock`,
+    inventoryDescription:
+      "Shared filament. Prices, notes, purchase dates, location and weigh-ins are not included.",
+    inventoryEmpty: "This stock is empty.",
+    inventoryDenied:
+      "You cannot view this stock. The sharing setting may have changed.",
+
+    searchTitle: "Found with friends",
+    searchHintShort: (vars: { count: number }) =>
+      `From ${vars.count} characters your friends' stock is searched too.`,
+    searchEmpty: "Your friends have nothing matching this.",
+    searchCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 match" : `${vars.count} matches`,
+    ownerLabel: (vars: { name: string }) => `at ${vars.name}`,
+    ownerColumn: "At",
+  },
+
+  loan: {
+    ask: "Ask",
+    askTitle: "Ask for filament",
+    askDescription: (vars: { material: string; name: string }) =>
+      `${vars.name} will get a message that you would like to borrow “${vars.material}”.`,
+    messageLabel: "Message (optional)",
+    messagePlaceholder: "e.g. “I'd need about 200 g, will return the rest.”",
+    send: "Send request",
+    sending: "Sending …",
+    sent: "Request sent",
+    sentUnreachable:
+      "Request sent. The person could not be reached on Telegram – they will see it on their next visit.",
+
+    incomingTitle: "Loan requests for you",
+    outgoingTitle: "Your loan requests",
+    emptyIncoming: "Nobody is asking for your filament right now.",
+    emptyOutgoing: "You have not asked for anything.",
+    fromLabel: (vars: { name: string }) => `from ${vars.name}`,
+    toLabel: (vars: { name: string }) => `to ${vars.name}`,
+    statusOpen: "Open",
+    statusAccepted: "Accepted",
+    statusDeclined: "Declined",
+    statusWithdrawn: "Withdrawn",
+    accept: "Accept",
+    decline: "Decline",
+    accepted: "Accepted",
+    declined: "Declined",
+    withdraw: "Withdraw",
+    withdrawn: "Request withdrawn",
   },
 };

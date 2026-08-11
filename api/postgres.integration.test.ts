@@ -104,6 +104,9 @@ describe("Migrationen", () => {
       "preset_spool_material",
       "preset_proposal_kind",
       "preset_proposal_status",
+      "friend_visibility",
+      "friendship_status",
+      "loan_request_status",
     ]) {
       expect(names).toContain(type);
     }

@@ -19,6 +19,12 @@ export const TELEGRAM_WIDGET_CONSENT_KEY = "telegram-widget-consent";
 export const LOGIN_PATH = "/login";
 export const SETTINGS_PATH = "/einstellungen";
 export const RELEASE_NOTES_PATH = "/neuerungen";
+export const FRIENDS_PATH = "/freunde";
+
+/** Lager eines Freundes – nur bei Sichtbarkeitsstufe `full` erreichbar. */
+export function friendInventoryPath(friendId: number): string {
+  return `${FRIENDS_PATH}/${friendId}`;
+}
 
 /**
  * Rechtstexte. Sie liegen als Markdown unter `src/legal/<doc>.<sprache>.md`.

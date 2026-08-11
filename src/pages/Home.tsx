@@ -15,7 +15,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
 import AuthLayout from "@/components/AuthLayout";
+import { FriendMaterialList } from "@/components/FriendMaterialList";
+import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { PageHeader } from "@/components/PageHeader";
 import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
@@ -47,12 +50,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useDebounced } from "@/hooks/useDebounced";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import type { MaterialOverview } from "@/types";
+import type { FriendMaterial, MaterialOverview } from "@/types";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -748,8 +752,72 @@ export default function Home() {
             </Card>
           </>
         )}
+
+        <FriendResults query={search} />
       </div>
     </AuthLayout>
+  );
+}
+
+/**
+ * Treffer im Lager der Freunde – ein eigener Abschnitt unter dem eigenen
+ * Bestand.
+ *
+ * Die Suche läuft hier **serverseitig**, anders als beim eigenen Lager oben.
+ * Das ist keine Inkonsequenz, sondern der Kern der Sichtbarkeitsstufe „nur in
+ * der Suche“: Läge die Liste vollständig im Browser, wäre die Stufe mit einem
+ * Blick in die Entwicklerwerkzeuge ausgehebelt. Deshalb wandert nur der
+ * Suchbegriff hin und nur die Treffer zurück.
+ *
+ * Getrennt vom eigenen Bestand dargestellt, weil die Zeilen weniger Felder
+ * haben (kein Preis, kein Kaufdatum, keine Box) und eine andere Aktion tragen.
+ */
+function FriendResults({ query }: { query: string }) {
+  const t = useT();
+  const [asking, setAsking] = useState<FriendMaterial | null>(null);
+  const term = query.trim();
+  const debounced = useDebounced(term, 300);
+  const ready = debounced.length >= FRIEND_SEARCH_MIN_LENGTH;
+
+  const { data, isFetching } = trpc.friend.searchMaterials.useQuery(
+    { query: debounced },
+    {
+      enabled: ready,
+      // Der Bestand eines Freundes ändert sich nicht im Sekundentakt.
+      staleTime: 1000 * 30,
+    }
+  );
+
+  /*
+    Ohne Suchbegriff gibt es hier nichts zu zeigen, und wer keine Freunde hat
+    (oder keine Treffer), soll keinen leeren Abschnitt vor sich haben. Der
+    Abschnitt erscheint deshalb nur, wenn er etwas enthält.
+  */
+  const results = data ?? [];
+  if (!ready) return null;
+  if (!isFetching && results.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="text-sm font-medium">{t.friends.searchTitle}</h2>
+        {results.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            {t.friends.searchCount({ count: results.length })}
+          </span>
+        )}
+      </div>
+
+      {results.length > 0 && (
+        <FriendMaterialList materials={results} onAsk={setAsking} showOwner />
+      )}
+
+      <LoanRequestDialog
+        open={asking != null}
+        onOpenChange={open => !open && setAsking(null)}
+        material={asking}
+      />
+    </div>
   );
 }
 

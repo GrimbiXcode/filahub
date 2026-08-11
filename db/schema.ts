@@ -1,3 +1,8 @@
+import {
+  FRIEND_VISIBILITIES,
+  FRIENDSHIP_STATUSES,
+  LOAN_REQUEST_STATUSES,
+} from "@contracts/friends";
 import type { NameI18n } from "@contracts/presets";
 import {
   pgTable,
@@ -59,6 +64,16 @@ export const users = pgTable("users", {
    * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
    */
   lastSeenReleaseVersion: varchar("lastSeenReleaseVersion", { length: 32 }),
+  /**
+   * Teilbarer Code, über den andere eine Freundschaftsanfrage stellen können
+   * (Format `FH-XXXX-XXXX`, siehe contracts/friends.ts).
+   *
+   * `NULL`, solange der Benutzer die Freundesseite nie geöffnet hat: Wer die
+   * Funktion nicht nutzt, bekommt auch kein zusätzliches Merkmal. Neu erzeugen
+   * macht den alten Code sofort wertlos – ein Code, den man verteilt hat, muss
+   * zurückholbar sein.
+   */
+  friendCode: varchar("friendCode", { length: 16 }).unique(),
   /**
    * Zähler zum Entwerten ausgegebener Sitzungen.
    *
@@ -525,3 +540,139 @@ export const auditLog = pgTable(
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type InsertAuditLogEntry = typeof auditLog.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Community: Freundschaften und Ausleih-Anfragen
+//
+// Die erste Stelle, an der Fachdaten eines Benutzers absichtlich bei einem
+// anderen ankommen. Bis hierhin gilt für jede Tabelle „`userId` filtern und
+// fertig“; ab hier entscheidet eine Freundschaft mit, wer was sehen darf.
+//
+// Deshalb heißt die Spalte des Antragstellers in beiden Tabellen `userId` und
+// nicht `requesterId`: Der Wächter in `api/account.integration.test.ts` sucht
+// im `information_schema` nach genau diesem Spaltennamen und schlägt an,
+// solange Auskunft und Löschung die neue Tabelle nicht kennen. Ein hübscherer
+// Name würde still durchrutschen.
+// ---------------------------------------------------------------------------
+
+/*
+  Die Aufzählungen stehen in `contracts/friends.ts` und werden hier nur zu
+  Postgres-Enums gemacht – nicht wie bei den Preset-Ebenen gespiegelt. Client
+  und Server lesen damit dieselbe Liste, und ein neuer Wert kann nicht in der
+  einen Datei stehen und in der anderen fehlen.
+*/
+export const friendVisibilityEnum = pgEnum(
+  "friend_visibility",
+  FRIEND_VISIBILITIES
+);
+
+export const friendshipStatusEnum = pgEnum(
+  "friendship_status",
+  FRIENDSHIP_STATUSES
+);
+
+/**
+ * Freundschaft zwischen zwei Benutzern – **eine** Zeile je Paar.
+ *
+ * Die Sichtbarkeit ist bewusst asymmetrisch: Jede Seite entscheidet allein
+ * über ihr eigenes Lager. Eine gemeinsame Stufe wäre einfacher, hieße aber,
+ * dass der eine die Freigabe des anderen ändern kann.
+ *
+ * Welche der beiden Spalten für eine Richtung gilt, löst **ausschließlich**
+ * `resolveVisibility` in `api/queries/friends.ts` auf. Jeder weitere Vergleich
+ * über `userId`/`friendUserId` wäre eine zweite Wahrheit – und ein vertauschtes
+ * Feld hier ist keine kaputte Ansicht, sondern eine Datenpanne.
+ */
+export const friendships = pgTable(
+  "friendships",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Wer die Anfrage gestellt hat (siehe Kommentar über der Tabelle) */
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    /** Wer angefragt wurde */
+    friendUserId: bigint("friendUserId", { mode: "number" }).notNull(),
+    status: friendshipStatusEnum("status").default("pending").notNull(),
+    /** Was `friendUserId` vom Lager von `userId` sehen darf */
+    visibilityFromUser: friendVisibilityEnum("visibilityFromUser")
+      .default("search")
+      .notNull(),
+    /** Was `userId` vom Lager von `friendUserId` sehen darf */
+    visibilityFromFriend: friendVisibilityEnum("visibilityFromFriend")
+      .default("search")
+      .notNull(),
+    respondedAt: tsColumn("respondedAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    /*
+      Verhindert die doppelte Zeile in *einer* Richtung. Die gespiegelte Zeile
+      (B, A) fängt das nicht – dafür gibt es zusätzlich einen Ausdrucks-Index
+      über LEAST/GREATEST, der von Hand in der Migration steht (drizzle-kit
+      kann ihn nicht erzeugen). Ohne ihn könnten zwei gleichzeitige Anfragen in
+      beide Richtungen zwei Freundschaften mit widersprüchlichen
+      Sichtbarkeiten anlegen, und welche gilt, entschiede die Sortierung.
+    */
+    unique("friendships_pair_unique").on(t.userId, t.friendUserId),
+    index("friendships_user_idx").on(t.userId),
+    index("friendships_friend_idx").on(t.friendUserId),
+  ]
+);
+
+export type Friendship = typeof friendships.$inferSelect;
+export type InsertFriendship = typeof friendships.$inferInsert;
+
+export const loanRequestStatusEnum = pgEnum(
+  "loan_request_status",
+  LOAN_REQUEST_STATUSES
+);
+
+/**
+ * Anfrage, ein Material eines Freundes auszuleihen.
+ *
+ * Der Vorgang lebt in der App; Telegram schickt nur den Hinweis darauf. Damit
+ * bleibt der Stand für beide Seiten sichtbar, und die Anfrage geht nicht
+ * verloren, wenn der Bot den Empfänger nicht erreichen kann.
+ */
+export const loanRequests = pgTable(
+  "loan_requests",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Wer fragt (siehe Kommentar über `friendships`) */
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    /** Wem das Material gehört */
+    ownerUserId: bigint("ownerUserId", { mode: "number" }).notNull(),
+    materialId: bigint("materialId", { mode: "number" }).notNull(),
+    /**
+     * Bezeichnung zum Zeitpunkt der Anfrage. Denormalisiert wie der
+     * JSON-Schnappschuss in `preset_proposals`: Wird die Rolle umbenannt oder
+     * gelöscht, muss der Vorgang lesbar bleiben – sonst stünde in der Liste
+     * beider Seiten irgendwann eine nackte ID.
+     */
+    materialName: varchar("materialName", { length: 255 }).notNull(),
+    message: varchar("message", { length: 300 }),
+    status: loanRequestStatusEnum("status").default("open").notNull(),
+    respondedAt: tsColumn("respondedAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  /*
+    Beide Richtungen werden gelesen (eingehend und ausgehend) und beim
+    Kontolöschen abgeräumt – ohne Indizes wäre das je Konto ein Full Scan.
+    Die Regel „höchstens eine *offene* Anfrage je Person und Material“ steckt
+    in einem partiellen Unique-Index, der von Hand in der Migration steht.
+  */
+  t => [
+    index("loan_requests_owner_idx").on(t.ownerUserId),
+    index("loan_requests_user_idx").on(t.userId),
+  ]
+);
+
+export type LoanRequest = typeof loanRequests.$inferSelect;
+export type InsertLoanRequest = typeof loanRequests.$inferInsert;

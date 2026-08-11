@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne, or } from "drizzle-orm";
 import {
   ACCOUNT_EXPORT_VERSION,
   type AccountExportSection,
@@ -78,6 +78,59 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   });
 
   /*
+    Freundschaften und Ausleih-Vorgänge, jeweils in **beiden** Richtungen: Eine
+    Freundschaft betrifft die Person auch dann, wenn die Anfrage von der anderen
+    Seite kam.
+
+    Mitgeliefert wird der Anzeigename der Gegenseite. Das ist eine bewusste
+    Entscheidung und der Gegenfall zum `ipHash` unten: Dort hilft der Wert nur
+    einem Dritten, hier hilft er der betroffenen Person – ohne den Namen wäre
+    die Zeile eine sinnlose Zahlenkolonne, und aus der Oberfläche kennt sie ihn
+    ohnehin. Begründet in COMPLIANCE.md, Abschnitt „Decisions on record“.
+  */
+  const [friendshipRows, loanRows] = await Promise.all([
+    db
+      .select()
+      .from(schema.friendships)
+      .where(
+        or(
+          eq(schema.friendships.userId, userId),
+          eq(schema.friendships.friendUserId, userId)
+        )
+      ),
+    db
+      .select()
+      .from(schema.loanRequests)
+      .where(
+        or(
+          eq(schema.loanRequests.userId, userId),
+          eq(schema.loanRequests.ownerUserId, userId)
+        )
+      ),
+  ]);
+
+  const counterpartIds = [
+    ...friendshipRows.flatMap(r => [r.userId, r.friendUserId]),
+    ...loanRows.flatMap(r => [r.userId, r.ownerUserId]),
+  ].filter(id => id !== userId);
+  const counterpartNames = await loadCounterpartNames(counterpartIds);
+
+  const friendships = friendshipRows.map(row => ({
+    ...row,
+    counterpartName:
+      counterpartNames.get(
+        row.userId === userId ? row.friendUserId : row.userId
+      ) ?? null,
+  }));
+  const loanRequests = loanRows.map(row => ({
+    ...row,
+    counterpartName:
+      counterpartNames.get(
+        row.userId === userId ? row.ownerUserId : row.userId
+      ) ?? null,
+  }));
+
+  /*
     Sicherheitsprotokoll, soweit es diese Person betrifft. Ohne `ipHash`:
     Der Wert ist für die betroffene Person wertlos und würde nur einem
     Dritten helfen, der den Export in die Hände bekommt.
@@ -103,8 +156,23 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     hiddenSpoolPresets,
     presetProposals,
     loginCodes,
+    friendships,
+    loanRequests,
     auditLog,
   };
+}
+
+/** Anzeigenamen der Gegenseiten. `users.name` ist nullable. */
+async function loadCounterpartNames(
+  ids: number[]
+): Promise<Map<number, string | null>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const rows = await getDb()
+    .select({ id: schema.users.id, name: schema.users.name })
+    .from(schema.users)
+    .where(inArray(schema.users.id, unique));
+  return new Map(rows.map(r => [r.id, r.name]));
 }
 
 export type AccountDeletionResult = {
@@ -216,6 +284,38 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.loginCodes)
       .where(eq(schema.loginCodes.telegramId, user.unionId));
+
+    /*
+      10a. Freundschaften und Ausleih-Vorgänge, jeweils in **beiden**
+           Richtungen.
+
+      Die zweite Richtung ist der leicht zu übersehende Teil (Vorbild: der
+      `reviewedBy`-Schritt weiter unten). Ohne sie blieben Zeilen stehen, in
+      denen dieses Konto die Gegenseite war – und die zeigten mangels
+      Fremdschlüssel später auf eine neu vergebene ID, also auf einen
+      fremden Menschen. Dieselbe Falle behandelt Schritt 1.
+
+      Anders als angenommene Preset-Vorschläge bleibt hier nichts als Nachweis
+      stehen: Es gibt keinen Moderationszweck, der das trüge. Beim Freund
+      verschwindet damit auch seine Seite des Vorgangs – unvermeidlich, die
+      Zeile ist gemeinsames Datum beider Personen.
+    */
+    await tx
+      .delete(schema.friendships)
+      .where(
+        or(
+          eq(schema.friendships.userId, userId),
+          eq(schema.friendships.friendUserId, userId)
+        )
+      );
+    await tx
+      .delete(schema.loanRequests)
+      .where(
+        or(
+          eq(schema.loanRequests.userId, userId),
+          eq(schema.loanRequests.ownerUserId, userId)
+        )
+      );
 
     /*
       11. Sicherheitsprotokoll anonymisieren, nicht löschen.

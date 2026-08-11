@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import type { MaterialOverview } from "@/types";
+import type { FriendMaterial, MaterialOverview } from "@/types";
 
 /** „palette“ = Suche und Sprünge, „weigh“ = Material zum Wiegen auswählen */
 export type PaletteMode = "palette" | "weigh";
@@ -14,6 +14,14 @@ export type QuickActionsState = {
   formMounted: boolean;
   editing: MaterialOverview | null;
   weighingFor: MaterialOverview | null;
+  /**
+   * Material eines Freundes, für das eine Ausleih-Anfrage offen ist.
+   *
+   * Läuft über diesen Zustand und nicht über einen Dialog in der Schnellsuche:
+   * Ein Dialog im Dialog wäre eine Falle – die Palette müsste erst schließen,
+   * und bis dahin wäre der Auslöser mit ihr verschwunden.
+   */
+  loanFor: FriendMaterial | null;
   paletteOpen: boolean;
   paletteMode: PaletteMode;
 };
@@ -30,6 +38,7 @@ let state: QuickActionsState = {
   formMounted: false,
   editing: null,
   weighingFor: null,
+  loanFor: null,
   paletteOpen: false,
   paletteMode: "palette",
 };
@@ -77,6 +86,10 @@ export const quickActions = {
   /** Wägedialog für ein bestimmtes Material öffnen */
   openWeighing(material: MaterialOverview) {
     setQuickActionsState({ weighingFor: material });
+  },
+  /** Ausleih-Anfrage für das Material eines Freundes öffnen */
+  openLoanRequest(material: FriendMaterial) {
+    setQuickActionsState({ loanFor: material });
   },
   /** Schnellsuche öffnen; im Modus „weigh“ direkt zur Materialauswahl */
   openPalette(mode: PaletteMode = "palette") {
