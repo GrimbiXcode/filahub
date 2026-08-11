@@ -96,13 +96,23 @@ list**: a friend's view stays a flat list, never grouped by store, so the
 recipient does not even learn how many stores their matches came from. The list
 is enforced in one place (`toFriendMaterial` in `api/queries/friends.ts`) and
 pinned by a test that asserts the exact set of fields; nothing else in the code
-assembles a material for another user.
+assembles a material for another user. Since 2.4.1 the data export honours the
+same boundary: the sharing a user _received_ is listed as one level per person,
+not one row per store — the raw rows would have said how many stores a friend
+keeps and which of them they open individually.
+
+The two accounts also see each other's display name and Telegram username, and
+since 2.4.1 only **after** the friendship is accepted. A pending or declined
+request discloses neither: a friend code is meant to be passed around, and
+holding one should not turn into a handle for writing to that person directly.
 
 Be honest with your users about one limit: **"search only" is a courtesy
 boundary, not a security boundary.** It stops browsing — matches are returned
 only for a query of at least two characters, never as a list — but somebody who
-tries many queries can map a stock piece by piece. If that matters to them, the
-answer is "nothing", not "search only".
+tries many queries can map a stock piece by piece. Since 2.4.1 the search is
+rate-limited (120 queries a minute per client address, far above normal use),
+which slows that down and records whoever trips the limit — it does not make it
+impossible. If that matters to them, the answer is "nothing", not "search only".
 
 Requesting a loan sends a message through the Telegram bot API to the owner,
 containing the requester's display name, the material's name and the optional
@@ -125,9 +135,11 @@ Both of the awkward ones are built in and need no work from you:
 
 - **Access and portability** — users export everything under Settings → "Data
   and account". The format is JSON, machine-readable as Art. 20 requires, and
-  carries a `formatVersion` (3 since 2.4.0, when the sharing levels moved out of
-  the friendship rows into their own `lagerShares` section; 2 since 2.3.0, when
-  two section names changed). Note it is **not** the format the import page reads
+  carries a `formatVersion` (4 since 2.4.1, when the sharing a user _received_
+  was compressed to one level per owner; 3 since 2.4.0, when the sharing levels
+  moved out of the friendship rows into their own `lagerShares` section; 2 since
+  2.3.0, when two section names changed). Note it is **not** the format the
+  import page reads
   — that one takes a short list of positions, not a full account dump.
 - **Erasure** — same place. Deletes the account and the entire stock.
 

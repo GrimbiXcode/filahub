@@ -19,8 +19,15 @@
  * weil ein älterer Export dadurch nicht falsch wird. Hier verschwinden aber
  * zwei Felder aus einem bestehenden Abschnitt: Wer eine Datei von 2.3.0 liest,
  * findet sie dort noch, und beide trügen ohne Erhöhung dieselbe Versionsnummer.
+ *
+ * `4` seit 2.4.1: Die **bekommenen** Freigaben in `lagerShares` sind auf eine
+ * Zeile je Besitzer verdichtet (`ownerUserId` und Stufe statt Lager-Kennung,
+ * Empfänger-Kennung und Zeitstempeln) – sie verrieten den Bestand des Freundes.
+ * Dieselbe Erwägung wie bei `3`, nur eine Version später bemerkt: Der Abschnitt
+ * bleibt, seine Zeilen haben eine andere Form, und ohne Erhöhung hießen beide
+ * Formen `3`.
  */
-export const ACCOUNT_EXPORT_VERSION = 3;
+export const ACCOUNT_EXPORT_VERSION = 4;
 
 /**
  * Tabellen, die im Export enthalten sein müssen.

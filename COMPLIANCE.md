@@ -157,7 +157,8 @@ For Art. 32 GDPR / Art. 8 revFADP. What the software provides:
   parameter, with explicit ownership checks on top
 - **Input validation** with shared zod schemas, client and server using the same
   definitions
-- **Rate limiting** on sign-in attempts, keyed on the client address
+- **Rate limiting** on sign-in attempts, friend requests and friend search, keyed
+  on the client address
 - **Transport and browser hardening**: Content-Security-Policy,
   `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`; HSTS in production
 - **Data minimisation**: sign-in codes purged after 24 h; no profile pictures;
