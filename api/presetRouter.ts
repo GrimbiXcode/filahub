@@ -212,6 +212,8 @@ export const presetRouter = createRouter({
           version: {
             name: input.version,
             nameI18n: input.versionI18n,
+            /* Die Form der eigenen Gebindeart ist die beste Auskunft, die es hier gibt. */
+            form: own.form,
             containerMaterial: input.containerMaterial ?? null,
           },
           variant: {

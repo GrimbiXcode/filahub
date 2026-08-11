@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
+import {
+  containerFormSchema,
+  formFitsKind,
+  type ContainerForm,
+  type MaterialKind,
+} from "./materials";
 
 /**
  * Gemeinsame Schemas und reine Hilfsfunktionen für den Preset-Katalog.
@@ -21,12 +27,22 @@ import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
 // nicht angefasst und bleiben Doppelungen.
 // ---------------------------------------------------------------------------
 
-/** Werkstoff des Gebindes selbst – nicht des Materials darin. */
+/**
+ * Werkstoff des Gebindes selbst – nicht des Materials darin.
+ *
+ * `glas` und `folie` sind mit den Gebindeformen dazugekommen: Harz steht in
+ * Glasflaschen, Pulver in Folienbeuteln. Neue Werte gehören ans **Ende** – die
+ * Reihenfolge bestimmt die Sortierung im Postgres-Enum, und ein Einschub in der
+ * Mitte wäre in der Migration eine eigene Übung (`ALTER TYPE … ADD VALUE …
+ * BEFORE`).
+ */
 export const CONTAINER_MATERIALS = [
   "kunststoff",
   "karton",
   "metall",
   "sonstiges",
+  "glas",
+  "folie",
 ] as const;
 export type ContainerMaterial = (typeof CONTAINER_MATERIALS)[number];
 
@@ -101,6 +117,50 @@ export function materialTypeMatches(
 /** 1000 → „1 kg“, 750 → „750 g“ */
 export function formatNominalWeight(grams: number): string {
   return grams % 1000 === 0 ? `${grams / 1000} kg` : `${grams} g`;
+}
+
+/**
+ * Passt ein Katalog-Gebinde zu dem, was gerade eingetragen wird?
+ *
+ * Zwei Merkmale sprechen mit: die Materialarten der Serie und die Form des
+ * Gebindes. Beide können unbekannt sein – eine Serie muss nicht verschlagwortet
+ * sein, und alles, was vor 2.3.0 in den Katalog kam, hat keine Form.
+ *
+ * Entscheidend ist, dass „passend“ **positive Belege** verlangt und nicht bloß
+ * das Fehlen eines Widerspruchs:
+ *
+ *   - Ein Merkmal, das widerspricht, schließt aus.
+ *   - Sonst muss mindestens ein Merkmal zustimmen.
+ *   - Zwei unbekannte Merkmale heißen „weiß nicht“, nicht „passt“.
+ *
+ * Warum das wichtig ist: `materialTypeMatches` hält eine leere Schlagwortliste
+ * für passend, und `formFitsKind` hält eine unbekannte Form für passend. Beide
+ * einzeln sind richtig so. Zusammengenommen ergaben sie aber, dass eine
+ * unverschlagwortete Filamentspule ohne Formangabe unter „Passend zu Harz“
+ * stand – eine Behauptung, für die es keinen einzigen Hinweis gab. Solange es
+ * nur Filament gab, fiel das nicht auf.
+ */
+export function containerFits(
+  container: {
+    form?: ContainerForm | null;
+    materialTypes?: readonly string[];
+  },
+  context: {
+    kind?: MaterialKind | null;
+    materialType?: string | null;
+  }
+): boolean {
+  const tags = container.materialTypes ?? [];
+  const typeKnown = !!context.materialType?.trim() && tags.length > 0;
+  const typeFits =
+    typeKnown && materialTypeMatches(tags, context.materialType ?? null);
+
+  const formKnown = container.form != null && context.kind != null;
+  const formFits = formKnown && formFitsKind(container.form, context.kind);
+
+  if (typeKnown && !typeFits) return false;
+  if (formKnown && !formFits) return false;
+  return typeFits || formFits;
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +396,8 @@ export const versionFieldsSchema = z
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
     nameI18n: nameI18nInputSchema,
+    /** Form des Gebindes; steuert Beschriftung und Sortierung der Auswahl */
+    form: containerFormSchema.nullable().optional(),
     containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
@@ -346,55 +408,98 @@ export const versionFieldsSchema = z
     path: ["validTo"],
   });
 
+/*
+  Grenzen der Variantenfelder.
+  ---------------------------------------------------------------------------
+  Einmal definiert und von `variantFieldsSchema` **und** dem Änderungsvorschlag
+  weiter unten benutzt. Vorher standen dieselben Zahlen zweimal im Code; wer die
+  eine Stelle anpasste, ließ die andere zurück, und der Vorschlagsweg hätte
+  Werte durchgelassen, die die Katalogpflege ablehnt.
+
+  Die Obergrenzen sind mit den Gebindeformen gestiegen: Der Katalog beschrieb
+  bis 2.2.0 eine Spule (bis 20 kg Inhalt, bis 5 kg Leergewicht). Ein
+  25-kg-Pulvereimer im Metallbehälter passt da nicht hinein.
+*/
+const variantFields = {
+  nominalWeight: z
+    .number()
+    .int("Nenngewicht muss eine ganze Zahl sein")
+    .positive("Nenngewicht muss größer als 0 sein")
+    .max(50000, "Nenngewicht ist unplausibel hoch"),
+  tareWeight: z
+    .number()
+    .int("Leergewicht muss eine ganze Zahl sein")
+    .min(0, "Leergewicht muss >= 0 sein")
+    .max(20000, "Leergewicht ist unplausibel hoch"),
+  /*
+    Geometrie: bleibt optional und ist in der Oberfläche nur bei Rollen
+    sichtbar. Die Untergrenzen sind gelockert, weil eine 100-ml-Kartusche
+    schmaler ist als jede Spule, die Breite nach oben, weil ein 10-kg-Pulverbeutel
+    breiter ist als jede Spule.
+  */
+  outerDiameterMm: z
+    .number()
+    .int()
+    .min(20, "Außendurchmesser muss zwischen 20 und 400 mm liegen")
+    .max(400, "Außendurchmesser muss zwischen 20 und 400 mm liegen")
+    .nullable()
+    .optional(),
+  widthMm: z
+    .number()
+    .int()
+    .min(5, "Breite muss zwischen 5 und 600 mm liegen")
+    .max(600, "Breite muss zwischen 5 und 600 mm liegen")
+    .nullable()
+    .optional(),
+  boreDiameterMm: z
+    .number()
+    .int()
+    .min(10, "Bohrung muss zwischen 10 und 200 mm liegen")
+    .max(200, "Bohrung muss zwischen 10 und 200 mm liegen")
+    .nullable()
+    .optional(),
+  notes: optionalNotes,
+};
+
+/**
+ * Die Bohrung muss kleiner als der Außendurchmesser sein.
+ *
+ * Bleibt für **alle** Formen gültig und braucht die Form nicht zu kennen: Was
+ * keine Bohrung hat, lässt das Feld leer, und dann greift die Regel nicht. Eine
+ * Flasche, bei der jemand trotzdem eine Bohrung einträgt, soll dieselbe Prüfung
+ * bekommen wie eine Spule – die Geometrie ändert sich nicht mit dem Namen.
+ */
+const boreFitsOuter = (v: {
+  boreDiameterMm?: number | null;
+  outerDiameterMm?: number | null;
+}) =>
+  v.boreDiameterMm == null ||
+  v.outerDiameterMm == null ||
+  v.boreDiameterMm < v.outerDiameterMm;
+
+/* Kein `as const`: zod verlangt ein veränderliches `PropertyKey[]`. */
+const BORE_MESSAGE = {
+  message: "Die Bohrung muss kleiner als der Außendurchmesser sein",
+  path: ["boreDiameterMm"],
+};
+
+/*
+  Bewusst **keine** Regel „Leergewicht kleiner als Nenngewicht“ mehr.
+
+  Sie galt bis 2.2.0 und war schon damals nur für Spulen richtig: 500 g
+  Testpulver in einem 2 kg schweren Metallbehälter verletzen sie, ohne dass an
+  der Angabe etwas falsch wäre. Sie zu behalten hieße, ein echtes Gebinde für
+  unplausibel zu erklären.
+
+  Kostet nichts: Die Restmenge wird an beiden Lesestellen bei null abgeschnitten
+  (`api/queries/filament.ts`, `api/queries/friends.ts`), eine negative Menge kann
+  also gar nicht entstehen. Und die **eigenen** Gebindearten des Benutzers
+  kannten diese Regel ohnehin nie – der Katalog war strenger als das Formular
+  daneben.
+*/
 export const variantFieldsSchema = z
-  .object({
-    nominalWeight: z
-      .number()
-      .int("Nenngewicht muss eine ganze Zahl sein")
-      .positive("Nenngewicht muss größer als 0 sein")
-      .max(20000, "Nenngewicht ist unplausibel hoch"),
-    tareWeight: z
-      .number()
-      .int("Leergewicht muss eine ganze Zahl sein")
-      .min(0, "Leergewicht muss >= 0 sein")
-      .max(5000, "Leergewicht ist unplausibel hoch"),
-    outerDiameterMm: z
-      .number()
-      .int()
-      .min(50, "Außendurchmesser muss zwischen 50 und 400 mm liegen")
-      .max(400, "Außendurchmesser muss zwischen 50 und 400 mm liegen")
-      .nullable()
-      .optional(),
-    widthMm: z
-      .number()
-      .int()
-      .min(10, "Breite muss zwischen 10 und 200 mm liegen")
-      .max(200, "Breite muss zwischen 10 und 200 mm liegen")
-      .nullable()
-      .optional(),
-    boreDiameterMm: z
-      .number()
-      .int()
-      .min(10, "Bohrung muss zwischen 10 und 200 mm liegen")
-      .max(200, "Bohrung muss zwischen 10 und 200 mm liegen")
-      .nullable()
-      .optional(),
-    notes: optionalNotes,
-  })
-  .refine(v => v.tareWeight < v.nominalWeight, {
-    message: "Das Leergewicht muss kleiner als das Nenngewicht sein",
-    path: ["tareWeight"],
-  })
-  .refine(
-    v =>
-      v.boreDiameterMm == null ||
-      v.outerDiameterMm == null ||
-      v.boreDiameterMm < v.outerDiameterMm,
-    {
-      message: "Die Bohrung muss kleiner als der Außendurchmesser sein",
-      path: ["boreDiameterMm"],
-    }
-  );
+  .object(variantFields)
+  .refine(boreFitsOuter, BORE_MESSAGE);
 
 export type ManufacturerFields = z.infer<typeof manufacturerFieldsSchema>;
 export type SeriesFields = z.infer<typeof seriesFieldsSchema>;
@@ -441,6 +546,8 @@ export const proposalNewPayloadSchema = z.object({
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
     nameI18n: nameI18nInputSchema,
+    /** Form des Gebindes; steuert Beschriftung und Sortierung der Auswahl */
+    form: containerFormSchema.nullable().optional(),
     containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
@@ -476,6 +583,8 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
         .object({
           name: z.string().trim().min(1).max(255).optional(),
           nameI18n: nameI18nInputSchema,
+          /** Form des Gebindes; steuert Beschriftung und Sortierung der Auswahl */
+          form: containerFormSchema.nullable().optional(),
           containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
           validFrom: isoDate,
           validTo: isoDate,
@@ -490,21 +599,23 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
   z.object({
     kind: z.literal("change"),
     scope: z.literal("variant"),
+    /*
+      Dieselben Feldgrenzen wie in `variantFieldsSchema` – nicht abgeschrieben,
+      sondern derselbe Baustein. Vorher standen sie hier ein zweites Mal, mit
+      eigenen Zahlen und ohne Meldungstexte; ein Vorschlag konnte damit Werte
+      tragen, die die Katalogpflege gar nicht angenommen hätte.
+    */
     patch: nonEmptyPatch(
-      z.object({
-        nominalWeight: z.number().int().positive().max(20000).optional(),
-        tareWeight: z.number().int().min(0).max(5000).optional(),
-        outerDiameterMm: z
-          .number()
-          .int()
-          .min(50)
-          .max(400)
-          .nullable()
-          .optional(),
-        widthMm: z.number().int().min(10).max(200).nullable().optional(),
-        boreDiameterMm: z.number().int().min(10).max(200).nullable().optional(),
-        notes: optionalNotes,
-      })
+      z
+        .object({
+          nominalWeight: variantFields.nominalWeight.optional(),
+          tareWeight: variantFields.tareWeight.optional(),
+          outerDiameterMm: variantFields.outerDiameterMm,
+          widthMm: variantFields.widthMm,
+          boreDiameterMm: variantFields.boreDiameterMm,
+          notes: optionalNotes,
+        })
+        .refine(boreFitsOuter, BORE_MESSAGE)
     ),
   }),
 ]);

@@ -110,9 +110,43 @@ describe("Migrationen", () => {
       "friendship_status",
       "loan_request_status",
       "material_kind",
+      "container_form",
     ]) {
       expect(names).toContain(type);
     }
+  });
+
+  /**
+   * Die Vorgabe `rolle` ist der Backfill für alles, was vor 2.3.0 angelegt
+   * wurde – bis dahin konnte eine Gebindeart nichts anderes sein. Wäre die
+   * Spalte ohne Vorgabe oder nullable, stünde bei jedem Altbestand „unbekannt“,
+   * und die Gebindeauswahl könnte nicht sortieren.
+   */
+  it("gibt einer Gebindeart ohne Angabe die Form „rolle“", async () => {
+    const [row] = await db()
+      .insert(schema.containerTypes)
+      .values({ userId: 1, name: "Ohne Formangabe", tareWeight: 140 })
+      .returning();
+    expect(row.form).toBe("rolle");
+
+    /*
+      Am Katalog ist es umgekehrt: Dort bleibt die Form leer, weil Einträge von
+      Administratoren und aus der Community alles sein können und eine geratene
+      Form später als gepflegt gelesen würde.
+    */
+    const [manufacturer] = await db()
+      .insert(schema.presetManufacturers)
+      .values({ slug: "formtest", name: "Formtest" })
+      .returning();
+    const [series] = await db()
+      .insert(schema.presetContainerSeries)
+      .values({ manufacturerId: manufacturer.id, name: "S", slug: "s" })
+      .returning();
+    const [version] = await db()
+      .insert(schema.presetContainerVersions)
+      .values({ seriesId: series.id, name: "V", slug: "v" })
+      .returning();
+    expect(version.form).toBeNull();
   });
 
   it("nutzt UTF-8 als Kodierung", async () => {

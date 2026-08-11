@@ -10,6 +10,7 @@ import {
   type ContainerMaterial,
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
+import type { ContainerForm } from "@contracts/materials";
 import {
   hiddenContainerPresets,
   presetManufacturers,
@@ -193,6 +194,11 @@ export type PresetContainerOption = {
   series: string;
   version: string;
   containerMaterial: ContainerMaterial | null;
+  /**
+   * Form des Gebindes; `null` bei allem, was vor 2.3.0 in den Katalog kam.
+   * Die Gebindeauswahl reiht damit passende Formen nach oben.
+   */
+  form: ContainerForm | null;
   /** Aktuell ausgelieferte Ausführung der Serie */
   isCurrent: boolean;
   /** Materialarten der Serie; leer = passt zu allem */
@@ -233,6 +239,7 @@ export async function findPresetOptionsForUser(
             series: seriesName,
             version: versionName,
             containerMaterial: version.containerMaterial,
+            form: version.form,
             isCurrent: version.isCurrent,
             materialTypes: series.materialTypes,
           });
@@ -417,6 +424,7 @@ export async function findOrCreateVersion(data: {
   slug: string;
   name: string;
   nameI18n?: NameI18n | null;
+  form?: ContainerForm | null;
   containerMaterial?: ContainerMaterial | null;
   validFrom?: string | null;
   validTo?: string | null;
@@ -439,6 +447,7 @@ export async function findOrCreateVersion(data: {
       slug: data.slug,
       name: data.name,
       nameI18n: data.nameI18n ?? null,
+      form: data.form ?? null,
       containerMaterial: data.containerMaterial ?? null,
       validFrom: data.validFrom ?? null,
       validTo: data.validTo ?? null,
@@ -546,11 +555,20 @@ export async function updateSeries(
   });
 }
 
+/*
+  Die Feldliste ist handgeschrieben und muss beim Ergänzen einer Spalte
+  mitwachsen. Sie ist **keine** Zusicherung: Der Router übergibt hier ein
+  aufgesammeltes Objekt, kein Literal, und TypeScript prüft überzählige
+  Eigenschaften nur bei Literalen. Ein hier vergessenes Feld wird also still
+  verworfen, ohne Typfehler – genau das ist mit `form` beim ersten Versuch
+  passiert.
+*/
 export async function updateVersion(
   id: number,
   data: Partial<{
     name: string;
     nameI18n: NameI18n | null;
+    form: ContainerForm | null;
     containerMaterial: ContainerMaterial | null;
     validFrom: string | null;
     validTo: string | null;

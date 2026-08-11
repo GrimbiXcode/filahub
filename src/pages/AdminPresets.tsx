@@ -188,7 +188,13 @@ export default function AdminPresets() {
                   variant="ghost"
                   size="icon"
                   title={t.common.edit}
-                  onClick={() => setEditor({ level: "variant", variant })}
+                  onClick={() =>
+                    setEditor({
+                      level: "variant",
+                      variant,
+                      parentForm: version.form,
+                    })
+                  }
                 >
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -252,7 +258,11 @@ export default function AdminPresets() {
             variant="ghost"
             size="sm"
             onClick={() =>
-              setEditor({ level: "variant", versionId: version.id })
+              setEditor({
+                level: "variant",
+                versionId: version.id,
+                parentForm: version.form,
+              })
             }
           >
             <Plus className="mr-1 h-3.5 w-3.5" /> {t.adminPresets.addSize}

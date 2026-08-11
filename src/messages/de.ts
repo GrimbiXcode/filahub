@@ -399,6 +399,11 @@ export const de = {
     deleteTitle: "Gebindeart löschen?",
     deleteDescription: (vars: { name: string }) =>
       `„${vars.name}“ wird gelöscht. Materialien, die diese Gebindeart verwenden, müssen vorher umgehängt werden.`,
+    dialogDescription:
+      "Name, Form und Leergewicht des leeren Gebindes. Das Leergewicht wird bei jeder Wägung abgezogen.",
+    formLabel: "Form *",
+    formHint:
+      "Bestimmt nur, was im Materialformular zuerst vorgeschlagen wird – wählbar bleibt jedes Gebinde in jedem Lager.",
     namePlaceholder: "z. B. Kunststoffspule 1 kg",
     manufacturerPlaceholder: "z. B. eSun, Prusament",
     tareLabel: "Leergewicht (g) *",
@@ -589,6 +594,7 @@ export const de = {
     website: "Website",
     materialTypes: "Materialarten",
     materialTypesPlaceholder: "z. B. PLA, PETG – leer = gilt für alle",
+    formLabel: "Gebindeform",
     containerMaterial: "Gebindematerial",
     unknown: "Unbekannt",
     validFrom: "Gültig ab",
@@ -736,7 +742,23 @@ export const de = {
       karton: "Karton",
       metall: "Metall",
       sonstiges: "Sonstiges",
+      glas: "Glas",
+      folie: "Folie",
     },
+    /* Gebindeformen. Reihenfolge wie in CONTAINER_FORMS. */
+    containerForm: {
+      rolle: "Rolle",
+      beutel: "Beutel",
+      flasche: "Flasche",
+      eimer: "Eimer",
+      kartusche: "Kartusche",
+      sonstiges: "Sonstiges",
+    },
+    /** Überschrift der passenden Gruppe in der Gebindeauswahl */
+    formFits: (vars: { kind: string }) => `Passend zu ${vars.kind}`,
+    tareSuffix: (vars: { amount: string }) => `${vars.amount} Tara`,
+    olderVersion: "ältere Ausführung",
+    catalogBadge: "Katalog",
   },
 
   myProposals: {

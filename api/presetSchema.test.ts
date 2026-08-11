@@ -115,15 +115,42 @@ describe("variantFieldsSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("lehnt ein Leergewicht >= Nenngewicht ab", () => {
+  /**
+   * Bis 2.2.0 verlangte das Schema „Leergewicht < Nenngewicht“. Die Regel galt
+   * nur für Spulen: 500 g Testpulver in einem 2 kg schweren Metallbehälter
+   * verletzen sie, ohne dass an der Angabe etwas falsch wäre. Sie ist mit den
+   * Gebindeformen gefallen, und dieser Test hält fest, dass das Absicht war –
+   * sonst kommt sie beim nächsten „das sieht unplausibel aus“ zurück.
+   *
+   * Gefahrlos, weil die Restmenge an beiden Lesestellen bei null abgeschnitten
+   * wird (`computeMaterialStats`, `toFriendMaterial`).
+   */
+  it("erlaubt ein Leergewicht über der Nennmenge – schweres Gebinde, kleine Menge", () => {
     const result = variantFieldsSchema.safeParse({
       ...validVariant,
-      tareWeight: 1000,
+      nominalWeight: 500,
+      tareWeight: 2000,
     });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues[0]?.message).toBe(
-      "Das Leergewicht muss kleiner als das Nenngewicht sein"
-    );
+    expect(result.success).toBe(true);
+  });
+
+  it("nimmt einen 25-kg-Pulvereimer an", () => {
+    const result = variantFieldsSchema.safeParse({
+      nominalWeight: 25000,
+      tareWeight: 2400,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("lehnt jenseits der neuen Obergrenzen weiter ab", () => {
+    expect(
+      variantFieldsSchema.safeParse({ nominalWeight: 50001, tareWeight: 100 })
+        .success
+    ).toBe(false);
+    expect(
+      variantFieldsSchema.safeParse({ nominalWeight: 1000, tareWeight: 20001 })
+        .success
+    ).toBe(false);
   });
 
   it("lehnt eine Bohrung >= Außendurchmesser ab", () => {

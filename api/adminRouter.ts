@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { containerFormSchema } from "@contracts/materials";
 import {
   PRESET_PROPOSAL_STATUSES,
   CONTAINER_MATERIALS,
@@ -88,6 +89,7 @@ async function applyProposal(
       slug: slugify(payload.version.name),
       name: payload.version.name,
       nameI18n: payload.version.nameI18n ?? null,
+      form: payload.version.form ?? null,
       containerMaterial: payload.version.containerMaterial ?? null,
       validFrom: payload.version.validFrom ?? null,
       validTo: payload.version.validTo ?? null,
@@ -252,6 +254,7 @@ const presetAdminRouter = createRouter({
         seriesId: z.number().int().positive(),
         name: z.string().trim().min(1, "Bezeichnung ist erforderlich").max(255),
         nameI18n: nameI18nInputSchema,
+        form: containerFormSchema.nullable().optional(),
         containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,
@@ -263,6 +266,7 @@ const presetAdminRouter = createRouter({
         slug: slugify(input.name),
         name: input.name,
         nameI18n: input.nameI18n ?? null,
+        form: input.form ?? null,
         containerMaterial: input.containerMaterial ?? null,
         validFrom: input.validFrom ?? null,
         validTo: input.validTo ?? null,
@@ -275,6 +279,7 @@ const presetAdminRouter = createRouter({
         id: z.number().int().positive(),
         name: z.string().trim().min(1).max(255).optional(),
         nameI18n: nameI18nInputSchema,
+        form: containerFormSchema.nullable().optional(),
         containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,

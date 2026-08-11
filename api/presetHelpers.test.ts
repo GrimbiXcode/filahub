@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVariantDisplayName,
+  containerFits,
   decodeContainerRef,
   encodeContainerRef,
   formatNominalWeight,
@@ -170,5 +171,88 @@ describe("isCurrentVersion", () => {
   it("gilt ohne Gültigkeitsende als aktuell", () => {
     expect(isCurrentVersion({ validTo: null })).toBe(true);
     expect(isCurrentVersion({ validTo: "2020-12-31" })).toBe(false);
+  });
+});
+
+describe("containerFits", () => {
+  const cardboardSpool = { form: "rolle" as const, materialTypes: ["PLA"] };
+  const resinBottle = { form: "flasche" as const, materialTypes: ["RESIN"] };
+  /** Wie der Startkatalog vor 2.3.0: keine Form, keine Schlagworte. */
+  const legacy = { form: null, materialTypes: [] };
+
+  it("nimmt an, wenn Form und Materialart zustimmen", () => {
+    expect(
+      containerFits(cardboardSpool, { kind: "filament", materialType: "PLA" })
+    ).toBe(true);
+    expect(
+      containerFits(resinBottle, { kind: "resin", materialType: "Resin" })
+    ).toBe(true);
+  });
+
+  /** Schlagworte stehen groß im Katalog, der Bestand ist Freitext. */
+  it("vergleicht Materialarten unabhängig von Groß- und Kleinschreibung", () => {
+    expect(
+      containerFits(resinBottle, { kind: "resin", materialType: "resin" })
+    ).toBe(true);
+  });
+
+  it("lässt eine zustimmende Form genügen, wenn die Materialart offen ist", () => {
+    expect(
+      containerFits(
+        { form: "flasche", materialTypes: [] },
+        { kind: "resin", materialType: "Irgendein Harz" }
+      )
+    ).toBe(true);
+  });
+
+  it("lässt eine zustimmende Materialart genügen, wenn die Form fehlt", () => {
+    expect(
+      containerFits(
+        { form: null, materialTypes: ["PLA"] },
+        { kind: "filament", materialType: "PLA+" }
+      )
+    ).toBe(true);
+  });
+
+  /**
+   * **Der Grund, warum diese Funktion existiert.** Vorher galt „passt“, sobald
+   * nichts widersprach – und weil eine leere Schlagwortliste zu allem passt und
+   * eine unbekannte Form zu allem passt, stand eine Filamentspule aus dem
+   * Startkatalog unter „Passend zu Harz“.
+   */
+  it("hält zwei unbekannte Merkmale nicht für einen Beleg", () => {
+    expect(
+      containerFits(legacy, { kind: "resin", materialType: "Resin" })
+    ).toBe(false);
+    expect(
+      containerFits(legacy, { kind: "filament", materialType: "PLA" })
+    ).toBe(false);
+  });
+
+  it("schließt aus, sobald ein Merkmal widerspricht", () => {
+    // Form passt, Materialart nicht.
+    expect(
+      containerFits(cardboardSpool, { kind: "filament", materialType: "PETG" })
+    ).toBe(false);
+    // Materialart passt, Form nicht.
+    expect(
+      containerFits(
+        { form: "flasche", materialTypes: ["PLA"] },
+        { kind: "filament", materialType: "PLA" }
+      )
+    ).toBe(false);
+  });
+
+  it("hält „Sonstiges“ nicht für einen Widerspruch", () => {
+    expect(
+      containerFits(
+        { form: "sonstiges", materialTypes: [] },
+        { kind: "powder", materialType: "PA12" }
+      )
+    ).toBe(true);
+  });
+
+  it("liefert ohne jeden Zusammenhang nichts Passendes", () => {
+    expect(containerFits(cardboardSpool, {})).toBe(false);
   });
 });

@@ -3,7 +3,7 @@ import {
   FRIENDSHIP_STATUSES,
   LOAN_REQUEST_STATUSES,
 } from "@contracts/friends";
-import { MATERIAL_KINDS } from "@contracts/materials";
+import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
 import { CONTAINER_MATERIALS, type NameI18n } from "@contracts/presets";
 import {
   pgTable,
@@ -184,18 +184,30 @@ export const lager = pgTable(
 export type Lager = typeof lager.$inferSelect;
 export type InsertLager = typeof lager.$inferInsert;
 
+/** Form des Gebindes; Werte und Zuordnung in `contracts/materials.ts`. */
+export const containerFormEnum = pgEnum("container_form", CONTAINER_FORMS);
+
 /**
  * Gebindeart mit hinterlegtem Leergewicht (Tara).
  *
- * Bis 2.2.0 hieß das `container_types`. Der Name war eine Annahme über den Inhalt:
- * Wer Pulver in Eimern führt, hat keine Rollentypen. Die Tabelle selbst hat
- * sich nicht geändert – ein Name und ein Leergewicht passen auf jedes Gebinde.
+ * Bis 2.2.0 hieß die Tabelle `spool_types`. Der Name war eine Annahme über den
+ * Inhalt: Wer Pulver in Eimern führt, hat keine Rollentypen. Die Struktur hat
+ * sich beim Umbenennen nicht geändert – ein Name und ein Leergewicht passen auf
+ * jedes Gebinde.
  */
 export const containerTypes = pgTable("container_types", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   userId: bigint("userId", { mode: "number" }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   manufacturer: varchar("manufacturer", { length: 255 }),
+  /**
+   * Form des Gebindes.
+   *
+   * `rolle` als Vorgabe, und die Migration trägt sie für jeden bestehenden
+   * Eintrag ein: Bis 2.2.0 konnte hier nichts anderes stehen, das ist keine
+   * Annahme, sondern der tatsächliche Stand.
+   */
+  form: containerFormEnum("form").default("rolle").notNull(),
   /** Leergewicht des leeren Gebindes in Gramm */
   tareWeight: integer("tareWeight").notNull(),
   /**
@@ -456,6 +468,17 @@ export const presetContainerVersions = pgTable(
     nameI18n: jsonb("nameI18n").$type<NameI18n>(),
     /** Stabiler Schlüssel innerhalb der Serie, z. B. „karton-2023“ */
     slug: varchar("slug", { length: 255 }).notNull(),
+    /**
+     * Form des Gebindes. `NULL` bei allem, was vor 2.3.0 angelegt wurde – die
+     * Migration setzt hier bewusst **nichts**: Der Startkatalog führt zwar
+     * ausschließlich Spulen, aber Einträge von Administratoren und aus der
+     * Community können alles sein, und eine geratene Form wäre eine Angabe, die
+     * irgendwann als gepflegt gelesen wird.
+     *
+     * Die Form gehört an die Ausführung und nicht an die Variante: „Kartonspule
+     * (ab 2021)" hat vier Größen und ist viermal eine Rolle.
+     */
+    form: containerFormEnum("form"),
     containerMaterial: presetContainerMaterialEnum("containerMaterial"),
     /** Gültig ab, ISO-String JJJJ-MM-TT */
     validFrom: date("validFrom", { mode: "string" }),

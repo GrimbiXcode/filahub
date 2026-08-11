@@ -33,9 +33,9 @@ details into the Markdown** — the next person to pull the image would ship the
 | Last sign-in timestamp                                                                                                                  | `users`            | until the account is deleted           |
 | Display settings (language, currency, format)                                                                                           | `users`            | until the account is deleted           |
 | Stores (name, material kind, filament diameter, free-text notes)                                                                        | `lager`            | until the account is deleted           |
-| Spools, weigh-ins, spool types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes              | own tables         | until the account is deleted           |
+| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes       | own tables         | until the account is deleted           |
 | Friendships: who is connected to whom, who asked, and each side's sharing level                                                         | `friendships`      | until either account is deleted        |
-| Loan requests: who asked whom for which spool, the spool's name at the time, and a free-text message                                    | `loan_requests`    | until either account is deleted        |
+| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                         | `loan_requests`    | until either account is deleted        |
 | Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`            | until the account is deleted           |
 | Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals` | see "Deletion" below                   |
 | Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`      | **purged automatically after 24 h**    |
@@ -84,7 +84,7 @@ location, the weigh-in history, and which store a material sits in — a store
 name is free text and can name a place, the same reason the storage box is
 excluded. That list is enforced in one place (`toFriendMaterial` in
 `api/queries/friends.ts`) and pinned by a test that asserts the exact set of
-fields; nothing else in the code assembles a spool for another user.
+fields; nothing else in the code assembles a material for another user.
 
 Be honest with your users about one limit: **"search only" is a courtesy
 boundary, not a security boundary.** It stops browsing — matches are returned
@@ -93,7 +93,7 @@ tries many queries can map a stock piece by piece. If that matters to them, the
 answer is "nothing", not "search only".
 
 Requesting a loan sends a message through the Telegram bot API to the owner,
-containing the requester's display name, the spool's name and the optional
+containing the requester's display name, the material's name and the optional
 message. Same channel as the sign-in codes, same third country.
 
 Granting, changing and withdrawing access is recorded in the security log
@@ -110,7 +110,10 @@ reporting service. Verifiable: the only third-party host in the codebase is
 Both of the awkward ones are built in and need no work from you:
 
 - **Access and portability** — users export everything under Settings → "Data
-  and account". The format is JSON and can be read back in on the import page.
+  and account". The format is JSON, machine-readable as Art. 20 requires, and
+  carries a `formatVersion` (2 since 2.3.0, when two section names changed).
+  Note it is **not** the format the import page reads — that one takes a short
+  list of positions, not a full account dump.
 - **Erasure** — same place. Deletes the account and the entire stock.
 
 Correction is just editing. For restriction and objection you will have to act

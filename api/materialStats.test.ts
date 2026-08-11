@@ -36,6 +36,7 @@ const ownContainer = {
   userId: 1,
   name: "Kunststoffspule 1 kg",
   manufacturer: "eSun",
+  form: "rolle" as const,
   tareWeight: 220,
   sourceVariantId: null,
   notes: null,
@@ -68,7 +69,8 @@ const presetVariant = {
     id: 5,
     seriesId: 3,
     name: "Kartonspule (ab 2023)",
-    nameI18n: { en: "Cardboard container (from 2023)" },
+    nameI18n: { en: "Cardboard spool (from 2023)" },
+    form: "rolle" as const,
     containerMaterial: "karton" as const,
     validFrom: null,
     validTo: null,
@@ -169,7 +171,7 @@ describe("computeMaterialStats", () => {
     // Der Hersteller bleibt gleich, die Ausführung ist übersetzt, die Serie
     // hat keine Übersetzung und fällt deshalb auf den Grundnamen zurück.
     expect(stats.containerLabel).toBe(
-      "Polymaker · PolyTerra PLA · Cardboard container (from 2023) · 1 kg"
+      "Polymaker · PolyTerra PLA · Cardboard spool (from 2023) · 1 kg"
     );
   });
 

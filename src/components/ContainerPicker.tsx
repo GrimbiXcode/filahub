@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Disc3 } from "lucide-react";
+import { formFitsKind, type MaterialKind } from "@contracts/materials";
 import {
   decodeContainerRef,
   encodeContainerRef,
+  containerFits,
   formatNominalWeight,
-  materialTypeMatches,
 } from "@contracts/presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/popover";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
+import { kindLabel } from "@/lib/materialKind";
 import { cn } from "@/lib/utils";
 import type { PresetOption, ContainerTypeItem } from "@/types";
 
@@ -37,6 +39,11 @@ type Props = {
   presets: PresetOption[];
   /** Aktuell im Formular gewählte Materialart – nur zur Gruppierung */
   materialType?: string;
+  /**
+   * Materialart des gewählten Lagers – auch nur zur Gruppierung. Ein Harzlager
+   * reiht Flaschen und Kartuschen nach oben.
+   */
+  materialKind?: MaterialKind | null;
   /** Nennmenge des Materials – passende Varianten werden vorgereiht */
   nominalWeight?: number | null;
   disabled?: boolean;
@@ -46,9 +53,12 @@ type Props = {
  * Auswahl des Gebindes: eigene Gebindearten und Presets aus dem
  * Katalog in einer Liste.
  *
- * Presets werden nach Materialart nur *gruppiert*, nie gefiltert – die
- * Materialart ist im Bestand Freitext („PLA“, „PLA+“, „PLA Silk“), eine harte
- * Filterung würde passende Gebinde verschwinden lassen.
+ * **Gruppiert, filtert nicht** – weder nach Materialart noch nach Gebindeform.
+ * Die Materialart ist im Bestand Freitext („PLA“, „PLA+“, „PLA Silk“), und die
+ * Form eines Gebindes ist eine Angabe des Benutzers. Wer beides hart filtert,
+ * lässt genau das Gebinde verschwinden, das jemand bewusst so angelegt hat, und
+ * gibt ihm keine Möglichkeit, es zu wählen. Passendes steht oben, alles andere
+ * darunter.
  */
 export function ContainerPicker({
   value,
@@ -56,6 +66,7 @@ export function ContainerPicker({
   ownContainerTypes,
   presets,
   materialType,
+  materialKind,
   nominalWeight,
   disabled,
 }: Props) {
@@ -82,7 +93,14 @@ export function ContainerPicker({
       : null;
   }, [value, ownContainerTypes, presets]);
 
-  /** Passende Presets zuerst, danach der Rest – beides bleibt sichtbar. */
+  /**
+   * Passende Presets zuerst, danach der Rest – beides bleibt sichtbar.
+   *
+   * Was „passend“ heißt, entscheidet `containerFits` (`contracts/presets.ts`):
+   * Form und Materialart dürfen nicht widersprechen, und mindestens eine von
+   * beiden muss ausdrücklich zustimmen. Zwei unbekannte Merkmale reichen nicht –
+   * sonst stünde eine unverschlagwortete Filamentspule unter „Passend zu Harz“.
+   */
   const { matching, others } = useMemo(() => {
     const sort = (a: PresetOption, b: PresetOption) => {
       // Zur Nennmenge passende Varianten nach oben
@@ -95,21 +113,31 @@ export function ContainerPicker({
       if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1;
       return a.displayName.localeCompare(b.displayName);
     };
-    if (!materialType?.trim()) {
-      return {
-        matching: [] as PresetOption[],
-        others: [...presets].sort(sort),
-      };
-    }
     const matching: PresetOption[] = [];
     const others: PresetOption[] = [];
     for (const preset of presets) {
-      if (materialTypeMatches(preset.materialTypes, materialType))
+      if (containerFits(preset, { kind: materialKind, materialType }))
         matching.push(preset);
       else others.push(preset);
     }
     return { matching: matching.sort(sort), others: others.sort(sort) };
-  }, [presets, materialType, nominalWeight]);
+  }, [presets, materialType, materialKind, nominalWeight]);
+
+  /*
+    Eigene Gebindearten stehen immer oben und werden nicht aufgeteilt: Es sind
+    die Einträge des Benutzers, meist eine Handvoll, und er weiß, was er angelegt
+    hat. Sortiert wird nur – passende Form zuerst.
+  */
+  const ownSorted = useMemo(
+    () =>
+      [...ownContainerTypes].sort((a, b) => {
+        const aFit = formFitsKind(a.form, materialKind) ? 0 : 1;
+        const bFit = formFitsKind(b.form, materialKind) ? 0 : 1;
+        if (aFit !== bFit) return aFit - bFit;
+        return a.name.localeCompare(b.name);
+      }),
+    [ownContainerTypes, materialKind]
+  );
 
   const renderPreset = (preset: PresetOption) => (
     <CommandItem
@@ -131,8 +159,9 @@ export function ContainerPicker({
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="leading-tight">{preset.displayName}</span>
         <span className="text-xs text-muted-foreground">
-          {formatGrams(preset.tareWeight)} Tara
-          {!preset.isCurrent && " · ältere Ausführung"}
+          {t.preset.tareSuffix({ amount: formatGrams(preset.tareWeight) })}
+          {preset.form && ` · ${t.preset.containerForm[preset.form]}`}
+          {!preset.isCurrent && ` · ${t.preset.olderVersion}`}
         </span>
       </div>
     </CommandItem>
@@ -193,9 +222,9 @@ export function ContainerPicker({
               </CommandItem>
             </CommandGroup>
 
-            {ownContainerTypes.length > 0 && (
+            {ownSorted.length > 0 && (
               <CommandGroup heading={t.containerPicker.ownTypes}>
-                {ownContainerTypes.map(own => (
+                {ownSorted.map(own => (
                   <CommandItem
                     key={`own-${own.id}`}
                     value={`${own.name} ${own.manufacturer ?? ""}`}
@@ -215,7 +244,10 @@ export function ContainerPicker({
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span className="leading-tight">{own.name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {formatGrams(own.tareWeight)} Tara
+                        {t.preset.tareSuffix({
+                          amount: formatGrams(own.tareWeight),
+                        })}
+                        {` · ${t.preset.containerForm[own.form]}`}
                       </span>
                     </div>
                   </CommandItem>
@@ -224,7 +256,20 @@ export function ContainerPicker({
             )}
 
             {matching.length > 0 && (
-              <CommandGroup heading={`Passend zu ${materialType}`}>
+              <CommandGroup
+                heading={t.preset.formFits({
+                  /*
+                    Die Materialart, wenn sie eingetragen ist – sonst die des
+                    Lagers. „Passend zu PLA" ist die genauere Auskunft, „Passend
+                    zu Harz" die, die immer verfügbar ist.
+                  */
+                  kind: materialType?.trim()
+                    ? materialType
+                    : materialKind
+                      ? kindLabel(t, materialKind)
+                      : "",
+                })}
+              >
                 {matching.map(renderPreset)}
               </CommandGroup>
             )}
@@ -255,9 +300,10 @@ export function ContainerPicker({
 
 /** Kleines Kennzeichen für Gebinde aus dem Katalog */
 export function PresetBadge() {
+  const t = useT();
   return (
     <Badge variant="secondary" className="font-normal">
-      Katalog
+      {t.preset.catalogBadge}
     </Badge>
   );
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
+import { CONTAINER_FORMS, type ContainerForm } from "@contracts/materials";
 import {
   CONTAINER_MATERIALS,
   type NameI18n,
@@ -43,7 +44,18 @@ export type EditorTarget =
   | { level: "manufacturer"; manufacturer?: PresetManufacturerNode }
   | { level: "series"; manufacturerId?: number; series?: PresetSeriesNode }
   | { level: "version"; seriesId?: number; version?: PresetVersionNode }
-  | { level: "variant"; versionId?: number; variant?: PresetVariantNode };
+  | {
+      level: "variant";
+      versionId?: number;
+      variant?: PresetVariantNode;
+      /**
+       * Form der übergeordneten Ausführung. Die Variante trägt die Geometrie,
+       * die Form steht aber eine Ebene höher – ohne diese Angabe wüsste der
+       * Dialog nicht, ob Außendurchmesser, Breite und Bohrung überhaupt etwas
+       * bedeuten. `null`/fehlend heißt „unbekannt“, dann werden sie gezeigt.
+       */
+      parentForm?: ContainerForm | null;
+    };
 
 /** Schlüssel in `t.catalogEditor` für [anlegen, bearbeiten] je Ebene */
 const TITLES: Record<
@@ -57,6 +69,7 @@ const TITLES: Record<
 };
 
 const NO_MATERIAL = "__none__";
+const NO_FORM = "__none__";
 
 /** Grundsprache – ihr Feld schreibt in `name`, nicht in `nameI18n` */
 const BASE_LANGUAGE_LABEL =
@@ -92,6 +105,15 @@ export function CatalogEditorDialog({
   const seriesNode = target?.level === "series" ? target.series : undefined;
   const versionNode = target?.level === "version" ? target.version : undefined;
   const variantNode = target?.level === "variant" ? target.variant : undefined;
+  /*
+    Geometrie gehört zur Rolle. Bei Flasche, Beutel, Eimer und Kartusche wären
+    Außendurchmesser, Breite und Bohrung Felder ohne Bedeutung; bei unbekannter
+    Form (alles vor 2.3.0) bleiben sie sichtbar, weil dort tatsächlich Spulen
+    stehen.
+  */
+  const parentForm =
+    target?.level === "variant" ? target.parentForm : undefined;
+  const showGeometry = parentForm == null || parentForm === "rolle";
   const existing = manufacturerNode ?? seriesNode ?? versionNode ?? variantNode;
   const isEdit = existing != null;
   /** Nur Serien und Ausführungen sind beschreibend genug für Übersetzungen */
@@ -117,6 +139,7 @@ export function CatalogEditorDialog({
   const [containerMaterial, setContainerMaterial] = useState<string>(
     () => versionNode?.containerMaterial ?? NO_MATERIAL
   );
+  const [form, setForm] = useState<string>(() => versionNode?.form ?? NO_FORM);
   const [validFrom, setValidFrom] = useState(
     () => versionNode?.validFrom ?? ""
   );
@@ -233,6 +256,7 @@ export function CatalogEditorDialog({
         containerMaterial === NO_MATERIAL
           ? null
           : (containerMaterial as ContainerMaterial);
+      const chosenForm = form === NO_FORM ? null : (form as ContainerForm);
       if (validFrom && validTo && validFrom > validTo)
         return toast.error(t.catalogEditor.validRangeInvalid);
       if (target.version) {
@@ -240,6 +264,7 @@ export function CatalogEditorDialog({
           id: target.version.id,
           name: name.trim(),
           nameI18n: translations,
+          form: chosenForm,
           containerMaterial: material,
           validFrom: validFrom || null,
           validTo: validTo || null,
@@ -250,6 +275,7 @@ export function CatalogEditorDialog({
         m.createVersion.mutate({
           seriesId: target.seriesId,
           name: name.trim(),
+          form: chosenForm,
           containerMaterial: material,
           validFrom: validFrom || null,
           validTo: validTo || null,
@@ -412,6 +438,24 @@ export function CatalogEditorDialog({
           {target.level === "version" && (
             <>
               <div className="grid gap-2">
+                <Label>{t.catalogEditor.formLabel}</Label>
+                <Select value={form} onValueChange={setForm}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NO_FORM}>
+                      {t.catalogEditor.unknown}
+                    </SelectItem>
+                    {CONTAINER_FORMS.map(f => (
+                      <SelectItem key={f} value={f}>
+                        {t.preset.containerForm[f]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
                 <Label>{t.catalogEditor.containerMaterial}</Label>
                 <Select
                   value={containerMaterial}
@@ -485,41 +529,43 @@ export function CatalogEditorDialog({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="grid gap-1.5">
-                  <Label htmlFor="ce-outer" className="text-xs">
-                    {t.catalogEditor.outerDiameter}
-                  </Label>
-                  <Input
-                    id="ce-outer"
-                    type="number"
-                    value={outerDiameterMm}
-                    onChange={e => setOuterDiameterMm(e.target.value)}
-                  />
+              {showGeometry && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="ce-outer" className="text-xs">
+                      {t.catalogEditor.outerDiameter}
+                    </Label>
+                    <Input
+                      id="ce-outer"
+                      type="number"
+                      value={outerDiameterMm}
+                      onChange={e => setOuterDiameterMm(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="ce-width" className="text-xs">
+                      {t.catalogEditor.width}
+                    </Label>
+                    <Input
+                      id="ce-width"
+                      type="number"
+                      value={widthMm}
+                      onChange={e => setWidthMm(e.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-1.5">
+                    <Label htmlFor="ce-bore" className="text-xs">
+                      {t.catalogEditor.bore}
+                    </Label>
+                    <Input
+                      id="ce-bore"
+                      type="number"
+                      value={boreDiameterMm}
+                      onChange={e => setBoreDiameterMm(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="ce-width" className="text-xs">
-                    {t.catalogEditor.width}
-                  </Label>
-                  <Input
-                    id="ce-width"
-                    type="number"
-                    value={widthMm}
-                    onChange={e => setWidthMm(e.target.value)}
-                  />
-                </div>
-                <div className="grid gap-1.5">
-                  <Label htmlFor="ce-bore" className="text-xs">
-                    {t.catalogEditor.bore}
-                  </Label>
-                  <Input
-                    id="ce-bore"
-                    type="number"
-                    value={boreDiameterMm}
-                    onChange={e => setBoreDiameterMm(e.target.value)}
-                  />
-                </div>
-              </div>
+              )}
             </>
           )}
 

@@ -2,9 +2,9 @@
 
 Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filament, Pulver
 und Harz in **Lagern** (bis fünf je Benutzer, je Lager eine Materialart),
-Rollentypen (Spule/Verpackung) und Dryboxen inkl. Leergewicht (Tara), Wägungen
-mit automatischer Restmengenberechnung, Kurz-Kennungen zum schnellen
-Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
+Gebindearten (Rolle, Beutel, Flasche, Eimer, Kartusche) und Dryboxen inkl.
+Leergewicht (Tara), Wägungen mit automatischer Restmengenberechnung,
+Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
 anfragen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
 Benutzer).
@@ -23,7 +23,7 @@ Benutzer).
 
 ```
 src/            React-Frontend
-  pages/        Routen: Home, MaterialDetail, Lager, SpoolTypes, StorageBoxes,
+  pages/        Routen: Home, MaterialDetail, Lager, ContainerTypes, StorageBoxes,
                 Import, Friends, FriendInventory, Settings, AdminPresets,
                 AdminProposals, AdminSystem, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
@@ -44,7 +44,7 @@ src/            React-Frontend
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
-  router.ts     appRouter: ping, auth, lager, spoolType, storageBox, material,
+  router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
                 friend, preset, admin (admin: preset, proposal, system)
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
@@ -60,7 +60,7 @@ db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatal
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, friends.ts (Stufen, Freundescode),
-                materials.ts (Materialarten, Dichte, Zweiteinheiten),
+                materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -107,7 +107,7 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   Eingabevalidierung mit zod; Transformer ist `superjson` (Client und Server).
   Geschützte Prozeduren mit `authedQuery` bzw. `adminQuery` (trotz des Namens
   sind beide generische Prozeduren für Query **und** Mutation).
-- **Mandantenfähigkeit:** Alle Fachdaten (Rollentypen, Lagerboxen, Materialien,
+- **Mandantenfähigkeit:** Alle Fachdaten (Gebindearten, Dryboxen, Materialien,
   Wägungen) sind über `userId` einem Benutzer zugeordnet. Jede Abfrage muss
   `ctx.user.id` berücksichtigen (siehe Muster in `api/materialRouter.ts` mit
   `validateForeignKeys` und den `*BelongsToUser`-Hilfsfunktionen in
@@ -166,10 +166,42 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   scheitert. Der Backfill legt je Benutzer ein Lager „Mein Lager" an, füllt
   `lagerId` und zieht die Spalte erst danach fest. Er läuft in Produktion genau
   einmal; abgedeckt ist er in `api/lager.integration.test.ts`.
-- **Bis Schritt 2 (2.3.0)** heißt die Gebindeauswahl auch in einem Harz- oder
-  Pulverlager „Rolle / Verpackung", und der Preset-Katalog bietet dort nichts
-  an. Eigene Gebinde („Harzflasche 250 g") funktionieren, weil sie nur ein Name
-  und ein Leergewicht sind.
+- **Gebindeformen seit 2.3.0** (`CONTAINER_FORMS`, `contracts/materials.ts`):
+  Rolle, Beutel, Flasche, Eimer, Kartusche, Sonstiges. `container_types.form` ist
+  Pflicht mit Vorgabe `rolle` – bis 2.2.0 konnte dort nichts anderes stehen, der
+  Backfill ist also der tatsächliche Stand. `preset_container_versions.form`
+  bleibt dagegen `NULL` für Altbestand: Der Startkatalog führt nur Spulen, aber
+  Einträge von Administratoren und aus der Community können alles sein, und eine
+  geratene Form würde später als gepflegt gelesen.
+- **`FORMS_BY_KIND` ordnet Formen den Materialarten zu und ist eine
+  Sortierhilfe, kein Filter.** Der Startkatalog hat noch keine Harz- oder
+  Pulvereinträge; gefüllt wird er über Administration und Community-Vorschläge.
+
+## Namenslisten, die kein Compiler prüft
+
+Drei Stellen führen Tabellennamen **wörtlich**. Beim Umbenennen einer Tabelle
+müssen alle drei mit:
+
+| Ort                                                            | Folge eines Versehens                          |
+| -------------------------------------------------------------- | ---------------------------------------------- |
+| `api/postgres.integration.test.ts` (Tabellen- und Enum-Listen) | roter Test                                     |
+| `api/account.integration.test.ts` (DSGVO-Wächter, zwei Listen) | roter Test                                     |
+| `api/queries/systemStatus.ts` → `COUNTED_TABLES`               | **500 auf `/verwaltung/system`, zur Laufzeit** |
+
+`COUNTED_TABLES` ist der gefährliche Fall: Die Namen gehen über
+`sql.identifier()` ins SQL, `tsc` sieht dort nichts. Bis 2.3.0 deckte kein Test
+das ab – und `lager` fehlte seit 2.2.0 still in der Liste. Seither ruft
+`api/postgres.integration.test.ts` `countAllTables()` einmal auf; das scheitert
+an jedem Namen, den es nicht gibt.
+
+**Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
+gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
+`ALTER TABLE … RENAME TO` benennt Indizes, Constraints, Primärschlüssel und
+Sequenzen **nicht** mit; weil `db/schema.ts` sie namentlich führt, will
+drizzle-kit sie danach neu anlegen. Vorbild ist `0010_container_rename.sql` (23
+Objekte, gegen `pg_class` und `pg_constraint` abgeglichen). Die Probe, dass
+nichts fehlt: `npm run db:generate` muss danach eine **leere** Migration
+erzeugen.
 
 ## Freunde und geteiltes Lager
 
@@ -193,7 +225,7 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
   eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
   nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
-  `notes`, `purchaseDate`, alles zur Lagerbox, der Wägungsverlauf, `lagerId` und
+  `notes`, `purchaseDate`, alles zur Drybox, der Wägungsverlauf, `lagerId` und
   der Lagername (Freitext, kann einen Ort verraten) sowie
   `densityGramsPerLiter`.
 - **Die Zweitanzeige rechnet der Server, auch für Freunde.** Sie braucht
@@ -202,9 +234,9 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   eine Division. Deshalb lädt `FRIEND_MATERIAL_WITH` vom Lager **nur**
   `materialKind` und `filamentDiameterUm`: Was nicht in der Zeile steht, kann
   keine Projektion durchlassen.
-- **Die Lagerbox ist unsichtbar, ihr Leergewicht zählt trotzdem.** Wird eine
-  Rolle in ihrer Drybox gewogen, ist die Restmenge
-  `grossWeight − Rollentara − Boxtara`. Wer den Box-Join weglässt, „weil Freunde
+- **Die Drybox ist unsichtbar, ihr Leergewicht zählt trotzdem.** Wird ein
+  Gebinde in seiner Drybox gewogen, ist die Restmenge
+  `grossWeight − Gebindetara − Boxtara`. Wer den Box-Join weglässt, „weil Freunde
   die Box nicht sehen dürfen“, meldet eine zu hohe Restmenge – also genau die
   Zahl falsch, um die es geht.
 - **Die Suche bei Freunden läuft serverseitig**, anders als die im eigenen Lager
@@ -230,27 +262,38 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
 
 ## Preset-Katalog
 
-Global gepflegte Hersteller und Spulen, aus denen Benutzer auswählen können,
+Global gepflegte Hersteller und Gebinde, aus denen Benutzer auswählen können,
 statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
-`preset_manufacturers` → `preset_spool_series` → `preset_spool_versions` →
-`preset_spool_variants` (eine Variante je Netto-Materialgewicht).
+`preset_manufacturers` → `preset_container_series` → `preset_container_versions`
+→ `preset_container_variants` (eine Variante je Netto-Materialgewicht).
 
-- **Rollenwahl am Material:** entweder `materials.spoolTypeId` (eigener
-  Rollentyp) **oder** `materials.spoolPresetVariantId` – nie beides. Geprüft
+- **Gebindewahl am Material:** entweder `materials.containerTypeId` (eigene
+  Gebindeart) **oder** `materials.containerPresetVariantId` – nie beides. Geprüft
   wird das an genau einer Stelle (`validateForeignKeys` in
   `api/materialRouter.ts`), und zwar immer der Zustand _nach_ dem Patch. Die
-  Priorität beim Auflösen der Tara steht in `resolveSpoolTare`
+  Priorität beim Auflösen der Tara steht in `resolveContainerTare`
   (`contracts/presets.ts`) und wird von Server und Client gemeinsam genutzt.
 - **`displayName` auf der Variante** ist denormalisiert. Nach jeder Umbenennung
   auf Hersteller-, Serien- oder Versionsebene muss
   `refreshVariantDisplayNames` laufen (passiert in den `update*`-Funktionen in
   `api/queries/presets.ts`).
-- **Materialarten** (`preset_series_material_types`) sind ein weicher
-  Sortierhinweis, **kein Filter**: `materials.materialType` ist Freitext
-  („PLA“, „PLA+“, „PLA Silk“), hartes Filtern würde passende Rollen
-  verstecken. Siehe `materialTypeMatches`.
-- **Ausblenden** (`hidden_spool_presets`) wirkt kaskadierend nach unten und
-  betrifft nur die Auswahl; bereits zugewiesene Rollen bleiben gültig.
+- **Materialarten** (`preset_series_material_types`) und **Gebindeform**
+  (`preset_container_versions.form`) sind weiche Sortierhinweise, **kein
+  Filter**: `materials.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),
+  und die Form ist eine Angabe des Benutzers. Hartes Filtern würde ein Gebinde
+  verstecken, das jemand bewusst so angelegt hat.
+
+  Zusammengesetzt wird das in `containerFits` (`contracts/presets.ts`), und dort
+  liegt eine Falle: `materialTypeMatches` hält eine leere Schlagwortliste für
+  passend, `formFitsKind` eine unbekannte Form. Einzeln ist beides richtig –
+  zusammen ergaben sie „passt zu allem“, sodass eine unverschlagwortete
+  Filamentspule ohne Formangabe unter „Passend zu Harz“ stand. `containerFits`
+  verlangt deshalb einen **positiven Beleg** und nicht bloß das Fehlen eines
+  Widerspruchs: Ein widersprechendes Merkmal schließt aus, sonst muss mindestens
+  eines zustimmen, und zwei unbekannte heißen „weiß nicht“.
+
+- **Ausblenden** (`hidden_container_presets`) wirkt kaskadierend nach unten und
+  betrifft nur die Auswahl; bereits zugewiesene Gebinde bleiben gültig.
 - **Löschen** ist nur ohne Untereinträge und ohne referenzierende Materialien
   erlaubt – es gibt keine Fremdschlüssel in der Datenbank, sonst ginge still
   die Tara verloren. Ansonsten `active: false` setzen.
@@ -261,7 +304,7 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   Statuswechsel kommt zuletzt und wirkt über den `pending`-Filter als
   optimistische Sperre.
 - **Startkatalog:** `db/presets/catalog.ts` (reine Daten) wird von
-  `seedSpoolPresets()` eingespielt – beim Serverstart in Produktion und über
+  `seedContainerPresets()` eingespielt – beim Serverstart in Produktion und über
   `npm run db:seed` lokal. Bestehende Zeilen werden nur überschrieben, wenn
   `source = "seed"` und `seedRevision < PRESET_SEED_REVISION`. Änderungen von
   Administratoren (`admin`) und übernommene Vorschläge (`community`) bleiben

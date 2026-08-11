@@ -33,6 +33,71 @@ export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 export const materialKindSchema = z.enum(MATERIAL_KINDS);
 
 // ---------------------------------------------------------------------------
+// Gebindeform
+// ---------------------------------------------------------------------------
+
+/**
+ * Form des Gebindes, in dem das Material steckt.
+ *
+ * Strukturiert wie die Materialart und aus demselben Grund: Die Form steuert,
+ * was das Formular zeigt (eine Flasche hat keine Mittelbohrung) und was in der
+ * Auswahl nach oben sortiert wird. Freitext wäre dafür nicht auswertbar.
+ *
+ * `sonstiges` ist die Auffangform und ausdrücklich vorgesehen – nicht jedes
+ * Gebinde der Welt passt in fünf Kästchen, und ein Benutzer soll deswegen nicht
+ * am Anlegen scheitern.
+ */
+export const CONTAINER_FORMS = [
+  "rolle",
+  "beutel",
+  "flasche",
+  "eimer",
+  "kartusche",
+  "sonstiges",
+] as const;
+
+export type ContainerForm = (typeof CONTAINER_FORMS)[number];
+
+export const containerFormSchema = z.enum(CONTAINER_FORMS);
+
+/**
+ * Welche Formen zu einer Materialart üblicherweise gehören.
+ *
+ * **Sortierhilfe, kein Filter.** Die Gebindeauswahl reiht passende Formen nach
+ * oben und zeigt die übrigen darunter weiter an – dieselbe Entscheidung wie bei
+ * der Materialart in `materialTypeMatches`, mit derselben Begründung: Eine harte
+ * Filterung ließe ein Gebinde verschwinden, das der Benutzer bewusst so
+ * angelegt hat, und er hätte keine Möglichkeit, es zu wählen.
+ *
+ * `sonstiges` steht in keiner Liste, gilt aber überall als passend (siehe
+ * `formFitsKind`): Eine Auffangform darf nicht ausgerechnet dort einsortiert
+ * werden, wo sie nicht hingehört.
+ *
+ * Grundlage der Zuordnung sind die Gebinde, in denen das Material tatsächlich
+ * verkauft wird – Filament auf Rollen und als Refill-Coil im Beutel, Sinterpulver
+ * laut Sinterit in Flaschen (2 kg), Metallbehältern (6 kg) und Eimern (10 kg),
+ * Harz in Flaschen und bei geschlossenen Systemen in Kartuschen.
+ */
+export const FORMS_BY_KIND: Record<MaterialKind, readonly ContainerForm[]> = {
+  filament: ["rolle", "beutel"],
+  powder: ["beutel", "eimer", "flasche"],
+  resin: ["flasche", "kartusche"],
+};
+
+/**
+ * Passt diese Form zu der Materialart? `sonstiges` und ein unbekanntes Lager
+ * passen immer – im Zweifel wird einsortiert statt ausgeschlossen.
+ */
+export function formFitsKind(
+  form: ContainerForm | null | undefined,
+  kind: MaterialKind | null | undefined
+): boolean {
+  if (form == null || kind == null) return true;
+  if (form === "sonstiges") return true;
+  return FORMS_BY_KIND[kind].includes(form);
+}
+
+// ---------------------------------------------------------------------------
 // Lager
 // ---------------------------------------------------------------------------
 

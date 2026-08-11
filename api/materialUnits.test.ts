@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  CONTAINER_FORMS,
+  FORMS_BY_KIND,
+  MATERIAL_KINDS,
+  formFitsKind,
   formatDiameter,
   lagerConfigIsValid,
   resolveDensity,
@@ -258,5 +262,68 @@ describe("formatDiameter", () => {
   it("schreibt Mikrometer als Millimeter mit Komma", () => {
     expect(formatDiameter(1750)).toBe("1,75 mm");
     expect(formatDiameter(2850)).toBe("2,85 mm");
+  });
+});
+
+describe("formFitsKind", () => {
+  it("ordnet die üblichen Gebinde ihrer Materialart zu", () => {
+    expect(formFitsKind("rolle", "filament")).toBe(true);
+    expect(formFitsKind("flasche", "resin")).toBe(true);
+    expect(formFitsKind("eimer", "powder")).toBe(true);
+  });
+
+  /**
+   * Refill-Coils kommen ohne Spule im Beutel – Filament ist nicht gleich Rolle.
+   */
+  it("kennt den Beutel auch beim Filament", () => {
+    expect(formFitsKind("beutel", "filament")).toBe(true);
+  });
+
+  it("sortiert unpassende Formen aus", () => {
+    expect(formFitsKind("rolle", "resin")).toBe(false);
+    expect(formFitsKind("kartusche", "filament")).toBe(false);
+  });
+
+  /*
+    „Sonstiges" ist die Auffangform. Sie darf nirgends als unpassend gelten,
+    sonst landet ausgerechnet das Gebinde unten, für das der Benutzer keine
+    bessere Bezeichnung gefunden hat.
+  */
+  it("lässt „Sonstiges“ überall gelten", () => {
+    for (const kind of ["filament", "powder", "resin"] as const) {
+      expect(formFitsKind("sonstiges", kind)).toBe(true);
+    }
+  });
+
+  /*
+    Unbekanntes passt: Der Katalog trägt vor 2.3.0 keine Form, und ein Material
+    ohne gewähltes Lager hat keine Art. In beiden Fällen wäre „unpassend“ eine
+    Behauptung, für die es keine Grundlage gibt.
+  */
+  it("hält Unbekanntes für passend, statt es nach unten zu sortieren", () => {
+    expect(formFitsKind(null, "resin")).toBe(true);
+    expect(formFitsKind(undefined, "powder")).toBe(true);
+    expect(formFitsKind("rolle", null)).toBe(true);
+    expect(formFitsKind("rolle", undefined)).toBe(true);
+  });
+
+  /**
+   * Jede Materialart braucht mindestens eine passende Form – sonst stünde in
+   * einem Lager dieser Art nie ein Gebinde oben, und die Gruppierung wäre für
+   * diese Art wirkungslos.
+   */
+  it("hat für jede Materialart mindestens eine Form", () => {
+    for (const kind of MATERIAL_KINDS) {
+      expect(FORMS_BY_KIND[kind].length, kind).toBeGreaterThan(0);
+    }
+  });
+
+  /** Keine Form in der Zuordnung, die es im Enum nicht gibt. */
+  it("nennt nur Formen, die es gibt", () => {
+    for (const forms of Object.values(FORMS_BY_KIND)) {
+      for (const form of forms) {
+        expect(CONTAINER_FORMS).toContain(form);
+      }
+    }
   });
 });

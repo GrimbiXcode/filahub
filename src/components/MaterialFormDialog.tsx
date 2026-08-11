@@ -510,6 +510,8 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 ownContainerTypes={containerTypes ?? []}
                 presets={presetOptions ?? []}
                 materialType={materialType}
+                /* Aus dem Lager, nicht aus dem Material – dort steht die Art. */
+                materialKind={selectedLager?.materialKind}
                 nominalWeight={parseInt(nominalWeight, 10) || null}
               />
             </div>

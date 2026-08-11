@@ -386,6 +386,11 @@ export const en: Messages = {
     deleteTitle: "Delete this container type?",
     deleteDescription: (vars: { name: string }) =>
       `“${vars.name}” will be deleted. Materials using it have to be moved to another type first.`,
+    dialogDescription:
+      "Name, form and empty weight of the container. The empty weight is subtracted from every weigh-in.",
+    formLabel: "Form *",
+    formHint:
+      "Only decides what gets suggested first in the material form – every container stays selectable in every store.",
     namePlaceholder: "e.g. plastic spool 1 kg",
     manufacturerPlaceholder: "e.g. eSun, Prusament",
     tareLabel: "Empty weight (g) *",
@@ -573,6 +578,7 @@ export const en: Messages = {
     website: "Website",
     materialTypes: "Material types",
     materialTypesPlaceholder: "e.g. PLA, PETG – empty = applies to all",
+    formLabel: "Container form",
     containerMaterial: "Container material",
     unknown: "Unknown",
     validFrom: "Valid from",
@@ -720,7 +726,21 @@ export const en: Messages = {
       karton: "Cardboard",
       metall: "Metal",
       sonstiges: "Other",
+      glas: "Glass",
+      folie: "Foil",
     },
+    containerForm: {
+      rolle: "Spool",
+      beutel: "Bag",
+      flasche: "Bottle",
+      eimer: "Pail",
+      kartusche: "Cartridge",
+      sonstiges: "Other",
+    },
+    formFits: (vars: { kind: string }) => `Fits ${vars.kind}`,
+    tareSuffix: (vars: { amount: string }) => `${vars.amount} tare`,
+    olderVersion: "older version",
+    catalogBadge: "Catalogue",
   },
 
   myProposals: {

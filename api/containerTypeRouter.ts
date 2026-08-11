@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { containerFormSchema } from "@contracts/materials";
 import { createRouter, authedQuery } from "./middleware";
 import {
   countMaterialsWithContainerType,
@@ -12,6 +13,16 @@ import {
 const containerTypeInput = z.object({
   name: z.string().min(1, "Name ist erforderlich"),
   manufacturer: z.string().optional(),
+  /**
+   * Form des Gebindes. Vorgabe `rolle`, damit ein Aufrufer, der das Feld nicht
+   * kennt, denselben Datensatz wie vor 2.3.0 anlegt.
+   */
+  form: containerFormSchema.default("rolle"),
+  /*
+    Keine Obergrenze wie im Katalog: Eigene Gebindearten hatten nie eine, und
+    wer sein Gebinde selbst gewogen hat, weiß es besser als eine Plausibilitäts-
+    schranke.
+  */
   tareWeight: z.number().int().min(0, "Leergewicht muss >= 0 sein"),
   notes: z.string().optional(),
 });

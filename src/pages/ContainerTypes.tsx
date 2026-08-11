@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Calculator, Disc3, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
+import { CONTAINER_FORMS, type ContainerForm } from "@contracts/materials";
 import AuthLayout from "@/components/AuthLayout";
 import { MyPresetProposals } from "@/components/MyPresetProposals";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,6 +30,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
@@ -59,6 +67,12 @@ export default function ContainerTypes() {
 
   const [name, setName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
+  /*
+    Typisiert als Literal-Union, nicht als string: So kann hier gar keine Form
+    landen, die der Server ablehnen würde (dasselbe Vorgehen wie bei der
+    Filamentstärke auf der Lager-Seite).
+  */
+  const [form, setForm] = useState<ContainerForm>("rolle");
   const [tareWeight, setTareWeight] = useState("");
   const [notes, setNotes] = useState("");
   // Leergewicht-Rechner: volles Gebinde wiegen
@@ -70,6 +84,7 @@ export default function ContainerTypes() {
     setEditing(containerType);
     setName(containerType?.name ?? "");
     setManufacturer(containerType?.manufacturer ?? "");
+    setForm(containerType?.form ?? "rolle");
     setTareWeight(containerType ? String(containerType.tareWeight) : "");
     setNotes(containerType?.notes ?? "");
     setCalcGross("");
@@ -144,6 +159,7 @@ export default function ContainerTypes() {
     const payload = {
       name: name.trim(),
       manufacturer: manufacturer.trim() || undefined,
+      form,
       tareWeight: tare,
       notes: notes.trim() || undefined,
     };
@@ -379,7 +395,7 @@ export default function ContainerTypes() {
               {editing ? t.containerTypes.editType : t.containerTypes.newType}
             </DialogTitle>
             <DialogDescription>
-              Das Leergewicht der leeren Rolle bzw. Verpackung in Gramm.
+              {t.containerTypes.dialogDescription}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4">
@@ -400,6 +416,27 @@ export default function ContainerTypes() {
                 onChange={e => setManufacturer(e.target.value)}
                 placeholder={t.containerTypes.manufacturerPlaceholder}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="s-form">{t.containerTypes.formLabel}</Label>
+              <Select
+                value={form}
+                onValueChange={value => setForm(value as ContainerForm)}
+              >
+                <SelectTrigger id="s-form">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTAINER_FORMS.map(f => (
+                    <SelectItem key={f} value={f}>
+                      {t.preset.containerForm[f]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {t.containerTypes.formHint}
+              </p>
             </div>
             {/* Leergewicht-Rechner: volles Gebinde wiegen */}
             <div className="grid gap-3 rounded-lg border bg-muted/40 p-3">
