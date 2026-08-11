@@ -81,19 +81,11 @@ Your friends' stock is searched from two characters onwards.
 
 Ending a friendship removes both directions and any pending requests. Deleting
 your account removes every friendship and request you were part of, in both
-directions — including the copies on your friends' side, since those rows describe
-both of you.
+directions — including the copy on your friend's side, since it describes both of
+you.
 
 Your friend code disappears with your account. Generating a new one immediately
 invalidates the old, in case you shared it too widely.
 
-## For operators
-
-One new optional setting: `APP_BASE_URL`, the public address of your instance.
-It is used for the links in Telegram notifications. Without it the messages still
-work — they just name the page instead of linking to it.
-
-The privacy policy and the compliance notes have both been updated. filahub is no
-longer purely single-tenant, and "who else gets data" now has an answer beyond
-Telegram and your hosting provider. Read that section before you upgrade a public
-instance.
+The privacy policy has been updated to match: "who else gets data" now has an
+answer beyond Telegram and the hosting provider.

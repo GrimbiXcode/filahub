@@ -24,10 +24,8 @@ reads the same everywhere.
 
 Missing a translation is not a problem: the original name is shown instead.
 
-Administrators maintain both languages side by side when editing a series or a
-version, and the catalogue marks entries that still lack a translation, with a
-filter to list only those. Suggesting a spool for the catalogue now lets you
-supply both languages at once, if you know them.
+Suggesting a spool for the catalogue now lets you supply both languages at
+once, if you know them.
 
 ## A name and a face
 
@@ -38,13 +36,11 @@ with a fill arc.
 ## Free software under the AGPL
 
 filahub is published under the **GNU Affero General Public License, version 3
-or later**. You may run it, study it, change it and pass it on. There is also a
-[product page](https://grimbixcode.github.io/filahub/) now, and a documented
-way to report security issues privately.
+or later**. You may run it, study it, change it and pass it on. There is a
+[product page](https://grimbixcode.github.io/filahub/) now as well.
 
 ## Smaller improvements
 
 - The sidebar no longer shows a stray horizontal scrollbar above the footer.
-- The bulk-import prompt is generated in your language. The JSON field names
-  stay as they are, because that is what the import expects.
+- The bulk-import prompt is generated in your language.
 - Currency and regional-format names in the settings appear in your language.

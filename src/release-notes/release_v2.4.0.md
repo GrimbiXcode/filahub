@@ -35,51 +35,30 @@ never be invisible about it.
 
 ## What friends see is unchanged
 
-The store is now the unit of sharing, and a friend still never learns a store's
-name — or that stores exist at all. Their view stays a flat list, never grouped,
-so they cannot tell whether their two matches came from one store or two. A store
-name is free text and can name a place, which is the same reason the drybox is
-excluded.
+You now share store by store, and a friend still never learns a store's name — or
+that you keep separate stores at all. Their view stays one plain list, so they
+cannot tell whether their two matches came from one store or two. A store name is
+free text and can name a place, which is the same reason a drybox is never shown.
 
-The set of visible fields is byte-for-byte the one from 2.2.0: name, identifier,
-material type, surface finish, manufacturer, colour, nominal weight, remaining
-amount and percentage, and the remaining amount in metres or litres. Prices,
-notes, purchase dates, dryboxes, weigh-in history and store are as absent as
-before.
+The list of what they can see has not changed: name, identifier, material type,
+surface finish, manufacturer, colour, nominal weight, remaining amount and
+percentage, and the remaining amount in metres or litres. Prices, notes,
+purchase dates, dryboxes, weigh-in history and store are as absent as before.
 
 ## Taking access back actually takes it back
 
-Two things that would have been easy to get wrong, and both would have failed
-quietly:
+Two ways access ends, and both end it for good:
 
-- **Ending a friendship removes the shares.** Had they stayed, becoming friends
-  again later would have revived the old access without anyone sharing anything —
-  and nothing on screen would have hinted at it.
-- **Deleting a store removes its shares.** There are no foreign keys in this
-  schema, so a leftover share row would eventually point at a store ID handed out
-  to someone else.
+- **Ending a friendship removes what you shared with that person.** Becoming
+  friends again later starts from nothing — no old sharing comes back.
+- **Deleting a store removes its sharing.** Whoever could see it, cannot any
+  more.
 
-Both are covered by tests that were checked the only way worth checking: by
-removing the safeguard and confirming they turn red.
+## Your existing sharing carried over
 
-## For operators
+Nobody gained or lost access when the setting moved. If you had granted someone
+"search only", they now have "search only" on each of your stores — and every
+store is yours to close individually from here on.
 
-One migration, `0012`. It creates `lager_shares`, **carries every existing level
-over**, and only then drops the two columns on `friendships`. A user who had
-granted "search only" now has "search only" on each of their stores — nobody
-gains or loses access in the migration, and the per-store setting is theirs to
-narrow afterwards. The drop is not reversible, so the carry-over runs first and in
-the same transaction.
-
-The security log records which store a change applied to. Deleting a shared store
-writes one entry per affected friend, with `reason: "lager_deleted"` — a single
-"store deleted" entry would not say whose access ended.
-
-The data export gained a `lagerShares` section covering both directions, the ones
-you granted and the ones you received. `formatVersion` moved from 2 to 3, because
-the sharing levels left the `friendships` rows.
-
-Also: the System page in administration now counts `friendships`, `loan_requests`
-and `lager_shares`. The first two had been missing since 2.1.0 — the page showed
-numbers, just not all of them. A test now compares the list against the database
-instead of a second list kept by hand.
+Your download under **Settings → Data and account** lists your sharing too: what
+you shared, and what was shared with you.

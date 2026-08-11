@@ -63,8 +63,8 @@ go back to being material types.
 ## What friends see
 
 Friends' materials now show the finish and the converted amount too, so "will
-this reach?" is answerable in metres rather than grams. The conversion is done on
-the server, with the diameter from the owner's store.
+this reach?" is answerable in metres rather than grams — using the diameter from
+the owner's store, so the figure is right even though you never see the store.
 
 Nothing new leaks. Which store a material sits in stays private — a store name is
 free text and can name a place, the same reason a drybox is never shown — and so
@@ -79,14 +79,3 @@ it is no longer buried inside the material type.
 With stores arriving, "Lagerbox" and "Lager" were one letter apart. The boxes are
 dryboxes — that is what they are for — so that is what they are called now.
 Nothing about them changed, and the old bookmark still works.
-
-## For operators
-
-The migration adds a store per existing account and assigns every material to
-it, then makes the column mandatory. It runs once, on the first start after the
-update. Nothing needs doing by hand.
-
-The store limit of five is a fixed value for every account right now.
-
-The privacy policy has a new row for stores; their name and notes are free text,
-so treat them like any other field your users type into.

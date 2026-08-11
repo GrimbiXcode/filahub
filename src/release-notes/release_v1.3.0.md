@@ -29,6 +29,4 @@ weigh it and send a suggestion; that is what the suggestion queue is for.
 
 ## Nothing you changed is touched
 
-As always, the catalogue update leaves your own edits alone. Entries an
-administrator changed, and suggestions accepted from the community, keep their
-values.
+As always, the catalogue update leaves your own edits alone.

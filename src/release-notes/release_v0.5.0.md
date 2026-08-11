@@ -9,8 +9,8 @@ Instead of typing the tare weight of every spool yourself, you can now pick a
 spool from a shared catalogue of manufacturers, series and versions. It ships
 with Polymaker, Prusament, Bambu Lab and eSUN.
 
-- Missing a spool? Propose it from within the app — an administrator reviews it
-  and everyone benefits from the addition.
+- Missing a spool? Propose it from within the app — once it has been reviewed,
+  everyone benefits from the addition.
 - Spools you never use can be hidden so they stay out of your way.
 
 ## Bulk import via an AI prompt

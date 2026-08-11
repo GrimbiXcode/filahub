@@ -17,9 +17,8 @@ Prusament is no longer just PLA: PETG, ASA, PVB and TPU are listed with their
 own sizes, including the 2 kg spool. eSUN gained the cardboard spool its PLA
 lines ship on today, and Bambu Lab the 500 g size.
 
-Nothing you changed yourself is touched. Entries an administrator edited, and
-suggestions that were accepted from the community, keep their values — only
-filahub's own starter entries are brought up to date.
+Nothing you changed yourself is touched — only filahub's own starter entries
+are brought up to date.
 
 A word of caution that has not changed: manufacturers redesign spools without
 announcing it, and cardboard takes on water. Treat every figure as a starting

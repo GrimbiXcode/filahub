@@ -46,11 +46,50 @@ title: Dark theme and release notes
   Dateiname in der Browser-Konsole) und `npm run test` fehlschlagen.
   `version:` ist ebenfalls verboten (siehe oben).
 
-## Inhalt
+## Inhalt: ausschließlich für Endbenutzer
+
+Die Zielgruppe ist **eine einzige**: jemand, der die App benutzt und sie weder
+betreibt noch verwaltet noch entwickelt. Hinein gehören **neue Funktionen,
+spürbare Verbesserungen und behobene Fehler** – und sonst nichts.
+
+**Die Prüffrage für jeden Satz:** Ergibt er für jemanden Sinn, der die App nur
+benutzt – der also keinen Server aufsetzt, keine Umgebungsvariable kennt, keine
+Verwaltungsseite sieht und den Quelltext nie öffnet? Wenn nein: streichen. Nicht
+umformulieren, nicht in einen Nebensatz retten – streichen.
+
+Was damit **nicht** in eine Release Note gehört:
+
+| Nicht hinein                | Beispiele                                                                                                                                            |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Für Hoster**              | Umgebungsvariablen, Docker, Deployment, Datenbank-URLs, Migrationen, Upgrade-Hinweise, „Set X before you upgrade"                                    |
+| **Für Administratoren**     | die Verwaltungsseiten, Moderation, Katalogpflege, Systemzustand, Rollen                                                                              |
+| **Technischer Hintergrund** | Tabellen- und Spaltennamen, Dateinamen, Funktionsnamen, Commit-Hashes, Schema-Änderungen, „auf dem Server gerechnet", „es gibt keine Fremdschlüssel" |
+| **Entwicklungsvorgang**     | Tests, Prüfungen, Refactorings, Versionsnummern von Formaten, interne Umbauten                                                                       |
+
+Es gibt **keinen** Abschnitt „For operators", „Für Administratoren" oder
+Ähnliches. Was Betreiber wissen müssen, steht in `README.md`, `PRIVACY.md` und
+`COMPLIANCE.md`; was Entwickler wissen müssen, in `AGENTS.md` und im Quelltext.
+Beides erreicht seine Leser dort – und niemanden, der es nicht braucht.
+
+**Das Warum darf bleiben, solange es der Benutzer nachvollziehen kann.** „Powder
+gets no second unit, because bulk density depends on grain size and a wrong
+number is worse than none" erklärt eine Entscheidung, die er sieht. „Die
+Zweitanzeige rechnet der Server, weil die Projektion sonst zwei Felder mehr
+herausgeben müsste" erklärt eine, die ihn nichts angeht.
+
+**Eine Datenschutz-Aussage ist Benutzerinhalt**, kein Hoster-Thema: Wer was von
+ihm zu sehen bekommt und was nie hinausgeht, betrifft ihn unmittelbar. Der Weg
+dorthin (Projektion, Spaltenauswahl) nicht.
+
+**Wenn nach dieser Regel nichts übrig bleibt**, ist die Release Note eine kurze
+Wartungsnotiz – zwei Zeilen, die sagen, dass sich für den Benutzer nichts
+geändert hat (Vorbild: `release_v1.0.0.md`, `release_v2.0.1.md`). Die Datei
+entfällt **nicht**: Eine Lücke in der Versionsliste wirft mehr Fragen auf, als
+sie erspart.
+
+## Form
 
 - Beginne die Abschnitte bei `##` (`#` ist der Seite vorbehalten).
-- Schreibe für Benutzer: neue Funktionen, spürbare Verbesserungen, behobene
-  Fehler. Keine internen Umbauten, keine Dateinamen, keine Commit-Hashes.
 - Unterstützt sind Überschriften, Absätze, Listen, Fett/Kursiv, Links, Code,
   Tabellen (GitHub-Markdown) und Bilder.
 - **Kein rohes HTML** – es wird beim Rendern still verworfen und ist deshalb
@@ -85,7 +124,17 @@ title: Dark theme and release notes
 
 Benutzer haben sie unter Umständen schon als gelesen markiert und sehen eine
 Änderung nie wieder. Tippfehler und Formulierungen zu korrigieren ist in
-Ordnung; nachträglich Inhalte ergänzen gehört in die nächste Version.
+Ordnung; nachträglich Inhalte **ergänzen** gehört in die nächste Version.
+
+Zwei Ausnahmen, beide aus demselben Grund – wer den Eintrag schon gelesen hat,
+verpasst dadurch nichts:
+
+- **Etwas entfernen, das nach der Regel oben nie hineingehört hätte.** Der
+  Bestand wurde in 2.4.0 einmal danach durchgesehen.
+- **Eine sachlich falsche Aussage berichtigen.** In `release_v2.0.0.md` stand,
+  der Datenexport sei „the same format the import page reads" – die Importseite
+  liest ein anderes. Eine Zusage, die die App nicht einlöst, stehen zu lassen
+  wäre schlechter, als sie zu berichtigen.
 
 `npm run format` (Prettier) formatiert diese Dateien mit – Aufzählungen mit
 `-`, Absätze werden nicht neu umbrochen.

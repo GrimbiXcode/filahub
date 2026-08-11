@@ -31,57 +31,37 @@ is not going to argue.
 The preset catalogue used to describe a spool and only a spool. Its limits said
 so: at most 20 kg of content, at most 5 kg empty, and the empty weight had to be
 lower than the content. A 25 kg pail of sintering powder in a steel container
-failed all three.
-
-Now:
+failed all three. If you suggest a container for the catalogue, that is what
+changes:
 
 - Content up to **50 kg**, empty weight up to **20 kg**.
 - The rule "empty weight below content weight" is **gone**. It was only ever true
   for spools — 500 g of test powder in a 2 kg container breaks it, and there is
-  nothing wrong with that entry. Your own container types never had this rule in
-  the first place, so the catalogue was stricter than the form next to it.
+  nothing wrong with that entry.
 - Outer diameter, width and bore only appear for spools. A bottle has no bore.
 - Container material gained **glass** and **foil**.
 
 **No resin or powder presets ship with this release.** The catalogue's own rule is
 that a wrong starting value is worse than a missing entry, and the empty weights
 for resin bottles and powder containers are not something we could source
-properly. The structure is ready; entries come through the catalogue admin and
-community suggestions, the same way the spool data grew.
+properly. The catalogue is ready for them; the entries themselves arrive through
+suggestions, the same way the spool data grew.
 
 ## Fixed: a filament spool claiming to fit resin
 
-Grouping in the container list rested on two lenient rules — an untagged series
-matches any material type, and an unknown form matches any material kind. Each is
-right on its own. Together they meant an untagged filament spool from the starter
-catalogue appeared under "Fits resin", which it plainly does not.
-
-Matching now needs a positive reason: a contradicting property rules a container
-out, and at least one property has to actually agree. Two unknowns mean "don't
-know" and sort down with the rest. Nothing became unselectable — it just stopped
-claiming to fit.
+In a resin store, a filament spool from the starter catalogue turned up under
+"Fits resin", which it plainly does not. A container is now only called fitting
+when something about it actually agrees — where nothing is known either way, it
+sorts down with the rest instead of claiming a match. Nothing became
+unselectable.
 
 ## Smaller things
 
 - The command palette knows your stores. It also lost a stale link to the old
   drybox address.
-- The System page in administration counts the `lager` table, which it quietly
-  skipped since the last release.
-- Five English strings still said "storage box" where the app says "drybox".
+- A few places in the English interface still said "storage box" where the app
+  says "drybox".
 - The container list shows each entry's form and tare together: "60 g tare · Bottle".
 - The hint next to the data export listed the wrong sections and claimed the
   importer reads that file back. It does not — the importer takes a short list of
   positions. Both are corrected.
-
-## For operators
-
-Two migrations. `0010` renames tables, columns and one enum type — a rename only,
-no data touched. `0011` adds the form columns and two container materials.
-
-The data export changed shape: the sections `spoolTypes` and `hiddenSpoolPresets`
-are now `containerTypes` and `hiddenContainerPresets`, and `formatVersion` moved
-from 1 to 2. A file a user downloaded earlier still carries the old names — that
-is what the version field is for. Nothing in the application reads exports back,
-so nothing breaks.
-
-The privacy policy's table of stored data uses the new names.

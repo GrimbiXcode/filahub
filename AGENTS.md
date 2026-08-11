@@ -408,6 +408,12 @@ Bilder liegen daneben in `images/` und werden über `import.meta.glob` mitgebaut
   Deutsch-Regel unter „Code-Stil". Die Oberfläche drumherum bleibt deutsch. Die
   genauen Regeln stehen in `src/release-notes/AGENTS.md`; wer dort Dateien
   anlegt, liest zuerst diese Datei.
+- **Zielgruppe ist ausschließlich, wer die App benutzt.** Neue Funktionen,
+  spürbare Verbesserungen, behobene Fehler – und sonst nichts. Was Hoster,
+  Administratoren oder Entwickler angeht, gehört in `README.md`, `PRIVACY.md`,
+  `COMPLIANCE.md` oder hierher, nicht in eine Release Note; es gibt dort keinen
+  Abschnitt „For operators". Die Prüffrage und die Grenzfälle stehen in
+  `src/release-notes/AGENTS.md`.
 - Die Version kommt aus dem **Dateinamen**. Beim Versionssprung gehören die
   Version in `package.json` und die neue Release Note in dieselbe Änderung.
 - Der Ungelesen-Stand hängt am Benutzer (`users.lastSeenReleaseVersion`,
