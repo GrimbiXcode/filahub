@@ -29,10 +29,10 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { friendInventoryPath } from "@/const";
+import { LAGER_PATH, friendInventoryPath } from "@/const";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
-import type { FriendshipItem, LoanRequestItem } from "@/types";
+import type { FriendshipItem, LagerItem, LoanRequestItem } from "@/types";
 
 /**
  * Freunde, Sichtbarkeit und Ausleih-Vorgänge.
@@ -48,6 +48,12 @@ export default function Friends() {
 
   const { data: friends, isLoading } = trpc.friend.list.useQuery();
   const { data: loans } = trpc.friend.loanRequests.useQuery();
+  /*
+    Die eigenen Lager einmal für die ganze Seite, nicht je Freundeskarte: Die
+    Namen sind für alle Karten dieselben, und `friend.list` gibt bewusst nur
+    IDs heraus (ein Lagername ist Freitext und geht nie an Freunde).
+  */
+  const { data: lager } = trpc.lager.list.useQuery();
 
   const [removing, setRemoving] = useState<FriendshipItem | null>(null);
 
@@ -164,7 +170,11 @@ export default function Friends() {
               accepted.map((friend, index) => (
                 <div key={friend.id} className="flex flex-col gap-3">
                   {index > 0 && <Separator />}
-                  <FriendRow friend={friend} onRemove={setRemoving} />
+                  <FriendRow
+                    friend={friend}
+                    lager={lager ?? []}
+                    onRemove={setRemoving}
+                  />
                 </div>
               ))
             )}
@@ -259,32 +269,46 @@ function FriendName({ friend }: { friend: FriendshipItem }) {
 /**
  * Eine Freundschaft mit **beiden** Richtungen.
  *
- * Getrennt dargestellt, weil sie getrennt entschieden werden: Links steht, was
- * ich zeige – das kann ich ändern. Rechts steht, was ich sehe – das ist die
- * Entscheidung des Freundes und deshalb nur Text, keine Auswahl. Eine einzige
- * Stufe für beide wäre einfacher zu bauen und falsch: Sie ließe den einen über
- * das Lager des anderen bestimmen.
+ * Getrennt dargestellt, weil sie getrennt entschieden werden: Oben steht, was
+ * ich zeige – je Lager, und das kann ich ändern. Unten steht, was ich sehe –
+ * das ist die Entscheidung des Freundes und deshalb nur Text, keine Auswahl.
+ * Eine einzige Stufe für beide wäre einfacher zu bauen und falsch: Sie ließe
+ * den einen über den Bestand des anderen bestimmen.
+ *
+ * Je Lager eine Zeile, auch für nicht freigegebene – die Vorgabe ist „nichts
+ * freigegeben“, und dieser Zustand darf nicht unsichtbar sein. Der Server
+ * liefert deshalb einen Eintrag je eigenem Lager, nicht nur die vorhandenen
+ * Freigaben.
  */
 function FriendRow({
   friend,
+  lager,
   onRemove,
 }: {
   friend: FriendshipItem;
+  lager: LagerItem[];
   onRemove: (friend: FriendshipItem) => void;
 }) {
   const t = useT();
   const utils = trpc.useUtils();
 
-  const setVisibility = trpc.friend.setVisibility.useMutation({
+  const setVisibility = trpc.friend.setLagerVisibility.useMutation({
     onSuccess: () => {
       toast.success(t.friends.visibilitySaved);
       utils.friend.list.invalidate();
+      // Die Zahl „mit N Freunden geteilt“ auf der Lager-Seite hängt daran.
+      utils.lager.list.invalidate();
       // Die Freigabe steuert, was in der Suche auftaucht – der zwischengespeicherte
       // Stand wäre sonst bis zum Neuladen falsch.
       utils.friend.searchMaterials.invalidate();
     },
     onError: e => toast.error(e.message),
   });
+
+  const shareOf = new Map(
+    friend.sharedByMe.map(s => [s.lagerId, s.visibility])
+  );
+  const sharesNothing = friend.sharedByMe.every(s => s.visibility === "none");
 
   return (
     <div className="flex flex-col gap-3">
@@ -309,46 +333,86 @@ function FriendRow({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid gap-1.5">
-          <Label htmlFor={`vis-${friend.id}`}>{t.friends.sharedByMe}</Label>
-          <Select
-            value={friend.sharedByMe}
-            disabled={setVisibility.isPending}
-            onValueChange={value =>
-              setVisibility.mutate({
-                id: friend.id,
-                visibility: value as FriendVisibility,
-              })
-            }
-          >
-            <SelectTrigger id={`vis-${friend.id}`}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {FRIEND_VISIBILITIES.map(level => (
-                <SelectItem key={level} value={level}>
-                  {visibilityLabel(t, level)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="grid gap-1.5">
+        <Label>{t.friends.sharedByMe}</Label>
+        {lager.length === 0 ? (
+          /*
+            Ohne Lager gibt es nichts freizugeben. Der Verweis ist wichtiger als
+            eine leere Liste: Sonst wirkt die Freundschaft kaputt, obwohl bloß
+            die Voraussetzung fehlt.
+          */
           <p className="text-xs text-muted-foreground">
-            {visibilityHint(t, friend.sharedByMe)}
+            {t.friends.noLagerYet}{" "}
+            <Link to={LAGER_PATH} className="underline">
+              {t.friends.toLager}
+            </Link>
           </p>
-        </div>
+        ) : (
+          <>
+            <div className="grid gap-2">
+              {lager.map(item => {
+                const level = shareOf.get(item.id) ?? "none";
+                const selectId = `vis-${friend.id}-${item.id}`;
+                return (
+                  <div
+                    key={item.id}
+                    className="flex flex-wrap items-center gap-2"
+                  >
+                    <Label
+                      htmlFor={selectId}
+                      className="min-w-0 flex-1 truncate text-sm font-normal"
+                    >
+                      {item.name}
+                    </Label>
+                    <Select
+                      value={level}
+                      disabled={setVisibility.isPending}
+                      onValueChange={value =>
+                        setVisibility.mutate({
+                          friendId: friend.friendId,
+                          lagerId: item.id,
+                          visibility: value as FriendVisibility,
+                        })
+                      }
+                    >
+                      <SelectTrigger id={selectId} className="w-[11rem]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FRIEND_VISIBILITIES.map(option => (
+                          <SelectItem key={option} value={option}>
+                            {visibilityLabel(t, option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                );
+              })}
+            </div>
+            {/*
+              Entweder der Hinweis, dass nichts freigegeben ist – sonst wäre
+              eine wirkungslose Freundschaft nicht erklärbar –, oder die
+              Bedeutung der Stufen. Beides zugleich wäre Text ohne Anlass, und
+              je Zeile wiederholt wäre es fünfmal derselbe Satz.
+            */}
+            <p className="text-xs text-muted-foreground">
+              {sharesNothing
+                ? t.friends.sharesNothingHint
+                : visibilityLegend(t)}
+            </p>
+          </>
+        )}
+      </div>
 
-        <div className="grid gap-1.5">
-          <Label>{t.friends.sharedWithMe}</Label>
-          <div className="flex h-9 items-center">
-            <Badge variant="secondary">
-              {visibilityLabel(t, friend.sharedWithMe)}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {t.friends.theirChoice}
-          </p>
+      <div className="grid gap-1.5">
+        <Label>{t.friends.sharedWithMe}</Label>
+        <div className="flex h-9 items-center">
+          <Badge variant="secondary">
+            {visibilityLabel(t, friend.sharedWithMe)}
+          </Badge>
         </div>
+        <p className="text-xs text-muted-foreground">{t.friends.theirChoice}</p>
       </div>
     </div>
   );
@@ -362,10 +426,18 @@ function visibilityLabel(t: Texts, level: FriendVisibility): string {
   return t.friends.visibilityNone;
 }
 
-function visibilityHint(t: Texts, level: FriendVisibility): string {
-  if (level === "full") return t.friends.visibilityFullHint;
-  if (level === "search") return t.friends.visibilitySearchHint;
-  return t.friends.visibilityNoneHint;
+/**
+ * Was die Stufen bedeuten – einmal unter der Liste, nicht je Zeile.
+ *
+ * Der Unterschied zwischen „nur Suche“ und „ganzes Lager“ ist keine Feinheit:
+ * Er entscheidet, ob jemand blättern kann oder nur findet, wonach er fragt.
+ * Deshalb steht er als Text da und nicht bloß als Wort im Auswahlfeld.
+ */
+function visibilityLegend(t: Texts): string {
+  return [
+    `${t.friends.visibilitySearch}: ${t.friends.visibilitySearchHint}`,
+    `${t.friends.visibilityFull}: ${t.friends.visibilityFullHint}`,
+  ].join(" · ");
 }
 
 /**

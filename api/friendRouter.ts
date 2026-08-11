@@ -33,7 +33,7 @@ import {
   respondToFriendship,
   respondToLoanRequest,
   rotateFriendCode,
-  setOwnVisibility,
+  setLagerShare,
   withdrawLoanRequest,
 } from "./queries/friends";
 import { appLink, sendTelegramMessage } from "./telegram/send";
@@ -227,30 +227,47 @@ export const friendRouter = createRouter({
   }),
 
   /**
-   * Setzt die Stufe für **das eigene** Lager. Die Gegenseite kann daran nichts
-   * ändern – welche Spalte gemeint ist, entscheidet `setOwnVisibility`.
+   * Gibt **ein eigenes Lager** für einen Freund frei – oder nimmt die Freigabe
+   * zurück (`none`).
+   *
+   * `friendId` ist die ID des Freundes, nicht die der Freundschaftszeile: Die
+   * Freigabe hängt seit 2.4.0 am Paar Lager/Empfänger, und `setLagerShare` sucht
+   * die Freundschaft selbst. Ein `NOT_FOUND` deckt beide Fehlschläge ab –
+   * fremdes Lager und fehlende angenommene Freundschaft. Sie zu unterscheiden
+   * hieße zu verraten, welche der beiden Zeilen es gibt.
    */
-  setVisibility: authedQuery
-    .input(idInput.extend({ visibility: friendVisibilitySchema }))
+  setLagerVisibility: authedQuery
+    .input(
+      z.object({
+        friendId: z.number().int().positive(),
+        lagerId: z.number().int().positive(),
+        visibility: friendVisibilitySchema,
+      })
+    )
     .mutation(async ({ ctx, input }) => {
-      const row = await setOwnVisibility(
+      const ok = await setLagerShare(
         ctx.user.id,
-        input.id,
+        input.lagerId,
+        input.friendId,
         input.visibility
       );
-      if (!row) {
+      if (!ok) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Freundschaft nicht gefunden",
+          message: "Lager oder Freundschaft nicht gefunden",
         });
       }
       recordAudit({
         event: "friend.visibility_changed",
         actorUserId: ctx.user.id,
-        subjectUserId:
-          row.userId === ctx.user.id ? row.friendUserId : row.userId,
+        subjectUserId: input.friendId,
         ip: ctx.clientIp,
-        detail: { visibility: input.visibility },
+        /*
+          Die Lager-ID gehört ins Protokoll: Ohne sie beantwortet der Eintrag
+          nicht mehr, wer Zugriff auf **was** bekam – und genau das ist die
+          Frage, für die das Protokoll da ist.
+        */
+        detail: { lagerId: input.lagerId, visibility: input.visibility },
       });
       return { ok: true };
     }),

@@ -69,6 +69,10 @@ afterAll(async () => {
  * eingeht, obwohl die Box selbst verborgen bleibt.
  */
 let alexMaterialId: number;
+/** Alex' zweites Lager samt Inhalt – der Beleg, dass Freigaben je Lager gelten. */
+let alexLagerId: number;
+let alexResinLagerId: number;
+let alexResinMaterialId: number;
 
 beforeEach(async () => {
   await resetSchema();
@@ -138,24 +142,75 @@ beforeEach(async () => {
     materialType: "PETG",
     nominalWeight: 1000,
   });
+  alexLagerId = alexLager.id;
+
+  /*
+    Ein **zweites** Lager mit eigenem Inhalt. Erst damit lässt sich prüfen, was
+    seit 2.4.0 der Kern der Sache ist: Eine Freigabe gilt für ein Lager, nicht
+    für den Bestand. Mit nur einem Lager wäre jeder Test dieser Datei auch dann
+    grün, wenn die Freigabe weiter für alles gälte.
+  */
+  const [resinLager] = await db()
+    .insert(schema.lager)
+    .values({ userId: alex.id, name: "Harz", materialKind: "resin" })
+    .returning();
+  alexResinLagerId = resinLager.id;
+  const [resinMaterial] = await db()
+    .insert(schema.materials)
+    .values({
+      userId: alex.id,
+      lagerId: resinLager.id,
+      name: "Anycubic Resin Klar",
+      materialType: "Standard-Resin",
+      nominalWeight: 1000,
+    })
+    .returning();
+  alexResinMaterialId = resinMaterial.id;
 });
 
-/** Freundschaft anlegen und annehmen; danach beide Stufen setzen. */
-async function befriend(options: {
-  fromAlex: schema.Friendship["visibilityFromUser"];
-  fromBea: schema.Friendship["visibilityFromUser"];
-}) {
+/**
+ * Freundschaft zwischen Alex und Bea anlegen, annehmen und Alex' Lager
+ * freigeben.
+ *
+ * Die Stufen stehen je Lager, weil sie im Modell je Lager stehen. `undefined`
+ * heißt „keine Freigabezeile“, und das ist nicht dasselbe wie ein Wert `none`:
+ * Fehlt die Zeile, ist es der Grundzustand; steht sie da, hat jemand
+ * zurückgenommen. Beide müssen dasselbe bewirken, und beide kommen hier vor.
+ */
+async function befriend(
+  options: {
+    main?: schema.LagerShare["visibility"];
+    resin?: schema.LagerShare["visibility"];
+  } = {}
+) {
   const [row] = await db()
     .insert(schema.friendships)
     .values({
       userId: alex.id,
       friendUserId: bea.id,
       status: "accepted",
-      visibilityFromUser: options.fromAlex,
-      visibilityFromFriend: options.fromBea,
+      respondedAt: new Date(),
     })
     .returning();
+  await share({ lagerId: alexLagerId, visibility: options.main });
+  await share({ lagerId: alexResinLagerId, visibility: options.resin });
   return row;
+}
+
+/** Eine Freigabezeile für Bea, direkt in der Datenbank. `none` schreibt nichts. */
+async function share(options: {
+  lagerId: number;
+  visibility?: schema.LagerShare["visibility"];
+  recipientId?: number;
+}) {
+  if (options.visibility == null || options.visibility === "none") return;
+  await db()
+    .insert(schema.lagerShares)
+    .values({
+      lagerId: options.lagerId,
+      sharedWithUserId: options.recipientId ?? bea.id,
+      visibility: options.visibility,
+    });
 }
 
 describe("Freundschaft schließen", () => {
@@ -185,8 +240,18 @@ describe("Freundschaft schließen", () => {
 
     const accepted = await callerFor(alex).friend.list();
     expect(accepted[0].status).toBe("accepted");
-    // Voreinstellung: gefunden werden, aber nicht das ganze Lager zeigen.
-    expect(accepted[0].sharedByMe).toBe("search");
+    /*
+      Nach dem Annehmen ist **nichts** freigegeben – seit 2.4.0 gibt es keine
+      Voreinstellung mehr, weil sie ein konkretes Lager öffnen würde. Die Liste
+      trägt trotzdem eine Zeile je eigenem Lager: So muss die Oberfläche keinen
+      Wert erfinden, und ein nicht freigegebenes Lager ist sichtbar nicht
+      freigegeben statt gar nicht erwähnt.
+    */
+    expect(accepted[0].sharedByMe).toEqual([
+      { lagerId: alexLagerId, visibility: "none" },
+      { lagerId: alexResinLagerId, visibility: "none" },
+    ]);
+    expect(accepted[0].sharedWithMe).toBe("none");
   });
 
   it("findet einen Freund über den exakten Telegram-Namen", async () => {
@@ -289,7 +354,7 @@ describe("Freundschaft schließen", () => {
 
 describe("Sichtbarkeitsstufen", () => {
   it("gibt bei `none` nichts heraus", async () => {
-    await befriend({ fromAlex: "none", fromBea: "full" });
+    await befriend({ main: "none" });
     expect(
       await callerFor(bea).friend.searchMaterials({ query: "PLA" })
     ).toEqual([]);
@@ -299,7 +364,7 @@ describe("Sichtbarkeitsstufen", () => {
   });
 
   it("liefert bei `search` nur Treffer und nie das ganze Lager", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
 
     const hits = await callerFor(bea).friend.searchMaterials({ query: "PETG" });
     expect(hits).toHaveLength(1);
@@ -320,7 +385,7 @@ describe("Sichtbarkeitsstufen", () => {
    * `findFriendMaterialsForSearch` liegt dahinter.
    */
   it("verweigert die Suche ohne ausreichenden Suchbegriff", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     for (const query of ["", "P"]) {
       await expect(
         callerFor(bea).friend.searchMaterials({ query })
@@ -333,7 +398,7 @@ describe("Sichtbarkeitsstufen", () => {
    * genau die vollständige Lagerliste, die die Stufe `search` verhindern soll.
    */
   it("lässt Platzhalter im Suchbegriff nicht durch", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     expect(
       await callerFor(bea).friend.searchMaterials({ query: "%%" })
     ).toEqual([]);
@@ -343,7 +408,7 @@ describe("Sichtbarkeitsstufen", () => {
   });
 
   it("öffnet bei `full` das ganze Lager", async () => {
-    await befriend({ fromAlex: "full", fromBea: "none" });
+    await befriend({ main: "full" });
     const inventory = await callerFor(bea).friend.inventory({
       friendId: alex.id,
     });
@@ -361,7 +426,7 @@ describe("Sichtbarkeitsstufen", () => {
    * sie gleich, käme ein Vertauschen der Spalten hier durch.
    */
   it("hält beide Richtungen auseinander", async () => {
-    await befriend({ fromAlex: "full", fromBea: "none" });
+    await befriend({ main: "full" });
 
     // Bea darf alles von Alex sehen …
     const inventory = await callerFor(bea).friend.inventory({
@@ -376,44 +441,266 @@ describe("Sichtbarkeitsstufen", () => {
 
     // Und die Oberfläche zeigt beiden das Richtige an.
     const [forAlex] = await callerFor(alex).friend.list();
-    expect(forAlex.sharedByMe).toBe("full");
+    expect(forAlex.sharedByMe).toEqual([
+      { lagerId: alexLagerId, visibility: "full" },
+      { lagerId: alexResinLagerId, visibility: "none" },
+    ]);
     expect(forAlex.sharedWithMe).toBe("none");
+    // Bea hat kein Lager, kann also nichts zeigen – und sieht alles von Alex.
     const [forBea] = await callerFor(bea).friend.list();
-    expect(forBea.sharedByMe).toBe("none");
+    expect(forBea.sharedByMe).toEqual([]);
     expect(forBea.sharedWithMe).toBe("full");
   });
 
-  it("ändert mit `setVisibility` nur das eigene Lager", async () => {
-    const friendship = await befriend({ fromAlex: "full", fromBea: "none" });
+  /**
+   * `sharedWithMe` ist die **höchste** Stufe über alle Lager des Freundes.
+   *
+   * Bewusst eine einzige Stufe: Wie viele Lager er hat und welche er freigibt,
+   * wäre eine Auskunft über seinen Bestand, die er nicht gegeben hat. Die
+   * beiden Stufen sind hier verschieden, sonst belegte der Test nichts.
+   */
+  it("verdichtet fremde Freigaben auf die höchste Stufe", async () => {
+    await befriend({ main: "search", resin: "full" });
+    const [forBea] = await callerFor(bea).friend.list();
+    expect(forBea.sharedWithMe).toBe("full");
 
-    // Bea setzt *ihre* Freigabe – die von Alex darf sich nicht bewegen.
-    await callerFor(bea).friend.setVisibility({
-      id: friendship.id,
+    // Umgekehrt: Ohne `full` bleibt es bei `search`.
+    await db().delete(schema.lagerShares);
+    await share({ lagerId: alexLagerId, visibility: "search" });
+    const [again] = await callerFor(bea).friend.list();
+    expect(again.sharedWithMe).toBe("search");
+  });
+
+  /**
+   * Die Freigabe gehört dem Lager, und ein Lager gehört genau einem Menschen.
+   * Bea kann deshalb nur über **ihre** Lager verfügen – auch innerhalb einer
+   * Freundschaft, in der Alex großzügiger ist.
+   */
+  it("lässt niemanden ein fremdes Lager freigeben", async () => {
+    await befriend({ main: "full" });
+
+    await expect(
+      callerFor(bea).friend.setLagerVisibility({
+        friendId: alex.id,
+        lagerId: alexLagerId,
+        visibility: "none",
+      })
+    ).rejects.toThrow(/nicht gefunden/);
+
+    // Alex' eigene Freigabe hat sich nicht bewegt.
+    const rows = await db().select().from(schema.lagerShares);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].visibility).toBe("full");
+  });
+
+  it("setzt und nimmt die Freigabe eines eigenen Lagers zurück", async () => {
+    await befriend();
+
+    const caller = callerFor(alex);
+    await caller.friend.setLagerVisibility({
+      friendId: bea.id,
+      lagerId: alexResinLagerId,
       visibility: "search",
     });
+    expect(
+      await callerFor(bea).friend.searchMaterials({ query: "Resin" })
+    ).toHaveLength(1);
 
-    const row = await db()
-      .select()
-      .from(schema.friendships)
-      .where(eq(schema.friendships.id, friendship.id));
-    expect(row[0].visibilityFromUser).toBe("full");
-    expect(row[0].visibilityFromFriend).toBe("search");
+    // Heraufsetzen ist ein Upsert, keine zweite Zeile.
+    await caller.friend.setLagerVisibility({
+      friendId: bea.id,
+      lagerId: alexResinLagerId,
+      visibility: "full",
+    });
+    expect(await db().select().from(schema.lagerShares)).toHaveLength(1);
 
-    // Und umgekehrt.
-    await callerFor(alex).friend.setVisibility({
-      id: friendship.id,
+    /*
+      Und `none` **löscht** die Zeile, statt sie zu schreiben: Die fehlende Zeile
+      ist der Grundzustand, sonst müsste jede Abfrage zwei Fälle unterscheiden.
+    */
+    await caller.friend.setLagerVisibility({
+      friendId: bea.id,
+      lagerId: alexResinLagerId,
       visibility: "none",
     });
-    const after = await db()
+    expect(await db().select().from(schema.lagerShares)).toEqual([]);
+    expect(
+      await callerFor(bea).friend.searchMaterials({ query: "Resin" })
+    ).toEqual([]);
+  });
+
+  /**
+   * **Der Kern der Änderung.** Ein Lager freigegeben, das andere nicht: Die
+   * Suche findet nur, was aus dem freigegebenen kommt, der Lagerblick zeigt nur
+   * dessen Material, und ein Material aus dem verborgenen ist auch über die
+   * Ausleih-Anfrage nicht erreichbar.
+   *
+   * Vor 2.4.0 hätte hier zwangsläufig alles oder nichts gestanden.
+   */
+  it("gibt genau das freigegebene Lager heraus, nicht den Bestand", async () => {
+    await befriend({ resin: "full" });
+    const caller = callerFor(bea);
+
+    const found = await caller.friend.searchMaterials({ query: "Anycubic" });
+    expect(found).toHaveLength(1);
+    expect(await caller.friend.searchMaterials({ query: "PolyTerra" })).toEqual(
+      []
+    );
+    expect(await caller.friend.searchMaterials({ query: "PETG" })).toEqual([]);
+
+    const inventory = await caller.friend.inventory({ friendId: alex.id });
+    expect(inventory.materials.map(m => m.name)).toEqual([
+      "Anycubic Resin Klar",
+    ]);
+
+    /*
+      `NOT_FOUND` und nicht `FORBIDDEN`: Die Antwort darf nicht verraten, dass
+      es das Material gibt – sonst wären Material-IDs durchprobierbar.
+    */
+    await expect(
+      caller.friend.requestLoan({ materialId: alexMaterialId })
+    ).rejects.toThrow(/nicht gefunden/);
+    // Aus dem freigegebenen Lager geht es.
+    await expect(
+      caller.friend.requestLoan({ materialId: alexResinMaterialId })
+    ).resolves.toBeTruthy();
+  });
+
+  /**
+   * Stufe `search` je Lager: Suchen ja, Lagerblick nein. Der Lagerblick verlangt
+   * `full` **irgendeines** Lagers – gibt es keines, ist er `NOT_FOUND`.
+   */
+  it("trennt `search` und `full` je Lager", async () => {
+    await befriend({ main: "search", resin: "search" });
+    const caller = callerFor(bea);
+
+    expect(await caller.friend.searchMaterials({ query: "PLA" })).toHaveLength(
+      1
+    );
+    await expect(
+      caller.friend.inventory({ friendId: alex.id })
+    ).rejects.toThrow(/nicht gefunden/);
+
+    // Ein einziges Lager auf `full` öffnet den Blick – aber nur auf dieses.
+    await db().delete(schema.lagerShares);
+    await share({ lagerId: alexResinLagerId, visibility: "full" });
+    const inventory = await caller.friend.inventory({ friendId: alex.id });
+    expect(inventory.materials.map(m => m.name)).toEqual([
+      "Anycubic Resin Klar",
+    ]);
+  });
+
+  /**
+   * **Falle 1: Die aufgelöste Freundschaft.** Ohne die Kaskade in
+   * `deleteFriendship` bliebe die Freigabezeile stehen, und eine erneut
+   * geschlossene Freundschaft weckte alten Zugriff wieder auf – ohne dass
+   * jemand etwas freigegeben hätte. Auffallen würde es niemandem: Der Lesepfad
+   * findet dann eine angenommene Freundschaft **und** eine Freigabe.
+   */
+  it("weckt nach dem Auflösen und Neuschließen keinen Zugriff", async () => {
+    const friendship = await befriend({ main: "full", resin: "full" });
+    expect(await db().select().from(schema.lagerShares)).toHaveLength(2);
+
+    await callerFor(alex).friend.remove({ id: friendship.id });
+    expect(await db().select().from(schema.lagerShares)).toEqual([]);
+
+    // Neu anfragen und annehmen – und nichts kehrt zurück.
+    const { code } = await callerFor(alex).friend.myCode();
+    const again = await callerFor(bea).friend.request({ code });
+    await callerFor(alex).friend.respond({ id: again.id, accept: true });
+
+    expect(
+      await callerFor(bea).friend.searchMaterials({ query: "PLA" })
+    ).toEqual([]);
+    await expect(
+      callerFor(bea).friend.inventory({ friendId: alex.id })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+
+  /**
+   * **Falle 2: Der Status ohne Kaskade.** Hier wird der Freundschaftsstatus
+   * direkt in der Datenbank auf `declined` gesetzt, **ohne** die Freigabe
+   * anzufassen – der Zustand, den es über die Oberfläche nicht gibt, den aber
+   * ein späterer Umbau erzeugen könnte.
+   *
+   * Der Test prüft damit `resolveShare` am echten Lesepfad: Verschiebt jemand
+   * die Statusprüfung ins SQL des Freigabe-Joins, wird er rot.
+   */
+  it("gewährt nichts, wenn die Freundschaft nicht angenommen ist", async () => {
+    await befriend({ main: "full" });
+    for (const status of ["declined", "pending"] as const) {
+      await db().update(schema.friendships).set({ status });
+
+      // Die Freigabezeile steht unverändert da.
+      expect(await db().select().from(schema.lagerShares)).toHaveLength(1);
+
+      const caller = callerFor(bea);
+      expect(await caller.friend.searchMaterials({ query: "PLA" })).toEqual([]);
+      await expect(
+        caller.friend.inventory({ friendId: alex.id })
+      ).rejects.toThrow(/nicht gefunden/);
+      await expect(
+        caller.friend.requestLoan({ materialId: alexMaterialId })
+      ).rejects.toThrow(/nicht gefunden/);
+    }
+  });
+
+  /**
+   * **Die Kaskade aus der anderen Richtung.** Ein gelöschtes Lager entzieht den
+   * Zugriff; bliebe die Freigabezeile stehen, zeigte ihre `lagerId` mangels
+   * Fremdschlüssel irgendwann auf ein neu vergebenes Lager.
+   */
+  it("entzieht mit dem gelöschten Lager auch die Freigabe", async () => {
+    await befriend({ main: "full", resin: "full" });
+
+    // Löschen geht nur leer – das Harzmaterial muss zuerst weg.
+    await db()
+      .delete(schema.materials)
+      .where(eq(schema.materials.id, alexResinMaterialId));
+    await callerFor(alex).lager.delete({ id: alexResinLagerId });
+
+    const rows = await db().select().from(schema.lagerShares);
+    expect(rows.map(r => r.lagerId)).toEqual([alexLagerId]);
+
+    // Und im Protokoll steht, wessen Zugriff endete.
+    await new Promise(resolve => setTimeout(resolve, 150));
+    const log = await db()
       .select()
-      .from(schema.friendships)
-      .where(eq(schema.friendships.id, friendship.id));
-    expect(after[0].visibilityFromUser).toBe("none");
-    expect(after[0].visibilityFromFriend).toBe("search");
+      .from(schema.auditLog)
+      .where(eq(schema.auditLog.event, "friend.visibility_changed"));
+    expect(log).toHaveLength(1);
+    expect(log[0].subjectUserId).toBe(bea.id);
+    expect(log[0].detail).toMatchObject({
+      lagerId: alexResinLagerId,
+      visibility: "none",
+      reason: "lager_deleted",
+    });
+  });
+
+  /** Die Zahl auf der Lager-Seite – die Gegenprobe zu „nichts freigegeben“. */
+  it("zählt je Lager, mit wie vielen Freunden es geteilt ist", async () => {
+    await befriend({ main: "full" });
+    // Ein zweiter Empfänger für dasselbe Lager.
+    await db().insert(schema.friendships).values({
+      userId: alex.id,
+      friendUserId: stranger.id,
+      status: "accepted",
+      respondedAt: new Date(),
+    });
+    await share({
+      lagerId: alexLagerId,
+      visibility: "search",
+      recipientId: stranger.id,
+    });
+
+    const list = await callerFor(alex).lager.list();
+    const byId = new Map(list.map(l => [l.id, l.sharedWith]));
+    expect(byId.get(alexLagerId)).toBe(2);
+    expect(byId.get(alexResinLagerId)).toBe(0);
   });
 
   it("lässt Unbeteiligte nichts sehen", async () => {
-    await befriend({ fromAlex: "full", fromBea: "full" });
+    await befriend({ main: "full" });
     expect(
       await callerFor(stranger).friend.searchMaterials({ query: "PLA" })
     ).toEqual([]);
@@ -430,7 +717,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    * Lesepfad, der die Projektion umgeht, fällt sonst nicht auf.
    */
   it("liefert in keiner Antwort verbotene Felder", async () => {
-    await befriend({ fromAlex: "full", fromBea: "none" });
+    await befriend({ main: "full" });
     const caller = callerFor(bea);
 
     const fromSearch = await caller.friend.searchMaterials({ query: "PLA" });
@@ -475,7 +762,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    * andere Zahl – bei 2,85 mm etwa 63 m.
    */
   it("liefert die Zweitanzeige aus dem Lager des Besitzers", async () => {
-    await befriend({ fromAlex: "full", fromBea: "none" });
+    await befriend({ main: "full" });
     const hits = await callerFor(bea).friend.searchMaterials({ query: "P01" });
     expect(hits).toHaveLength(1);
     expect(hits[0].secondary?.unit).toBe("m");
@@ -488,7 +775,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    * fände „wer mattes PETG sucht“ nichts.
    */
   it("findet fremdes Material über die Oberfläche", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     await db()
       .update(schema.materials)
       .set({ texture: "Silk" })
@@ -506,7 +793,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    * die Zahl falsch, um die es in dieser Funktion geht.
    */
   it("rechnet die Tara der verborgenen Lagerbox mit ein", async () => {
-    await befriend({ fromAlex: "full", fromBea: "none" });
+    await befriend({ main: "full" });
     const hits = await callerFor(bea).friend.searchMaterials({ query: "P01" });
     expect(hits).toHaveLength(1);
     // 1440 g brutto − 140 g Rolle − 800 g Box
@@ -520,14 +807,14 @@ describe("Was ein Freund zu sehen bekommt", () => {
 
   it("durchsucht die Notizen nicht", async () => {
     // Man darf keine Treffer über einen Text erzielen, den man nicht sehen darf.
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     expect(
       await callerFor(bea).friend.searchMaterials({ query: "Personenbezug" })
     ).toEqual([]);
   });
 
   it("findet über Bezeichnung, Kennung, Art, Hersteller und Farbe", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     const caller = callerFor(bea);
     for (const query of ["PolyTerra", "P01", "PLA", "Polymaker", "Schwarz"]) {
       const hits = await caller.friend.searchMaterials({ query });
@@ -538,7 +825,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
 
 describe("Ausleih-Anfragen", () => {
   it("führt vom Anfragen zum Zusagen", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
 
     const created = await callerFor(bea).friend.requestLoan({
       materialId: alexMaterialId,
@@ -567,7 +854,7 @@ describe("Ausleih-Anfragen", () => {
   });
 
   it("lässt nur eine offene Anfrage je Material zu", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     const caller = callerFor(bea);
     await caller.friend.requestLoan({ materialId: alexMaterialId });
     await expect(
@@ -590,7 +877,7 @@ describe("Ausleih-Anfragen", () => {
   });
 
   it("erlaubt eine neue Anfrage nach dem Zurückziehen", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     const caller = callerFor(bea);
     const first = await caller.friend.requestLoan({
       materialId: alexMaterialId,
@@ -607,7 +894,7 @@ describe("Ausleih-Anfragen", () => {
    * die Antwort dieselbe wie für ein Material, das es nicht gibt.
    */
   it("verweigert die Anfrage ohne Freigabe", async () => {
-    await befriend({ fromAlex: "none", fromBea: "full" });
+    await befriend({ main: "none" });
     await expect(
       callerFor(bea).friend.requestLoan({ materialId: alexMaterialId })
     ).rejects.toThrow(/nicht gefunden/);
@@ -624,7 +911,7 @@ describe("Ausleih-Anfragen", () => {
   });
 
   it("lässt nur den Besitzer antworten und nur den Fragenden zurückziehen", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     const { id } = await callerFor(bea).friend.requestLoan({
       materialId: alexMaterialId,
     });
@@ -640,7 +927,7 @@ describe("Ausleih-Anfragen", () => {
   });
 
   it("behält die Bezeichnung, wenn das Material verschwindet", async () => {
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
     await callerFor(alex).material.delete({ id: alexMaterialId });
 
@@ -657,7 +944,7 @@ describe("Kontolöschung", () => {
    * Menschen.
    */
   it("räumt Freundschaften und Vorgänge in beiden Richtungen ab", async () => {
-    await befriend({ fromAlex: "search", fromBea: "search" });
+    await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
     // Und eine Freundschaft, in der Bea die Anfragende war
     await db().insert(schema.friendships).values({
@@ -681,7 +968,45 @@ describe("Kontolöschung", () => {
       .select()
       .from(schema.materials)
       .where(eq(schema.materials.userId, alex.id));
-    expect(materials).toHaveLength(2);
+    expect(materials).toHaveLength(3);
+  });
+
+  /**
+   * Freigaben in **beiden** Richtungen: die, die das gelöschte Konto erteilt
+   * hat, und die, die es bekommen hat. Bleibt eine stehen, zeigt ihre `lagerId`
+   * oder ihr `sharedWithUserId` mangels Fremdschlüssel später auf eine neu
+   * vergebene ID – jemand sähe einen fremden Bestand, den nie jemand für ihn
+   * freigegeben hat.
+   */
+  it("räumt Lager-Freigaben in beiden Richtungen ab", async () => {
+    await befriend({ main: "full", resin: "search" });
+
+    // Und die Gegenrichtung: Bea gibt Alex ihr Lager frei.
+    const [beaLager] = await db()
+      .insert(schema.lager)
+      .values({
+        userId: bea.id,
+        name: "Beas Lager",
+        materialKind: "filament",
+        filamentDiameterUm: 2850,
+      })
+      .returning();
+    await share({
+      lagerId: beaLager.id,
+      visibility: "full",
+      recipientId: alex.id,
+    });
+    expect(await db().select().from(schema.lagerShares)).toHaveLength(3);
+
+    await deleteUserAccount(bea.id);
+    expect(await db().select().from(schema.lagerShares)).toEqual([]);
+    // Alex' Lager bleiben, nur die Freigaben an Bea sind fort.
+    const lagerLeft = await db()
+      .select({ id: schema.lager.id })
+      .from(schema.lager);
+    expect(lagerLeft.map(l => l.id).sort()).toEqual(
+      [alexLagerId, alexResinLagerId].sort()
+    );
   });
 
   it("nimmt den Freundescode mit dem Konto mit", async () => {
@@ -695,7 +1020,7 @@ describe("Kontolöschung", () => {
   });
 
   it("nimmt die Anfrage des Löschenden beim Freund mit", async () => {
-    await befriend({ fromAlex: "search", fromBea: "search" });
+    await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
     expect(await callerFor(alex).friend.loanRequests()).toHaveLength(1);
 
@@ -708,7 +1033,7 @@ describe("Kontolöschung", () => {
 
 describe("Auskunft (Art. 15/20 DSGVO)", () => {
   it("enthält Freundschaften und Vorgänge samt Namen der Gegenseite", async () => {
-    await befriend({ fromAlex: "search", fromBea: "full" });
+    await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({
       materialId: alexMaterialId,
       message: "Bräuchte etwas.",
@@ -732,10 +1057,32 @@ describe("Auskunft (Art. 15/20 DSGVO)", () => {
   });
 
   it("nennt auch die Freundschaft, die von der anderen Seite kam", async () => {
-    await befriend({ fromAlex: "search", fromBea: "search" });
+    await befriend({ main: "search" });
     // Alex hat die Zeile angelegt; für Bea ist sie die Gegenseite.
     const dump = await callerFor(bea).account.export();
     expect(dump.friendships as unknown[]).toHaveLength(1);
+  });
+
+  /**
+   * Freigaben in beiden Richtungen, mit `direction` daran: Die Zeile allein sagt
+   * es nicht, weil der Eigentümer am Lager steht und nicht an der Freigabe.
+   */
+  it("enthält erteilte und bekommene Lager-Freigaben", async () => {
+    await befriend({ main: "full" });
+
+    const forAlex = (await callerFor(alex).account.export()).lagerShares as {
+      direction: string;
+      counterpartName: string | null;
+    }[];
+    expect(forAlex).toHaveLength(1);
+    expect(forAlex[0].direction).toBe("granted");
+    expect(forAlex[0].counterpartName).toBe("Bea");
+
+    const forBea = (await callerFor(bea).account.export()).lagerShares as {
+      direction: string;
+    }[];
+    expect(forBea).toHaveLength(1);
+    expect(forBea[0].direction).toBe("received");
   });
 });
 
@@ -755,6 +1102,57 @@ describe("Schema", () => {
     ]);
   });
 
+  /**
+   * Was Migration `0012` bleibend hergestellt haben muss.
+   *
+   * **Was dieser Test nicht abdeckt:** die Übertragung der Zeilen selbst. Sie
+   * läuft in Produktion genau einmal, und `resetSchema()` spielt alle
+   * Migrationen auf eine leere Datenbank – da gibt es nichts zu übertragen.
+   * Dafür gibt es die Probe an echten Daten (Skript aus der 2.4.0-Prüfung: eine
+   * Datenbank auf Stand `0011` mit Freundschaften auf allen drei Stufen und in
+   * beiden Richtungen, dann nur `0012`). Geprüft wird hier der Zustand, den
+   * `0012` hinterlässt – und der ist dauerhaft nachprüfbar.
+   */
+  it("hat die Freigabestufen aus `friendships` entfernt", async () => {
+    const result = await db().execute<{ column_name: string }>(sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_schema = current_schema()
+        AND table_name = 'friendships'
+        AND column_name ILIKE 'visibility%'
+    `);
+    expect(result.rows).toEqual([]);
+  });
+
+  it("hält je Lager und Empfänger höchstens eine Stufe", async () => {
+    /*
+      Ohne den Schlüssel könnten zwei Zeilen widersprechen, und welche gilt,
+      entschiede die Sortierung – derselbe Fehler, den der Ausdrucks-Index bei
+      `friendships` verhindert.
+    */
+    await befriend({ main: "full" });
+    await expect(
+      db().insert(schema.lagerShares).values({
+        lagerId: alexLagerId,
+        sharedWithUserId: bea.id,
+        visibility: "search",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("legt die Indizes der Freigabetabelle an", async () => {
+    const result = await db().execute<{ indexname: string }>(sql`
+      SELECT indexname FROM pg_indexes
+      WHERE schemaname = current_schema() AND tablename = 'lager_shares'
+      ORDER BY indexname
+    `);
+    expect(result.rows.map(r => r.indexname)).toEqual([
+      "lager_shares_lager_idx",
+      "lager_shares_pkey",
+      "lager_shares_recipient_idx",
+      "lager_shares_unique",
+    ]);
+  });
+
   it("hält den Freundescode eindeutig", async () => {
     await db()
       .update(schema.users)
@@ -768,10 +1166,11 @@ describe("Schema", () => {
     ).rejects.toThrow();
   });
 
-  it("protokolliert Änderungen an Zugriffsrechten", async () => {
-    const friendship = await befriend({ fromAlex: "search", fromBea: "none" });
-    await callerFor(alex).friend.setVisibility({
-      id: friendship.id,
+  it("protokolliert Änderungen an Zugriffsrechten samt Lager", async () => {
+    await befriend({ main: "search" });
+    await callerFor(alex).friend.setLagerVisibility({
+      friendId: bea.id,
+      lagerId: alexLagerId,
       visibility: "full",
     });
 
@@ -788,11 +1187,20 @@ describe("Schema", () => {
       );
     expect(rows).toHaveLength(1);
     expect(rows[0].subjectUserId).toBe(bea.id);
+    /*
+      Die Lager-ID gehört dazu: Ohne sie beantwortet der Eintrag nicht, wer
+      Zugriff auf **was** bekam – und das ist die Frage, für die das Protokoll
+      da ist.
+    */
+    expect(rows[0].detail).toMatchObject({
+      lagerId: alexLagerId,
+      visibility: "full",
+    });
   });
 
   it("protokolliert Ausleih-Anfragen nicht", async () => {
     // Sie sind Nutzung, nicht Sicherheit – siehe contracts/audit.ts.
-    await befriend({ fromAlex: "search", fromBea: "none" });
+    await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
     await new Promise(resolve => setTimeout(resolve, 150));
     const rows = await db().select().from(schema.auditLog);

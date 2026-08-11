@@ -834,6 +834,15 @@ export const de = {
 
     materialCount: (vars: { count: number }) =>
       vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+    /*
+      Nur die Anzahl, kein Name: Wer wem etwas freigibt, steht auf der
+      Freundesseite. Hier zählt die Frage „geht dieses Lager überhaupt
+      hinaus?“ – und die beantwortet eine Zahl.
+    */
+    sharedWith: (vars: { count: number }) =>
+      vars.count === 1
+        ? "mit 1 Freund geteilt"
+        : `mit ${vars.count} Freunden geteilt`,
     limitReached: (vars: { max: number }) =>
       `Mehr als ${vars.max} Lager sind derzeit nicht möglich.`,
     noLagerTitle: "Kein Lager vorhanden",
@@ -853,7 +862,7 @@ export const de = {
   friends: {
     title: "Freunde",
     description:
-      "Material mit Freunden teilen – du entscheidest für jeden einzeln, wie viel von deinem Lager er sieht. Geldbeträge nie.",
+      "Material mit Freunden teilen – du entscheidest je Lager und je Freund, wie viel davon sichtbar ist. Voreingestellt ist nichts, und Geldbeträge gehen nie hinaus.",
 
     // Eigener Code
     myCodeTitle: "Dein Freundescode",
@@ -899,25 +908,29 @@ export const de = {
       `Du siehst danach kein Material von ${vars.name} mehr und ${vars.name} keines von dir. Laufende Ausleih-Anfragen verschwinden mit.`,
     removed: "Freundschaft aufgelöst",
 
-    // Sichtbarkeit
-    sharedByMe: "Du zeigst",
+    // Freigabe je Lager
+    sharedByMe: "Du zeigst – je Lager",
     sharedWithMe: "Du siehst",
-    theirChoice: "Entscheidung deines Freundes",
+    theirChoice: "Entscheidung deines Freundes, über alle seine Lager",
     visibilityNone: "Nichts",
     visibilitySearch: "Nur in der Suche",
     visibilityFull: "Ganzes Lager",
-    visibilityNoneHint: "Dein Lager bleibt vollständig verborgen.",
+    visibilityNoneHint: "Dieses Lager bleibt vollständig verborgen.",
     visibilitySearchHint:
-      "Treffer erscheinen nur, wenn nach etwas Bestimmtem gesucht wird. Kein Blättern durch dein Lager.",
+      "Treffer erscheinen nur, wenn nach etwas Bestimmtem gesucht wird. Kein Blättern.",
     visibilityFullHint:
       "Das ganze Lager ist einsehbar – ohne Preise, Notizen, Kaufdaten, Lagerort und Wägungen.",
-    visibilitySaved: "Sichtbarkeit gespeichert",
+    visibilitySaved: "Freigabe gespeichert",
+    sharesNothingHint:
+      "Du gibst noch kein Lager frei – dieser Freund sieht nichts von dir. Wähle oben je Lager, was er sehen darf.",
+    noLagerYet: "Du hast noch kein Lager, das du freigeben könntest.",
+    toLager: "Lager anlegen",
     openInventory: "Lager ansehen",
 
     // Lager eines Freundes
     inventoryTitle: (vars: { name: string }) => `Lager von ${vars.name}`,
     inventoryDescription:
-      "Freigegebenes Material. Preise, Notizen, Kaufdaten, Lagerort und Wägungen sind nicht enthalten.",
+      "Material aus den Lagern, die dieser Freund dir ganz freigegeben hat. Preise, Notizen, Kaufdaten, Lagerort und Wägungen sind nicht enthalten.",
     inventoryEmpty: "Dieses Lager ist leer.",
     inventoryDenied:
       "Dieses Lager ist für dich nicht einsehbar. Vielleicht hat sich die Freigabe geändert.",

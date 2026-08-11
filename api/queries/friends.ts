@@ -1,7 +1,6 @@
-import { and, asc, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import {
-  DEFAULT_FRIEND_VISIBILITY,
   FRIEND_CODE_ALPHABET,
   FRIEND_CODE_LENGTH,
   FRIEND_SEARCH_LIMIT,
@@ -19,6 +18,8 @@ import {
 import { resolveContainerTare } from "@contracts/presets";
 import {
   friendships,
+  lager,
+  lagerShares,
   loanRequests,
   materials,
   users,
@@ -34,58 +35,43 @@ import { getDb } from "./connection";
  * **anderen** aufbereitet werden. Überall sonst gilt „`userId` gleich
  * `ctx.user.id`, sonst nichts“. Zwei Regeln halten das hier zusammen:
  *
- *  1. Über die Richtung einer Freundschaft entscheidet ausschließlich
- *     `resolveVisibility`. Ein zweiter Vergleich über `userId`/`friendUserId`
- *     irgendwo sonst wäre eine zweite Wahrheit – und ein vertauschtes Feld
- *     keine kaputte Ansicht, sondern eine Datenpanne.
+ *  1. Über die Stufe einer Freigabe entscheidet ausschließlich `resolveShare`.
+ *     Eine zweite Stelle, die Freigabe und Freundschaftsstatus selbst
+ *     verrechnet, wäre eine zweite Wahrheit – und ein übersehener Status keine
+ *     kaputte Ansicht, sondern eine Datenpanne.
  *  2. Jede Lesefunktion nimmt `viewerId` als ersten Parameter und ermittelt die
- *     erlaubten Besitzer **selbst**. Keine nimmt eine Besitzerliste von außen
- *     an; sonst könnte ein Aufrufer sie erweitern.
+ *     freigegebenen Lager **selbst**. Keine nimmt eine Lager- oder
+ *     Besitzerliste von außen an; sonst könnte ein Aufrufer sie erweitern.
  */
 
 // ---------------------------------------------------------------------------
-// Richtung einer Freundschaft
+// Freigabe eines Lagers
 // ---------------------------------------------------------------------------
-
-/** Die beiden Spalten, die für die Richtungsauflösung gebraucht werden. */
-type DirectionRow = Pick<
-  Friendship,
-  | "userId"
-  | "friendUserId"
-  | "status"
-  | "visibilityFromUser"
-  | "visibilityFromFriend"
->;
 
 /**
- * Was darf `viewerId` vom Lager von `ownerId` sehen?
+ * Was darf der Empfänger von diesem Lager sehen?
  *
- * Reine Funktion, absichtlich von der Datenbank gelöst: Die Richtungslogik ist
- * der heikelste Teil der ganzen Funktion und muss sich ohne Postgres prüfen
- * lassen (siehe `api/friendVisibility.test.ts`).
+ * Reine Funktion, absichtlich von der Datenbank gelöst: Dies ist die heikelste
+ * Regel der ganzen Funktion und muss sich ohne Postgres prüfen lassen (siehe
+ * `api/friendVisibility.test.ts`).
  *
- * `visibilityFromUser` ist die Freigabe, die **`row.userId`** erteilt – sie
- * gilt also, wenn `row.userId` der Besitzer ist. Genau hier vertauscht man es
- * leicht, deshalb steht es nur an dieser einen Stelle.
+ * **Zwei Tabellen, eine Bedingung.** Die Freigabe steht in `lager_shares`, der
+ * Freundschaftsstatus in `friendships`. Deshalb nimmt die Funktion beides und
+ * nicht bloß die Freigabe: Wanderte die Statusprüfung ins SQL, behielte eine
+ * abgelehnte oder aufgelöste Freundschaft ihren Zugriff – und kein Test, der die
+ * Freigabe allein betrachtet, würde das bemerken.
+ *
+ * Die Richtungsauflösung, die hier bis 2.3.0 stand, ist entfallen: Ein Lager hat
+ * genau einen Eigentümer, es gibt keine zwei Spalten mehr zu verwechseln.
  */
-export function resolveVisibility(
-  row: DirectionRow | null | undefined,
-  viewerId: number,
-  ownerId: number
-): FriendVisibility {
-  if (!row) return "none";
-  // Nur angenommene Freundschaften geben etwas frei. Offene und abgelehnte
-  // Anfragen sind keine Freigabe.
-  if (row.status !== "accepted") return "none";
-  if (row.userId === ownerId && row.friendUserId === viewerId) {
-    return row.visibilityFromUser;
-  }
-  if (row.friendUserId === ownerId && row.userId === viewerId) {
-    return row.visibilityFromFriend;
-  }
-  // Die Zeile gehört zu einem anderen Paar – kein Zufall, sondern ein Fehler
-  // beim Aufrufen. Nichts freigeben.
-  return "none";
+export function resolveShare(input: {
+  friendshipStatus: Friendship["status"] | null | undefined;
+  shareVisibility: FriendVisibility | null | undefined;
+}): FriendVisibility {
+  // Ohne angenommene Freundschaft gilt keine Freigabe – auch keine bestehende.
+  if (input.friendshipStatus !== "accepted") return "none";
+  // Fehlende Zeile heißt „nicht freigegeben“; `none`-Zeilen gibt es nicht.
+  return input.shareVisibility ?? "none";
 }
 
 /** Findet die Freundschaftszeile zweier Benutzer, in welcher Richtung auch immer. */
@@ -107,74 +93,119 @@ export async function findFriendshipBetween(
 }
 
 /**
- * Sichtbarkeitsstufe für ein konkretes Paar – der Prüfpunkt für alle
- * Einzelzugriffe (etwa vor einer Ausleih-Anfrage).
+ * Stufe für **ein** Lager – der Prüfpunkt für alle Einzelzugriffe (etwa vor
+ * einer Ausleih-Anfrage).
  */
-export async function visibilityFor(
+export async function shareLevelFor(
   viewerId: number,
-  ownerId: number
+  lagerId: number
 ): Promise<FriendVisibility> {
-  // Das eigene Lager sieht man immer vollständig; die Frage stellt sich hier
-  // eigentlich nicht, aber ein `none` wäre eine überraschende Antwort.
-  if (viewerId === ownerId) return "full";
-  const row = await findFriendshipBetween(viewerId, ownerId);
-  return resolveVisibility(row, viewerId, ownerId);
+  const rows = await getDb()
+    .select({
+      ownerId: lager.userId,
+      visibility: lagerShares.visibility,
+      status: friendships.status,
+    })
+    .from(lager)
+    .leftJoin(
+      lagerShares,
+      and(
+        eq(lagerShares.lagerId, lager.id),
+        eq(lagerShares.sharedWithUserId, viewerId)
+      )
+    )
+    /*
+      Die Freundschaft zwischen Betrachter und **Eigentümer des Lagers** – nicht
+      irgendeine. Ohne die Zuordnung an dieser Stelle würde eine beliebige
+      Freundschaft die Freigabe eines fremden Lagers gültig machen.
+    */
+    .leftJoin(
+      friendships,
+      or(
+        and(
+          eq(friendships.userId, lager.userId),
+          eq(friendships.friendUserId, viewerId)
+        ),
+        and(
+          eq(friendships.friendUserId, lager.userId),
+          eq(friendships.userId, viewerId)
+        )
+      )
+    )
+    .where(eq(lager.id, lagerId))
+    .limit(1);
+
+  const row = rows.at(0);
+  if (!row) return "none";
+  // Das eigene Lager sieht man immer vollständig.
+  if (row.ownerId === viewerId) return "full";
+  return resolveShare({
+    friendshipStatus: row.status,
+    shareVisibility: row.visibility,
+  });
 }
 
-/** Ein Freund, dessen Lager `viewerId` mindestens auf Stufe `minLevel` sieht. */
-export type VisibleOwner = {
+/** Ein Lager, das `viewerId` mindestens auf Stufe `minLevel` sehen darf. */
+export type VisibleLager = {
+  lagerId: number;
   ownerId: number;
   ownerName: string;
   visibility: FriendVisibility;
 };
 
 /**
- * Alle Freunde, deren Lager `viewerId` mindestens auf `minLevel` sehen darf.
+ * Alle **Lager**, die `viewerId` mindestens auf `minLevel` sehen darf.
  *
- * Lädt beide Richtungen in einem Zug und löst sie über `resolveVisibility` auf –
- * kein `CASE` im SQL, damit die Regel nicht doppelt existiert.
+ * Bis 2.3.0 lieferte diese Funktion Besitzer; jetzt Lager, weil ein Freund
+ * Lager A zeigen und Lager B verbergen kann.
+ *
+ * Drei Bedingungen müssen zusammenkommen, und keine davon steht allein: eine
+ * Freigabezeile für diesen Empfänger, das Lager mit seinem Eigentümer, und eine
+ * **angenommene** Freundschaft zwischen Empfänger und genau diesem Eigentümer.
+ * Der Statusvergleich passiert danach in `resolveShare` und nicht im SQL – siehe
+ * die Begründung dort.
  */
-export async function listVisibleOwners(
+export async function listVisibleLager(
   viewerId: number,
   minLevel: FriendVisibility
-): Promise<VisibleOwner[]> {
+): Promise<VisibleLager[]> {
   const rows = await getDb()
     .select({
-      userId: friendships.userId,
-      friendUserId: friendships.friendUserId,
+      lagerId: lagerShares.lagerId,
+      ownerId: lager.userId,
+      visibility: lagerShares.visibility,
       status: friendships.status,
-      visibilityFromUser: friendships.visibilityFromUser,
-      visibilityFromFriend: friendships.visibilityFromFriend,
-      ownerAName: users.name,
     })
-    .from(friendships)
-    .leftJoin(users, eq(users.id, friendships.userId))
-    .where(
-      and(
-        eq(friendships.status, "accepted"),
-        or(
-          eq(friendships.userId, viewerId),
+    .from(lagerShares)
+    .innerJoin(lager, eq(lager.id, lagerShares.lagerId))
+    .leftJoin(
+      friendships,
+      or(
+        and(
+          eq(friendships.userId, lager.userId),
           eq(friendships.friendUserId, viewerId)
+        ),
+        and(
+          eq(friendships.friendUserId, lager.userId),
+          eq(friendships.userId, viewerId)
         )
       )
-    );
+    )
+    .where(eq(lagerShares.sharedWithUserId, viewerId));
 
-  // Namen der Gegenseite in einem zweiten Zug: Der Join oben trifft nur
-  // `friendships.userId`, und zweimal dieselbe Tabelle zu joinen kostet mehr
-  // Umstand als ein zweites, kleines SELECT.
-  const ownerIds = rows.map(r =>
-    r.userId === viewerId ? r.friendUserId : r.userId
-  );
-  const names = await loadDisplayNames(ownerIds);
+  const names = await loadDisplayNames(rows.map(r => r.ownerId));
 
-  const result: VisibleOwner[] = [];
+  const result: VisibleLager[] = [];
   for (const row of rows) {
-    const ownerId = row.userId === viewerId ? row.friendUserId : row.userId;
-    const visibility = resolveVisibility(row, viewerId, ownerId);
+    const visibility = resolveShare({
+      friendshipStatus: row.status,
+      shareVisibility: row.visibility,
+    });
     if (!visibilityAllows(visibility, minLevel)) continue;
     result.push({
-      ownerId,
-      ownerName: names.get(ownerId) ?? "",
+      lagerId: row.lagerId,
+      ownerId: row.ownerId,
+      ownerName: names.get(row.ownerId) ?? "",
       visibility,
     });
   }
@@ -216,8 +247,11 @@ async function loadDisplayNames(ids: number[]): Promise<Map<number, string>> {
  *    Restmenge und Prozent bleiben sichtbar, sonst wäre die Suche sinnlos.
  *  - `lagerId` und der Lagername – ein Lagername ist Freitext, der einen Ort
  *    verraten kann („Keller Müllerstraße“); dieselbe Erwägung schließt die
- *    Drybox aus. Zur Einheit der Freigabe wird das Lager erst später, dann
- *    braucht der Empfänger seine Kennung – heute nicht.
+ *    Drybox aus. Seit 2.4.0 ist das Lager die **Einheit der Freigabe**, und
+ *    trotzdem bleibt beides draußen: Die Liste eines Freundes ist flach, nicht
+ *    nach Lagern gruppiert, also braucht der Empfänger die Kennung nicht. Wer
+ *    hier gruppieren will, gibt damit Auskunft über die Ordnung eines fremden
+ *    Bestands – und die hat niemand freigegeben.
  *  - `densityGramsPerLiter` – steckt bereits in `secondary`; sie zusätzlich
  *    herauszugeben brächte nichts.
  */
@@ -256,6 +290,14 @@ export type FriendMaterial = {
 const FRIEND_MATERIAL_COLUMNS = {
   id: true,
   userId: true,
+  /*
+    Das Lager wird geladen, geht aber **nicht** hinaus. Es entscheidet über die
+    Freigabe (`shareLevelFor` in `findFriendMaterial`) und über die Zweitanzeige –
+    beides braucht die Zeile, der Empfänger nicht. Draußen bleibt es, weil
+    `toFriendMaterial` es nicht in sein Ergebnis schreibt; genau dafür ist die
+    Projektion handgeschrieben und ihre Schlüsselmenge festgenagelt.
+  */
+  lagerId: true,
   name: true,
   identifier: true,
   materialType: true,
@@ -263,10 +305,7 @@ const FRIEND_MATERIAL_COLUMNS = {
   color: true,
   texture: true,
   nominalWeight: true,
-  /*
-    Die Dichte geht in die Zweitanzeige ein, aber nicht hinaus – siehe die
-    Begründung an `FriendMaterial`.
-  */
+  /* Die Dichte ebenso: geht in die Zweitanzeige ein, aber nicht hinaus. */
   densityGramsPerLiter: true,
 } as const;
 
@@ -323,6 +362,7 @@ const FRIEND_MATERIAL_WITH = {
 export type FriendMaterialRow = {
   id: number;
   userId: number;
+  lagerId: number;
   name: string;
   identifier: string | null;
   materialType: string;
@@ -424,15 +464,26 @@ export async function findFriendMaterialsForSearch(
   const term = query.trim();
   if (term.length < FRIEND_SEARCH_MIN_LENGTH) return [];
 
-  const owners = await listVisibleOwners(viewerId, "search");
-  if (owners.length === 0) return [];
-  const names = new Map(owners.map(o => [o.ownerId, o.ownerName]));
+  const visible = await listVisibleLager(viewerId, "search");
+  if (visible.length === 0) return [];
+  const names = new Map(visible.map(v => [v.ownerId, v.ownerName]));
 
   const pattern = `%${escapeLike(term)}%`;
   const rows = await getDb().query.materials.findMany({
     columns: FRIEND_MATERIAL_COLUMNS,
     with: FRIEND_MATERIAL_WITH,
     where: and(
+      inArray(
+        materials.lagerId,
+        visible.map(v => v.lagerId)
+      ),
+      /*
+        Zusätzlich der Besitzer, obwohl das Lager ihn bereits festlegt: Der
+        Filter ist redundant, solange kein Material in einem fremden Lager liegt
+        (`api/lager.integration.test.ts` prüft genau das). Genau deshalb ist er
+        billig – er macht eine verletzte Invariante unerreichbar statt bloß
+        unwahrscheinlich, und dies ist die Abfrage, in der das zählt.
+      */
       inArray(materials.userId, [...names.keys()]),
       or(
         ilike(materials.name, pattern),
@@ -453,10 +504,15 @@ export async function findFriendMaterialsForSearch(
 }
 
 /**
- * Das ganze Lager eines Freundes – nur bei Stufe `full`.
+ * Was ein Freund ganz freigegeben hat – die Lager auf Stufe `full`.
  *
- * Gibt `null` zurück, wenn die Stufe nicht reicht. Der Router macht daraus ein
- * `NOT_FOUND` und nicht `FORBIDDEN`: Wie überall im Projekt soll die Antwort
+ * Eine **flache Liste**, nicht nach Lagern gruppiert: Der Lagername geht
+ * bewusst nicht an Freunde hinaus (Freitext, kann einen Ort verraten). Die
+ * Freigabe entscheidet also nur, *welche* Materialien hier stehen – ein Freund
+ * sieht nicht, aus wie vielen Lagern sie kommen.
+ *
+ * Gibt `null` zurück, wenn nichts ganz freigegeben ist. Der Router macht daraus
+ * ein `NOT_FOUND` und nicht `FORBIDDEN`: Wie überall im Projekt soll die Antwort
  * nicht verraten, dass es die Zeile gibt.
  */
 export async function findFriendInventory(
@@ -464,15 +520,22 @@ export async function findFriendInventory(
   ownerId: number
 ): Promise<{ ownerName: string; materials: FriendMaterial[] } | null> {
   if (viewerId === ownerId) return null;
-  const visibility = await visibilityFor(viewerId, ownerId);
-  if (!visibilityAllows(visibility, "full")) return null;
+  const visible = await listVisibleLager(viewerId, "full");
+  const lagerIds = visible
+    .filter(v => v.ownerId === ownerId)
+    .map(v => v.lagerId);
+  if (lagerIds.length === 0) return null;
 
   const names = await loadDisplayNames([ownerId]);
   const ownerName = names.get(ownerId) ?? "";
   const rows = await getDb().query.materials.findMany({
     columns: FRIEND_MATERIAL_COLUMNS,
     with: FRIEND_MATERIAL_WITH,
-    where: eq(materials.userId, ownerId),
+    // Besitzer **und** Lager, aus demselben Grund wie im Suchpfad.
+    where: and(
+      eq(materials.userId, ownerId),
+      inArray(materials.lagerId, lagerIds)
+    ),
     orderBy: [asc(materials.name), asc(materials.id)],
   });
   return {
@@ -499,7 +562,12 @@ export async function findFriendMaterial(
   });
   if (!row || row.userId === viewerId) return null;
 
-  const visibility = await visibilityFor(viewerId, row.userId);
+  /*
+    Geprüft wird das **Lager des Materials**, nicht der Besitzer: Wer nur ein
+    Lager freigegeben hat, soll nicht über eine geratene Material-ID nach einem
+    Material aus einem anderen gefragt werden können.
+  */
+  const visibility = await shareLevelFor(viewerId, row.lagerId);
   if (!visibilityAllows(visibility, "search")) return null;
 
   const names = await loadDisplayNames([row.userId]);
@@ -521,6 +589,12 @@ function escapeLike(value: string): string {
 // Freundschaften verwalten
 // ---------------------------------------------------------------------------
 
+/** Die Stufe, die ein Freund für **eines** meiner Lager hat. */
+export type LagerShareView = {
+  lagerId: number;
+  visibility: FriendVisibility;
+};
+
 /** Freundschaft samt Gegenseite und beiden Richtungen, für die Freundesseite. */
 export type FriendshipView = {
   id: number;
@@ -530,9 +604,24 @@ export type FriendshipView = {
   status: Friendship["status"];
   /** Ob der angemeldete Benutzer die Anfrage gestellt hat */
   outgoing: boolean;
-  /** Was der Freund von **meinem** Lager sieht – meine Entscheidung */
-  sharedByMe: FriendVisibility;
-  /** Was ich von **seinem** Lager sehe – seine Entscheidung */
+  /**
+   * Was der Freund von **meinen** Lagern sieht – meine Entscheidung, je Lager.
+   *
+   * **Ein Eintrag je eigenem Lager**, auch bei `none`. So muss die Oberfläche
+   * keinen Vorgabewert erfinden, und ein nicht freigegebenes Lager ist dort
+   * sichtbar nicht freigegeben statt gar nicht erwähnt. Den Namen holt sie sich
+   * über `lagerId` aus `lager.list`.
+   */
+  sharedByMe: LagerShareView[];
+  /**
+   * Was ich von **seinem** Bestand sehe – seine Entscheidung, als **höchste**
+   * Stufe über alle seine Lager.
+   *
+   * Bewusst eine einzige Stufe und keine Liste: Wie viele Lager er hat und
+   * welche er freigibt, ist eine Auskunft über seinen Bestand, die er nicht
+   * gegeben hat. Für die Oberfläche zählt ohnehin nur, ob der Lagerblick offen
+   * ist (`full`) oder bloß die Suche (`search`).
+   */
   sharedWithMe: FriendVisibility;
   createdAt: Date;
 };
@@ -540,7 +629,8 @@ export type FriendshipView = {
 export async function listFriendships(
   viewerId: number
 ): Promise<FriendshipView[]> {
-  const rows = await getDb()
+  const db = getDb();
+  const rows = await db
     .select()
     .from(friendships)
     .where(
@@ -555,11 +645,21 @@ export async function listFriendships(
     r.userId === viewerId ? r.friendUserId : r.userId
   );
   const profiles = await loadProfiles(otherIds);
+  const granted = await loadGrantedShares(viewerId, otherIds);
+  const received = await loadReceivedShares(viewerId, otherIds);
+  const ownLagerIds = await loadOwnLagerIds(viewerId);
 
   return rows.map(row => {
     const outgoing = row.userId === viewerId;
     const friendId = outgoing ? row.friendUserId : row.userId;
     const profile = profiles.get(friendId);
+    const grants = granted.get(friendId);
+    /*
+      Auch für die Anzeige nicht selbst rechnen: Über die geltende Stufe
+      entscheidet `resolveShare`, und zwar in beiden Richtungen. Für eine offene
+      oder abgelehnte Anfrage kommt damit überall `none` heraus – die ehrliche
+      Antwort, denn ohne Annahme gilt keine Freigabe.
+    */
     return {
       id: row.id,
       friendId,
@@ -567,24 +667,103 @@ export async function listFriendships(
       friendUsername: profile?.telegramUsername ?? null,
       status: row.status,
       outgoing,
-      /*
-        Auch hier nicht selbst rechnen: Die Zuordnung von Spalte zu Richtung
-        gehört `resolveVisibility`. „Was der Freund von mir sieht“ heißt:
-        Betrachter ist der Freund, Besitzer bin ich.
-      */
-      sharedByMe: resolveVisibility(row, friendId, viewerId),
-      sharedWithMe: resolveVisibility(row, viewerId, friendId),
+      sharedByMe: ownLagerIds.map(lagerId => ({
+        lagerId,
+        visibility: resolveShare({
+          friendshipStatus: row.status,
+          shareVisibility: grants?.get(lagerId),
+        }),
+      })),
+      sharedWithMe: resolveShare({
+        friendshipStatus: row.status,
+        shareVisibility: received.get(friendId),
+      }),
       createdAt: row.createdAt,
     };
   });
 }
 
+/** IDs der eigenen Lager, in stabiler Reihenfolge. */
+async function loadOwnLagerIds(viewerId: number): Promise<number[]> {
+  const rows = await getDb()
+    .select({ id: lager.id })
+    .from(lager)
+    .where(eq(lager.userId, viewerId))
+    .orderBy(asc(lager.id));
+  return rows.map(r => r.id);
+}
+
 /**
- * Beim Anzeigen der Sichtbarkeit tut `resolveVisibility` das Richtige nur für
- * angenommene Freundschaften – bei offenen Anfragen liefert es `none`. Für die
- * Oberfläche ist das die ehrliche Antwort: Vor der Annahme ist nichts
- * freigegeben.
+ * Freigaben, die `viewerId` erteilt hat: `Empfänger → (Lager → Stufe)`.
+ *
+ * Eine Abfrage für alle Freunde statt eine je Freundeskarte – die Freundesseite
+ * zeigt sonst bei fünf Lagern und zwanzig Freunden hundert Einzelabfragen.
  */
+async function loadGrantedShares(
+  viewerId: number,
+  recipientIds: number[]
+): Promise<Map<number, Map<number, FriendVisibility>>> {
+  const unique = [...new Set(recipientIds)];
+  const result = new Map<number, Map<number, FriendVisibility>>();
+  if (unique.length === 0) return result;
+  const rows = await getDb()
+    .select({
+      lagerId: lagerShares.lagerId,
+      recipientId: lagerShares.sharedWithUserId,
+      visibility: lagerShares.visibility,
+    })
+    .from(lagerShares)
+    .innerJoin(lager, eq(lager.id, lagerShares.lagerId))
+    .where(
+      and(
+        eq(lager.userId, viewerId),
+        inArray(lagerShares.sharedWithUserId, unique)
+      )
+    );
+  for (const row of rows) {
+    const perLager = result.get(row.recipientId) ?? new Map();
+    perLager.set(row.lagerId, row.visibility);
+    result.set(row.recipientId, perLager);
+  }
+  return result;
+}
+
+/**
+ * Freigaben, die `viewerId` **bekommen** hat, verdichtet auf die höchste Stufe
+ * je Besitzer: `Besitzer → Stufe`.
+ *
+ * Die Verdichtung passiert hier und nicht in der Oberfläche, damit die Anzahl
+ * der Lager des Freundes den Server nicht verlässt.
+ */
+async function loadReceivedShares(
+  viewerId: number,
+  ownerIds: number[]
+): Promise<Map<number, FriendVisibility>> {
+  const unique = [...new Set(ownerIds)];
+  const result = new Map<number, FriendVisibility>();
+  if (unique.length === 0) return result;
+  const rows = await getDb()
+    .select({
+      ownerId: lager.userId,
+      visibility: lagerShares.visibility,
+    })
+    .from(lagerShares)
+    .innerJoin(lager, eq(lager.id, lagerShares.lagerId))
+    .where(
+      and(
+        eq(lagerShares.sharedWithUserId, viewerId),
+        inArray(lager.userId, unique)
+      )
+    );
+  for (const row of rows) {
+    const current = result.get(row.ownerId);
+    // `full` schlägt `search`; die Rangfolge steht allein in `visibilityAllows`.
+    if (current == null || visibilityAllows(row.visibility, current))
+      result.set(row.ownerId, row.visibility);
+  }
+  return result;
+}
+
 async function loadProfiles(ids: number[]) {
   const unique = [...new Set(ids)];
   if (unique.length === 0)
@@ -608,16 +787,16 @@ async function loadProfiles(ids: number[]) {
   );
 }
 
+/**
+ * Legt eine Anfrage an. Freigegeben ist danach **nichts**: Freigaben stehen seit
+ * 2.4.0 je Lager in `lager_shares`, und eine Vorgabe müsste ein konkretes Lager
+ * benennen – siehe die Begründung in `contracts/friends.ts` dort, wo
+ * `DEFAULT_FRIEND_VISIBILITY` stand.
+ */
 export async function createFriendship(userId: number, friendUserId: number) {
   const [row] = await getDb()
     .insert(friendships)
-    .values({
-      userId,
-      friendUserId,
-      status: "pending",
-      visibilityFromUser: DEFAULT_FRIEND_VISIBILITY,
-      visibilityFromFriend: DEFAULT_FRIEND_VISIBILITY,
-    })
+    .values({ userId, friendUserId, status: "pending" })
     .returning();
   return row;
 }
@@ -649,56 +828,143 @@ export async function respondToFriendship(
   return row ?? null;
 }
 
-/** Löst eine Freundschaft auf. Beide Seiten dürfen das, in jedem Status. */
+/**
+ * Löst eine Freundschaft auf. Beide Seiten dürfen das, in jedem Status.
+ *
+ * **Die Freigaben gehen in beiden Richtungen mit.** Bleiben sie stehen, weckt
+ * eine erneut geschlossene Freundschaft den alten Zugriff wieder auf, ohne dass
+ * jemand etwas freigegeben hätte – und weil `resolveShare` dann eine angenommene
+ * Freundschaft vorfindet, fällt es an keiner Prüfung auf.
+ */
 export async function deleteFriendship(viewerId: number, friendshipId: number) {
-  const [row] = await getDb()
-    .delete(friendships)
-    .where(
-      and(
-        eq(friendships.id, friendshipId),
-        or(
-          eq(friendships.userId, viewerId),
-          eq(friendships.friendUserId, viewerId)
+  const db = getDb();
+  return db.transaction(async tx => {
+    const [row] = await tx
+      .delete(friendships)
+      .where(
+        and(
+          eq(friendships.id, friendshipId),
+          or(
+            eq(friendships.userId, viewerId),
+            eq(friendships.friendUserId, viewerId)
+          )
         )
       )
-    )
-    .returning();
-  return row ?? null;
+      .returning();
+    if (!row) return null;
+
+    // Beide Richtungen: was ich ihm freigegeben habe und er mir.
+    for (const [ownerId, recipientId] of [
+      [row.userId, row.friendUserId],
+      [row.friendUserId, row.userId],
+    ] as const) {
+      await tx
+        .delete(lagerShares)
+        .where(
+          and(
+            eq(lagerShares.sharedWithUserId, recipientId),
+            inArray(
+              lagerShares.lagerId,
+              tx
+                .select({ id: lager.id })
+                .from(lager)
+                .where(eq(lager.userId, ownerId))
+            )
+          )
+        );
+    }
+    return row;
+  });
 }
 
 /**
- * Setzt die Stufe für **das eigene** Lager.
+ * Setzt die Freigabe **eines eigenen Lagers** für einen Freund.
  *
- * Welche Spalte das ist, hängt daran, auf welcher Seite der Zeile der Benutzer
- * steht: Wer sie angelegt hat, schreibt `visibilityFromUser`, der andere
- * `visibilityFromFriend`. Beides in einer Anweisung, damit die Zuordnung nicht
- * von einem vorherigen Lesevorgang abhängt.
+ * Zwei Bedingungen, beide in der `where`-Klausel bzw. davor geprüft: Das Lager
+ * muss dem Aufrufer gehören, und die Freundschaft muss angenommen sein. Ohne die
+ * zweite ließe sich eine Freigabe an jemanden erteilen, mit dem man nicht
+ * befreundet ist – wirkungslos wegen `resolveShare`, aber eine Zeile mit
+ * Personenbezug, die niemand erwartet.
+ *
+ * `none` **löscht** die Zeile, statt sie zu schreiben: Eine fehlende Zeile ist
+ * der Grundzustand (siehe `lager_shares` in `db/schema.ts`).
  */
-export async function setOwnVisibility(
-  viewerId: number,
-  friendshipId: number,
+export async function setLagerShare(
+  ownerId: number,
+  lagerId: number,
+  friendUserId: number,
   visibility: FriendVisibility
-) {
-  const [row] = await getDb()
-    .update(friendships)
-    .set({
-      visibilityFromUser: sql`CASE WHEN ${friendships.userId} = ${viewerId}
-        THEN ${visibility}::friend_visibility ELSE ${friendships.visibilityFromUser} END`,
-      visibilityFromFriend: sql`CASE WHEN ${friendships.friendUserId} = ${viewerId}
-        THEN ${visibility}::friend_visibility ELSE ${friendships.visibilityFromFriend} END`,
-    })
-    .where(
-      and(
-        eq(friendships.id, friendshipId),
-        eq(friendships.status, "accepted"),
-        or(
-          eq(friendships.userId, viewerId),
-          eq(friendships.friendUserId, viewerId)
+): Promise<boolean> {
+  const db = getDb();
+
+  const own = await db
+    .select({ id: lager.id })
+    .from(lager)
+    .where(and(eq(lager.id, lagerId), eq(lager.userId, ownerId)))
+    .limit(1);
+  if (own.length === 0) return false;
+
+  const friendship = await findFriendshipBetween(ownerId, friendUserId);
+  if (!friendship || friendship.status !== "accepted") return false;
+
+  if (visibility === "none") {
+    await db
+      .delete(lagerShares)
+      .where(
+        and(
+          eq(lagerShares.lagerId, lagerId),
+          eq(lagerShares.sharedWithUserId, friendUserId)
         )
-      )
-    )
-    .returning();
-  return row ?? null;
+      );
+    return true;
+  }
+
+  await db
+    .insert(lagerShares)
+    .values({ lagerId, sharedWithUserId: friendUserId, visibility })
+    .onConflictDoUpdate({
+      target: [lagerShares.lagerId, lagerShares.sharedWithUserId],
+      set: { visibility, updatedAt: new Date() },
+    });
+  return true;
+}
+
+/**
+ * Freigaben eines Lagers – wer sieht es, und wie viel?
+ *
+ * Gebraucht beim Löschen eines Lagers (das entzieht Zugriff und gehört
+ * protokolliert) und für die Anzeige „mit N Freunden geteilt“.
+ */
+export async function findSharesOfLager(
+  lagerId: number
+): Promise<{ sharedWithUserId: number; visibility: FriendVisibility }[]> {
+  return getDb()
+    .select({
+      sharedWithUserId: lagerShares.sharedWithUserId,
+      visibility: lagerShares.visibility,
+    })
+    .from(lagerShares)
+    .where(eq(lagerShares.lagerId, lagerId));
+}
+
+/**
+ * Anzahl der Freigaben je eigenem Lager – für die Lager-Seite.
+ *
+ * Gezählt werden Zeilen, ohne den Freundschaftsstatus nachzuschlagen. Das ist
+ * hier richtig: Zeilen entstehen nur bei angenommener Freundschaft
+ * (`setLagerShare`) und verschwinden mit ihr (`deleteFriendship`), und für die
+ * Frage „geht dieses Lager hinaus?“ ist die Zeile selbst die Antwort.
+ */
+export async function countSharesByLager(
+  ownerId: number
+): Promise<Map<number, number>> {
+  const rows = await getDb()
+    .select({ lagerId: lagerShares.lagerId, count: count() })
+    .from(lagerShares)
+    .innerJoin(lager, eq(lager.id, lagerShares.lagerId))
+    .where(eq(lager.userId, ownerId))
+    .groupBy(lagerShares.lagerId);
+  return new Map(rows.map(r => [r.lagerId, Number(r.count)]));
 }
 
 // ---------------------------------------------------------------------------

@@ -124,6 +124,17 @@ const COUNTED_TABLES = [
   "weighings",
   "hidden_container_presets",
   "preset_proposals",
+  /*
+    Die Gemeinschaftstabellen. `friendships` und `loan_requests` fehlten seit
+    2.1.0 – dieselbe Auslassung wie bei `lager`, nur ein Release früher.
+    `lager_shares` kommt mit 2.4.0 dazu. Seit dem Vollständigkeitstest in
+    `api/postgres.integration.test.ts` kann das nicht mehr still passieren: Eine
+    neue Tabelle, die hier fehlt, macht ihn rot.
+  */
+  "friendships",
+  "lager_shares",
+  "loan_requests",
+  "audit_log",
 ] as const;
 
 /** Zeilenzahlen aller Fachtabellen für die Verwaltungsseite. */

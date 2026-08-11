@@ -717,14 +717,11 @@ export const friendshipStatusEnum = pgEnum(
 /**
  * Freundschaft zwischen zwei Benutzern – **eine** Zeile je Paar.
  *
- * Die Sichtbarkeit ist bewusst asymmetrisch: Jede Seite entscheidet allein
- * über ihr eigenes Lager. Eine gemeinsame Stufe wäre einfacher, hieße aber,
- * dass der eine die Freigabe des anderen ändern kann.
- *
- * Welche der beiden Spalten für eine Richtung gilt, löst **ausschließlich**
- * `resolveVisibility` in `api/queries/friends.ts` auf. Jeder weitere Vergleich
- * über `userId`/`friendUserId` wäre eine zweite Wahrheit – und ein vertauschtes
- * Feld hier ist keine kaputte Ansicht, sondern eine Datenpanne.
+ * Die Zeile sagt nur, *dass* zwei Menschen verbunden sind. Was der eine vom
+ * Bestand des anderen sieht, steht seit 2.4.0 in `lager_shares` – je Lager und
+ * Empfänger. Bis 2.3.0 trug diese Tabelle zwei Sichtbarkeitsspalten; sie galten
+ * für den gesamten Bestand und ließen „mein Filament ja, mein Harz nein“ nicht
+ * ausdrücken.
  */
 export const friendships = pgTable(
   "friendships",
@@ -735,14 +732,6 @@ export const friendships = pgTable(
     /** Wer angefragt wurde */
     friendUserId: bigint("friendUserId", { mode: "number" }).notNull(),
     status: friendshipStatusEnum("status").default("pending").notNull(),
-    /** Was `friendUserId` vom Lager von `userId` sehen darf */
-    visibilityFromUser: friendVisibilityEnum("visibilityFromUser")
-      .default("search")
-      .notNull(),
-    /** Was `userId` vom Lager von `friendUserId` sehen darf */
-    visibilityFromFriend: friendVisibilityEnum("visibilityFromFriend")
-      .default("search")
-      .notNull(),
     respondedAt: tsColumn("respondedAt"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
@@ -756,8 +745,9 @@ export const friendships = pgTable(
       (B, A) fängt das nicht – dafür gibt es zusätzlich einen Ausdrucks-Index
       über LEAST/GREATEST, der von Hand in der Migration steht (drizzle-kit
       kann ihn nicht erzeugen). Ohne ihn könnten zwei gleichzeitige Anfragen in
-      beide Richtungen zwei Freundschaften mit widersprüchlichen
-      Sichtbarkeiten anlegen, und welche gilt, entschiede die Sortierung.
+      beide Richtungen zwei Freundschaften anlegen, und welche gilt, entschiede
+      die Sortierung – mit zwei Zeilen hingen an einem Paar zwei getrennte
+      Mengen von Freigaben.
     */
     unique("friendships_pair_unique").on(t.userId, t.friendUserId),
     index("friendships_user_idx").on(t.userId),
@@ -767,6 +757,65 @@ export const friendships = pgTable(
 
 export type Friendship = typeof friendships.$inferSelect;
 export type InsertFriendship = typeof friendships.$inferInsert;
+
+/**
+ * Freigabe eines Lagers an einen Freund – **eine Stufe je Lager und Empfänger.**
+ *
+ * Bis 2.3.0 hing die Freigabe an der Freundschaft und galt für den gesamten
+ * Bestand. Wer sein Filament gern teilt, sein teures Harz aber nicht, musste
+ * sich zwischen „alles“ und „nichts“ entscheiden.
+ *
+ * **Eine fehlende Zeile bedeutet `none`.** Es gibt keine `none`-Zeilen; wer eine
+ * Freigabe zurücknimmt, löscht sie. Damit ist „nicht freigegeben“ der
+ * Grundzustand und kein Wert, den erst jemand schreiben muss – und ein neu
+ * angelegtes Lager ist ohne weiteres Zutun privat.
+ *
+ * **Diese Zeile allein gewährt nichts.** Sie gilt nur, solange zwischen dem
+ * Eigentümer des Lagers und `sharedWithUserId` eine **angenommene** Freundschaft
+ * besteht. Diese Bedingung steht in `resolveShare` (`api/queries/friends.ts`)
+ * und nicht im SQL: Wanderte sie dorthin, behielte eine abgelehnte oder
+ * aufgelöste Freundschaft ihren Zugriff, ohne dass etwas auffiele.
+ */
+export const lagerShares = pgTable(
+  "lager_shares",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Freigegebenes Lager. Der Eigentümer steht am Lager, nicht hier. */
+    lagerId: bigint("lagerId", { mode: "number" }).notNull(),
+    /**
+     * Wer die Freigabe bekommt.
+     *
+     * Personenbezogen, und deshalb im Datenexport enthalten. Der DSGVO-Wächter
+     * in `api/account.integration.test.ts` findet die Spalte über
+     * `ILIKE '%userid%'` – bis 2.3.0 suchte er nach genau `userId` und hätte
+     * diesen Namen übersehen.
+     */
+    sharedWithUserId: bigint("sharedWithUserId", { mode: "number" }).notNull(),
+    visibility: friendVisibilityEnum("visibility").notNull(),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    /*
+      Eine Stufe je Lager und Empfänger. Ohne den Schlüssel könnten zwei Zeilen
+      widersprechen, und welche gilt, entschiede die Sortierung.
+    */
+    unique("lager_shares_unique").on(t.lagerId, t.sharedWithUserId),
+    /*
+      Beide Richtungen bekommen einen Index: Der Lesepfad fragt „was ist mir
+      freigegeben?“ (Empfänger), das Löschen eines Lagers und die
+      Freigabe-Anzeige fragen „wer sieht dieses Lager?“ (Lager).
+    */
+    index("lager_shares_recipient_idx").on(t.sharedWithUserId),
+    index("lager_shares_lager_idx").on(t.lagerId),
+  ]
+);
+
+export type LagerShare = typeof lagerShares.$inferSelect;
+export type InsertLagerShare = typeof lagerShares.$inferInsert;
 
 export const loanRequestStatusEnum = pgEnum(
   "loan_request_status",

@@ -52,14 +52,14 @@ api/            Hono/tRPC-Backend
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
-                lager.ts (Lager-CRUD, Obergrenze, Belegung),
-                friends.ts (Sichtbarkeit, Projektion, Ausleih-Vorgänge),
+                lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
+                friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
-                types.ts, import.ts, friends.ts (Stufen, Freundescode),
+                types.ts, import.ts, friends.ts (Freigabestufen, Freundescode),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
@@ -176,6 +176,12 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
 - **`FORMS_BY_KIND` ordnet Formen den Materialarten zu und ist eine
   Sortierhilfe, kein Filter.** Der Startkatalog hat noch keine Harz- oder
   Pulvereinträge; gefüllt wird er über Administration und Community-Vorschläge.
+- **Die Migration `0012_lager_shares.sql` ist ebenfalls von Hand ergänzt** – aus
+  dem umgekehrten Grund: drizzle-kit erzeugt `CREATE TABLE` und `DROP COLUMN`
+  richtig, kennt aber die **Übertragung** der Stufen aus `friendships` nach
+  `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
+  Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
+  nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
 
 ## Namenslisten, die kein Compiler prüft
 
@@ -189,10 +195,19 @@ müssen alle drei mit:
 | `api/queries/systemStatus.ts` → `COUNTED_TABLES`               | **500 auf `/verwaltung/system`, zur Laufzeit** |
 
 `COUNTED_TABLES` ist der gefährliche Fall: Die Namen gehen über
-`sql.identifier()` ins SQL, `tsc` sieht dort nichts. Bis 2.3.0 deckte kein Test
-das ab – und `lager` fehlte seit 2.2.0 still in der Liste. Seither ruft
-`api/postgres.integration.test.ts` `countAllTables()` einmal auf; das scheitert
-an jedem Namen, den es nicht gibt.
+`sql.identifier()` ins SQL, `tsc` sieht dort nichts. Zwei Fehlerrichtungen, beide
+schon vorgekommen – ein **veralteter** Name (500 zur Laufzeit) und eine
+**fehlende** Tabelle (die Seite zeigt weiter etwas, nur nicht alles: `lager`
+fehlte seit 2.2.0, `friendships` und `loan_requests` seit 2.1.0). Seit 2.4.0
+vergleicht `api/postgres.integration.test.ts` die Liste gegen
+`information_schema`; beide Richtungen sind damit rot statt still.
+
+Der DSGVO-Wächter prüft `column_name ILIKE '%userid%'` und nicht `= 'userId'` –
+sonst wäre er eine Benennungsvorschrift statt einer Prüfung, und eine Tabelle,
+die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
+er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
+nur noch `profile` (über `users.id`), `weighings` (über das Material) und
+`loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -209,18 +224,40 @@ Die einzige Funktion, die die Mandantengrenze absichtlich überschreitet. Ein
 Fehler hier ist keine kaputte Ansicht, sondern eine Datenpanne – entsprechend
 eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
 
-- **Eine Zeile je Paar** (`friendships`), mit **zwei** Sichtbarkeitsstufen:
-  `visibilityFromUser` ist die Freigabe von `userId`, `visibilityFromFriend` die
-  von `friendUserId`. Jede Seite entscheidet allein über ihr eigenes Lager; eine
-  gemeinsame Stufe wäre einfacher und falsch, weil sie den einen über das Lager
-  des anderen bestimmen ließe.
-- **Die Richtung löst genau eine Funktion auf:** `resolveVisibility`. Sie ist
-  rein und ohne Datenbank testbar, weil das Vertauschen der beiden Spalten der
-  wahrscheinlichste schwere Fehler ist. Kein zweiter Vergleich über
-  `userId`/`friendUserId` irgendwo sonst, auch nicht im SQL.
+- **Die Freigabe hängt am Lager, nicht an der Freundschaft** (`lager_shares`,
+  seit 2.4.0): eine Stufe je Lager **und** Empfänger. `friendships` trägt nur
+  noch Status und Richtung der Anfrage. Wer sein Filament gern teilt, sein teures
+  Harz aber nicht, kann das damit ausdrücken; vorher gab es nur „alles“ oder
+  „nichts“. Jede Seite entscheidet allein über ihre eigenen Lager – ein Lager hat
+  genau einen Eigentümer, und der steht am Lager.
+- **Eine fehlende Zeile ist `none`.** Es gibt keine `none`-Zeilen; wer eine
+  Freigabe zurücknimmt, löscht sie. „Nicht freigegeben“ ist damit der
+  Grundzustand und kein Wert, den erst jemand schreiben muss – ein neu angelegtes
+  Lager ist ohne Zutun privat, und es gibt keine Voreinstellung beim Annehmen
+  einer Freundschaft (die Begründung steht dort, wo bis 2.3.0
+  `DEFAULT_FRIEND_VISIBILITY` stand).
+- **Ob eine Freigabe gilt, entscheidet genau eine Funktion:** `resolveShare`.
+  Freigabe und Freundschaftsstatus stehen in **zwei Tabellen**, deshalb nimmt sie
+  beides. Die Statusprüfung darf **nicht** ins SQL wandern: Sonst behielte eine
+  abgelehnte oder aufgelöste Freundschaft ihren Zugriff. Ein Unit- und ein
+  Integrationstest halten genau das fest.
+- **Zwei Kaskaden, beide unverzichtbar.** `deleteFriendship` löscht die Freigaben
+  **beider Richtungen** – sonst weckt eine erneut geschlossene Freundschaft alten
+  Zugriff wieder auf, ohne dass jemand etwas freigegeben hätte. `deleteLager`
+  löscht die Freigaben dieses Lagers – sonst zeigt eine `lagerId` mangels
+  Fremdschlüssel später auf ein neu vergebenes Lager. Dieselbe Reihenfolge gilt
+  bei der Kontolöschung: Freigaben **vor** den Lagern.
 - **Jede Lesefunktion nimmt `viewerId` als ersten Parameter** und ermittelt die
-  erlaubten Besitzer selbst. Keine nimmt eine Besitzerliste von außen an –
-  sonst wäre die Prüfung eine Frage der Disziplin am Aufrufort.
+  freigegebenen Lager selbst (`listVisibleLager`, `shareLevelFor`). Keine nimmt
+  eine Lager- oder Besitzerliste von außen an – sonst wäre die Prüfung eine Frage
+  der Disziplin am Aufrufort. Der Suchpfad filtert zusätzlich auf
+  `materials.userId`: redundant, solange kein Material in einem fremden Lager
+  liegt, und genau deshalb billig.
+- **Der Lagername geht nie hinaus, auch nicht als Kennung.** Die Liste eines
+  Freundes bleibt flach und wird nicht nach Lagern gruppiert; der Empfänger
+  erfährt nicht, aus wie vielen Lagern seine Treffer kommen. Ein Lagername ist
+  Freitext und kann einen Ort verraten – dieselbe Erwägung, die die Drybox
+  ausschließt.
 - **`FriendMaterial` ist handgeschrieben**, nicht aus dem Schema abgeleitet, und
   `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
   eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
@@ -255,6 +292,11 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
 - **Freundschaften werden protokolliert, Ausleih-Anfragen nicht** (`friend.*` in
   `contracts/audit.ts`). Erstere ändern Zugriffsrechte, letztere sind Nutzung –
   die Grenze zieht der Kommentar in `contracts/audit.ts`.
+  `friend.visibility_changed` trägt `{ lagerId, visibility }`; ohne die Lager-ID
+  beantwortete der Eintrag nicht, wer Zugriff auf **was** bekam. Ein gelöschtes
+  Lager schreibt je betroffenem Freund denselben Eintrag mit
+  `visibility: "none"` und `reason: "lager_deleted"` – ein eigenes
+  `lager.deleted` sagte nicht, wessen Zugriff endete.
 - **`sendTelegramMessage` gibt `boolean` zurück** (`api/telegram/send.ts`).
   Telegram lässt einen Bot nur schreiben, wenn der Empfänger den Chat einmal
   geöffnet hat; wer nur das Login-Widget benutzt hat, ist unerreichbar. Der
@@ -530,9 +572,15 @@ Datenbank.
   Seedings, Katalog- und Vorschlagsfluss über die tRPC-Router, Unique-Keys,
   `RETURNING`, die optimistische Sperre, Zeitstempel und der Systemzustand für
   `/verwaltung/system`. Dazu der ganze Freundes-Fluss: beide
-  Sichtbarkeitsrichtungen, alle drei Stufen, die Abwesenheit der verbotenen
-  Felder in **jeder** Antwort, die zwei handgeschriebenen Indizes und die
-  Löschung in beiden Richtungen.
+  Freigaberichtungen, alle drei Stufen **je Lager**, die Abwesenheit der
+  verbotenen Felder in **jeder** Antwort, die zwei handgeschriebenen Indizes und
+  die Löschung in beiden Richtungen.
+- **Zwei dieser Tests sichern Fehler ab, die still schiefgehen** und deshalb
+  keinen Nutzer erreichen würden: „weckt nach dem Auflösen und Neuschließen
+  keinen Zugriff“ (die Kaskade in `deleteFriendship`) und „gewährt nichts, wenn
+  die Freundschaft nicht angenommen ist“ (der Status wird in `resolveShare`
+  geprüft, nicht im SQL). Beide wurden gegengeprüft, indem der jeweilige Riegel
+  entfernt wurde – sie werden dann rot.
 - Die Verbindung kommt ausschließlich aus `TEST_DATABASE_URL` und darf nicht
   mit `DATABASE_URL` übereinstimmen: Jeder Lauf löscht **das gesamte Schema**
   der Zieldatenbank und spielt die Migrationen neu ein (`api/test/`).

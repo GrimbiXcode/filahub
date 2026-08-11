@@ -1,6 +1,6 @@
 import { and, count, eq } from "drizzle-orm";
 import type { MaterialKind } from "@contracts/materials";
-import { lager, materials } from "@db/schema";
+import { lager, lagerShares, materials } from "@db/schema";
 import { getDb } from "./connection";
 
 /**
@@ -8,8 +8,10 @@ import { getDb } from "./connection";
  *
  * Muster wie `api/queries/filament.ts`: Der Besitzer steht in der
  * `where`-Klausel jeder Abfrage, es gibt keinen globalen Scope und keine
- * Fremdschlüssel. Ein Lager gehört immer genau einem Benutzer; geteilt wird es
- * erst ab Schritt 3 (2.4.0), und auch dann bleibt der Eigentümer eindeutig.
+ * Fremdschlüssel. Ein Lager gehört immer genau einem Benutzer – auch seit es
+ * (2.4.0) an Freunde freigegeben werden kann. Die Freigaben selbst liegen in
+ * `api/queries/friends.ts`; hier steht nur, was beim **Löschen** mit ihnen
+ * geschieht.
  */
 
 export function findLagerByUser(userId: number) {
@@ -57,10 +59,42 @@ export async function updateLager(
   return getDb().query.lager.findFirst({ where: eq(lager.id, id) });
 }
 
-export async function deleteLager(userId: number, id: number) {
-  await getDb()
-    .delete(lager)
-    .where(and(eq(lager.id, id), eq(lager.userId, userId)));
+/**
+ * Löscht ein Lager **samt seinen Freigaben** und meldet, wessen Zugriff damit
+ * endete.
+ *
+ * Die Kaskade ist keine Aufräumarbeit, sondern die Gegenrichtung zu der in
+ * `deleteFriendship`: Bliebe die Freigabezeile stehen, zeigte ihre `lagerId`
+ * mangels Fremdschlüssel irgendwann auf ein **neu vergebenes** Lager – und
+ * jemand sähe einen Bestand, den nie jemand für ihn freigegeben hat.
+ *
+ * Erst die Freigaben, dann das Lager: dieselbe Reihenfolge wie beim Löschen
+ * eines Kontos, und aus demselben Grund. Beides in einer Transaktion, damit es
+ * keinen Zwischenzustand mit dem einen ohne das andere gibt.
+ *
+ * Der Rückgabewert trägt die betroffenen Empfänger zum Aufrufer, weil das
+ * Protokoll sie braucht: Ein Eintrag „Lager gelöscht“ beantwortet nicht,
+ * **wessen** Zugriff endete.
+ */
+export async function deleteLager(
+  userId: number,
+  id: number
+): Promise<{ revoked: number[] }> {
+  return getDb().transaction(async tx => {
+    const own = await tx
+      .select({ id: lager.id })
+      .from(lager)
+      .where(and(eq(lager.id, id), eq(lager.userId, userId)))
+      .limit(1);
+    if (own.length === 0) return { revoked: [] };
+
+    const removed = await tx
+      .delete(lagerShares)
+      .where(eq(lagerShares.lagerId, id))
+      .returning({ sharedWithUserId: lagerShares.sharedWithUserId });
+    await tx.delete(lager).where(eq(lager.id, id));
+    return { revoked: removed.map(r => r.sharedWithUserId) };
+  });
 }
 
 /**

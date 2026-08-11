@@ -186,20 +186,21 @@ Known gaps, deliberately recorded rather than glossed over:
 
 ## Erasure concept
 
-| Data                                                                       | On account deletion                                                              |
-| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Own stock: materials, weigh-ins, container types, dryboxes, hidden presets | deleted                                                                          |
-| Stores (`lager`) — deleted **after** the materials that point at them      | deleted                                                                          |
-| Proposals — pending, rejected, withdrawn                                   | deleted                                                                          |
-| Proposals — accepted                                                       | anonymised: `userId` and comment set to NULL                                     |
-| Global catalogue entries                                                   | kept; they carry no personal data                                                |
-| Moderation record where the deleted user reviewed                          | `reviewedBy` set to NULL                                                         |
-| Sign-in codes                                                              | deleted                                                                          |
-| Friendships — in both directions                                           | deleted                                                                          |
-| Loan requests — asked and been asked                                       | deleted                                                                          |
-| Friend code                                                                | deleted with the account row                                                     |
-| Security log entries                                                       | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
-| Account                                                                    | deleted                                                                          |
+| Data                                                                        | On account deletion                                                              |
+| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Own stock: materials, weigh-ins, container types, dryboxes, hidden presets  | deleted                                                                          |
+| Store shares (`lager_shares`) — granted and received, **before** the stores | deleted                                                                          |
+| Stores (`lager`) — deleted **after** the materials that point at them       | deleted                                                                          |
+| Proposals — pending, rejected, withdrawn                                    | deleted                                                                          |
+| Proposals — accepted                                                        | anonymised: `userId` and comment set to NULL                                     |
+| Global catalogue entries                                                    | kept; they carry no personal data                                                |
+| Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                                                         |
+| Sign-in codes                                                               | deleted                                                                          |
+| Friendships — in both directions                                            | deleted                                                                          |
+| Loan requests — asked and been asked                                        | deleted                                                                          |
+| Friend code                                                                 | deleted with the account row                                                     |
+| Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
+| Account                                                                     | deleted                                                                          |
 
 Sign-in codes are additionally purged after 24 hours, and security log entries
 after 90 days, regardless of any deletion request
@@ -216,13 +217,20 @@ The reasoning for keeping accepted proposals is in
 Art. 17(3): other users' stock references those catalogue entries, and the
 remaining row no longer identifies anyone.
 
-Friendships and loan requests get the opposite treatment — deleted outright, in
-both directions. Nothing in Art. 17(3) covers keeping them: there is no
-moderation record, no other user's stock depends on them, and an anonymised
+Friendships, store shares and loan requests get the opposite treatment — deleted
+outright, in both directions. Nothing in Art. 17(3) covers keeping them: there is
+no moderation record, no other user's stock depends on them, and an anonymised
 friendship would be meaningless. Deleting them does remove the counterparty's
 side of a row that describes both people; that is inherent to joint data, and the
 erasure right of the person leaving takes precedence over the other's
 convenience.
+
+The order in the table is load-bearing, not tidiness. There are no foreign keys
+anywhere in this schema, so a row deleted too late is a row pointing at an ID the
+database will hand out again: a leftover `lager_shares` row would grant a stranger
+access to whoever next receives that store ID. The same reasoning puts the stores
+after the materials that reference them, and both are enforced by the order of
+statements in `deleteUserAccount` with the reasoning in the comments there.
 
 ## Decisions on record
 

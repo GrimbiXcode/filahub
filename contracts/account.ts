@@ -9,12 +9,18 @@
  * Format-Version des Exports. Zu erhöhen, sobald sich der Aufbau so ändert,
  * dass ein älterer Export anders gelesen werden müsste.
  *
- * `2` seit 2.3.0: Die Abschnitte `spoolTypes` und `hiddenSpoolPresets` heißen
- * jetzt `containerTypes` und `hiddenContainerPresets`. Eine Datei, die jemand
- * vorher heruntergeladen hat, trägt noch die alten Namen – deshalb steht die
- * Version drin.
+ * `2` in 2.3.0: Die Abschnitte `spoolTypes` und `hiddenSpoolPresets` hießen
+ * seither `containerTypes` und `hiddenContainerPresets`.
+ *
+ * `3` seit 2.4.0: Die Freigabestufen sind aus den `friendships`-Zeilen
+ * ausgezogen (`visibilityFromUser`/`visibilityFromFriend` gibt es nicht mehr)
+ * und stehen jetzt je Lager im neuen Abschnitt `lagerShares`. Der neue
+ * Abschnitt allein wäre kein Grund – `lager` kam in 2.2.0 ohne Erhöhung dazu,
+ * weil ein älterer Export dadurch nicht falsch wird. Hier verschwinden aber
+ * zwei Felder aus einem bestehenden Abschnitt: Wer eine Datei von 2.3.0 liest,
+ * findet sie dort noch, und beide trügen ohne Erhöhung dieselbe Versionsnummer.
  */
-export const ACCOUNT_EXPORT_VERSION = 2;
+export const ACCOUNT_EXPORT_VERSION = 3;
 
 /**
  * Tabellen, die im Export enthalten sein müssen.
@@ -48,6 +54,12 @@ export const ACCOUNT_EXPORT_SECTIONS = [
     Oberfläche kennt sie ihn ohnehin.
   */
   "friendships",
+  /*
+    Freigaben von Lagern, ebenfalls in **beiden** Richtungen: die, die diese
+    Person erteilt hat, und die, die sie bekommen hat. Beide sagen etwas über
+    sie aus – die einen, was sie zeigt, die anderen, worauf sie zugreifen darf.
+  */
+  "lagerShares",
   "loanRequests",
   /*
     Das Sicherheitsprotokoll gehört dazu: Es enthält Ereignisse über diese

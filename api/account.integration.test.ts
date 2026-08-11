@@ -125,21 +125,31 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
    * die Wahrheit darüber, wo Personenbezug tatsächlich liegt.
    */
   it("deckt alle Tabellen mit Personenbezug ab", async () => {
+    /*
+      `ILIKE '%userid%'` und nicht `= 'userId'`: Sonst müsste jede
+      personenbezogene Spalte genau so heißen, und eine Tabelle, die ihre
+      Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch – der
+      Wächter wäre eine Benennungsvorschrift statt einer Prüfung.
+
+      `DISTINCT`, weil eine Tabelle mit zwei Personenspalten sonst zweimal
+      erschiene.
+    */
     const result = await db().execute<{ table_name: string }>(sql`
-      SELECT table_name
+      SELECT DISTINCT table_name
       FROM information_schema.columns
-      WHERE table_schema = current_schema() AND column_name = 'userId'
+      WHERE table_schema = current_schema() AND column_name ILIKE '%userid%'
       ORDER BY table_name
     `);
     const withUserId = result.rows.map(r => r.table_name);
 
-    // Alphabetisch, wie die Abfrage sortiert – seit der Umbenennung steht
-    // `container_types` deshalb vorn, wo vorher `spool_types` hinten stand.
+    // Alphabetisch, wie die Abfrage sortiert.
     expect(withUserId).toEqual([
+      "audit_log",
       "container_types",
       "friendships",
       "hidden_container_presets",
       "lager",
+      "lager_shares",
       "loan_requests",
       "materials",
       "preset_proposals",
@@ -147,16 +157,16 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese acht plus vier, die den Personenbezug über eine andere Spalte
-      führen: `profile` (users.id), `weighings` (über das Material),
-      `loginCodes` (Telegram-ID) und `auditLog` (actorUserId). Ändert sich
-      die linke Seite, muss die rechte nachziehen.
+      Diese zehn plus drei, die den Personenbezug über eine andere Spalte
+      führen: `profile` (users.id), `weighings` (über das Material) und
+      `loginCodes` (Telegram-ID). Ändert sich die linke Seite, muss die rechte
+      nachziehen.
 
-      `friendships` und `loan_requests` tragen den Personenbezug in **zwei**
-      Spalten – die zweite (`friendUserId` bzw. `ownerUserId`) fällt oben durchs
-      Raster, weil die Abfrage auf den Namen `userId` prüft. Genau deshalb heißt
-      die Antragsteller-Spalte in beiden Tabellen so: Ein hübscheres
-      `requesterId` wäre hier still durchgerutscht.
+      Vier waren es bis 2.3.0 – `audit_log` gehörte dazu, weil seine Spalten
+      `actorUserId`/`subjectUserId` am engen Namensvergleich vorbeikamen. Mit dem
+      aufgeweiteten Prädikat findet die Abfrage sie selbst, und die
+      handgepflegte Ausnahmeliste ist um einen Eintrag kürzer. Genau das ist der
+      Sinn der Aufweitung: Was der Wächter selbst sieht, muss niemand pflegen.
     */
     expect([...ACCOUNT_EXPORT_SECTIONS].sort()).toEqual(
       [
@@ -164,6 +174,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "friendships",
         "hiddenContainerPresets",
         "lager",
+        "lagerShares",
         "loanRequests",
         "loginCodes",
         "materials",

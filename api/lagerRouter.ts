@@ -7,6 +7,8 @@ import {
   materialKindSchema,
 } from "@contracts/materials";
 import { createRouter, authedQuery } from "./middleware";
+import { recordAudit } from "./queries/audit";
+import { countSharesByLager } from "./queries/friends";
 import {
   countLagerByUser,
   countMaterialsInLager,
@@ -56,7 +58,21 @@ function assertConfigValid(config: {
 }
 
 export const lagerRouter = createRouter({
-  list: authedQuery.query(({ ctx }) => findLagerByUser(ctx.user.id)),
+  /**
+   * Die eigenen Lager, jedes mit der Zahl der Freunde, die es sehen dürfen.
+   *
+   * Die Zahl steht bewusst hier und nicht auf der Freundesseite: Die
+   * Voreinstellung ist „nichts freigegeben“, und dieser Zustand darf nirgends
+   * unsichtbar sein. Wer seine Lager ansieht, soll erkennen, welche davon
+   * hinausgehen – ohne dafür jede Freundeskarte durchklicken zu müssen.
+   */
+  list: authedQuery.query(async ({ ctx }) => {
+    const [rows, shares] = await Promise.all([
+      findLagerByUser(ctx.user.id),
+      countSharesByLager(ctx.user.id),
+    ]);
+    return rows.map(row => ({ ...row, sharedWith: shares.get(row.id) ?? 0 }));
+  }),
 
   create: authedQuery.input(lagerInput).mutation(async ({ ctx, input }) => {
     /*
@@ -152,7 +168,27 @@ export const lagerRouter = createRouter({
         Lager vorhanden" zurecht und lädt zum Anlegen ein – eine Sperre wäre
         eine Bevormundung, und wer neu anfangen will, soll das können.
       */
-      await deleteLager(ctx.user.id, input.id);
+      const { revoked } = await deleteLager(ctx.user.id, input.id);
+      /*
+        Je betroffenem Freund ein Eintrag, und zwar derselbe Ereignisname wie
+        beim Zurücknehmen von Hand: Für den Betroffenen ist es dasselbe – sein
+        Zugriff endet. Ein eigenes `lager.deleted` sagte nicht, **wessen**
+        Zugriff endete, und genau das muss das Protokoll beantworten. `reason`
+        unterscheidet die beiden Wege.
+      */
+      for (const friendId of revoked) {
+        recordAudit({
+          event: "friend.visibility_changed",
+          actorUserId: ctx.user.id,
+          subjectUserId: friendId,
+          ip: ctx.clientIp,
+          detail: {
+            lagerId: input.id,
+            visibility: "none",
+            reason: "lager_deleted",
+          },
+        });
+      }
       return { ok: true };
     }),
 });

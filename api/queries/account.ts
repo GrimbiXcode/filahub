@@ -139,6 +139,48 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   }));
 
   /*
+    Freigaben von Lagern, ebenfalls in beiden Richtungen: die erteilten (ein
+    Lager dieser Person, freigegeben an jemanden) und die bekommenen (ein
+    fremdes Lager, freigegeben an diese Person). `direction` steht dabei, weil
+    die Zeile allein es nicht sagt – der Eigentümer steht am Lager, nicht an der
+    Freigabe, und ohne die Angabe müsste die betroffene Person `lagerId` gegen
+    den Abschnitt `lager` prüfen, um die eigenen von den fremden zu trennen.
+
+    Bei den erteilten Freigaben steht der Name des Empfängers dabei, aus
+    demselben Grund wie bei den Freundschaften. Bei den bekommenen nicht: Diese
+    Person kennt den Namen aus der Freundesliste ohnehin, und der Bezug ist die
+    Freundschaft, nicht die Freigabe.
+  */
+  const ownLagerIds = lager.map(l => l.id);
+  const [grantedShares, receivedShares] = await Promise.all([
+    ownLagerIds.length === 0
+      ? []
+      : db
+          .select()
+          .from(schema.lagerShares)
+          .where(inArray(schema.lagerShares.lagerId, ownLagerIds)),
+    db
+      .select()
+      .from(schema.lagerShares)
+      .where(eq(schema.lagerShares.sharedWithUserId, userId)),
+  ]);
+  const shareRecipientNames = await loadCounterpartNames(
+    grantedShares.map(r => r.sharedWithUserId)
+  );
+  const lagerShares = [
+    ...grantedShares.map(row => ({
+      ...row,
+      direction: "granted" as const,
+      counterpartName: shareRecipientNames.get(row.sharedWithUserId) ?? null,
+    })),
+    ...receivedShares.map(row => ({
+      ...row,
+      direction: "received" as const,
+      counterpartName: null,
+    })),
+  ];
+
+  /*
     Sicherheitsprotokoll, soweit es diese Person betrifft. Ohne `ipHash`:
     Der Wert ist für die betroffene Person wertlos und würde nur einem
     Dritten helfen, der den Export in die Hände bekommt.
@@ -166,6 +208,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     presetProposals,
     loginCodes,
     friendships,
+    lagerShares,
     loanRequests,
     auditLog,
   };
@@ -243,6 +286,29 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.materials)
       .where(eq(schema.materials.userId, userId));
+    /*
+      Freigaben in **beiden** Richtungen, und zwar **vor** den Lagern: die
+      erteilten (die Unterabfrage liest die Lagerzeilen, die es gleich nicht
+      mehr gibt) und die bekommenen. Eine übrig gebliebene `lagerId` oder
+      `sharedWithUserId` zeigte mangels Fremdschlüssel später auf eine neu
+      vergebene ID – jemand sähe einen fremden Bestand, ohne dass ihn je jemand
+      freigegeben hat. Dieselbe Falle wie bei `materials.lagerId` unten, nur
+      folgenschwerer.
+    */
+    await tx
+      .delete(schema.lagerShares)
+      .where(
+        or(
+          eq(schema.lagerShares.sharedWithUserId, userId),
+          inArray(
+            schema.lagerShares.lagerId,
+            tx
+              .select({ id: schema.lager.id })
+              .from(schema.lager)
+              .where(eq(schema.lager.userId, userId))
+          )
+        )
+      );
     /*
       Lager **nach** den Materialien: Ein `materials.lagerId` zeigt mangels
       Fremdschlüssel sonst auf eine später neu vergebene Lager-ID – also auf den

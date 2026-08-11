@@ -7,6 +7,7 @@ import {
   Pencil,
   Plus,
   Trash2,
+  Users2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -239,6 +240,19 @@ export default function LagerPage() {
                           <span className="text-xs text-muted-foreground">
                             {t.lager.materialCount({ count })}
                           </span>
+                          {/*
+                            Die Gegenprobe zur Voreinstellung „nichts
+                            freigegeben“: Wird ein Lager geteilt, muss man das
+                            hier sehen, ohne jede Freundeskarte durchzuklicken.
+                            Bei null Freunden steht bewusst nichts – eine
+                            Auszeichnung „mit 0 Freunden geteilt“ wäre Lärm.
+                          */}
+                          {item.sharedWith > 0 && (
+                            <Badge variant="outline">
+                              <Users2 className="mr-1 h-3 w-3" />
+                              {t.lager.sharedWith({ count: item.sharedWith })}
+                            </Badge>
+                          )}
                         </div>
                         {item.notes && (
                           <p className="truncate text-xs text-muted-foreground">

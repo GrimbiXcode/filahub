@@ -18,7 +18,12 @@ import { z } from "zod";
 // Aufzählungen – Grundlage der Postgres-Enums in db/schema.ts
 // ---------------------------------------------------------------------------
 
-/** Wie viel ein Freund vom eigenen Lager sehen darf */
+/**
+ * Wie viel ein Freund von **einem** Lager sehen darf.
+ *
+ * Seit 2.4.0 gilt die Stufe je Lager und Freund (`lager_shares`), nicht mehr für
+ * den gesamten Bestand. Die Stufen selbst sind unverändert.
+ */
 export const FRIEND_VISIBILITIES = ["none", "search", "full"] as const;
 export type FriendVisibility = (typeof FRIEND_VISIBILITIES)[number];
 
@@ -35,15 +40,21 @@ export type LoanRequestStatus = (typeof LOAN_REQUEST_STATUSES)[number];
 
 export const friendVisibilitySchema = z.enum(FRIEND_VISIBILITIES);
 
-/**
- * Stufe für eine neu angenommene Freundschaft.
- *
- * `search` und nicht `full`: Wer eine Freundschaft annimmt, will gefunden
- * werden – aber nicht sein ganzes Lager offenlegen, solange er dazu nichts
- * gesagt hat. Und nicht `none`, weil die Freundschaft sonst wirkungslos wäre
- * und niemand verstünde, warum nichts passiert.
- */
-export const DEFAULT_FRIEND_VISIBILITY: FriendVisibility = "search";
+/*
+  Hier stand bis 2.3.0 `DEFAULT_FRIEND_VISIBILITY = "search"` – die Stufe, die
+  eine neu angenommene Freundschaft automatisch bekam. Begründet war das damit,
+  dass eine Freundschaft ohne jede Freigabe wirkungslos wäre und niemand
+  verstünde, warum nichts passiert.
+
+  Mit Freigaben je Lager trägt das nicht mehr: Eine Vorgabe würde ein **konkretes
+  Lager** öffnen, das der Benutzer vielleicht gerade nicht zeigen will, und sie
+  müsste bei jedem neu angelegten Lager erneut entscheiden. Ein versehentlich
+  offenes Lager ist der schlimmere Fehler als ein versehentlich geschlossenes.
+
+  Die Verständlichkeit trägt jetzt die Oberfläche: Die Freundeskarte sagt
+  ausdrücklich, wenn nichts freigegeben ist, und die Lager-Seite zeigt je Lager,
+  mit wie vielen Freunden es geteilt ist.
+*/
 
 /**
  * Rangfolge der Stufen. `full` schließt `search` ein – wer das ganze Lager

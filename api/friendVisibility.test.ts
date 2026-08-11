@@ -1,82 +1,73 @@
 import { describe, expect, it } from "vitest";
-import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
+import { visibilityAllows } from "@contracts/friends";
 import {
-  resolveVisibility,
+  resolveShare,
   toFriendMaterial,
   type FriendMaterialRow,
 } from "./queries/friends";
 
 /**
  * Die zwei Stellen, an denen ein Fehler keine kaputte Ansicht, sondern eine
- * Datenpanne wäre: die Richtung einer Freundschaft und die Menge der Felder,
- * die ein Freund zu sehen bekommt. Beide sind bewusst als reine Funktionen
- * gebaut, damit sie ohne Datenbank prüfbar sind.
+ * Datenpanne wäre: ob eine Freigabe gilt, und die Menge der Felder, die ein
+ * Freund zu sehen bekommt. Beide sind bewusst als reine Funktionen gebaut,
+ * damit sie ohne Datenbank prüfbar sind.
  */
 
-type DirectionRow = {
-  userId: number;
-  friendUserId: number;
-  status: "pending" | "accepted" | "declined";
-  visibilityFromUser: FriendVisibility;
-  visibilityFromFriend: FriendVisibility;
-};
-
-/** Benutzer 1 hat die Freundschaft angelegt, Benutzer 2 wurde angefragt. */
-function row(overrides: Partial<DirectionRow> = {}): DirectionRow {
-  return {
-    userId: 1,
-    friendUserId: 2,
-    status: "accepted",
-    visibilityFromUser: "full",
-    visibilityFromFriend: "search",
-    ...overrides,
-  };
-}
-
-describe("resolveVisibility", () => {
-  /*
-    Der eigentliche Regressionstest. Die beiden Stufen sind absichtlich
-    **verschieden**: Wären sie gleich, käme ein Vertauschen der Spalten durch
-    jeden Test hindurch.
-  */
-  it("ordnet jede Richtung der richtigen Spalte zu", () => {
-    // `visibilityFromUser` ist die Freigabe, die userId (=1) erteilt.
-    // Sie gilt, wenn 1 der Besitzer ist und 2 hinschaut.
-    expect(resolveVisibility(row(), 2, 1)).toBe("full");
-    // Umgekehrt gilt `visibilityFromFriend`.
-    expect(resolveVisibility(row(), 1, 2)).toBe("search");
-  });
-
-  it("gibt ohne angenommene Freundschaft nichts frei", () => {
-    for (const status of ["pending", "declined"] as const) {
-      expect(resolveVisibility(row({ status }), 2, 1)).toBe("none");
-      expect(resolveVisibility(row({ status }), 1, 2)).toBe("none");
+describe("resolveShare", () => {
+  it("gibt bei angenommener Freundschaft die freigegebene Stufe zurück", () => {
+    for (const level of ["search", "full"] as const) {
+      expect(
+        resolveShare({ friendshipStatus: "accepted", shareVisibility: level })
+      ).toBe(level);
     }
   });
 
+  /**
+   * **Der Riegel.** Freigabe und Freundschaft stehen in zwei Tabellen; die
+   * Statusprüfung passiert bewusst hier und nicht im SQL. Verschiebt sie jemand
+   * dorthin, behält eine abgelehnte oder offene Anfrage ihren Zugriff – und
+   * dieser Test ist die einzige Stelle, an der das auffällt.
+   */
+  it("gibt ohne angenommene Freundschaft nichts frei", () => {
+    for (const status of ["pending", "declined"] as const) {
+      expect(
+        resolveShare({ friendshipStatus: status, shareVisibility: "full" })
+      ).toBe("none");
+    }
+  });
+
+  /** Keine Freundschaftszeile – etwa nach dem Auflösen. */
   it("gibt ohne Freundschaft nichts frei", () => {
-    expect(resolveVisibility(null, 2, 1)).toBe("none");
-    expect(resolveVisibility(undefined, 2, 1)).toBe("none");
+    expect(
+      resolveShare({ friendshipStatus: null, shareVisibility: "full" })
+    ).toBe("none");
+    expect(
+      resolveShare({ friendshipStatus: undefined, shareVisibility: "full" })
+    ).toBe("none");
   });
 
   /*
-    Schutz gegen den Aufruf mit einer Zeile, die zu einem anderen Paar gehört.
-    Ohne die letzte Rückgabe in `resolveVisibility` fiele der Fall auf die
-    zuletzt geprüfte Bedingung – und gäbe eine fremde Freigabe zurück.
+    Die fehlende Zeile **ist** der Grundzustand: Es gibt keine `none`-Zeilen,
+    wer zurücknimmt, löscht. Fiele das hier auf einen anderen Wert, wäre ein
+    nicht freigegebenes Lager offen.
   */
-  it("gibt nichts frei, wenn die Zeile zu einem anderen Paar gehört", () => {
-    expect(resolveVisibility(row(), 3, 1)).toBe("none");
-    expect(resolveVisibility(row(), 2, 3)).toBe("none");
-    expect(resolveVisibility(row(), 3, 4)).toBe("none");
+  it("behandelt eine fehlende Freigabe als `none`", () => {
+    expect(
+      resolveShare({ friendshipStatus: "accepted", shareVisibility: null })
+    ).toBe("none");
+    expect(
+      resolveShare({ friendshipStatus: "accepted", shareVisibility: undefined })
+    ).toBe("none");
   });
 
-  it("behandelt beide Seiten unabhängig", () => {
-    const asymmetric = row({
-      visibilityFromUser: "none",
-      visibilityFromFriend: "full",
-    });
-    expect(resolveVisibility(asymmetric, 2, 1)).toBe("none");
-    expect(resolveVisibility(asymmetric, 1, 2)).toBe("full");
+  /*
+    Eine ausdrücklich gespeicherte `none` gibt es nicht, sie darf aber auch
+    nichts freigeben, falls doch eine Zeile existiert.
+  */
+  it("gibt bei Stufe `none` nichts frei", () => {
+    expect(
+      resolveShare({ friendshipStatus: "accepted", shareVisibility: "none" })
+    ).toBe("none");
   });
 });
 
@@ -103,6 +94,7 @@ function materialRow(
   return {
     id: 7,
     userId: 1,
+    lagerId: 3,
     name: "PolyTerra PLA Schwarz",
     identifier: "P01",
     materialType: "PLA",
@@ -135,6 +127,12 @@ describe("toFriendMaterial", () => {
    * (Ortsangabe), der Wägungsverlauf (Druckzeiten) – und seit 2.2.0 `lagerId`,
    * der Lagername (Freitext, kann einen Ort verraten) sowie die Dichte (steckt
    * in `secondary`).
+   *
+   * **Diese Liste ist in 2.4.0 unverändert geblieben**, obwohl das Lager dort
+   * zur Einheit der Freigabe wurde. Das ist Absicht: Die Liste eines Freundes
+   * bleibt flach, also braucht der Empfänger die Lager-Kennung nicht. Musste
+   * dieser Test für eine Freigabe-Änderung angefasst werden, ist etwas an der
+   * Projektion passiert, das dort nicht passieren sollte.
    */
   it("gibt genau die erlaubten Felder heraus", () => {
     const result = toFriendMaterial(materialRow(), "Alex");
@@ -169,6 +167,9 @@ describe("toFriendMaterial", () => {
     expect(result.secondary?.value).toBeCloseTo(335.3, 0);
     expect(JSON.stringify(result)).not.toContain("lager");
     expect(JSON.stringify(result)).not.toContain("1240");
+    // Auch nicht die bloße Kennung: Sie ist geladen (die Freigabe hängt daran),
+    // darf aber nicht hinausgehen.
+    expect(result).not.toHaveProperty("lagerId");
   });
 
   it("liefert bei der Materialart Pulver keine Zweitanzeige", () => {

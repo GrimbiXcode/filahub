@@ -816,6 +816,10 @@ export const en: Messages = {
 
     materialCount: (vars: { count: number }) =>
       vars.count === 1 ? "1 material" : `${vars.count} materials`,
+    sharedWith: (vars: { count: number }) =>
+      vars.count === 1
+        ? "shared with 1 friend"
+        : `shared with ${vars.count} friends`,
     limitReached: (vars: { max: number }) =>
       `More than ${vars.max} stores are not possible at the moment.`,
     noLagerTitle: "No store available",
@@ -834,7 +838,7 @@ export const en: Messages = {
   friends: {
     title: "Friends",
     description:
-      "Share filament with friends – you decide for each of them how much of your stock they see. Never any prices.",
+      "Share material with friends – you decide per store and per friend how much of it is visible. Nothing is shared by default, and prices never leave.",
 
     myCodeTitle: "Your friend code",
     myCodeHint:
@@ -877,23 +881,27 @@ export const en: Messages = {
       `Afterwards you will no longer see any filament from ${vars.name}, and ${vars.name} none of yours. Pending loan requests go with it.`,
     removed: "Friendship ended",
 
-    sharedByMe: "You show",
+    sharedByMe: "You show – per store",
     sharedWithMe: "You see",
-    theirChoice: "Your friend's choice",
+    theirChoice: "Your friend's choice, across all their stores",
     visibilityNone: "Nothing",
     visibilitySearch: "Search only",
-    visibilityFull: "Whole stock",
-    visibilityNoneHint: "Your stock stays completely hidden.",
+    visibilityFull: "Whole store",
+    visibilityNoneHint: "This store stays completely hidden.",
     visibilitySearchHint:
-      "Matches appear only when something specific is searched for. No browsing your stock.",
+      "Matches appear only when something specific is searched for. No browsing.",
     visibilityFullHint:
-      "The whole stock can be viewed – without prices, notes, purchase dates, location and weigh-ins.",
-    visibilitySaved: "Visibility saved",
+      "The whole store can be viewed – without prices, notes, purchase dates, location and weigh-ins.",
+    visibilitySaved: "Sharing saved",
+    sharesNothingHint:
+      "You are not sharing any store yet – this friend sees nothing of yours. Choose above what they may see, per store.",
+    noLagerYet: "You have no store yet that you could share.",
+    toLager: "Create a store",
     openInventory: "View stock",
 
     inventoryTitle: (vars: { name: string }) => `${vars.name}'s stock`,
     inventoryDescription:
-      "Shared filament. Prices, notes, purchase dates, location and weigh-ins are not included.",
+      "Material from the stores this friend has shared with you in full. Prices, notes, purchase dates, location and weigh-ins are not included.",
     inventoryEmpty: "This stock is empty.",
     inventoryDenied:
       "You cannot view this stock. The sharing setting may have changed.",

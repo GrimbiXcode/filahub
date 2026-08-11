@@ -69,6 +69,9 @@ describe("Migrationen", () => {
       "preset_series_material_types",
       "preset_proposals",
       "hidden_container_presets",
+      "friendships",
+      "lager_shares",
+      "loan_requests",
     ]) {
       expect(names).toContain(table);
     }
@@ -169,13 +172,35 @@ describe("Migrationen", () => {
    */
   it("zählt alle Fachtabellen, die es wirklich gibt", async () => {
     const counts = await countAllTables();
-    const tables = counts.map(c => c.table);
 
-    expect(tables).toContain("lager");
-    expect(tables).toContain("container_types");
-    expect(tables).toContain("materials");
-    expect(tables).toContain("hidden_container_presets");
-    // Keine Zeile darf fehlen: je Eintrag genau ein Ergebnis.
+    /*
+      Zwei Richtungen, und beide sind schon einmal schiefgegangen:
+
+      **Veralteter Name.** `countAllTables` baut ihn über `sql.identifier()`
+      zusammen; ein Name, der nicht mehr existiert, ist ein 500 auf
+      `/verwaltung/system` – kein Compilerfehler, keine Typprüfung. Der bloße
+      Aufruf deckt das ab, weil Postgres dann eine Ausnahme wirft.
+
+      **Fehlende Tabelle.** Die stille Variante: Die Seite zeigt weiter etwas an,
+      nur eben nicht alles. So blieb `lager` in 2.2.0 und `friendships` seit
+      2.1.0 unbemerkt draußen. Deshalb wird hier gegen die Datenbank verglichen
+      und nicht gegen eine zweite Liste von Hand.
+    */
+    const result = await db().execute<{ name: string }>(sql`
+      SELECT table_name AS name
+      FROM information_schema.tables
+      WHERE table_schema = current_schema() AND table_type = 'BASE TABLE'
+    `);
+    /*
+      Ohne Ausnahmeliste: Die Buchführung von drizzle-kit über die angewandten
+      Migrationen liegt in ihrem eigenen Schema (`drizzle.__drizzle_migrations`)
+      und fällt schon durch `current_schema()` heraus. Alles, was hier steht, ist
+      also eine Fachtabelle.
+    */
+    const expected = result.rows.map(r => r.name).sort();
+
+    expect(counts.map(c => c.table).sort()).toEqual(expected);
+    // Je Eintrag genau ein Ergebnis, und jedes eine Zahl.
     expect(counts.every(c => Number.isInteger(c.rows))).toBe(true);
   });
 

@@ -52,7 +52,15 @@ export const AUDIT_EVENTS = [
   "friend.declined",
   /** Freundschaft aufgelöst */
   "friend.removed",
-  /** Sichtbarkeit des eigenen Lagers für einen Freund geändert */
+  /**
+   * Freigabe **eines** eigenen Lagers für einen Freund geändert.
+   *
+   * `detail` trägt seit 2.4.0 `{ lagerId, visibility }` – ohne die Lager-ID
+   * beantwortete der Eintrag nicht mehr, wer Zugriff auf **was** bekam. Endet
+   * der Zugriff, weil das Lager gelöscht wurde, steht zusätzlich
+   * `reason: "lager_deleted"` darin; ein eigenes Ereignis dafür sagte nicht,
+   * wessen Zugriff endete.
+   */
   "friend.visibility_changed",
   /** Freundescode neu erzeugt, alter damit entwertet */
   "friend.code_rotated",
