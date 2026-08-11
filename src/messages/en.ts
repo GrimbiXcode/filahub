@@ -440,6 +440,14 @@ export const en: Messages = {
     initialLabel: (vars: { withBox: boolean }) =>
       `First weigh-in incl. container${vars.withBox ? " + box" : ""} (g, optional)`,
     initialPlaceholder: "Total weight measured at purchase",
+    tareBreakdown: (vars: {
+      total: string;
+      container: string;
+      box: string | null;
+    }) =>
+      `Total tare: ${vars.total} (container ${vars.container}${
+        vars.box ? ` + box ${vars.box}` : ""
+      })`,
     notesPlaceholder: "Printing temperature, quirks …",
     created: "Material created",
     saved: "Material saved",

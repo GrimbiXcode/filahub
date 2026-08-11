@@ -139,6 +139,9 @@ export function formatNominalWeight(grams: number): string {
  * unverschlagwortete Filamentspule ohne Formangabe unter „Passend zu Harz“
  * stand – eine Behauptung, für die es keinen einzigen Hinweis gab. Solange es
  * nur Filament gab, fiel das nicht auf.
+ *
+ * **`sonstiges` ist keine Formangabe, sondern deren Fehlen** – siehe die
+ * Begründung an `formKnown` unten.
  */
 export function containerFits(
   container: {
@@ -155,7 +158,25 @@ export function containerFits(
   const typeFits =
     typeKnown && materialTypeMatches(tags, context.materialType ?? null);
 
-  const formKnown = container.form != null && context.kind != null;
+  /*
+    `sonstiges` zählt wie eine fehlende Form. Es ist die Auffangform – die
+    Aussage „keine der fünf passt“, nicht die Aussage „diese hier“. Als Beleg
+    genommen machte sie jedes Gebinde ohne Schlagworte zu einem passenden für
+    **jede** Materialart, also genau die Behauptung ohne Hinweis, gegen die diese
+    Funktion geschrieben ist. Als Widerspruch genommen schlösse sie es überall
+    aus, was der Sinn einer Auffangform gerade nicht ist. Unbekannt ist beides
+    nicht: Es fällt in die Mitte, wie ein Katalogeintrag von vor 2.3.0.
+
+    `formFitsKind` bleibt davon unberührt – dort ist `sonstiges` weiter passend,
+    weil die Funktion nur nach dem Widerspruch fragt. Die Gebindeauswahl sortiert
+    damit die **eigenen** Gebindearten des Benutzers, und ein selbst angelegtes
+    „Sonstiges“ gehört nicht nach unten: Es steht in einer kurzen Liste, die er
+    selbst gepflegt hat, und wird nicht in „passend“ und „übrige“ geteilt.
+  */
+  const formKnown =
+    container.form != null &&
+    container.form !== "sonstiges" &&
+    context.kind != null;
   const formFits = formKnown && formFitsKind(container.form, context.kind);
 
   if (typeKnown && !typeFits) return false;

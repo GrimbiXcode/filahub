@@ -75,10 +75,18 @@ is not.
   enforcing it, which left the containers the change was for unreachable.
 - **In English**, 71 catalogue entries said "container" where they mean "spool".
   The names are back to what the manufacturers call them.
+- **"Other" no longer claims to fit everything.** A catalogue container whose
+  shape is "Other" was sorted to the top for every material — resin, powder,
+  filament alike — as if being a catch-all were evidence of fitting. It is the
+  opposite: it says none of the five shapes apply. Such an entry now sits with
+  the rest of the list instead of under "Fits resin", and it is not hidden or
+  excluded anywhere.
 
 ## Smaller things
 
 - Filament diameters read "1.75 mm" in English instead of "1,75 mm".
+- The tare breakdown under the first weigh-in still called the container a
+  "Rolle", and stayed German no matter which language you use.
 - Roughly one friend code in a thousand could not be typed in at all.
 - The import assistant's German half asked for the weight of the "spool" rather
   than the container.

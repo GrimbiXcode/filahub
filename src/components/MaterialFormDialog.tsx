@@ -563,12 +563,13 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   placeholder={t.materialForm.initialPlaceholder}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Tara gesamt: {formatGrams(totalTare)} (Rolle{" "}
-                  {formatGrams(selectedContainerTare)}
-                  {selectedBox
-                    ? ` + Box ${formatGrams(selectedBox.tareWeight)}`
-                    : ""}
-                  )
+                  {t.materialForm.tareBreakdown({
+                    total: formatGrams(totalTare),
+                    container: formatGrams(selectedContainerTare),
+                    box: selectedBox
+                      ? formatGrams(selectedBox.tareWeight)
+                      : null,
+                  })}
                 </p>
               </div>
             )}

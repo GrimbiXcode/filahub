@@ -243,13 +243,40 @@ describe("containerFits", () => {
     ).toBe(false);
   });
 
-  it("hält „Sonstiges“ nicht für einen Widerspruch", () => {
+  /**
+   * „Sonstiges“ liegt in der Mitte: Es widerspricht nie, belegt aber auch nichts.
+   *
+   * Beide Hälften gehören zusammen geprüft, weil je eine allein die falsche
+   * Auslegung durchlässt. Nur die erste, und „Sonstiges“ dürfte überall
+   * ausschließen; nur die zweite, und es dürfte überall als passend gelten – und
+   * damit stünde ein Gebinde ohne Schlagworte unter „Passend zu Harz“, obwohl
+   * kein Merkmal das sagt.
+   */
+  it("hält „Sonstiges“ weder für einen Widerspruch noch für einen Beleg", () => {
+    // Kein Beleg: allein trägt „Sonstiges“ die Zuordnung nicht.
     expect(
       containerFits(
         { form: "sonstiges", materialTypes: [] },
         { kind: "powder", materialType: "PA12" }
       )
+    ).toBe(false);
+    // Kein Widerspruch: eine zustimmende Materialart genügt weiterhin.
+    expect(
+      containerFits(
+        { form: "sonstiges", materialTypes: ["PA12"] },
+        { kind: "powder", materialType: "PA12" }
+      )
     ).toBe(true);
+    /*
+      Und die Gegenprobe zur Auffangform: Eine Form, die es *nicht* ist,
+      schließt bei denselben Schlagworten aus.
+    */
+    expect(
+      containerFits(
+        { form: "rolle", materialTypes: ["PA12"] },
+        { kind: "powder", materialType: "PA12" }
+      )
+    ).toBe(false);
   });
 
   it("liefert ohne jeden Zusammenhang nichts Passendes", () => {

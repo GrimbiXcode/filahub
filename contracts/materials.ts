@@ -73,6 +73,11 @@ export const containerFormSchema = z.enum(CONTAINER_FORMS);
  * `formFitsKind`): Eine Auffangform darf nicht ausgerechnet dort einsortiert
  * werden, wo sie nicht hingehört.
  *
+ * Das heißt **nicht**, dass sie irgendwo als Beleg zählt: `containerFits`
+ * (`contracts/presets.ts`) behandelt sie wie eine fehlende Form, weil „keine der
+ * fünf passt“ keine Aussage über die Materialart ist. Hier nicht ausschließen,
+ * dort nicht behaupten – beides folgt aus derselben Lesart.
+ *
  * Grundlage der Zuordnung sind die Gebinde, in denen das Material tatsächlich
  * verkauft wird – Filament auf Rollen und als Refill-Coil im Beutel, Sinterpulver
  * laut Sinterit in Flaschen (2 kg), Metallbehältern (6 kg) und Eimern (10 kg),
@@ -87,6 +92,10 @@ export const FORMS_BY_KIND: Record<MaterialKind, readonly ContainerForm[]> = {
 /**
  * Passt diese Form zu der Materialart? `sonstiges` und ein unbekanntes Lager
  * passen immer – im Zweifel wird einsortiert statt ausgeschlossen.
+ *
+ * Die Frage ist bewusst nur die nach dem **Widerspruch**. Wer einen Beleg
+ * braucht, nimmt `containerFits`; das ist der Unterschied, den die Anmerkung an
+ * `FORMS_BY_KIND` beschreibt.
  */
 export function formFitsKind(
   form: ContainerForm | null | undefined,

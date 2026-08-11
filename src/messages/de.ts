@@ -453,6 +453,14 @@ export const de = {
     initialLabel: (vars: { withBox: boolean }) =>
       `Erstwägung inkl. Gebinde${vars.withBox ? " + Box" : ""} (g, optional)`,
     initialPlaceholder: "Gemessenes Gesamtgewicht beim Kauf",
+    tareBreakdown: (vars: {
+      total: string;
+      container: string;
+      box: string | null;
+    }) =>
+      `Tara gesamt: ${vars.total} (Gebinde ${vars.container}${
+        vars.box ? ` + Box ${vars.box}` : ""
+      })`,
     notesPlaceholder: "Drucktemperatur, Besonderheiten …",
     created: "Material angelegt",
     saved: "Material gespeichert",
