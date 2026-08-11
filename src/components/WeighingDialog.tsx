@@ -128,9 +128,9 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
           <div className="space-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">
-                {t.weighing.tareSpool}
+                {t.weighing.tareContainer}
               </span>
-              <span>{formatGrams(material.spoolTareWeight)}</span>
+              <span>{formatGrams(material.containerTareWeight)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">

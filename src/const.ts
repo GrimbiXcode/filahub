@@ -31,6 +31,14 @@ export const LAGER_PATH = "/lager";
 export const DRYBOXES_PATH = "/dryboxen";
 export const LEGACY_DRYBOXES_PATH = "/lagerboxen";
 
+/**
+ * Gebindearten. Bis 2.2.0 „Rollentypen" unter `/rollentypen` – ein Name, der
+ * eine Annahme über den Inhalt machte: Wer Pulver in Eimern führt, hat keine
+ * Rollentypen. Der alte Pfad leitet weiter, wie bei den Dryboxen.
+ */
+export const CONTAINER_TYPES_PATH = "/gebinde";
+export const LEGACY_CONTAINER_TYPES_PATH = "/rollentypen";
+
 /** Lager eines Freundes – nur bei Sichtbarkeitsstufe `full` erreichbar. */
 export function friendInventoryPath(friendId: number): string {
   return `${FRIENDS_PATH}/${friendId}`;
@@ -43,7 +51,7 @@ export function friendInventoryPath(friendId: number): string {
  * Art. 19 revDSG greift, bevor jemand ein Konto hat, und ein Impressum hinter
  * einer Anmeldeschranke wäre keins.
  *
- * Die Pfade sind deutsch wie überall in der App (`/rollentypen`,
+ * Die Pfade sind deutsch wie überall in der App (`/gebinde`,
  * `/einstellungen`), unabhängig von der eingestellten Oberflächensprache.
  */
 export const LEGAL_DOCUMENTS = ["privacy", "imprint", "terms"] as const;

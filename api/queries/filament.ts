@@ -2,7 +2,7 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   resolveName,
-  resolveSpoolTare,
+  resolveContainerTare,
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
@@ -12,17 +12,17 @@ import {
 } from "@contracts/materials";
 import {
   materials,
-  presetSpoolVariants,
-  spoolTypes,
+  presetContainerVariants,
+  containerTypes,
   storageBoxes,
   weighings,
   type Lager,
   type Material,
   type PresetManufacturer,
-  type PresetSpoolSeries,
-  type PresetSpoolVariant,
-  type PresetSpoolVersion,
-  type SpoolType,
+  type PresetContainerSeries,
+  type PresetContainerVariant,
+  type PresetContainerVersion,
+  type ContainerType,
   type StorageBox,
   type Weighing,
 } from "@db/schema";
@@ -32,14 +32,14 @@ import { getDb } from "./connection";
 // Rollentypen (Verpackung / Spule mit Leergewicht)
 // ---------------------------------------------------------------------------
 
-export function findSpoolTypesByUser(userId: number) {
-  return getDb().query.spoolTypes.findMany({
-    where: eq(spoolTypes.userId, userId),
+export function findContainerTypesByUser(userId: number) {
+  return getDb().query.containerTypes.findMany({
+    where: eq(containerTypes.userId, userId),
     orderBy: (t, { asc }) => [asc(t.name)],
   });
 }
 
-export async function createSpoolType(data: {
+export async function createContainerType(data: {
   userId: number;
   name: string;
   manufacturer?: string;
@@ -48,13 +48,15 @@ export async function createSpoolType(data: {
   notes?: string;
 }) {
   const [{ id }] = await getDb()
-    .insert(spoolTypes)
+    .insert(containerTypes)
     .values(data)
-    .returning({ id: spoolTypes.id });
-  return getDb().query.spoolTypes.findFirst({ where: eq(spoolTypes.id, id) });
+    .returning({ id: containerTypes.id });
+  return getDb().query.containerTypes.findFirst({
+    where: eq(containerTypes.id, id),
+  });
 }
 
-export async function updateSpoolType(
+export async function updateContainerType(
   userId: number,
   id: number,
   data: Partial<{
@@ -65,24 +67,26 @@ export async function updateSpoolType(
   }>
 ) {
   await getDb()
-    .update(spoolTypes)
+    .update(containerTypes)
     .set(data)
-    .where(and(eq(spoolTypes.id, id), eq(spoolTypes.userId, userId)));
-  return getDb().query.spoolTypes.findFirst({ where: eq(spoolTypes.id, id) });
+    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)));
+  return getDb().query.containerTypes.findFirst({
+    where: eq(containerTypes.id, id),
+  });
 }
 
-export async function countMaterialsWithSpoolType(id: number) {
+export async function countMaterialsWithContainerType(id: number) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(eq(materials.spoolTypeId, id));
+    .where(eq(materials.containerTypeId, id));
   return rows.length;
 }
 
-export async function deleteSpoolType(userId: number, id: number) {
+export async function deleteContainerType(userId: number, id: number) {
   await getDb()
-    .delete(spoolTypes)
-    .where(and(eq(spoolTypes.id, id), eq(spoolTypes.userId, userId)));
+    .delete(containerTypes)
+    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)));
 }
 
 // ---------------------------------------------------------------------------
@@ -150,14 +154,14 @@ export async function deleteStorageBox(userId: number, id: number) {
 // ---------------------------------------------------------------------------
 
 export type MaterialWithRelations = Material & {
-  spoolType: SpoolType | null;
+  containerType: ContainerType | null;
   storageBox: StorageBox | null;
   /**
-   * Referenzierte Variante aus dem Preset-Katalog (Alternative zu spoolType),
+   * Referenzierte Variante aus dem Preset-Katalog (Alternative zu containerType),
    * mitsamt ihres Pfads: Der Anzeigename wird daraus in der Sprache des
    * Aufrufers erzeugt, statt wie früher vorberechnet in der Spalte zu liegen.
    */
-  spoolPresetVariant: PresetVariantWithPath | null;
+  containerPresetVariant: PresetVariantWithPath | null;
   /**
    * Das Lager, in dem das Material liegt. Wird mitgeladen, weil Materialart und
    * Filamentstärke dort stehen – die Zweitanzeige braucht beides.
@@ -166,9 +170,9 @@ export type MaterialWithRelations = Material & {
 };
 
 /** Preset-Variante samt der drei Ebenen über ihr */
-export type PresetVariantWithPath = PresetSpoolVariant & {
-  version: PresetSpoolVersion & {
-    series: PresetSpoolSeries & { manufacturer: PresetManufacturer };
+export type PresetVariantWithPath = PresetContainerVariant & {
+  version: PresetContainerVersion & {
+    series: PresetContainerSeries & { manufacturer: PresetManufacturer };
   };
 };
 
@@ -183,9 +187,9 @@ export type MaterialOverview = MaterialWithRelations & {
   /** Summe der Leergewichte (Rolle + Box) in Gramm */
   tareWeight: number;
   /** Leergewicht nur der Rolle/Verpackung in Gramm (eigen oder Preset) */
-  spoolTareWeight: number;
+  containerTareWeight: number;
   /** Anzeigename der gewählten Rolle, null wenn keine gewählt ist */
-  spoolLabel: string | null;
+  containerLabel: string | null;
   /** Effektiv übrige Materialmenge in Gramm */
   remainingWeight: number;
   /** Verbleibend in Prozent der Nennmenge (0–100), null ohne Nennmenge */
@@ -225,17 +229,18 @@ export function computeMaterialStats(
   weighingCount: number,
   language: LanguageCode = FALLBACK_LANGUAGE
 ): MaterialOverview {
-  const spoolTareWeight = resolveSpoolTare(material);
-  const preset = material.spoolPresetVariant;
-  const spoolLabel = preset
+  const containerTareWeight = resolveContainerTare(material);
+  const preset = material.containerPresetVariant;
+  const containerLabel = preset
     ? buildVariantDisplayName({
         manufacturer: preset.version.series.manufacturer.name,
         series: resolveName(preset.version.series, language),
         version: resolveName(preset.version, language),
         nominalWeight: preset.nominalWeight,
       })
-    : (material.spoolType?.name ?? null);
-  const tareWeight = spoolTareWeight + (material.storageBox?.tareWeight ?? 0);
+    : (material.containerType?.name ?? null);
+  const tareWeight =
+    containerTareWeight + (material.storageBox?.tareWeight ?? 0);
   const remainingWeight =
     lastWeighing != null
       ? Math.max(0, lastWeighing.grossWeight - tareWeight)
@@ -277,8 +282,8 @@ export function computeMaterialStats(
   return {
     ...material,
     tareWeight,
-    spoolTareWeight,
-    spoolLabel,
+    containerTareWeight,
+    containerLabel,
     remainingWeight,
     remainingPercent,
     lastWeighing,
@@ -305,9 +310,9 @@ export async function findMaterialsByUser(
         ? and(eq(materials.userId, userId), eq(materials.lagerId, lagerId))
         : eq(materials.userId, userId),
     with: {
-      spoolType: true,
+      containerType: true,
       storageBox: true,
-      spoolPresetVariant: withPresetPath,
+      containerPresetVariant: withPresetPath,
       lager: true,
       weighings: true,
     },
@@ -322,9 +327,9 @@ export async function findMaterialsByUser(
     return computeMaterialStats(
       {
         ...rest,
-        spoolType: normalizeRelation(row.spoolType),
+        containerType: normalizeRelation(row.containerType),
         storageBox: normalizeRelation(row.storageBox),
-        spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
+        containerPresetVariant: normalizeRelation(row.containerPresetVariant),
         lager: normalizeRelation(row.lager),
       },
       last,
@@ -342,9 +347,9 @@ export async function findMaterialById(
   const row = await getDb().query.materials.findFirst({
     where: and(eq(materials.id, id), eq(materials.userId, userId)),
     with: {
-      spoolType: true,
+      containerType: true,
       storageBox: true,
-      spoolPresetVariant: withPresetPath,
+      containerPresetVariant: withPresetPath,
       lager: true,
       weighings: { orderBy: (t, { desc: d }) => [d(t.weighedAt), d(t.id)] },
     },
@@ -356,9 +361,9 @@ export async function findMaterialById(
     ...computeMaterialStats(
       {
         ...rest,
-        spoolType: normalizeRelation(row.spoolType),
+        containerType: normalizeRelation(row.containerType),
         storageBox: normalizeRelation(row.storageBox),
-        spoolPresetVariant: normalizeRelation(row.spoolPresetVariant),
+        containerPresetVariant: normalizeRelation(row.containerPresetVariant),
         lager: normalizeRelation(row.lager),
       },
       last,
@@ -383,8 +388,8 @@ export async function createMaterial(
     purchaseDate?: string | null;
     nominalWeight: number;
     densityGramsPerLiter?: number | null;
-    spoolTypeId?: number | null;
-    spoolPresetVariantId?: number | null;
+    containerTypeId?: number | null;
+    containerPresetVariantId?: number | null;
     storageBoxId?: number | null;
     notes?: string;
   },
@@ -418,8 +423,8 @@ export async function updateMaterial(
     purchaseDate: string | null;
     nominalWeight: number;
     densityGramsPerLiter: number | null;
-    spoolTypeId: number | null;
-    spoolPresetVariantId: number | null;
+    containerTypeId: number | null;
+    containerPresetVariantId: number | null;
     storageBoxId: number | null;
     notes: string | null;
   }>
@@ -472,12 +477,12 @@ export async function materialBelongsToUser(
   return row.length > 0;
 }
 
-/** IDs der SpoolTypes/Boxen des Benutzers (zur Validierung von FKs). */
-export async function spoolTypeBelongsToUser(userId: number, id: number) {
+/** IDs der ContainerTypes/Boxen des Benutzers (zur Validierung von FKs). */
+export async function containerTypeBelongsToUser(userId: number, id: number) {
   const row = await getDb()
-    .select({ id: spoolTypes.id })
-    .from(spoolTypes)
-    .where(and(eq(spoolTypes.id, id), eq(spoolTypes.userId, userId)))
+    .select({ id: containerTypes.id })
+    .from(containerTypes)
+    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)))
     .limit(1);
   return row.length > 0;
 }
@@ -498,10 +503,13 @@ export async function storageBoxBelongsToUser(userId: number, id: number) {
  */
 export async function presetVariantIsSelectable(id: number) {
   const row = await getDb()
-    .select({ id: presetSpoolVariants.id })
-    .from(presetSpoolVariants)
+    .select({ id: presetContainerVariants.id })
+    .from(presetContainerVariants)
     .where(
-      and(eq(presetSpoolVariants.id, id), eq(presetSpoolVariants.active, true))
+      and(
+        eq(presetContainerVariants.id, id),
+        eq(presetContainerVariants.active, true)
+      )
     )
     .limit(1);
   return row.length > 0;
@@ -512,7 +520,7 @@ export async function countMaterialsWithPresetVariant(id: number) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(eq(materials.spoolPresetVariantId, id));
+    .where(eq(materials.containerPresetVariantId, id));
   return rows.length;
 }
 

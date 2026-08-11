@@ -2,7 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   PRESET_PROPOSAL_STATUSES,
-  SPOOL_MATERIALS,
+  CONTAINER_MATERIALS,
   manufacturerFieldsSchema,
   materialTypesSchema,
   nameI18nInputSchema,
@@ -88,7 +88,7 @@ async function applyProposal(
       slug: slugify(payload.version.name),
       name: payload.version.name,
       nameI18n: payload.version.nameI18n ?? null,
-      spoolMaterial: payload.version.spoolMaterial ?? null,
+      containerMaterial: payload.version.containerMaterial ?? null,
       validFrom: payload.version.validFrom ?? null,
       validTo: payload.version.validTo ?? null,
       source: "community",
@@ -252,7 +252,7 @@ const presetAdminRouter = createRouter({
         seriesId: z.number().int().positive(),
         name: z.string().trim().min(1, "Bezeichnung ist erforderlich").max(255),
         nameI18n: nameI18nInputSchema,
-        spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+        containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,
       })
@@ -263,7 +263,7 @@ const presetAdminRouter = createRouter({
         slug: slugify(input.name),
         name: input.name,
         nameI18n: input.nameI18n ?? null,
-        spoolMaterial: input.spoolMaterial ?? null,
+        containerMaterial: input.containerMaterial ?? null,
         validFrom: input.validFrom ?? null,
         validTo: input.validTo ?? null,
       })
@@ -275,7 +275,7 @@ const presetAdminRouter = createRouter({
         id: z.number().int().positive(),
         name: z.string().trim().min(1).max(255).optional(),
         nameI18n: nameI18nInputSchema,
-        spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+        containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
         validFrom: isoDate,
         validTo: isoDate,
         notes: z.string().max(2000).nullable().optional(),
@@ -374,7 +374,7 @@ const presetAdminRouter = createRouter({
     if (used > 0) {
       throw new TRPCError({
         code: "CONFLICT",
-        message: `Diese Rolle wird noch von ${used} Material(ien) verwendet. Sie kann nur deaktiviert werden.`,
+        message: `Dieses Gebinde wird noch von ${used} Material(ien) verwendet. Sie kann nur deaktiviert werden.`,
       });
     }
     await deleteVariant(input.id);

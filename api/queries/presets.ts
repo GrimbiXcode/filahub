@@ -7,22 +7,22 @@ import {
   resolveName,
   type NameI18n,
   type PresetScope,
-  type SpoolMaterial,
+  type ContainerMaterial,
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
-  hiddenSpoolPresets,
+  hiddenContainerPresets,
   presetManufacturers,
   presetProposals,
   presetSeriesMaterialTypes,
-  presetSpoolSeries,
-  presetSpoolVariants,
-  presetSpoolVersions,
+  presetContainerSeries,
+  presetContainerVariants,
+  presetContainerVersions,
   type PresetManufacturer,
   type PresetProposal,
-  type PresetSpoolSeries,
-  type PresetSpoolVariant,
-  type PresetSpoolVersion,
+  type PresetContainerSeries,
+  type PresetContainerVariant,
+  type PresetContainerVersion,
 } from "@db/schema";
 import { getDb } from "./connection";
 
@@ -36,10 +36,10 @@ import { getDb } from "./connection";
 
 type CatalogRows = {
   manufacturers: PresetManufacturer[];
-  series: PresetSpoolSeries[];
+  series: PresetContainerSeries[];
   materialTypes: { seriesId: number; materialType: string }[];
-  versions: PresetSpoolVersion[];
-  variants: PresetSpoolVariant[];
+  versions: PresetContainerVersion[];
+  variants: PresetContainerVariant[];
 };
 
 async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
@@ -52,8 +52,10 @@ async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
           : eq(presetManufacturers.active, true),
         orderBy: (t, { asc }) => [asc(t.name)],
       }),
-      db.query.presetSpoolSeries.findMany({
-        where: includeInactive ? undefined : eq(presetSpoolSeries.active, true),
+      db.query.presetContainerSeries.findMany({
+        where: includeInactive
+          ? undefined
+          : eq(presetContainerSeries.active, true),
         orderBy: (t, { asc }) => [asc(t.name)],
       }),
       db
@@ -62,16 +64,16 @@ async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
           materialType: presetSeriesMaterialTypes.materialType,
         })
         .from(presetSeriesMaterialTypes),
-      db.query.presetSpoolVersions.findMany({
+      db.query.presetContainerVersions.findMany({
         where: includeInactive
           ? undefined
-          : eq(presetSpoolVersions.active, true),
+          : eq(presetContainerVersions.active, true),
         orderBy: (t, { asc, desc }) => [desc(t.validTo), asc(t.name)],
       }),
-      db.query.presetSpoolVariants.findMany({
+      db.query.presetContainerVariants.findMany({
         where: includeInactive
           ? undefined
-          : eq(presetSpoolVariants.active, true),
+          : eq(presetContainerVariants.active, true),
         orderBy: (t, { asc }) => [asc(t.nominalWeight)],
       }),
     ]);
@@ -82,21 +84,21 @@ async function loadCatalogRows(includeInactive: boolean): Promise<CatalogRows> {
 export async function findHiddenPresetKeys(userId: number) {
   const rows = await getDb()
     .select({
-      scope: hiddenSpoolPresets.scope,
-      refId: hiddenSpoolPresets.refId,
+      scope: hiddenContainerPresets.scope,
+      refId: hiddenContainerPresets.refId,
     })
-    .from(hiddenSpoolPresets)
-    .where(eq(hiddenSpoolPresets.userId, userId));
+    .from(hiddenContainerPresets)
+    .where(eq(hiddenContainerPresets.userId, userId));
   return new Set(rows.map(r => hiddenKey(r.scope, r.refId)));
 }
 
-export type CatalogVariantNode = PresetSpoolVariant & { hidden: boolean };
-export type CatalogVersionNode = PresetSpoolVersion & {
+export type CatalogVariantNode = PresetContainerVariant & { hidden: boolean };
+export type CatalogVersionNode = PresetContainerVersion & {
   hidden: boolean;
   isCurrent: boolean;
   variants: CatalogVariantNode[];
 };
-export type CatalogSeriesNode = PresetSpoolSeries & {
+export type CatalogSeriesNode = PresetContainerSeries & {
   hidden: boolean;
   materialTypes: string[];
   versions: CatalogVersionNode[];
@@ -127,21 +129,21 @@ export async function findCatalogTree(
     typesBySeries.set(row.seriesId, list);
   }
 
-  const variantsByVersion = new Map<number, PresetSpoolVariant[]>();
+  const variantsByVersion = new Map<number, PresetContainerVariant[]>();
   for (const variant of rows.variants) {
     const list = variantsByVersion.get(variant.versionId) ?? [];
     list.push(variant);
     variantsByVersion.set(variant.versionId, list);
   }
 
-  const versionsBySeries = new Map<number, PresetSpoolVersion[]>();
+  const versionsBySeries = new Map<number, PresetContainerVersion[]>();
   for (const version of rows.versions) {
     const list = versionsBySeries.get(version.seriesId) ?? [];
     list.push(version);
     versionsBySeries.set(version.seriesId, list);
   }
 
-  const seriesByManufacturer = new Map<number, PresetSpoolSeries[]>();
+  const seriesByManufacturer = new Map<number, PresetContainerSeries[]>();
   for (const series of rows.series) {
     const list = seriesByManufacturer.get(series.manufacturerId) ?? [];
     list.push(series);
@@ -181,7 +183,7 @@ export async function findCatalogTree(
 }
 
 /** Eine Rolle zur Auswahl im Materialformular – eigen oder aus dem Katalog */
-export type PresetSpoolOption = {
+export type PresetContainerOption = {
   /** ID der Preset-Variante */
   id: number;
   displayName: string;
@@ -190,7 +192,7 @@ export type PresetSpoolOption = {
   manufacturer: string;
   series: string;
   version: string;
-  spoolMaterial: SpoolMaterial | null;
+  containerMaterial: ContainerMaterial | null;
   /** Aktuell ausgelieferte Ausführung der Serie */
   isCurrent: boolean;
   /** Materialarten der Serie; leer = passt zu allem */
@@ -204,9 +206,9 @@ export type PresetSpoolOption = {
 export async function findPresetOptionsForUser(
   userId: number,
   language: LanguageCode = FALLBACK_LANGUAGE
-): Promise<PresetSpoolOption[]> {
+): Promise<PresetContainerOption[]> {
   const tree = await findCatalogTree(userId);
-  const options: PresetSpoolOption[] = [];
+  const options: PresetContainerOption[] = [];
   for (const manufacturer of tree) {
     if (manufacturer.hidden) continue;
     for (const series of manufacturer.series) {
@@ -230,7 +232,7 @@ export async function findPresetOptionsForUser(
             manufacturer: manufacturer.name,
             series: seriesName,
             version: versionName,
-            spoolMaterial: version.spoolMaterial,
+            containerMaterial: version.containerMaterial,
             isCurrent: version.isCurrent,
             materialTypes: series.materialTypes,
           });
@@ -250,21 +252,21 @@ export async function setHiddenPreset(
 ) {
   const db = getDb();
   const where = and(
-    eq(hiddenSpoolPresets.userId, userId),
-    eq(hiddenSpoolPresets.scope, scope),
-    eq(hiddenSpoolPresets.refId, refId)
+    eq(hiddenContainerPresets.userId, userId),
+    eq(hiddenContainerPresets.scope, scope),
+    eq(hiddenContainerPresets.refId, refId)
   );
   if (!hidden) {
-    await db.delete(hiddenSpoolPresets).where(where);
+    await db.delete(hiddenContainerPresets).where(where);
     return;
   }
   const existing = await db
-    .select({ id: hiddenSpoolPresets.id })
-    .from(hiddenSpoolPresets)
+    .select({ id: hiddenContainerPresets.id })
+    .from(hiddenContainerPresets)
     .where(where)
     .limit(1);
   if (existing.length > 0) return;
-  await db.insert(hiddenSpoolPresets).values({ userId, scope, refId });
+  await db.insert(hiddenContainerPresets).values({ userId, scope, refId });
 }
 
 // ---------------------------------------------------------------------------
@@ -272,9 +274,9 @@ export async function setHiddenPreset(
 // ---------------------------------------------------------------------------
 
 export type PresetVariantWithPath = {
-  variant: PresetSpoolVariant;
-  version: PresetSpoolVersion;
-  series: PresetSpoolSeries;
+  variant: PresetContainerVariant;
+  version: PresetContainerVersion;
+  series: PresetContainerSeries;
   manufacturer: PresetManufacturer;
 };
 
@@ -283,16 +285,16 @@ export async function findPresetVariantWithPath(
   id: number
 ): Promise<PresetVariantWithPath | null> {
   const db = getDb();
-  const variant = await db.query.presetSpoolVariants.findFirst({
-    where: eq(presetSpoolVariants.id, id),
+  const variant = await db.query.presetContainerVariants.findFirst({
+    where: eq(presetContainerVariants.id, id),
   });
   if (!variant) return null;
-  const version = await db.query.presetSpoolVersions.findFirst({
-    where: eq(presetSpoolVersions.id, variant.versionId),
+  const version = await db.query.presetContainerVersions.findFirst({
+    where: eq(presetContainerVersions.id, variant.versionId),
   });
   if (!version) return null;
-  const series = await db.query.presetSpoolSeries.findFirst({
-    where: eq(presetSpoolSeries.id, version.seriesId),
+  const series = await db.query.presetContainerSeries.findFirst({
+    where: eq(presetContainerSeries.id, version.seriesId),
   });
   if (!series) return null;
   const manufacturer = await db.query.presetManufacturers.findFirst({
@@ -385,16 +387,16 @@ export async function findOrCreateSeries(data: {
 }) {
   const db = getDb();
   const find = () =>
-    db.query.presetSpoolSeries.findFirst({
+    db.query.presetContainerSeries.findFirst({
       where: and(
-        eq(presetSpoolSeries.manufacturerId, data.manufacturerId),
-        eq(presetSpoolSeries.slug, data.slug)
+        eq(presetContainerSeries.manufacturerId, data.manufacturerId),
+        eq(presetContainerSeries.slug, data.slug)
       ),
     });
   const existing = await find();
   if (existing) return existing;
   try {
-    await db.insert(presetSpoolSeries).values({
+    await db.insert(presetContainerSeries).values({
       manufacturerId: data.manufacturerId,
       slug: data.slug,
       name: data.name,
@@ -415,7 +417,7 @@ export async function findOrCreateVersion(data: {
   slug: string;
   name: string;
   nameI18n?: NameI18n | null;
-  spoolMaterial?: SpoolMaterial | null;
+  containerMaterial?: ContainerMaterial | null;
   validFrom?: string | null;
   validTo?: string | null;
   source?: "seed" | "admin" | "community";
@@ -423,21 +425,21 @@ export async function findOrCreateVersion(data: {
 }) {
   const db = getDb();
   const find = () =>
-    db.query.presetSpoolVersions.findFirst({
+    db.query.presetContainerVersions.findFirst({
       where: and(
-        eq(presetSpoolVersions.seriesId, data.seriesId),
-        eq(presetSpoolVersions.slug, data.slug)
+        eq(presetContainerVersions.seriesId, data.seriesId),
+        eq(presetContainerVersions.slug, data.slug)
       ),
     });
   const existing = await find();
   if (existing) return existing;
   try {
-    await db.insert(presetSpoolVersions).values({
+    await db.insert(presetContainerVersions).values({
       seriesId: data.seriesId,
       slug: data.slug,
       name: data.name,
       nameI18n: data.nameI18n ?? null,
-      spoolMaterial: data.spoolMaterial ?? null,
+      containerMaterial: data.containerMaterial ?? null,
       validFrom: data.validFrom ?? null,
       validTo: data.validTo ?? null,
       source: data.source ?? "admin",
@@ -455,10 +457,10 @@ export async function findVariantByNominalWeight(
   versionId: number,
   nominalWeight: number
 ) {
-  return getDb().query.presetSpoolVariants.findFirst({
+  return getDb().query.presetContainerVariants.findFirst({
     where: and(
-      eq(presetSpoolVariants.versionId, versionId),
-      eq(presetSpoolVariants.nominalWeight, nominalWeight)
+      eq(presetContainerVariants.versionId, versionId),
+      eq(presetContainerVariants.nominalWeight, nominalWeight)
     ),
   });
 }
@@ -476,7 +478,7 @@ export async function createVariant(data: {
 }) {
   const db = getDb();
   try {
-    await db.insert(presetSpoolVariants).values({
+    await db.insert(presetContainerVariants).values({
       versionId: data.versionId,
       nominalWeight: data.nominalWeight,
       tareWeight: data.tareWeight,
@@ -536,11 +538,11 @@ export async function updateSeries(
   source: "admin" | "community" = "admin"
 ) {
   await getDb()
-    .update(presetSpoolSeries)
+    .update(presetContainerSeries)
     .set({ ...data, source })
-    .where(eq(presetSpoolSeries.id, id));
-  return getDb().query.presetSpoolSeries.findFirst({
-    where: eq(presetSpoolSeries.id, id),
+    .where(eq(presetContainerSeries.id, id));
+  return getDb().query.presetContainerSeries.findFirst({
+    where: eq(presetContainerSeries.id, id),
   });
 }
 
@@ -549,7 +551,7 @@ export async function updateVersion(
   data: Partial<{
     name: string;
     nameI18n: NameI18n | null;
-    spoolMaterial: SpoolMaterial | null;
+    containerMaterial: ContainerMaterial | null;
     validFrom: string | null;
     validTo: string | null;
     notes: string | null;
@@ -558,11 +560,11 @@ export async function updateVersion(
   source: "admin" | "community" = "admin"
 ) {
   await getDb()
-    .update(presetSpoolVersions)
+    .update(presetContainerVersions)
     .set({ ...data, source })
-    .where(eq(presetSpoolVersions.id, id));
-  return getDb().query.presetSpoolVersions.findFirst({
-    where: eq(presetSpoolVersions.id, id),
+    .where(eq(presetContainerVersions.id, id));
+  return getDb().query.presetContainerVersions.findFirst({
+    where: eq(presetContainerVersions.id, id),
   });
 }
 
@@ -581,11 +583,11 @@ export async function updateVariant(
 ) {
   const db = getDb();
   await db
-    .update(presetSpoolVariants)
+    .update(presetContainerVariants)
     .set({ ...data, source })
-    .where(eq(presetSpoolVariants.id, id));
-  return db.query.presetSpoolVariants.findFirst({
-    where: eq(presetSpoolVariants.id, id),
+    .where(eq(presetContainerVariants.id, id));
+  return db.query.presetContainerVariants.findFirst({
+    where: eq(presetContainerVariants.id, id),
   });
 }
 
@@ -597,22 +599,22 @@ export async function countCatalogChildren(
   const db = getDb();
   if (scope === "manufacturer") {
     const rows = await db
-      .select({ id: presetSpoolSeries.id })
-      .from(presetSpoolSeries)
-      .where(eq(presetSpoolSeries.manufacturerId, id));
+      .select({ id: presetContainerSeries.id })
+      .from(presetContainerSeries)
+      .where(eq(presetContainerSeries.manufacturerId, id));
     return rows.length;
   }
   if (scope === "series") {
     const rows = await db
-      .select({ id: presetSpoolVersions.id })
-      .from(presetSpoolVersions)
-      .where(eq(presetSpoolVersions.seriesId, id));
+      .select({ id: presetContainerVersions.id })
+      .from(presetContainerVersions)
+      .where(eq(presetContainerVersions.seriesId, id));
     return rows.length;
   }
   const rows = await db
-    .select({ id: presetSpoolVariants.id })
-    .from(presetSpoolVariants)
-    .where(eq(presetSpoolVariants.versionId, id));
+    .select({ id: presetContainerVariants.id })
+    .from(presetContainerVariants)
+    .where(eq(presetContainerVariants.versionId, id));
   return rows.length;
 }
 
@@ -627,26 +629,30 @@ export async function deleteSeries(id: number) {
   await db
     .delete(presetSeriesMaterialTypes)
     .where(eq(presetSeriesMaterialTypes.seriesId, id));
-  await db.delete(presetSpoolSeries).where(eq(presetSpoolSeries.id, id));
+  await db
+    .delete(presetContainerSeries)
+    .where(eq(presetContainerSeries.id, id));
 }
 
 export async function deleteVersion(id: number) {
   await getDb()
-    .delete(presetSpoolVersions)
-    .where(eq(presetSpoolVersions.id, id));
+    .delete(presetContainerVersions)
+    .where(eq(presetContainerVersions.id, id));
 }
 
 export async function deleteVariant(id: number) {
   const db = getDb();
   await db
-    .delete(hiddenSpoolPresets)
+    .delete(hiddenContainerPresets)
     .where(
       and(
-        eq(hiddenSpoolPresets.scope, "variant"),
-        eq(hiddenSpoolPresets.refId, id)
+        eq(hiddenContainerPresets.scope, "variant"),
+        eq(hiddenContainerPresets.refId, id)
       )
     );
-  await db.delete(presetSpoolVariants).where(eq(presetSpoolVariants.id, id));
+  await db
+    .delete(presetContainerVariants)
+    .where(eq(presetContainerVariants.id, id));
 }
 
 export function findManufacturerById(id: number) {
@@ -656,20 +662,20 @@ export function findManufacturerById(id: number) {
 }
 
 export function findSeriesById(id: number) {
-  return getDb().query.presetSpoolSeries.findFirst({
-    where: eq(presetSpoolSeries.id, id),
+  return getDb().query.presetContainerSeries.findFirst({
+    where: eq(presetContainerSeries.id, id),
   });
 }
 
 export function findVersionById(id: number) {
-  return getDb().query.presetSpoolVersions.findFirst({
-    where: eq(presetSpoolVersions.id, id),
+  return getDb().query.presetContainerVersions.findFirst({
+    where: eq(presetContainerVersions.id, id),
   });
 }
 
 export function findVariantById(id: number) {
-  return getDb().query.presetSpoolVariants.findFirst({
-    where: eq(presetSpoolVariants.id, id),
+  return getDb().query.presetContainerVariants.findFirst({
+    where: eq(presetContainerVariants.id, id),
   });
 }
 
@@ -683,7 +689,7 @@ export async function createProposal(data: {
   targetType: PresetScope;
   targetId?: number | null;
   payload: unknown;
-  sourceSpoolTypeId?: number | null;
+  sourceContainerTypeId?: number | null;
   comment?: string | null;
 }) {
   const db = getDb();
@@ -695,7 +701,7 @@ export async function createProposal(data: {
       targetType: data.targetType,
       targetId: data.targetId ?? null,
       payload: data.payload,
-      sourceSpoolTypeId: data.sourceSpoolTypeId ?? null,
+      sourceContainerTypeId: data.sourceContainerTypeId ?? null,
       comment: data.comment ?? null,
     })
     .returning({ id: presetProposals.id });

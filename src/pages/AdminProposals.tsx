@@ -65,7 +65,7 @@ function payloadRows(
     const series = p.series as
       { name?: string; materialTypes?: string[] } | undefined;
     const version = p.version as
-      { name?: string; spoolMaterial?: string } | undefined;
+      { name?: string; containerMaterial?: string } | undefined;
     const variant = (p.variant ?? {}) as Record<string, unknown>;
     return [
       {
@@ -81,8 +81,8 @@ function payloadRows(
       },
       { label: t.adminProposals.rowVersion, value: version?.name ?? "–" },
       {
-        label: t.adminProposals.rowSpoolMaterial,
-        value: version?.spoolMaterial ?? "–",
+        label: t.adminProposals.rowContainerMaterial,
+        value: version?.containerMaterial ?? "–",
       },
       ...Object.entries(variant).map(([key, value]) => ({
         label: key,

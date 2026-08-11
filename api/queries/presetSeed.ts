@@ -7,9 +7,9 @@ import {
 import {
   presetManufacturers,
   presetSeriesMaterialTypes,
-  presetSpoolSeries,
-  presetSpoolVariants,
-  presetSpoolVersions,
+  presetContainerSeries,
+  presetContainerVariants,
+  presetContainerVersions,
 } from "@db/schema";
 import { getDb } from "./connection";
 
@@ -39,7 +39,7 @@ export function seedAction(row: {
  * überschreiben. Läuft bewusst ohne Transaktion; die Unique-Keys je Ebene
  * sind die eigentliche Absicherung.
  */
-export async function seedSpoolPresets(
+export async function seedContainerPresets(
   catalog: SeedManufacturer[] = presetSeedCatalog
 ): Promise<SeedStats> {
   const db = getDb();
@@ -83,16 +83,16 @@ export async function seedSpoolPresets(
     }
 
     for (const series of manufacturer.series) {
-      const existingSeries = await db.query.presetSpoolSeries.findFirst({
+      const existingSeries = await db.query.presetContainerSeries.findFirst({
         where: and(
-          eq(presetSpoolSeries.manufacturerId, manufacturerId),
-          eq(presetSpoolSeries.slug, series.slug)
+          eq(presetContainerSeries.manufacturerId, manufacturerId),
+          eq(presetContainerSeries.slug, series.slug)
         ),
       });
 
       let seriesId: number;
       if (!existingSeries) {
-        await db.insert(presetSpoolSeries).values({
+        await db.insert(presetContainerSeries).values({
           manufacturerId,
           slug: series.slug,
           name: series.name,
@@ -100,10 +100,10 @@ export async function seedSpoolPresets(
           source: "seed",
           seedRevision: PRESET_SEED_REVISION,
         });
-        const created = await db.query.presetSpoolSeries.findFirst({
+        const created = await db.query.presetContainerSeries.findFirst({
           where: and(
-            eq(presetSpoolSeries.manufacturerId, manufacturerId),
-            eq(presetSpoolSeries.slug, series.slug)
+            eq(presetContainerSeries.manufacturerId, manufacturerId),
+            eq(presetContainerSeries.slug, series.slug)
           ),
         });
         if (!created) continue;
@@ -114,13 +114,13 @@ export async function seedSpoolPresets(
         seriesId = existingSeries.id;
         if (seedAction(existingSeries) === "update") {
           await db
-            .update(presetSpoolSeries)
+            .update(presetContainerSeries)
             .set({
               name: series.name,
               nameI18n: series.nameI18n ?? null,
               seedRevision: PRESET_SEED_REVISION,
             })
-            .where(eq(presetSpoolSeries.id, seriesId));
+            .where(eq(presetContainerSeries.id, seriesId));
           await replaceMaterialTypes(seriesId, series.materialTypes);
           stats.updated++;
         } else {
@@ -129,30 +129,31 @@ export async function seedSpoolPresets(
       }
 
       for (const version of series.versions) {
-        const existingVersion = await db.query.presetSpoolVersions.findFirst({
-          where: and(
-            eq(presetSpoolVersions.seriesId, seriesId),
-            eq(presetSpoolVersions.slug, version.slug)
-          ),
-        });
+        const existingVersion =
+          await db.query.presetContainerVersions.findFirst({
+            where: and(
+              eq(presetContainerVersions.seriesId, seriesId),
+              eq(presetContainerVersions.slug, version.slug)
+            ),
+          });
 
         let versionId: number;
         if (!existingVersion) {
-          await db.insert(presetSpoolVersions).values({
+          await db.insert(presetContainerVersions).values({
             seriesId,
             slug: version.slug,
             name: version.name,
             nameI18n: version.nameI18n ?? null,
-            spoolMaterial: version.spoolMaterial,
+            containerMaterial: version.containerMaterial,
             validFrom: version.validFrom ?? null,
             validTo: version.validTo ?? null,
             source: "seed",
             seedRevision: PRESET_SEED_REVISION,
           });
-          const created = await db.query.presetSpoolVersions.findFirst({
+          const created = await db.query.presetContainerVersions.findFirst({
             where: and(
-              eq(presetSpoolVersions.seriesId, seriesId),
-              eq(presetSpoolVersions.slug, version.slug)
+              eq(presetContainerVersions.seriesId, seriesId),
+              eq(presetContainerVersions.slug, version.slug)
             ),
           });
           if (!created) continue;
@@ -162,16 +163,16 @@ export async function seedSpoolPresets(
           versionId = existingVersion.id;
           if (seedAction(existingVersion) === "update") {
             await db
-              .update(presetSpoolVersions)
+              .update(presetContainerVersions)
               .set({
                 name: version.name,
                 nameI18n: version.nameI18n ?? null,
-                spoolMaterial: version.spoolMaterial,
+                containerMaterial: version.containerMaterial,
                 validFrom: version.validFrom ?? null,
                 validTo: version.validTo ?? null,
                 seedRevision: PRESET_SEED_REVISION,
               })
-              .where(eq(presetSpoolVersions.id, versionId));
+              .where(eq(presetContainerVersions.id, versionId));
             stats.updated++;
           } else {
             stats.skipped++;
@@ -179,15 +180,16 @@ export async function seedSpoolPresets(
         }
 
         for (const variant of version.variants) {
-          const existingVariant = await db.query.presetSpoolVariants.findFirst({
-            where: and(
-              eq(presetSpoolVariants.versionId, versionId),
-              eq(presetSpoolVariants.nominalWeight, variant.nominalWeight)
-            ),
-          });
+          const existingVariant =
+            await db.query.presetContainerVariants.findFirst({
+              where: and(
+                eq(presetContainerVariants.versionId, versionId),
+                eq(presetContainerVariants.nominalWeight, variant.nominalWeight)
+              ),
+            });
 
           if (!existingVariant) {
-            await db.insert(presetSpoolVariants).values({
+            await db.insert(presetContainerVariants).values({
               versionId,
               nominalWeight: variant.nominalWeight,
               tareWeight: variant.tareWeight,
@@ -201,7 +203,7 @@ export async function seedSpoolPresets(
             stats.created++;
           } else if (seedAction(existingVariant) === "update") {
             await db
-              .update(presetSpoolVariants)
+              .update(presetContainerVariants)
               .set({
                 tareWeight: variant.tareWeight,
                 outerDiameterMm: variant.outerDiameterMm ?? null,
@@ -210,7 +212,7 @@ export async function seedSpoolPresets(
                 notes: variant.notes ?? null,
                 seedRevision: PRESET_SEED_REVISION,
               })
-              .where(eq(presetSpoolVariants.id, existingVariant.id));
+              .where(eq(presetContainerVariants.id, existingVariant.id));
             stats.updated++;
           } else {
             stats.skipped++;

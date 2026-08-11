@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Disc3 } from "lucide-react";
 import {
-  decodeSpoolRef,
-  encodeSpoolRef,
+  decodeContainerRef,
+  encodeContainerRef,
   formatNominalWeight,
   materialTypeMatches,
 } from "@contracts/presets";
@@ -24,16 +24,16 @@ import {
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
-import type { PresetOption, SpoolTypeItem } from "@/types";
+import type { PresetOption, ContainerTypeItem } from "@/types";
 
-/** Wert für „keine Rolle gewählt“ */
-export const NO_SPOOL = "";
+/** Wert für „kein Gebinde gewählt“ */
+export const NO_CONTAINER = "";
 
 type Props = {
   /** "" | "own:12" | "preset:34" */
   value: string;
   onChange: (ref: string) => void;
-  ownSpoolTypes: SpoolTypeItem[];
+  ownContainerTypes: ContainerTypeItem[];
   presets: PresetOption[];
   /** Aktuell im Formular gewählte Materialart – nur zur Gruppierung */
   materialType?: string;
@@ -43,17 +43,17 @@ type Props = {
 };
 
 /**
- * Auswahl der Rolle/Verpackung: eigene Rollentypen und Presets aus dem
+ * Auswahl des Gebindes: eigene Gebindearten und Presets aus dem
  * Katalog in einer Liste.
  *
  * Presets werden nach Materialart nur *gruppiert*, nie gefiltert – die
  * Materialart ist im Bestand Freitext („PLA“, „PLA+“, „PLA Silk“), eine harte
- * Filterung würde passende Rollen verschwinden lassen.
+ * Filterung würde passende Gebinde verschwinden lassen.
  */
-export function SpoolPicker({
+export function ContainerPicker({
   value,
   onChange,
-  ownSpoolTypes,
+  ownContainerTypes,
   presets,
   materialType,
   nominalWeight,
@@ -64,10 +64,10 @@ export function SpoolPicker({
   const t = useT();
 
   const selected = useMemo(() => {
-    const ref = decodeSpoolRef(value);
+    const ref = decodeContainerRef(value);
     if (!ref) return null;
     if (ref.kind === "own") {
-      const own = ownSpoolTypes.find(s => s.id === ref.id);
+      const own = ownContainerTypes.find(s => s.id === ref.id);
       return own
         ? { label: own.name, tareWeight: own.tareWeight, preset: false }
         : null;
@@ -80,7 +80,7 @@ export function SpoolPicker({
           preset: true,
         }
       : null;
-  }, [value, ownSpoolTypes, presets]);
+  }, [value, ownContainerTypes, presets]);
 
   /** Passende Presets zuerst, danach der Rest – beides bleibt sichtbar. */
   const { matching, others } = useMemo(() => {
@@ -116,14 +116,14 @@ export function SpoolPicker({
       key={`preset-${preset.id}`}
       value={`${preset.displayName} ${preset.manufacturer} ${preset.series} ${formatNominalWeight(preset.nominalWeight)}`}
       onSelect={() => {
-        onChange(encodeSpoolRef("preset", preset.id));
+        onChange(encodeContainerRef("preset", preset.id));
         setOpen(false);
       }}
     >
       <Check
         className={cn(
           "mr-2 h-4 w-4",
-          value === encodeSpoolRef("preset", preset.id)
+          value === encodeContainerRef("preset", preset.id)
             ? "opacity-100"
             : "opacity-0"
         )}
@@ -160,7 +160,7 @@ export function SpoolPicker({
               </>
             ) : (
               <span className="text-muted-foreground">
-                {t.spoolPicker.choose}
+                {t.containerPicker.choose}
               </span>
             )}
           </span>
@@ -172,42 +172,42 @@ export function SpoolPicker({
         align="start"
       >
         <Command>
-          <CommandInput placeholder={t.spoolPicker.searchPlaceholder} />
+          <CommandInput placeholder={t.containerPicker.searchPlaceholder} />
           <CommandList>
-            <CommandEmpty>{t.spoolPicker.empty}</CommandEmpty>
+            <CommandEmpty>{t.containerPicker.empty}</CommandEmpty>
             <CommandGroup>
               <CommandItem
                 value="keine unbekannt"
                 onSelect={() => {
-                  onChange(NO_SPOOL);
+                  onChange(NO_CONTAINER);
                   setOpen(false);
                 }}
               >
                 <Check
                   className={cn(
                     "mr-2 h-4 w-4",
-                    value === NO_SPOOL ? "opacity-100" : "opacity-0"
+                    value === NO_CONTAINER ? "opacity-100" : "opacity-0"
                   )}
                 />
-                {t.spoolPicker.none}
+                {t.containerPicker.none}
               </CommandItem>
             </CommandGroup>
 
-            {ownSpoolTypes.length > 0 && (
-              <CommandGroup heading={t.spoolPicker.ownTypes}>
-                {ownSpoolTypes.map(own => (
+            {ownContainerTypes.length > 0 && (
+              <CommandGroup heading={t.containerPicker.ownTypes}>
+                {ownContainerTypes.map(own => (
                   <CommandItem
                     key={`own-${own.id}`}
                     value={`${own.name} ${own.manufacturer ?? ""}`}
                     onSelect={() => {
-                      onChange(encodeSpoolRef("own", own.id));
+                      onChange(encodeContainerRef("own", own.id));
                       setOpen(false);
                     }}
                   >
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        value === encodeSpoolRef("own", own.id)
+                        value === encodeContainerRef("own", own.id)
                           ? "opacity-100"
                           : "opacity-0"
                       )}
@@ -233,17 +233,17 @@ export function SpoolPicker({
               <CommandGroup
                 heading={
                   matching.length > 0
-                    ? t.spoolPicker.catalogMore
-                    : t.spoolPicker.catalog
+                    ? t.containerPicker.catalogMore
+                    : t.containerPicker.catalog
                 }
               >
                 {others.map(renderPreset)}
               </CommandGroup>
             )}
 
-            {presets.length === 0 && ownSpoolTypes.length === 0 && (
+            {presets.length === 0 && ownContainerTypes.length === 0 && (
               <div className="px-3 py-4 text-xs text-muted-foreground">
-                {t.spoolPicker.nothingYet}
+                {t.containerPicker.nothingYet}
               </div>
             )}
           </CommandList>
@@ -253,7 +253,7 @@ export function SpoolPicker({
   );
 }
 
-/** Kleines Kennzeichen für Rollen aus dem Katalog */
+/** Kleines Kennzeichen für Gebinde aus dem Katalog */
 export function PresetBadge() {
   return (
     <Badge variant="secondary" className="font-normal">

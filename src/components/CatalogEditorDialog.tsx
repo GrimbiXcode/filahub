@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import {
-  SPOOL_MATERIALS,
+  CONTAINER_MATERIALS,
   type NameI18n,
-  type SpoolMaterial,
+  type ContainerMaterial,
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
 import { Button } from "@/components/ui/button";
@@ -114,8 +114,8 @@ export function CatalogEditorDialog({
   const [materialTypes, setMaterialTypes] = useState(() =>
     (seriesNode?.materialTypes ?? []).join(", ")
   );
-  const [spoolMaterial, setSpoolMaterial] = useState<string>(
-    () => versionNode?.spoolMaterial ?? NO_MATERIAL
+  const [containerMaterial, setContainerMaterial] = useState<string>(
+    () => versionNode?.containerMaterial ?? NO_MATERIAL
   );
   const [validFrom, setValidFrom] = useState(
     () => versionNode?.validFrom ?? ""
@@ -230,7 +230,9 @@ export function CatalogEditorDialog({
 
     if (target.level === "version") {
       const material =
-        spoolMaterial === NO_MATERIAL ? null : (spoolMaterial as SpoolMaterial);
+        containerMaterial === NO_MATERIAL
+          ? null
+          : (containerMaterial as ContainerMaterial);
       if (validFrom && validTo && validFrom > validTo)
         return toast.error(t.catalogEditor.validRangeInvalid);
       if (target.version) {
@@ -238,7 +240,7 @@ export function CatalogEditorDialog({
           id: target.version.id,
           name: name.trim(),
           nameI18n: translations,
-          spoolMaterial: material,
+          containerMaterial: material,
           validFrom: validFrom || null,
           validTo: validTo || null,
           notes: notes.trim() || null,
@@ -248,7 +250,7 @@ export function CatalogEditorDialog({
         m.createVersion.mutate({
           seriesId: target.seriesId,
           name: name.trim(),
-          spoolMaterial: material,
+          containerMaterial: material,
           validFrom: validFrom || null,
           validTo: validTo || null,
         });
@@ -410,8 +412,11 @@ export function CatalogEditorDialog({
           {target.level === "version" && (
             <>
               <div className="grid gap-2">
-                <Label>{t.catalogEditor.spoolMaterial}</Label>
-                <Select value={spoolMaterial} onValueChange={setSpoolMaterial}>
+                <Label>{t.catalogEditor.containerMaterial}</Label>
+                <Select
+                  value={containerMaterial}
+                  onValueChange={setContainerMaterial}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -419,9 +424,9 @@ export function CatalogEditorDialog({
                     <SelectItem value={NO_MATERIAL}>
                       {t.catalogEditor.unknown}
                     </SelectItem>
-                    {SPOOL_MATERIALS.map(material => (
+                    {CONTAINER_MATERIALS.map(material => (
                       <SelectItem key={material} value={material}>
-                        {t.preset.spoolMaterial[material]}
+                        {t.preset.containerMaterial[material]}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -1,4 +1,4 @@
-import { seedSpoolPresets } from "../api/queries/presetSeed";
+import { seedContainerPresets } from "../api/queries/presetSeed";
 
 /**
  * Manuelles Seeding für die lokale Entwicklung: `npm run db:seed`.
@@ -10,7 +10,7 @@ import { seedSpoolPresets } from "../api/queries/presetSeed";
  */
 async function seed() {
   console.log("Preset-Katalog wird eingespielt …");
-  const stats = await seedSpoolPresets();
+  const stats = await seedContainerPresets();
   console.log(
     `Fertig: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
   );

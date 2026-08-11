@@ -3,10 +3,10 @@ import {
   lager,
   materials,
   presetManufacturers,
-  presetSpoolSeries,
-  presetSpoolVariants,
-  presetSpoolVersions,
-  spoolTypes,
+  presetContainerSeries,
+  presetContainerVariants,
+  presetContainerVersions,
+  containerTypes,
   storageBoxes,
   users,
   weighings,
@@ -14,7 +14,7 @@ import {
 
 export const usersRelations = relations(users, ({ many }) => ({
   materials: many(materials),
-  spoolTypes: many(spoolTypes),
+  containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   lager: many(lager),
 }));
@@ -24,10 +24,16 @@ export const lagerRelations = relations(lager, ({ one, many }) => ({
   materials: many(materials),
 }));
 
-export const spoolTypesRelations = relations(spoolTypes, ({ one, many }) => ({
-  user: one(users, { fields: [spoolTypes.userId], references: [users.id] }),
-  materials: many(materials),
-}));
+export const containerTypesRelations = relations(
+  containerTypes,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [containerTypes.userId],
+      references: [users.id],
+    }),
+    materials: many(materials),
+  })
+);
 
 export const storageBoxesRelations = relations(
   storageBoxes,
@@ -44,17 +50,17 @@ export const materialsRelations = relations(materials, ({ one, many }) => ({
     Filamentstärke stehen am Lager, nicht am Material.
   */
   lager: one(lager, { fields: [materials.lagerId], references: [lager.id] }),
-  spoolType: one(spoolTypes, {
-    fields: [materials.spoolTypeId],
-    references: [spoolTypes.id],
+  containerType: one(containerTypes, {
+    fields: [materials.containerTypeId],
+    references: [containerTypes.id],
   }),
   storageBox: one(storageBoxes, {
     fields: [materials.storageBoxId],
     references: [storageBoxes.id],
   }),
-  spoolPresetVariant: one(presetSpoolVariants, {
-    fields: [materials.spoolPresetVariantId],
-    references: [presetSpoolVariants.id],
+  containerPresetVariant: one(presetContainerVariants, {
+    fields: [materials.containerPresetVariantId],
+    references: [presetContainerVariants.id],
   }),
   weighings: many(weighings),
 }));
@@ -70,7 +76,7 @@ export const weighingsRelations = relations(weighings, ({ one }) => ({
 // Preset-Katalog: Hersteller → Serie → Version → Variante
 //
 // Für `preset_proposals`, `preset_series_material_types`,
-// `hidden_spool_presets`, `friendships` und `loan_requests` gibt es bewusst
+// `hidden_container_presets`, `friendships` und `loan_requests` gibt es bewusst
 // keine Relations: die meisten zeigen polymorph bzw. doppelt auf `users`
 // (`friendships` gleich mit beiden Spalten), die übrigen sind
 // Zuordnungstabellen. Sie werden per select() geladen und in JS verknüpft
@@ -80,38 +86,38 @@ export const weighingsRelations = relations(weighings, ({ one }) => ({
 export const presetManufacturersRelations = relations(
   presetManufacturers,
   ({ many }) => ({
-    series: many(presetSpoolSeries),
+    series: many(presetContainerSeries),
   })
 );
 
-export const presetSpoolSeriesRelations = relations(
-  presetSpoolSeries,
+export const presetContainerSeriesRelations = relations(
+  presetContainerSeries,
   ({ one, many }) => ({
     manufacturer: one(presetManufacturers, {
-      fields: [presetSpoolSeries.manufacturerId],
+      fields: [presetContainerSeries.manufacturerId],
       references: [presetManufacturers.id],
     }),
-    versions: many(presetSpoolVersions),
+    versions: many(presetContainerVersions),
   })
 );
 
-export const presetSpoolVersionsRelations = relations(
-  presetSpoolVersions,
+export const presetContainerVersionsRelations = relations(
+  presetContainerVersions,
   ({ one, many }) => ({
-    series: one(presetSpoolSeries, {
-      fields: [presetSpoolVersions.seriesId],
-      references: [presetSpoolSeries.id],
+    series: one(presetContainerSeries, {
+      fields: [presetContainerVersions.seriesId],
+      references: [presetContainerSeries.id],
     }),
-    variants: many(presetSpoolVariants),
+    variants: many(presetContainerVariants),
   })
 );
 
-export const presetSpoolVariantsRelations = relations(
-  presetSpoolVariants,
+export const presetContainerVariantsRelations = relations(
+  presetContainerVariants,
   ({ one, many }) => ({
-    version: one(presetSpoolVersions, {
-      fields: [presetSpoolVariants.versionId],
-      references: [presetSpoolVersions.id],
+    version: one(presetContainerVersions, {
+      fields: [presetContainerVariants.versionId],
+      references: [presetContainerVersions.id],
     }),
     materials: many(materials),
   })

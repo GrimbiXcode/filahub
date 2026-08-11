@@ -9,16 +9,26 @@ import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
  */
 
 // ---------------------------------------------------------------------------
-// Aufzählungen (Spiegel der Enums in db/schema.ts)
+// Aufzählungen
+//
+// `CONTAINER_MATERIALS` ist die Vorlage für den `pgEnum` in `db/schema.ts` –
+// die Richtung geht von hier nach dort, wie bei `MATERIAL_KINDS` in
+// `contracts/materials.ts`. Vorher stand die Liste in beiden Dateien; beim
+// Umbenennen wäre eine der beiden Kopien liegen geblieben.
+//
+// Die übrigen Listen hier (`PRESET_SCOPES`, `PRESET_PROPOSAL_STATUSES`) sind
+// noch Spiegel der Enums in `db/schema.ts`. Sie wurden von dieser Änderung
+// nicht angefasst und bleiben Doppelungen.
 // ---------------------------------------------------------------------------
 
-export const SPOOL_MATERIALS = [
+/** Werkstoff des Gebindes selbst – nicht des Materials darin. */
+export const CONTAINER_MATERIALS = [
   "kunststoff",
   "karton",
   "metall",
   "sonstiges",
 ] as const;
-export type SpoolMaterial = (typeof SPOOL_MATERIALS)[number];
+export type ContainerMaterial = (typeof CONTAINER_MATERIALS)[number];
 
 export const PRESET_SCOPES = [
   "manufacturer",
@@ -172,40 +182,40 @@ export function buildVariantDisplayName(parts: {
 }
 
 /**
- * Referenz auf die gewählte Rolle im Formular. Eigene Rollentypen und
+ * Referenz auf das gewählte Gebinde im Formular. Eigene Gebindearten und
  * Preset-Varianten teilen sich eine Auswahlliste, deshalb wird die Herkunft
  * mitkodiert.
  */
-export type SpoolRefKind = "own" | "preset";
+export type ContainerRefKind = "own" | "preset";
 
-export function encodeSpoolRef(kind: SpoolRefKind, id: number): string {
+export function encodeContainerRef(kind: ContainerRefKind, id: number): string {
   return `${kind}:${id}`;
 }
 
-export function decodeSpoolRef(
+export function decodeContainerRef(
   ref: string | null | undefined
-): { kind: SpoolRefKind; id: number } | null {
+): { kind: ContainerRefKind; id: number } | null {
   if (!ref) return null;
   const match = /^(own|preset):(\d+)$/.exec(ref);
   if (!match) return null;
   const id = Number(match[2]);
   if (!Number.isSafeInteger(id) || id <= 0) return null;
-  return { kind: match[1] as SpoolRefKind, id };
+  return { kind: match[1] as ContainerRefKind, id };
 }
 
 /**
- * Leergewicht der Rolle in Gramm. Einzige Stelle, an der die Priorität
- * zwischen Preset-Variante und eigenem Rollentyp festgelegt ist – Server
+ * Leergewicht des Gebindes in Gramm. Einzige Stelle, an der die Priorität
+ * zwischen Preset-Variante und eigener Gebindeart festgelegt ist – Server
  * (Restmengenberechnung) und Client (Tara-Vorschau) nutzen sie gemeinsam,
  * damit sie nicht auseinanderlaufen können.
  */
-export function resolveSpoolTare(material: {
-  spoolType?: { tareWeight: number } | null;
-  spoolPresetVariant?: { tareWeight: number } | null;
+export function resolveContainerTare(material: {
+  containerType?: { tareWeight: number } | null;
+  containerPresetVariant?: { tareWeight: number } | null;
 }): number {
   return (
-    material.spoolPresetVariant?.tareWeight ??
-    material.spoolType?.tareWeight ??
+    material.containerPresetVariant?.tareWeight ??
+    material.containerType?.tareWeight ??
     0
   );
 }
@@ -326,7 +336,7 @@ export const versionFieldsSchema = z
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
     nameI18n: nameI18nInputSchema,
-    spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+    containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
     notes: optionalNotes,
@@ -431,7 +441,7 @@ export const proposalNewPayloadSchema = z.object({
       .min(1, "Bezeichnung der Ausführung ist erforderlich")
       .max(255, "Bezeichnung darf höchstens 255 Zeichen haben"),
     nameI18n: nameI18nInputSchema,
-    spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+    containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
     validFrom: isoDate,
     validTo: isoDate,
   }),
@@ -466,7 +476,7 @@ export const proposalChangePayloadSchema = z.discriminatedUnion("scope", [
         .object({
           name: z.string().trim().min(1).max(255).optional(),
           nameI18n: nameI18nInputSchema,
-          spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+          containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
           validFrom: isoDate,
           validTo: isoDate,
           notes: optionalNotes,

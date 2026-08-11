@@ -56,21 +56,25 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
           where: inArray(schema.weighings.materialId, materialIds),
         });
 
-  const [spoolTypes, storageBoxes, hiddenSpoolPresets, presetProposals] =
-    await Promise.all([
-      db.query.spoolTypes.findMany({
-        where: eq(schema.spoolTypes.userId, userId),
-      }),
-      db.query.storageBoxes.findMany({
-        where: eq(schema.storageBoxes.userId, userId),
-      }),
-      db.query.hiddenSpoolPresets.findMany({
-        where: eq(schema.hiddenSpoolPresets.userId, userId),
-      }),
-      db.query.presetProposals.findMany({
-        where: eq(schema.presetProposals.userId, userId),
-      }),
-    ]);
+  const [
+    containerTypes,
+    storageBoxes,
+    hiddenContainerPresets,
+    presetProposals,
+  ] = await Promise.all([
+    db.query.containerTypes.findMany({
+      where: eq(schema.containerTypes.userId, userId),
+    }),
+    db.query.storageBoxes.findMany({
+      where: eq(schema.storageBoxes.userId, userId),
+    }),
+    db.query.hiddenContainerPresets.findMany({
+      where: eq(schema.hiddenContainerPresets.userId, userId),
+    }),
+    db.query.presetProposals.findMany({
+      where: eq(schema.presetProposals.userId, userId),
+    }),
+  ]);
 
   /*
     Login-Codes hängen an der Telegram-ID, nicht am Benutzerdatensatz. Sie
@@ -156,9 +160,9 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     lager,
     materials,
     weighings,
-    spoolTypes,
+    containerTypes,
     storageBoxes,
-    hiddenSpoolPresets,
+    hiddenContainerPresets,
     presetProposals,
     loginCodes,
     friendships,
@@ -195,12 +199,12 @@ export type AccountDeletionResult = {
  *
  * Zwei Feinheiten, die leicht übersehen werden:
  *
- *  - `preset_proposals.sourceSpoolTypeId` muss gelöst werden, **bevor** die
+ *  - `preset_proposals.sourceContainerTypeId` muss gelöst werden, **bevor** die
  *    Rollentypen verschwinden – sonst zeigt die Spalte mangels Fremdschlüssel
  *    stillschweigend auf eine später neu vergebene ID.
  *  - Die globalen Katalogtabellen werden **nicht** angefasst. Sie haben keine
  *    `userId` und damit keinen Personenbezug; würde man sie mitlöschen, zeigten
- *    die `materials.spoolPresetVariantId` anderer Benutzer ins Leere.
+ *    die `materials.containerPresetVariantId` anderer Benutzer ins Leere.
  */
 export async function deleteUserAccount(
   userId: number
@@ -219,7 +223,7 @@ export async function deleteUserAccount(
     // 1. Verweise auf eigene Rollentypen lösen, bevor diese gelöscht werden
     await tx
       .update(schema.presetProposals)
-      .set({ sourceSpoolTypeId: null })
+      .set({ sourceContainerTypeId: null })
       .where(eq(schema.presetProposals.userId, userId));
 
     // 2. Wägungen der eigenen Rollen
@@ -243,15 +247,15 @@ export async function deleteUserAccount(
       Lager **nach** den Materialien: Ein `materials.lagerId` zeigt mangels
       Fremdschlüssel sonst auf eine später neu vergebene Lager-ID – also auf den
       Bestand eines fremden Menschen. Dieselbe Falle behandelt Schritt 1 für
-      `preset_proposals.sourceSpoolTypeId`.
+      `preset_proposals.sourceContainerTypeId`.
     */
     await tx.delete(schema.lager).where(eq(schema.lager.userId, userId));
     await tx
-      .delete(schema.hiddenSpoolPresets)
-      .where(eq(schema.hiddenSpoolPresets.userId, userId));
+      .delete(schema.hiddenContainerPresets)
+      .where(eq(schema.hiddenContainerPresets.userId, userId));
     await tx
-      .delete(schema.spoolTypes)
-      .where(eq(schema.spoolTypes.userId, userId));
+      .delete(schema.containerTypes)
+      .where(eq(schema.containerTypes.userId, userId));
     await tx
       .delete(schema.storageBoxes)
       .where(eq(schema.storageBoxes.userId, userId));

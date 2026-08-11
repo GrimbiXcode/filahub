@@ -47,7 +47,7 @@ export const en: Messages = {
   nav: {
     overview: "Materials",
     import: "Import",
-    spoolTypes: "Spool types",
+    containerTypes: "Container types",
     storageBoxes: "Dryboxes",
     lager: "Stores",
     friends: "Friends",
@@ -183,7 +183,7 @@ export const en: Messages = {
       "Look for “Install app”, “Add to home screen” or “Add to dock” in your browser's menu. What the entry is called is up to the browser.",
     dataAndAccount: "Data and account",
     exportHint:
-      "Download everything stored for your account: profile, spools, weigh-ins, spool types, storage boxes, hidden presets, submitted proposals and pending login codes. The format is the same one the import reads back.",
+      "Download everything stored for your account: profile, stores, materials, weigh-ins, container types, dryboxes, friendships, loan requests, hidden presets, submitted suggestions, pending login codes and the security log. A JSON file to read and keep — the importer on the import page expects a different, shorter format.",
     exportAction: "Download my data",
     exportPending: "Collecting …",
     exportDone: "Export downloaded",
@@ -253,7 +253,7 @@ export const en: Messages = {
     statValue: "Remaining value",
     statValueHint: "pro rata by remaining quantity",
     statInBox: "In a drybox",
-    statInBoxHint: "materials with a storage box",
+    statInBoxHint: "materials in a drybox",
     searchAria: "Search materials",
     clearSearch: "Clear the search",
     filterSheetTitle: "Filters and sorting",
@@ -284,13 +284,14 @@ export const en: Messages = {
     sortPurchase: "Purchase date",
     emptyTitle: "No materials in the inventory yet",
     emptyFiltered: "Nothing matches the current filters",
-    emptyHint: "Add your first filament – with its spool, weight and price.",
+    emptyHint:
+      "Add your first filament – with its container, weight and price.",
     emptyFilteredHint: "Adjust the search or the filters.",
     colIdentifier: "Identifier",
     colMaterial: "Material",
     colType: "Type",
     colRemaining: "Remaining",
-    colSpoolBox: "Spool / box",
+    colContainerBox: "Container / box",
     colPurchase: "Purchased",
     remaining: (vars: { amount: string }) => `${vars.amount} left`,
     sortBy: (vars: { label: string }) => `Sort by ${vars.label}`,
@@ -311,7 +312,7 @@ export const en: Messages = {
     identifier: "Identifier",
     materialType: "Material type",
     purchaseDate: "Purchased",
-    spool: "Spool / packaging",
+    container: "Container",
     fromCatalog: "Catalogue",
     storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} tare)`,
@@ -339,9 +340,9 @@ export const en: Messages = {
   storageBoxes: {
     title: "Dryboxes",
     description:
-      "Dryboxes and storage boxes with their empty weight – weighing a spool inside one subtracts its tare automatically",
+      "Dryboxes and storage boxes with their empty weight – weighing a container inside one subtracts its tare automatically",
     newBox: "New drybox",
-    firstBox: "Add your first storage box",
+    firstBox: "Add your first drybox",
     emptyTitle: "No dryboxes yet",
     emptyDescription:
       "Weigh your empty drybox, enter the empty weight and assign it to a material – filahub takes the box tare out of the result for you.",
@@ -353,7 +354,7 @@ export const en: Messages = {
     occupancy: "In use",
     editBox: "Edit drybox",
     deleteBox: "Delete drybox",
-    deleteTitle: "Delete this storage box?",
+    deleteTitle: "Delete this drybox?",
     deleteDescription: (vars: { name: string }) =>
       `“${vars.name}” will be deleted. It must not be assigned to any material.`,
     namePlaceholder: "e.g. Drybox 1",
@@ -365,23 +366,24 @@ export const en: Messages = {
     deleted: "Drybox deleted",
   },
 
-  spoolTypes: {
-    title: "Spool types",
-    description: "Packaging and spools with a stored empty weight (tare)",
-    newType: "New spool type",
-    firstType: "Add your first spool type",
-    tabOwn: "My spool types",
+  containerTypes: {
+    title: "Container types",
+    description:
+      "Spools, bags, bottles and pails with a stored empty weight (tare)",
+    newType: "New container type",
+    firstType: "Add your first container type",
+    tabOwn: "My container types",
     tabCatalog: "Preset catalogue",
     tabProposals: "My suggestions",
-    emptyTitle: "No spool types yet",
+    emptyTitle: "No container types yet",
     emptyDescription:
-      "Add something like “plastic spool 1 kg (140 g)” or “cardboard spool (55 g)” – the empty weight is subtracted from every weigh-in. Ready-made spools are in the preset catalogue.",
+      "Add something like “plastic spool 1 kg (140 g)”, “cardboard spool (55 g)” or “resin bottle 250 g (60 g)” – the empty weight is subtracted from every weigh-in. Ready-made containers are in the preset catalogue.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} tare`,
     fromCatalog: "from the catalogue",
     proposeAsPreset: "Suggest as a preset",
-    deleteType: "Delete spool type",
-    editType: "Edit spool type",
-    deleteTitle: "Delete this spool type?",
+    deleteType: "Delete container type",
+    editType: "Edit container type",
+    deleteTitle: "Delete this container type?",
     deleteDescription: (vars: { name: string }) =>
       `“${vars.name}” will be deleted. Materials using it have to be moved to another type first.`,
     namePlaceholder: "e.g. plastic spool 1 kg",
@@ -390,16 +392,16 @@ export const en: Messages = {
     tarePlaceholder: "e.g. 140",
     calcTitle: "Work out the empty weight from a weigh-in",
     calcDescription:
-      "Put a new (full) spool on the scale, enter the total weight and the nominal fill – the empty weight is calculated and filled in below.",
-    calcGross: "Weight of the new spool (g)",
+      "Put a full container on the scale, enter the total weight and the nominal fill – the empty weight is calculated and filled in below.",
+    calcGross: "Weight of the full container (g)",
     calcGrossPlaceholder: "e.g. 1250",
     calcNominal: "Nominal fill (g)",
     calcNominalPlaceholder: "e.g. 1000",
     calcResult: (vars: { amount: string }) => `Empty weight: ${vars.amount}`,
     calcInvalid: "The total weight has to be larger than the nominal fill.",
-    created: "Spool type created",
-    saved: "Spool type saved",
-    deleted: "Spool type deleted",
+    created: "Container type created",
+    saved: "Container type saved",
+    deleted: "Container type deleted",
   },
 
   materialForm: {
@@ -425,13 +427,13 @@ export const en: Messages = {
       vars.diameter ? `${vars.kind}, ${vars.diameter}` : vars.kind,
     lagerChangeHint:
       "A different store may use a different diameter – the conversion to metres changes with it.",
-    spool: "Spool / packaging",
+    container: "Container",
     storageBox: "Drybox",
     chooseBox: "Pick a drybox",
     noBox: "No box",
     noBoxesHint: "No dryboxes yet – add one under “Dryboxes”.",
     initialLabel: (vars: { withBox: boolean }) =>
-      `First weigh-in incl. spool${vars.withBox ? " + box" : ""} (g, optional)`,
+      `First weigh-in incl. container${vars.withBox ? " + box" : ""} (g, optional)`,
     initialPlaceholder: "Total weight measured at purchase",
     notesPlaceholder: "Printing temperature, quirks …",
     created: "Material created",
@@ -443,24 +445,24 @@ export const en: Messages = {
     initialInvalid: "Please enter a valid initial weight",
   },
 
-  spoolPicker: {
-    choose: "Pick a spool",
+  containerPicker: {
+    choose: "Pick a container",
     searchPlaceholder: "Search manufacturer, series or weight …",
-    empty: "No matching spool found.",
+    empty: "No matching container found.",
     none: "None / unknown",
-    ownTypes: "My spool types",
-    catalogMore: "More catalogue spools",
-    catalog: "Catalogue spools",
+    ownTypes: "My container types",
+    catalogMore: "More from the catalogue",
+    catalog: "From the catalogue",
     nothingYet:
-      "No spool types yet – add one under “Spool types” or pick a preset from the catalogue.",
+      "No container types yet – add one under “Container types” or pick a preset from the catalogue.",
   },
 
   presetCatalog: {
     emptyTitle: "The preset catalogue is still empty",
     emptyDescription:
-      "Once manufacturers and spools are in it, you can pick them here – the empty weight then comes across automatically.",
+      "Once manufacturers and containers are in it, you can pick them here – the empty weight then comes across automatically.",
     intro:
-      "Ready-made spools. Whatever you hide here disappears from your picker – spools already assigned to a material stay valid. “Use this” turns a preset into your own, freely editable spool type.",
+      "Ready-made containers. Whatever you hide here disappears from your picker – containers already assigned to a material stay valid. “Use this” turns a preset into your own, freely editable container type.",
     show: "Show again",
     hide: "Hide for me",
     hidden: "hidden",
@@ -474,9 +476,9 @@ export const en: Messages = {
     validTo: (vars: { date: string }) => `until ${vars.date}`,
     nominalWeight: "Nominal weight",
     dimensions: "Dimensions (Ø × width × bore)",
-    adopt: "Copy into my spool types",
+    adopt: "Copy into my container types",
     adopted: (vars: { name: string }) =>
-      `“${vars.name}” copied into your own spool types`,
+      `“${vars.name}” copied into your own container types`,
   },
 
   proposePreset: {
@@ -484,7 +486,7 @@ export const en: Messages = {
     description: (vars: { name: string; tare: string }) =>
       `“${vars.name}” (${vars.tare} tare)`,
     descriptionSuffix:
-      "suggested for everyone. Place the spool under a manufacturer, a series and a version – translations are optional.",
+      "suggested for everyone. Place the container under a manufacturer, a series and a version – translations are optional.",
     seriesInLanguage: (vars: { language: string }) =>
       `Series (${vars.language}, optional)`,
     versionInLanguage: (vars: { language: string }) =>
@@ -492,7 +494,7 @@ export const en: Messages = {
     manufacturerLabel: "Manufacturer *",
     seriesLabel: "Series / product line *",
     versionLabel: "Version *",
-    spoolMaterialLabel: "Spool material",
+    containerMaterialLabel: "Container material",
     nominalLabel: "Nominal weight (g) *",
     materialTypeLabel: "Material type",
     commentLabel: "Note",
@@ -560,7 +562,7 @@ export const en: Messages = {
       "Changes take effect for everyone straight away. Edited entries are no longer overwritten by the automatic starter catalogue.",
     manufacturerPlaceholder: "e.g. Polymaker",
     seriesPlaceholder: "e.g. PolyTerra PLA",
-    versionPlaceholder: "e.g. cardboard spool (from 2023)",
+    versionPlaceholder: "e.g. cardboard container (from 2023)",
     nameInLanguage: (vars: { language: string }) => `Name (${vars.language})`,
     translationHint: "Leave empty to use the base name",
     sameAsBase: "Same as base",
@@ -571,7 +573,7 @@ export const en: Messages = {
     website: "Website",
     materialTypes: "Material types",
     materialTypesPlaceholder: "e.g. PLA, PETG – empty = applies to all",
-    spoolMaterial: "Spool material",
+    containerMaterial: "Container material",
     unknown: "Unknown",
     validFrom: "Valid from",
     validTo: "Valid until",
@@ -657,7 +659,7 @@ export const en: Messages = {
     rowSeries: "Series",
     rowMaterialTypes: "Material types",
     rowVersion: "Version",
-    rowSpoolMaterial: "Spool material",
+    rowContainerMaterial: "Container material",
   },
 
   adminSystem: {
@@ -684,15 +686,15 @@ export const en: Messages = {
   weighing: {
     title: "Weigh material",
     description: (vars: { name: string; withBox: boolean }) =>
-      `Weigh “${vars.name}” as a whole – spool${
-        vars.withBox ? " and storage box" : ""
+      `Weigh “${vars.name}” as a whole – container${
+        vars.withBox ? " and drybox" : ""
       } included. The empty weight is subtracted for you.`,
     grossLabel: "Measured total weight (g) *",
     grossPlaceholder: "e.g. 740",
     remaining: "Actually left",
-    tareSpool: "Spool / packaging tare",
-    tareBox: "Storage box tare",
-    tareBoxNamed: (vars: { name: string }) => `Storage box tare (${vars.name})`,
+    tareContainer: "Container / packaging tare",
+    tareBox: "Drybox tare",
+    tareBoxNamed: (vars: { name: string }) => `Drybox tare (${vars.name})`,
     tareTotal: "Total tare",
     notePlaceholder: "e.g. after printing part X",
     submit: "Save weigh-in",
@@ -713,7 +715,7 @@ export const en: Messages = {
       rejected: "Rejected",
       withdrawn: "Withdrawn",
     },
-    spoolMaterial: {
+    containerMaterial: {
       kunststoff: "Plastic",
       karton: "Cardboard",
       metall: "Metal",
@@ -725,7 +727,7 @@ export const en: Messages = {
     withdrawn: "Suggestion withdrawn",
     emptyTitle: "No suggestions submitted yet",
     emptyDescription:
-      "Use “Suggest as preset” on one of your own spool types, or “Suggest a change” in the catalogue, to improve the shared catalogue.",
+      "Use “Suggest as preset” on one of your own container types, or “Suggest a change” in the catalogue, to improve the shared catalogue.",
     submitted: "Submitted",
     kind: "Kind",
     content: "Content",
@@ -737,15 +739,15 @@ export const en: Messages = {
 
   proposeChange: {
     title: "Suggest a change",
-    description: (vars: { spool: string; size: string }) =>
-      `${vars.spool} · ${vars.size}. An administrator reviews your correction before it reaches the catalogue.`,
+    description: (vars: { container: string; size: string }) =>
+      `${vars.container} · ${vars.size}. An administrator reviews your correction before it reaches the catalogue.`,
     tareLabel: "Empty weight (g)",
     outerDiameter: "Outer Ø (mm)",
     width: "Width (mm)",
     bore: "Bore (mm)",
     reason: "Reason",
     reasonPlaceholder:
-      "e.g. “Weighed the empty spool three times, 138 g on average”",
+      "e.g. “Weighed the empty container three times, 138 g on average”",
     submit: "Submit suggestion",
     submitting: "Sending …",
     submitted: "Suggestion submitted – it will be reviewed by a moderator.",
@@ -779,7 +781,7 @@ export const en: Messages = {
     kindFilament: "Filament",
     kindPowder: "Powder",
     kindResin: "Resin",
-    kindFilamentHint: "Spools and reels; remaining amount also in metres.",
+    kindFilamentHint: "Containers and reels; remaining amount also in metres.",
     kindPowderHint: "Sintering powder in bags or buckets; grams only.",
     kindResinHint: "Liquid resin; remaining amount also in litres.",
 

@@ -5,7 +5,7 @@ export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 export type MaterialOverview = RouterOutputs["material"]["list"][number];
 export type MaterialDetail = RouterOutputs["material"]["byId"];
-export type SpoolTypeItem = RouterOutputs["spoolType"]["list"][number];
+export type ContainerTypeItem = RouterOutputs["containerType"]["list"][number];
 export type StorageBoxItem = RouterOutputs["storageBox"]["list"][number];
 /** Lager – die Ebene über den Materialien */
 export type LagerItem = RouterOutputs["lager"]["list"][number];

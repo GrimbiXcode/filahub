@@ -7,7 +7,7 @@ import { legalRouter } from "./legalRouter";
 import { createRouter, publicQuery } from "./middleware";
 import { materialRouter } from "./materialRouter";
 import { presetRouter } from "./presetRouter";
-import { spoolTypeRouter } from "./spoolTypeRouter";
+import { containerTypeRouter } from "./containerTypeRouter";
 import { storageBoxRouter } from "./storageBoxRouter";
 
 export const appRouter = createRouter({
@@ -15,7 +15,7 @@ export const appRouter = createRouter({
   auth: authRouter,
   account: accountRouter,
   lager: lagerRouter,
-  spoolType: spoolTypeRouter,
+  containerType: containerTypeRouter,
   storageBox: storageBoxRouter,
   material: materialRouter,
   friend: friendRouter,

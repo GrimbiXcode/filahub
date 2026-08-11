@@ -10,9 +10,9 @@ import { count, eq, sql } from "drizzle-orm";
 import { PRESET_SEED_REVISION } from "@db/presets/catalog";
 import {
   presetManufacturers,
-  presetSpoolSeries,
-  presetSpoolVariants,
-  presetSpoolVersions,
+  presetContainerSeries,
+  presetContainerVariants,
+  presetContainerVersions,
 } from "@db/schema";
 import { env } from "../lib/env";
 import { getDb, getPool } from "./connection";
@@ -101,20 +101,28 @@ export async function getSchemaMigrations(): Promise<SchemaMigration[]> {
  * erscheinen: erst Konten, dann Katalog, dann Bestand. Bewusst eine eigene
  * Liste statt „alles aus dem Schema“ – Protokoll- und Sitzungstabellen sagen
  * über den Füllstand des Lagers nichts aus.
+ *
+ * **Diese Namen gehen als Bezeichner ins SQL** (`sql.identifier` unten). Ein
+ * veralteter Eintrag ist deshalb kein Typfehler, sondern ein Fehler zur
+ * Laufzeit – die Verwaltungsseite antwortet dann mit 500. Beim Umbenennen einer
+ * Tabelle ist das die Stelle, die weder der Compiler noch ein Typ findet;
+ * `api/postgres.integration.test.ts` ruft `countAllTables()` deshalb einmal auf.
  */
 const COUNTED_TABLES = [
   "users",
   "login_codes",
-  "spool_types",
+  "container_types",
   "storage_boxes",
   "preset_manufacturers",
-  "preset_spool_series",
+  "preset_container_series",
   "preset_series_material_types",
-  "preset_spool_versions",
-  "preset_spool_variants",
+  "preset_container_versions",
+  "preset_container_variants",
+  // Seit 2.2.0. Fehlte in der Auslieferung von 2.2.0 – nachgetragen in 2.3.0.
+  "lager",
   "materials",
   "weighings",
-  "hidden_spool_presets",
+  "hidden_container_presets",
   "preset_proposals",
 ] as const;
 
@@ -143,9 +151,9 @@ export async function getSeedInfo(): Promise<SeedInfo> {
   const db = getDb();
   const tables = [
     presetManufacturers,
-    presetSpoolSeries,
-    presetSpoolVersions,
-    presetSpoolVariants,
+    presetContainerSeries,
+    presetContainerVersions,
+    presetContainerVariants,
   ];
   const counts = await Promise.all(
     tables.map(table =>

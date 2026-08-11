@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Archive,
+  Boxes,
   Disc3,
   FileUp,
   LayoutDashboard,
@@ -31,7 +32,14 @@ import {
   CommandSeparator,
   CommandShortcut,
 } from "@/components/ui/command";
-import { FRIENDS_PATH, RELEASE_NOTES_PATH, SETTINGS_PATH } from "@/const";
+import {
+  CONTAINER_TYPES_PATH,
+  DRYBOXES_PATH,
+  FRIENDS_PATH,
+  LAGER_PATH,
+  RELEASE_NOTES_PATH,
+  SETTINGS_PATH,
+} from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useFormat } from "@/lib/formatContext";
@@ -109,8 +117,15 @@ type NavKey = TextKey<"nav">;
 
 const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
-  { icon: Disc3, label: "spoolTypes", path: "/rollentypen" },
-  { icon: Archive, label: "storageBoxes", path: "/lagerboxen" },
+  /*
+    Beide Einträge sind in 2.2.0 hinter der Seitenleiste hergelaufen: Das Lager
+    fehlte hier ganz, und die Dryboxen zeigten noch auf den alten Pfad, der nur
+    über die Weiterleitung ankam. Pfade kommen jetzt aus `@/const`, damit die
+    Palette nicht wieder abdriftet.
+  */
+  { icon: Boxes, label: "lager", path: LAGER_PATH },
+  { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
+  { icon: Archive, label: "storageBoxes", path: DRYBOXES_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Sparkles, label: "releaseNotes", path: RELEASE_NOTES_PATH },

@@ -68,8 +68,8 @@ beforeEach(async () => {
         filamentDiameterUm: 1750,
       })
       .returning();
-    const [spoolType] = await db()
-      .insert(schema.spoolTypes)
+    const [containerType] = await db()
+      .insert(schema.containerTypes)
       .values({ userId: user.id, name: "Kartonrolle", tareWeight: 140 })
       .returning();
     const [box] = await db()
@@ -84,7 +84,7 @@ beforeEach(async () => {
         name: "PLA schwarz",
         materialType: "PLA",
         nominalWeight: 1000,
-        spoolTypeId: spoolType.id,
+        containerTypeId: containerType.id,
         storageBoxId: box.id,
         notes: "Freitext mit Personenbezug",
       })
@@ -93,7 +93,7 @@ beforeEach(async () => {
       .insert(schema.weighings)
       .values({ materialId: material.id, grossWeight: 1340 });
     await db()
-      .insert(schema.hiddenSpoolPresets)
+      .insert(schema.hiddenContainerPresets)
       .values({ userId: user.id, scope: "manufacturer", refId: 1 });
     await db()
       .insert(schema.loginCodes)
@@ -133,14 +133,16 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     `);
     const withUserId = result.rows.map(r => r.table_name);
 
+    // Alphabetisch, wie die Abfrage sortiert – seit der Umbenennung steht
+    // `container_types` deshalb vorn, wo vorher `spool_types` hinten stand.
     expect(withUserId).toEqual([
+      "container_types",
       "friendships",
-      "hidden_spool_presets",
+      "hidden_container_presets",
       "lager",
       "loan_requests",
       "materials",
       "preset_proposals",
-      "spool_types",
       "storage_boxes",
     ]);
 
@@ -160,14 +162,14 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       [
         "auditLog",
         "friendships",
-        "hiddenSpoolPresets",
+        "hiddenContainerPresets",
         "lager",
         "loanRequests",
         "loginCodes",
         "materials",
         "presetProposals",
         "profile",
-        "spoolTypes",
+        "containerTypes",
         "storageBoxes",
         "weighings",
       ].sort()
@@ -208,14 +210,14 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
       db().query.materials.findMany({
         where: eq(schema.materials.userId, owner.id),
       }),
-      db().query.spoolTypes.findMany({
-        where: eq(schema.spoolTypes.userId, owner.id),
+      db().query.containerTypes.findMany({
+        where: eq(schema.containerTypes.userId, owner.id),
       }),
       db().query.storageBoxes.findMany({
         where: eq(schema.storageBoxes.userId, owner.id),
       }),
-      db().query.hiddenSpoolPresets.findMany({
-        where: eq(schema.hiddenSpoolPresets.userId, owner.id),
+      db().query.hiddenContainerPresets.findMany({
+        where: eq(schema.hiddenContainerPresets.userId, owner.id),
       }),
       db().query.loginCodes.findMany({
         where: eq(schema.loginCodes.telegramId, owner.unionId),
@@ -336,15 +338,15 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
   });
 
   it("löst Verweise auf eigene Rollentypen, bevor diese verschwinden", async () => {
-    const spoolType = await db().query.spoolTypes.findFirst({
-      where: eq(schema.spoolTypes.userId, owner.id),
+    const containerType = await db().query.containerTypes.findFirst({
+      where: eq(schema.containerTypes.userId, owner.id),
     });
     const proposal = await makeProposal({
       userId: owner.id,
       kind: "new",
       targetType: "variant",
       payload: { name: "Aus Rollentyp", slug: "aus-rollentyp" },
-      sourceSpoolTypeId: spoolType!.id,
+      sourceContainerTypeId: containerType!.id,
     });
     await closeProposal(proposal.id, {
       status: "approved",
@@ -359,7 +361,7 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
     });
     // Hinge hier noch die alte ID, zeigte sie nach der nächsten Vergabe aus
     // derselben Sequenz auf einen fremden Rollentyp.
-    expect(kept!.sourceSpoolTypeId).toBeNull();
+    expect(kept!.sourceContainerTypeId).toBeNull();
   });
 
   it("ist in sich abgeschlossen – ein zweiter Lauf schlägt fehl", async () => {

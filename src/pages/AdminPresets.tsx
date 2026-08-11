@@ -235,9 +235,9 @@ export default function AdminPresets() {
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-medium">{presetNames.name(version)}</span>
           {translationGaps(version)}
-          {version.spoolMaterial && (
+          {version.containerMaterial && (
             <Badge variant="secondary" className="font-normal">
-              {t.preset.spoolMaterial[version.spoolMaterial]}
+              {t.preset.containerMaterial[version.containerMaterial]}
             </Badge>
           )}
           {!version.isCurrent && (

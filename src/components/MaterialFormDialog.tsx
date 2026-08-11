@@ -6,12 +6,12 @@ import {
   resolveDensity,
 } from "@contracts/materials";
 import {
-  decodeSpoolRef,
-  encodeSpoolRef,
+  decodeContainerRef,
+  encodeContainerRef,
   formatNominalWeight,
 } from "@contracts/presets";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
-import { NO_SPOOL, SpoolPicker } from "@/components/SpoolPicker";
+import { NO_CONTAINER, ContainerPicker } from "@/components/ContainerPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -63,7 +63,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const utils = trpc.useUtils();
   const { centsToInput, currencySymbol, formatGrams, parseMoney } = useFormat();
   const t = useT();
-  const { data: spoolTypes } = trpc.spoolType.list.useQuery();
+  const { data: containerTypes } = trpc.containerType.list.useQuery();
   const { data: presetOptions } = trpc.preset.options.useQuery();
   const { data: storageBoxes } = trpc.storageBox.list.useQuery();
   const { data: allMaterials } = trpc.material.list.useQuery({});
@@ -82,7 +82,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const [purchaseDate, setPurchaseDate] = useState("");
   const [nominalWeight, setNominalWeight] = useState("1000");
   /** "" | "own:<id>" | "preset:<id>" */
-  const [spoolRef, setSpoolRef] = useState<string>(NO_SPOOL);
+  const [containerRef, setContainerRef] = useState<string>(NO_CONTAINER);
   const [storageBoxId, setStorageBoxId] = useState<string>(NONE);
   const [initialGrossWeight, setInitialGrossWeight] = useState("");
   const [notes, setNotes] = useState("");
@@ -128,12 +128,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       setPrice(centsToInput(material?.priceCents));
       setPurchaseDate(material?.purchaseDate ?? "");
       setNominalWeight(material ? String(material.nominalWeight) : "1000");
-      setSpoolRef(
-        material?.spoolPresetVariantId
-          ? encodeSpoolRef("preset", material.spoolPresetVariantId)
-          : material?.spoolTypeId
-            ? encodeSpoolRef("own", material.spoolTypeId)
-            : NO_SPOOL
+      setContainerRef(
+        material?.containerPresetVariantId
+          ? encodeContainerRef("preset", material.containerPresetVariantId)
+          : material?.containerTypeId
+            ? encodeContainerRef("own", material.containerTypeId)
+            : NO_CONTAINER
       );
       setStorageBoxId(
         material?.storageBoxId ? String(material.storageBoxId) : NONE
@@ -164,10 +164,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     (allMaterials ?? []).forEach(
       m => m.manufacturer && set.add(m.manufacturer)
     );
-    spoolTypes?.forEach(s => s.manufacturer && set.add(s.manufacturer));
+    containerTypes?.forEach(s => s.manufacturer && set.add(s.manufacturer));
     presetOptions?.forEach(p => set.add(p.manufacturer));
     return [...set].sort((a, b) => a.localeCompare(b));
-  }, [allMaterials, spoolTypes, presetOptions]);
+  }, [allMaterials, containerTypes, presetOptions]);
 
   const colorSuggestions = useMemo(() => {
     const set = new Set<string>();
@@ -191,19 +191,19 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     [lagerList, lagerId]
   );
 
-  /** Leergewicht der gewählten Rolle – eigener Typ oder Preset-Variante */
-  const selectedSpoolTare = useMemo(() => {
-    const ref = decodeSpoolRef(spoolRef);
+  /** Leergewicht des gewählten Gebindes – eigene Art oder Preset-Variante */
+  const selectedContainerTare = useMemo(() => {
+    const ref = decodeContainerRef(containerRef);
     if (!ref) return 0;
     if (ref.kind === "own")
-      return spoolTypes?.find(s => s.id === ref.id)?.tareWeight ?? 0;
+      return containerTypes?.find(s => s.id === ref.id)?.tareWeight ?? 0;
     return presetOptions?.find(p => p.id === ref.id)?.tareWeight ?? 0;
-  }, [spoolRef, spoolTypes, presetOptions]);
+  }, [containerRef, containerTypes, presetOptions]);
   const selectedBox = useMemo(
     () => storageBoxes?.find(b => String(b.id) === storageBoxId) ?? null,
     [storageBoxes, storageBoxId]
   );
-  const totalTare = selectedSpoolTare + (selectedBox?.tareWeight ?? 0);
+  const totalTare = selectedContainerTare + (selectedBox?.tareWeight ?? 0);
 
   const invalidate = () => {
     utils.material.list.invalidate();
@@ -269,7 +269,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     )
       return toast.error(t.lager.densityLabel);
 
-    const spoolSelection = decodeSpoolRef(spoolRef);
+    const containerSelection = decodeContainerRef(containerRef);
     const base = {
       lagerId: lager,
       name: finalName,
@@ -283,9 +283,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       purchaseDate: purchaseDate || null,
       nominalWeight: nominal,
       // Immer beide Felder senden, damit ein Wechsel das jeweils andere leert
-      spoolTypeId: spoolSelection?.kind === "own" ? spoolSelection.id : null,
-      spoolPresetVariantId:
-        spoolSelection?.kind === "preset" ? spoolSelection.id : null,
+      containerTypeId:
+        containerSelection?.kind === "own" ? containerSelection.id : null,
+      containerPresetVariantId:
+        containerSelection?.kind === "preset" ? containerSelection.id : null,
       storageBoxId: storageBoxId === NONE ? null : Number(storageBoxId),
       notes: notes.trim() || null,
     };
@@ -502,11 +503,11 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               </div>
             )}
             <div className="grid gap-2">
-              <Label>{t.materialForm.spool}</Label>
-              <SpoolPicker
-                value={spoolRef}
-                onChange={setSpoolRef}
-                ownSpoolTypes={spoolTypes ?? []}
+              <Label>{t.materialForm.container}</Label>
+              <ContainerPicker
+                value={containerRef}
+                onChange={setContainerRef}
+                ownContainerTypes={containerTypes ?? []}
                 presets={presetOptions ?? []}
                 materialType={materialType}
                 nominalWeight={parseInt(nominalWeight, 10) || null}
@@ -548,7 +549,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 />
                 <p className="text-xs text-muted-foreground">
                   Tara gesamt: {formatGrams(totalTare)} (Rolle{" "}
-                  {formatGrams(selectedSpoolTare)}
+                  {formatGrams(selectedContainerTare)}
                   {selectedBox
                     ? ` + Box ${formatGrams(selectedBox.tareWeight)}`
                     : ""}

@@ -100,8 +100,8 @@ The JSON has to match this shape exactly — keep the German field names, they a
 Rules:
 - Answer with the JSON only – no markdown code fences and no text before or after it.
 - "bestelldatum" in ISO format YYYY-MM-DD (e.g. 2026-07-20). Leave the field out if no date is recognisable.
-- "nenngewicht" is the weight per spool in grams as a whole number (e.g. 1000 for 1 kg).
-- "preis" is the price per spool in ${currency} as a number with a dot as the decimal separator (e.g. 29.99), without a currency symbol. Do not convert prices in another currency – leave the field out instead.
+- "nenngewicht" is the weight per container in grams as a whole number (e.g. 1000 for 1 kg).
+- "preis" is the price per container in ${currency} as a number with a dot as the decimal separator (e.g. 29.99), without a currency symbol. Do not convert prices in another currency – leave the field out instead.
 - "anzahl" is the quantity of that line as a whole number (at least 1).
 - "typ" and "nenngewicht" are required. Leave out every other field you do not know.
 - Do not invent values: if something is missing from the order list, leave the field out rather than guessing.

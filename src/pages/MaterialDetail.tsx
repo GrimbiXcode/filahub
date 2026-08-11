@@ -288,17 +288,17 @@ export default function MaterialDetail() {
                 </dt>
                 <dd>{formatDate(material.purchaseDate)}</dd>
                 <dt className="text-muted-foreground">
-                  {t.materialDetail.spool}
+                  {t.materialDetail.container}
                 </dt>
                 <dd className="flex flex-wrap items-center gap-1.5">
-                  {material.spoolLabel ? (
+                  {material.containerLabel ? (
                     <>
                       <Disc3 className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="wrap-break-word">
-                        {material.spoolLabel} (
-                        {formatGrams(material.spoolTareWeight)} Tara)
+                        {material.containerLabel} (
+                        {formatGrams(material.containerTareWeight)} Tara)
                       </span>
-                      {material.spoolPresetVariant && (
+                      {material.containerPresetVariant && (
                         <Badge variant="secondary" className="font-normal">
                           {t.materialDetail.fromCatalog}
                         </Badge>

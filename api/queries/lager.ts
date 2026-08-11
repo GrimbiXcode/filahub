@@ -94,7 +94,7 @@ export async function countMaterialsInLager(id: number): Promise<number> {
 
 /**
  * Gehört dieses Lager dem Benutzer? Gleiche Bauform wie
- * `spoolTypeBelongsToUser` und `storageBoxBelongsToUser` in
+ * `containerTypeBelongsToUser` und `storageBoxBelongsToUser` in
  * `api/queries/filament.ts`, damit `validateForeignKeys` einheitlich prüft.
  */
 export async function lagerBelongsToUser(userId: number, id: number) {

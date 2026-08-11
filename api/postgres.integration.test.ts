@@ -15,10 +15,11 @@
 import { beforeAll, afterAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { getDb } from "./queries/connection";
-import { seedSpoolPresets } from "./queries/presetSeed";
+import { seedContainerPresets } from "./queries/presetSeed";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import { createProposal, closeProposal, findProposal } from "./queries/presets";
-import { createSpoolType } from "./queries/filament";
+import { createContainerType } from "./queries/filament";
+import { countAllTables } from "./queries/systemStatus";
 import * as schema from "@db/schema";
 import { type User } from "@db/schema";
 import {
@@ -58,16 +59,16 @@ describe("Migrationen", () => {
       "lager",
       "materials",
       "weighings",
-      "spool_types",
+      "container_types",
       "storage_boxes",
       "login_codes",
       "preset_manufacturers",
-      "preset_spool_series",
-      "preset_spool_versions",
-      "preset_spool_variants",
+      "preset_container_series",
+      "preset_container_versions",
+      "preset_container_variants",
       "preset_series_material_types",
       "preset_proposals",
-      "hidden_spool_presets",
+      "hidden_container_presets",
     ]) {
       expect(names).toContain(table);
     }
@@ -102,7 +103,7 @@ describe("Migrationen", () => {
       "user_role",
       "preset_source",
       "preset_scope",
-      "preset_spool_material",
+      "preset_container_material",
       "preset_proposal_kind",
       "preset_proposal_status",
       "friend_visibility",
@@ -121,6 +122,29 @@ describe("Migrationen", () => {
     expect(result.rows[0].encoding).toBe("UTF8");
   });
 
+  /**
+   * Die Tabellenliste in `COUNTED_TABLES` (`api/queries/systemStatus.ts`) geht
+   * als Bezeichner ins SQL. Ein veralteter Name ist deshalb **kein** Typfehler,
+   * sondern ein 500 auf `/verwaltung/system` – und war bis 2.3.0 von keinem Test
+   * abgedeckt. Genau so ist beim Umbenennen von `spool_*` auf `container_*` ein
+   * Bruch möglich, den weder `tsc` noch die übrige Suite bemerkt.
+   *
+   * Der Aufruf selbst ist die Prüfung: Er scheitert an jedem Namen, den es nicht
+   * gibt. Zusätzlich wird verlangt, dass die Tabellen mit Bestandsdaten dabei
+   * sind – `lager` fehlte in 2.2.0 still.
+   */
+  it("zählt alle Fachtabellen, die es wirklich gibt", async () => {
+    const counts = await countAllTables();
+    const tables = counts.map(c => c.table);
+
+    expect(tables).toContain("lager");
+    expect(tables).toContain("container_types");
+    expect(tables).toContain("materials");
+    expect(tables).toContain("hidden_container_presets");
+    // Keine Zeile darf fehlen: je Eintrag genau ein Ergebnis.
+    expect(counts.every(c => Number.isInteger(c.rows))).toBe(true);
+  });
+
   it("ist wiederholbar", async () => {
     await expect(resetSchema()).resolves.not.toThrow();
   });
@@ -128,23 +152,23 @@ describe("Migrationen", () => {
 
 describe("Seeding des Preset-Katalogs", () => {
   it("legt den Startkatalog an", async () => {
-    const stats = await seedSpoolPresets();
+    const stats = await seedContainerPresets();
     expect(stats.created).toBeGreaterThan(0);
     expect(stats.updated).toBe(0);
 
     seedCounts = {
       manufacturers: await countRows("preset_manufacturers"),
-      series: await countRows("preset_spool_series"),
-      versions: await countRows("preset_spool_versions"),
-      variants: await countRows("preset_spool_variants"),
+      series: await countRows("preset_container_series"),
+      versions: await countRows("preset_container_versions"),
+      variants: await countRows("preset_container_variants"),
       materialTypes: await countRows("preset_series_material_types"),
     };
     expect(seedCounts.variants).toBeGreaterThan(0);
   });
 
   it("ist idempotent – wiederholtes Seeding ändert nichts", async () => {
-    const second = await seedSpoolPresets();
-    const third = await seedSpoolPresets();
+    const second = await seedContainerPresets();
+    const third = await seedContainerPresets();
 
     expect(second.created).toBe(0);
     expect(second.updated).toBe(0);
@@ -154,9 +178,9 @@ describe("Seeding des Preset-Katalogs", () => {
     // Der entscheidende Punkt: keine Duplikate durch mehrfache Deployments.
     expect({
       manufacturers: await countRows("preset_manufacturers"),
-      series: await countRows("preset_spool_series"),
-      versions: await countRows("preset_spool_versions"),
-      variants: await countRows("preset_spool_variants"),
+      series: await countRows("preset_container_series"),
+      versions: await countRows("preset_container_versions"),
+      variants: await countRows("preset_container_variants"),
       materialTypes: await countRows("preset_series_material_types"),
     }).toEqual(seedCounts);
   });
@@ -249,7 +273,7 @@ describe("Presets ausblenden", () => {
       hidden: true,
     });
 
-    expect(await countRows("hidden_spool_presets")).toBe(1);
+    expect(await countRows("hidden_container_presets")).toBe(1);
     expect(
       (await asUser.preset.tree()).find(m => m.id === target.id)?.hidden
     ).toBe(true);
@@ -262,7 +286,7 @@ describe("Presets ausblenden", () => {
       hidden: false,
     });
     expect(await asUser.preset.options()).toHaveLength(before.length);
-    expect(await countRows("hidden_spool_presets")).toBe(0);
+    expect(await countRows("hidden_container_presets")).toBe(0);
   });
 });
 
@@ -293,7 +317,7 @@ describe("Vorschläge", () => {
         series: { name: "IT Serie", materialTypes: ["PLA", "PETG"] },
         version: {
           name: "v1",
-          spoolMaterial: "kunststoff",
+          containerMaterial: "kunststoff",
           validFrom: "2024-01-01",
         },
         variant: {
@@ -337,8 +361,8 @@ describe("Vorschläge", () => {
     expect(closed?.resultId).toBeTypeOf("number");
 
     resultVariantId = closed!.resultId!;
-    const variant = await db().query.presetSpoolVariants.findFirst({
-      where: eq(schema.presetSpoolVariants.id, resultVariantId),
+    const variant = await db().query.presetContainerVariants.findFirst({
+      where: eq(schema.presetContainerVariants.id, resultVariantId),
     });
     expect(variant?.source).toBe("community");
     const option = (await asUser.preset.options()).find(
@@ -408,7 +432,7 @@ describe("Katalogpflege durch Administratoren", () => {
     const version = await asAdmin.admin.preset.createVersion({
       seriesId,
       name: "2024",
-      spoolMaterial: "karton",
+      containerMaterial: "karton",
     });
     versionId = version.id;
 
@@ -503,7 +527,7 @@ describe("Materialien und Wiegungen", () => {
       materialType: "PLA",
       nominalWeight: 1000,
       storageBoxId: box!.id,
-      spoolPresetVariantId: option.id,
+      containerPresetVariantId: option.id,
     });
 
     await asUser.material.addWeighing({
@@ -522,7 +546,7 @@ describe("Materialien und Wiegungen", () => {
 
     const detail = await asUser.material.byId({ id: material.id });
     expect(detail?.weighings).toHaveLength(2);
-    expect(detail?.spoolPresetVariantId).toBe(option.id);
+    expect(detail?.containerPresetVariantId).toBe(option.id);
   });
 
   it("trennt die Daten der Benutzer", async () => {
@@ -540,12 +564,12 @@ describe("Postgres-Eigenheiten", () => {
     const found = await findUserByUnionId("it-utf8");
     expect(found?.name).toBe("Jörg Müller-Straße 🧵✨");
 
-    const spoolType = await createSpoolType({
+    const containerType = await createContainerType({
       userId: found!.id,
       name: "Rolle „Grün“ – 1 kg · Ø200 mm",
       tareWeight: 200,
     });
-    expect(spoolType?.name).toBe("Rolle „Grün“ – 1 kg · Ø200 mm");
+    expect(containerType?.name).toBe("Rolle „Grün“ – 1 kg · Ø200 mm");
   });
 
   it("erzeugt ausschließlich ASCII-Slugs", async () => {
@@ -561,7 +585,7 @@ describe("Postgres-Eigenheiten", () => {
   it("weist zu lange Werte ab, statt sie zu kürzen", async () => {
     await expect(
       db()
-        .insert(schema.spoolTypes)
+        .insert(schema.containerTypes)
         .values({
           userId: admin.id,
           name: "x".repeat(300),

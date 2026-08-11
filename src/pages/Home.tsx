@@ -463,7 +463,7 @@ export default function Home() {
           }
         />
 
-        {/* Schnellzugriff: Kennung von der Rolle ablesen und sofort wiegen */}
+        {/* Schnellzugriff: Kennung vom Gebinde ablesen und sofort wiegen */}
         <Card>
           <CardContent className="p-3 sm:p-4">
             <form className="flex gap-2" onSubmit={quickWeigh}>
@@ -705,7 +705,7 @@ export default function Home() {
                         className="min-w-[180px]"
                       />
                       <TableHead className="hidden 2xl:table-cell">
-                        {t.home.colSpoolBox}
+                        {t.home.colContainerBox}
                       </TableHead>
                       <TableHead className="hidden lg:table-cell">
                         {t.common.price}
@@ -784,7 +784,7 @@ export default function Home() {
                           </div>
                         </TableCell>
                         <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
-                          <div>{m.spoolLabel ?? "–"}</div>
+                          <div>{m.containerLabel ?? "–"}</div>
                           {m.storageBox && (
                             <div className="flex items-center gap-1 text-xs">
                               <Archive className="h-3 w-3" />{" "}

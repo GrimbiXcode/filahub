@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import { SPOOL_MATERIALS } from "@contracts/presets";
+import { CONTAINER_MATERIALS } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
 
 /** Sprachen, für die ein zusätzliches Namensfeld erscheint */
@@ -29,38 +29,43 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
-import { COMMON_MATERIAL_TYPES, type SpoolTypeItem } from "@/types";
+import { COMMON_MATERIAL_TYPES, type ContainerTypeItem } from "@/types";
 
 type Props = {
-  spoolType: SpoolTypeItem | null;
+  containerType: ContainerTypeItem | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
 /**
- * Eigenen Rollentyp für den gemeinsamen Katalog vorschlagen. Name, Hersteller
- * und Leergewicht kommen aus dem Rollentyp, die Einordnung in Serie und
+ * Eigene Gebindeart für den gemeinsamen Katalog vorschlagen. Name, Hersteller
+ * und Leergewicht kommen aus der Gebindeart, die Einordnung in Serie und
  * Ausführung ergänzt der Benutzer.
  */
-export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
+export function ProposePresetDialog({
+  containerType,
+  open,
+  onOpenChange,
+}: Props) {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
   const t = useT();
-  // Der Aufrufer gibt der Komponente einen key je Rollentyp – der Zustand wird
+  // Der Aufrufer gibt der Komponente einen key je Gebindeart – der Zustand wird
   // deshalb beim Öffnen über den Initialwert gesetzt, nicht über einen Effekt.
   const [manufacturer, setManufacturer] = useState(
-    () => spoolType?.manufacturer ?? ""
+    () => containerType?.manufacturer ?? ""
   );
   const [series, setSeries] = useState("");
   const [seriesEn, setSeriesEn] = useState("");
   const [version, setVersion] = useState("");
   const [versionEn, setVersionEn] = useState("");
-  const [spoolMaterial, setSpoolMaterial] = useState<string>("kunststoff");
+  const [containerMaterial, setContainerMaterial] =
+    useState<string>("kunststoff");
   const [materialType, setMaterialType] = useState<string>("");
   const [nominalWeight, setNominalWeight] = useState("1000");
   const [comment, setComment] = useState("");
 
-  const submit = trpc.preset.proposals.submitFromSpoolType.useMutation({
+  const submit = trpc.preset.proposals.submitFromContainerType.useMutation({
     onSuccess: () => {
       toast.success(t.proposeChange.submitted);
       utils.preset.proposals.mine.invalidate();
@@ -71,7 +76,7 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!spoolType) return;
+    if (!containerType) return;
     const nominal = parseInt(nominalWeight, 10);
     if (!manufacturer.trim())
       return toast.error(t.proposePreset.manufacturerRequired);
@@ -79,17 +84,18 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
     if (!version.trim()) return toast.error(t.proposePreset.versionRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.proposePreset.nominalInvalid);
-    if (spoolType.tareWeight >= nominal)
+    if (containerType.tareWeight >= nominal)
       return toast.error(t.proposePreset.tareTooLarge);
 
     submit.mutate({
-      spoolTypeId: spoolType.id,
+      containerTypeId: containerType.id,
       manufacturer: manufacturer.trim(),
       series: series.trim(),
       seriesI18n: seriesEn.trim() ? { en: seriesEn.trim() } : undefined,
       version: version.trim(),
       versionI18n: versionEn.trim() ? { en: versionEn.trim() } : undefined,
-      spoolMaterial: spoolMaterial as (typeof SPOOL_MATERIALS)[number],
+      containerMaterial:
+        containerMaterial as (typeof CONTAINER_MATERIALS)[number],
       materialTypes: materialType.trim() ? [materialType.trim()] : [],
       nominalWeight: nominal,
       comment: comment.trim() || undefined,
@@ -103,8 +109,8 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
           <DialogTitle>{t.proposePreset.title}</DialogTitle>
           <DialogDescription>
             {t.proposePreset.description({
-              name: spoolType?.name ?? "",
-              tare: formatGrams(spoolType?.tareWeight ?? 0),
+              name: containerType?.name ?? "",
+              tare: formatGrams(containerType?.tareWeight ?? 0),
             })}{" "}
             {t.proposePreset.descriptionSuffix}
           </DialogDescription>
@@ -167,15 +173,18 @@ export function ProposePresetDialog({ spoolType, open, onOpenChange }: Props) {
           ))}
           <div className="grid grid-cols-2 gap-3">
             <div className="grid gap-2">
-              <Label>{t.proposePreset.spoolMaterialLabel}</Label>
-              <Select value={spoolMaterial} onValueChange={setSpoolMaterial}>
+              <Label>{t.proposePreset.containerMaterialLabel}</Label>
+              <Select
+                value={containerMaterial}
+                onValueChange={setContainerMaterial}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {SPOOL_MATERIALS.map(m => (
+                  {CONTAINER_MATERIALS.map(m => (
                     <SelectItem key={m} value={m}>
-                      {t.preset.spoolMaterial[m]}
+                      {t.preset.containerMaterial[m]}
                     </SelectItem>
                   ))}
                 </SelectContent>

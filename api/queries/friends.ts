@@ -16,7 +16,7 @@ import {
   type MaterialKind,
   type SecondaryAmount,
 } from "@contracts/materials";
-import { resolveSpoolTare } from "@contracts/presets";
+import { resolveContainerTare } from "@contracts/presets";
 import {
   friendships,
   loanRequests,
@@ -274,8 +274,8 @@ const FRIEND_MATERIAL_COLUMNS = {
   Mitgeladene Relationen – ebenfalls nur mit den Spalten, die für die Rechnung
   gebraucht werden.
 
-  Von den Rollen und der Box kommt allein das Leergewicht: `resolveSpoolTare`
-  verlangt strukturell bloß `{ tareWeight }`, und `spoolType.name`/`notes` sind
+  Von den Rollen und der Box kommt allein das Leergewicht: `resolveContainerTare`
+  verlangt strukturell bloß `{ tareWeight }`, und `containerType.name`/`notes` sind
   Freitext des Besitzers.
 
   Die Lagerbox ist für Freunde unsichtbar, ihr Leergewicht geht aber in die
@@ -290,8 +290,8 @@ const FRIEND_MATERIAL_COLUMNS = {
 const TARE_ONLY = { columns: { tareWeight: true } as const };
 
 const FRIEND_MATERIAL_WITH = {
-  spoolType: TARE_ONLY,
-  spoolPresetVariant: TARE_ONLY,
+  containerType: TARE_ONLY,
+  containerPresetVariant: TARE_ONLY,
   storageBox: TARE_ONLY,
   /*
     Vom Lager nur Materialart und Stärke – die beiden Angaben, die die
@@ -331,8 +331,8 @@ export type FriendMaterialRow = {
   texture: string | null;
   nominalWeight: number;
   densityGramsPerLiter: number | null;
-  spoolType: { tareWeight: number } | null;
-  spoolPresetVariant: { tareWeight: number } | null;
+  containerType: { tareWeight: number } | null;
+  containerPresetVariant: { tareWeight: number } | null;
   storageBox: { tareWeight: number } | null;
   lager: {
     materialKind: MaterialKind;
@@ -353,7 +353,7 @@ export function toFriendMaterial(
   row: FriendMaterialRow,
   ownerName: string
 ): FriendMaterial {
-  const tare = resolveSpoolTare(row) + (row.storageBox?.tareWeight ?? 0);
+  const tare = resolveContainerTare(row) + (row.storageBox?.tareWeight ?? 0);
   const last = row.weighings.at(0);
   const remainingWeight =
     last != null ? Math.max(0, last.grossWeight - tare) : row.nominalWeight;

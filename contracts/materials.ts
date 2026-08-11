@@ -182,7 +182,7 @@ function densityKey(materialType: string): string {
  *
  * **Einzige Stelle, an der die Priorität festgelegt ist** – eigener Wert am
  * Material, sonst die Tabelle nach Materialart-Bezeichnung, sonst die
- * Materialart des Lagers. Analog zu `resolveSpoolTare` in `contracts/presets.ts`
+ * Materialart des Lagers. Analog zu `resolveContainerTare` in `contracts/presets.ts`
  * bewusst rein und von Server und Client gemeinsam genutzt, damit die
  * Zweitanzeige nicht an zwei Orten verschieden herauskommt.
  */

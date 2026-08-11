@@ -37,7 +37,7 @@ const lagerInput = z.object({
  *
  * Die Regel selbst steht als reine Funktion in `contracts/materials.ts` und ist
  * dort ohne Datenbank getestet; hier wird sie nur auf den Zustand **nach** dem
- * Patch angewandt – dasselbe Vorgehen wie bei der Rollenwahl in
+ * Patch angewandt – dasselbe Vorgehen wie bei der Gebindewahl in
  * `validateForeignKeys` (`api/materialRouter.ts`). Ohne das könnte eine
  * Teilaktualisierung ein Harzlager mit einer Filamentstärke hinterlassen.
  */

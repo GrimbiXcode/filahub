@@ -150,7 +150,7 @@ describe("proposalNewPayloadSchema", () => {
     kind: "new",
     manufacturer: { name: "Sunlu" },
     series: { name: "PLA Meta", materialTypes: ["pla"] },
-    version: { name: "Kunststoffspule", spoolMaterial: "kunststoff" },
+    version: { name: "Kunststoffspule", containerMaterial: "kunststoff" },
     variant: { nominalWeight: 1000, tareWeight: 178 },
   };
 
@@ -170,7 +170,7 @@ describe("proposalNewPayloadSchema", () => {
   it("lehnt ein unbekanntes Spulenmaterial ab", () => {
     const result = proposalNewPayloadSchema.safeParse({
       ...payload,
-      version: { name: "X", spoolMaterial: "holz" },
+      version: { name: "X", containerMaterial: "holz" },
     });
     expect(result.success).toBe(false);
   });

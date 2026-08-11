@@ -18,20 +18,20 @@ function material(
     priceCents: null,
     purchaseDate: null,
     nominalWeight: 1000,
-    spoolTypeId: null,
-    spoolPresetVariantId: null,
+    containerTypeId: null,
+    containerPresetVariantId: null,
     storageBoxId: null,
     notes: null,
     createdAt: new Date("2026-01-01"),
     updatedAt: new Date("2026-01-01"),
-    spoolType: null,
+    containerType: null,
     storageBox: null,
-    spoolPresetVariant: null,
+    containerPresetVariant: null,
     ...overrides,
   } as MaterialWithRelations;
 }
 
-const ownSpool = {
+const ownContainer = {
   id: 7,
   userId: 1,
   name: "Kunststoffspule 1 kg",
@@ -68,8 +68,8 @@ const presetVariant = {
     id: 5,
     seriesId: 3,
     name: "Kartonspule (ab 2023)",
-    nameI18n: { en: "Cardboard spool (from 2023)" },
-    spoolMaterial: "karton" as const,
+    nameI18n: { en: "Cardboard container (from 2023)" },
+    containerMaterial: "karton" as const,
     validFrom: null,
     validTo: null,
     ...meta,
@@ -105,7 +105,7 @@ const box = {
 describe("computeMaterialStats", () => {
   it("verhält sich ohne Preset-Variante exakt wie bisher", () => {
     const stats = computeMaterialStats(
-      material({ spoolType: ownSpool, storageBox: box }),
+      material({ containerType: ownContainer, storageBox: box }),
       {
         id: 1,
         materialId: 1,
@@ -117,14 +117,14 @@ describe("computeMaterialStats", () => {
       1
     );
     expect(stats.tareWeight).toBe(720);
-    expect(stats.spoolTareWeight).toBe(220);
+    expect(stats.containerTareWeight).toBe(220);
     expect(stats.remainingWeight).toBe(780);
-    expect(stats.spoolLabel).toBe("Kunststoffspule 1 kg");
+    expect(stats.containerLabel).toBe("Kunststoffspule 1 kg");
   });
 
   it("nutzt das Leergewicht der Preset-Variante", () => {
     const stats = computeMaterialStats(
-      material({ spoolPresetVariant: presetVariant }),
+      material({ containerPresetVariant: presetVariant }),
       {
         id: 1,
         materialId: 1,
@@ -135,52 +135,55 @@ describe("computeMaterialStats", () => {
       },
       1
     );
-    expect(stats.spoolTareWeight).toBe(130);
+    expect(stats.containerTareWeight).toBe(130);
     expect(stats.tareWeight).toBe(130);
     expect(stats.remainingWeight).toBe(1000);
     expect(stats.remainingPercent).toBe(100);
-    expect(stats.spoolLabel).toBe(
+    expect(stats.containerLabel).toBe(
       "Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg"
     );
   });
 
   it("bevorzugt die Preset-Variante, falls doch einmal beides gesetzt ist", () => {
     const stats = computeMaterialStats(
-      material({ spoolType: ownSpool, spoolPresetVariant: presetVariant }),
+      material({
+        containerType: ownContainer,
+        containerPresetVariant: presetVariant,
+      }),
       null,
       0
     );
-    expect(stats.spoolTareWeight).toBe(130);
-    expect(stats.spoolLabel).toBe(
+    expect(stats.containerTareWeight).toBe(130);
+    expect(stats.containerLabel).toBe(
       "Polymaker · PolyTerra PLA · Kartonspule (ab 2023) · 1 kg"
     );
   });
 
   it("baut das Etikett der Preset-Variante in der gewünschten Sprache", () => {
     const stats = computeMaterialStats(
-      material({ spoolPresetVariant: presetVariant }),
+      material({ containerPresetVariant: presetVariant }),
       null,
       0,
       "en"
     );
     // Der Hersteller bleibt gleich, die Ausführung ist übersetzt, die Serie
     // hat keine Übersetzung und fällt deshalb auf den Grundnamen zurück.
-    expect(stats.spoolLabel).toBe(
-      "Polymaker · PolyTerra PLA · Cardboard spool (from 2023) · 1 kg"
+    expect(stats.containerLabel).toBe(
+      "Polymaker · PolyTerra PLA · Cardboard container (from 2023) · 1 kg"
     );
   });
 
   it("liefert ohne Rolle Tara 0 und kein Etikett", () => {
     const stats = computeMaterialStats(material(), null, 0);
     expect(stats.tareWeight).toBe(0);
-    expect(stats.spoolLabel).toBeNull();
+    expect(stats.containerLabel).toBeNull();
     // Ohne Wägung gilt die Nennmenge als Restmenge
     expect(stats.remainingWeight).toBe(1000);
   });
 
   it("begrenzt die Restmenge nach unten auf 0", () => {
     const stats = computeMaterialStats(
-      material({ spoolPresetVariant: presetVariant }),
+      material({ containerPresetVariant: presetVariant }),
       {
         id: 1,
         materialId: 1,

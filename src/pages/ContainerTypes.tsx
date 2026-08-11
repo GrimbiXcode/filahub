@@ -43,41 +43,42 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
-import type { SpoolTypeItem } from "@/types";
+import type { ContainerTypeItem } from "@/types";
 
-export default function SpoolTypes() {
+export default function ContainerTypes() {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
   const t = useT();
-  const { data: spoolTypes, isLoading } = trpc.spoolType.list.useQuery();
+  const { data: containerTypes, isLoading } =
+    trpc.containerType.list.useQuery();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<SpoolTypeItem | null>(null);
-  const [deleting, setDeleting] = useState<SpoolTypeItem | null>(null);
-  const [proposing, setProposing] = useState<SpoolTypeItem | null>(null);
+  const [editing, setEditing] = useState<ContainerTypeItem | null>(null);
+  const [deleting, setDeleting] = useState<ContainerTypeItem | null>(null);
+  const [proposing, setProposing] = useState<ContainerTypeItem | null>(null);
 
   const [name, setName] = useState("");
   const [manufacturer, setManufacturer] = useState("");
   const [tareWeight, setTareWeight] = useState("");
   const [notes, setNotes] = useState("");
-  // Leergewicht-Rechner: neue (volle) Rolle wiegen
+  // Leergewicht-Rechner: volles Gebinde wiegen
   const [calcGross, setCalcGross] = useState("");
   const [calcNominal, setCalcNominal] = useState("");
 
   /** Dialog öffnen und die Felder aus dem Eintrag befüllen (`null` = neu). */
-  const openDialog = (spoolType: SpoolTypeItem | null) => {
-    setEditing(spoolType);
-    setName(spoolType?.name ?? "");
-    setManufacturer(spoolType?.manufacturer ?? "");
-    setTareWeight(spoolType ? String(spoolType.tareWeight) : "");
-    setNotes(spoolType?.notes ?? "");
+  const openDialog = (containerType: ContainerTypeItem | null) => {
+    setEditing(containerType);
+    setName(containerType?.name ?? "");
+    setManufacturer(containerType?.manufacturer ?? "");
+    setTareWeight(containerType ? String(containerType.tareWeight) : "");
+    setNotes(containerType?.notes ?? "");
     setCalcGross("");
     setCalcNominal("");
     setDialogOpen(true);
   };
 
   /**
-   * Berechnetes Leergewicht: gemessenes Gewicht der neuen Rolle minus
+   * Berechnetes Leergewicht: gemessenes Gewicht des vollen Gebindes minus
    * Nenn-Füllmenge des Materials (z. B. 1250 g - 1000 g = 250 g).
    */
   const computeTare = (grossValue: string, nominalValue: string) => {
@@ -102,30 +103,30 @@ export default function SpoolTypes() {
   };
 
   const invalidate = () => {
-    utils.spoolType.list.invalidate();
+    utils.containerType.list.invalidate();
     utils.material.list.invalidate();
     utils.material.byId.invalidate();
   };
 
-  const createMutation = trpc.spoolType.create.useMutation({
+  const createMutation = trpc.containerType.create.useMutation({
     onSuccess: () => {
-      toast.success(t.spoolTypes.created);
+      toast.success(t.containerTypes.created);
       invalidate();
       setDialogOpen(false);
     },
     onError: e => toast.error(e.message),
   });
-  const updateMutation = trpc.spoolType.update.useMutation({
+  const updateMutation = trpc.containerType.update.useMutation({
     onSuccess: () => {
-      toast.success(t.spoolTypes.saved);
+      toast.success(t.containerTypes.saved);
       invalidate();
       setDialogOpen(false);
     },
     onError: e => toast.error(e.message),
   });
-  const deleteMutation = trpc.spoolType.delete.useMutation({
+  const deleteMutation = trpc.containerType.delete.useMutation({
     onSuccess: () => {
-      toast.success(t.spoolTypes.deleted);
+      toast.success(t.containerTypes.deleted);
       invalidate();
       setDeleting(null);
     },
@@ -150,20 +151,20 @@ export default function SpoolTypes() {
     else createMutation.mutate(payload);
   };
 
-  const list = spoolTypes ?? [];
+  const list = containerTypes ?? [];
 
   return (
     <AuthLayout>
       <div className="flex flex-col gap-4 sm:gap-6">
         <PageHeader
-          title={t.spoolTypes.title}
-          description={t.spoolTypes.description}
+          title={t.containerTypes.title}
+          description={t.containerTypes.description}
           actions={
             <Button
               className="w-full sm:w-auto"
               onClick={() => openDialog(null)}
             >
-              <Plus className="mr-2 h-4 w-4" /> {t.spoolTypes.newType}
+              <Plus className="mr-2 h-4 w-4" /> {t.containerTypes.newType}
             </Button>
           }
         />
@@ -173,12 +174,14 @@ export default function SpoolTypes() {
               auf zwei Buchstaben zu kürzen. */}
           <div className="-mx-1 overflow-x-auto px-1 pb-1">
             <TabsList className="w-max">
-              <TabsTrigger value="eigene">{t.spoolTypes.tabOwn}</TabsTrigger>
+              <TabsTrigger value="eigene">
+                {t.containerTypes.tabOwn}
+              </TabsTrigger>
               <TabsTrigger value="katalog">
-                {t.spoolTypes.tabCatalog}
+                {t.containerTypes.tabCatalog}
               </TabsTrigger>
               <TabsTrigger value="vorschlaege">
-                {t.spoolTypes.tabProposals}
+                {t.containerTypes.tabProposals}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -197,12 +200,13 @@ export default function SpoolTypes() {
               <Card>
                 <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
                   <Disc3 className="h-10 w-10 text-muted-foreground/50" />
-                  <p className="font-medium">{t.spoolTypes.emptyTitle}</p>
+                  <p className="font-medium">{t.containerTypes.emptyTitle}</p>
                   <p className="max-w-md text-sm text-muted-foreground">
-                    {t.spoolTypes.emptyDescription}
+                    {t.containerTypes.emptyDescription}
                   </p>
                   <Button onClick={() => openDialog(null)}>
-                    <Plus className="mr-2 h-4 w-4" /> {t.spoolTypes.firstType}
+                    <Plus className="mr-2 h-4 w-4" />{" "}
+                    {t.containerTypes.firstType}
                   </Button>
                 </CardContent>
               </Card>
@@ -221,7 +225,7 @@ export default function SpoolTypes() {
                             {s.name}
                           </p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {t.spoolTypes.tareSuffix({
+                            {t.containerTypes.tareSuffix({
                               amount: formatGrams(s.tareWeight),
                             })}
                             {s.manufacturer ? ` · ${s.manufacturer}` : ""}
@@ -232,7 +236,7 @@ export default function SpoolTypes() {
                             variant="secondary"
                             className="shrink-0 font-normal"
                           >
-                            {t.spoolTypes.fromCatalog}
+                            {t.containerTypes.fromCatalog}
                           </Badge>
                         )}
                       </div>
@@ -253,7 +257,7 @@ export default function SpoolTypes() {
                           variant="ghost"
                           size="icon"
                           className="h-10 w-10"
-                          aria-label={t.spoolTypes.proposeAsPreset}
+                          aria-label={t.containerTypes.proposeAsPreset}
                           onClick={() => setProposing(s)}
                         >
                           <Upload className="h-4 w-4 text-muted-foreground" />
@@ -262,7 +266,7 @@ export default function SpoolTypes() {
                           variant="ghost"
                           size="icon"
                           className="h-10 w-10"
-                          aria-label={t.spoolTypes.deleteType}
+                          aria-label={t.containerTypes.deleteType}
                           onClick={() => setDeleting(s)}
                         >
                           <Trash2 className="h-4 w-4 text-muted-foreground" />
@@ -314,8 +318,8 @@ export default function SpoolTypes() {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  aria-label={t.spoolTypes.proposeAsPreset}
-                                  title={t.spoolTypes.proposeAsPreset}
+                                  aria-label={t.containerTypes.proposeAsPreset}
+                                  title={t.containerTypes.proposeAsPreset}
                                   onClick={() => setProposing(s)}
                                 >
                                   <Upload className="h-4 w-4 text-muted-foreground" />
@@ -372,7 +376,7 @@ export default function SpoolTypes() {
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {editing ? t.spoolTypes.editType : t.spoolTypes.newType}
+              {editing ? t.containerTypes.editType : t.containerTypes.newType}
             </DialogTitle>
             <DialogDescription>
               Das Leergewicht der leeren Rolle bzw. Verpackung in Gramm.
@@ -385,7 +389,7 @@ export default function SpoolTypes() {
                 id="s-name"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder={t.spoolTypes.namePlaceholder}
+                placeholder={t.containerTypes.namePlaceholder}
               />
             </div>
             <div className="grid gap-2">
@@ -394,22 +398,22 @@ export default function SpoolTypes() {
                 id="s-manufacturer"
                 value={manufacturer}
                 onChange={e => setManufacturer(e.target.value)}
-                placeholder={t.spoolTypes.manufacturerPlaceholder}
+                placeholder={t.containerTypes.manufacturerPlaceholder}
               />
             </div>
-            {/* Leergewicht-Rechner: neue Rolle wiegen */}
+            {/* Leergewicht-Rechner: volles Gebinde wiegen */}
             <div className="grid gap-3 rounded-lg border bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Calculator className="h-4 w-4 text-muted-foreground" />
-                {t.spoolTypes.calcTitle}
+                {t.containerTypes.calcTitle}
               </div>
               <p className="text-xs text-muted-foreground">
-                {t.spoolTypes.calcDescription}
+                {t.containerTypes.calcDescription}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid gap-1.5">
                   <Label htmlFor="s-calc-gross" className="text-xs">
-                    {t.spoolTypes.calcGross}
+                    {t.containerTypes.calcGross}
                   </Label>
                   <Input
                     id="s-calc-gross"
@@ -421,12 +425,12 @@ export default function SpoolTypes() {
                       setCalcGross(e.target.value);
                       applyCalculatedTare(e.target.value, calcNominal);
                     }}
-                    placeholder={t.spoolTypes.calcGrossPlaceholder}
+                    placeholder={t.containerTypes.calcGrossPlaceholder}
                   />
                 </div>
                 <div className="grid gap-1.5">
                   <Label htmlFor="s-calc-nominal" className="text-xs">
-                    {t.spoolTypes.calcNominal}
+                    {t.containerTypes.calcNominal}
                   </Label>
                   <Input
                     id="s-calc-nominal"
@@ -438,14 +442,14 @@ export default function SpoolTypes() {
                       setCalcNominal(e.target.value);
                       applyCalculatedTare(calcGross, e.target.value);
                     }}
-                    placeholder={t.spoolTypes.calcNominalPlaceholder}
+                    placeholder={t.containerTypes.calcNominalPlaceholder}
                   />
                 </div>
               </div>
               {calculatedTare != null &&
                 (calculatedTare >= 0 ? (
                   <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm font-medium">
-                    {t.spoolTypes.calcResult({
+                    {t.containerTypes.calcResult({
                       amount: formatGrams(calculatedTare),
                     })}
                     <span className="ml-1 font-normal text-muted-foreground">
@@ -455,12 +459,12 @@ export default function SpoolTypes() {
                   </div>
                 ) : (
                   <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                    {t.spoolTypes.calcInvalid}
+                    {t.containerTypes.calcInvalid}
                   </div>
                 ))}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="s-tare">{t.spoolTypes.tareLabel}</Label>
+              <Label htmlFor="s-tare">{t.containerTypes.tareLabel}</Label>
               <Input
                 id="s-tare"
                 type="number"
@@ -468,7 +472,7 @@ export default function SpoolTypes() {
                 min={0}
                 value={tareWeight}
                 onChange={e => setTareWeight(e.target.value)}
-                placeholder={t.spoolTypes.tarePlaceholder}
+                placeholder={t.containerTypes.tarePlaceholder}
               />
             </div>
             <div className="grid gap-2">
@@ -503,7 +507,7 @@ export default function SpoolTypes() {
 
       <ProposePresetDialog
         key={proposing?.id ?? "none"}
-        spoolType={proposing}
+        containerType={proposing}
         open={proposing != null}
         onOpenChange={o => !o && setProposing(null)}
       />
@@ -514,9 +518,11 @@ export default function SpoolTypes() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{t.spoolTypes.deleteTitle}</AlertDialogTitle>
+            <AlertDialogTitle>{t.containerTypes.deleteTitle}</AlertDialogTitle>
             <AlertDialogDescription>
-              {t.spoolTypes.deleteDescription({ name: deleting?.name ?? "" })}
+              {t.containerTypes.deleteDescription({
+                name: deleting?.name ?? "",
+              })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

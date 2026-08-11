@@ -8,8 +8,13 @@
 /**
  * Format-Version des Exports. Zu erhöhen, sobald sich der Aufbau so ändert,
  * dass ein älterer Export anders gelesen werden müsste.
+ *
+ * `2` seit 2.3.0: Die Abschnitte `spoolTypes` und `hiddenSpoolPresets` heißen
+ * jetzt `containerTypes` und `hiddenContainerPresets`. Eine Datei, die jemand
+ * vorher heruntergeladen hat, trägt noch die alten Namen – deshalb steht die
+ * Version drin.
  */
-export const ACCOUNT_EXPORT_VERSION = 1;
+export const ACCOUNT_EXPORT_VERSION = 2;
 
 /**
  * Tabellen, die im Export enthalten sein müssen.
@@ -29,9 +34,9 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "lager",
   "materials",
   "weighings",
-  "spoolTypes",
+  "containerTypes",
   "storageBoxes",
-  "hiddenSpoolPresets",
+  "hiddenContainerPresets",
   "presetProposals",
   "loginCodes",
   /*

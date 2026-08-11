@@ -7,11 +7,14 @@ import {
   proposalChangePayloadSchema,
   proposalNewPayloadSchema,
   resolveName,
-  SPOOL_MATERIALS,
+  CONTAINER_MATERIALS,
   materialTypesSchema,
 } from "@contracts/presets";
 import { createRouter, authedQuery } from "./middleware";
-import { createSpoolType, findSpoolTypesByUser } from "./queries/filament";
+import {
+  createContainerType,
+  findContainerTypesByUser,
+} from "./queries/filament";
 import {
   closeProposal,
   countOpenProposals,
@@ -42,13 +45,13 @@ const proposeChangeInput = z.object({
 
 const proposeNewInput = z.object({
   payload: proposalNewPayloadSchema,
-  sourceSpoolTypeId: z.number().int().positive().nullable().optional(),
+  sourceContainerTypeId: z.number().int().positive().nullable().optional(),
   comment: z.string().trim().max(1000).optional(),
 });
 
-/** Vorschlag direkt aus einem eigenen Rollentyp heraus */
-const proposeFromSpoolTypeInput = z.object({
-  spoolTypeId: z.number().int().positive(),
+/** Vorschlag direkt aus einer eigenen Gebindeart heraus */
+const proposeFromContainerTypeInput = z.object({
+  containerTypeId: z.number().int().positive(),
   manufacturer: z
     .string()
     .trim()
@@ -63,7 +66,7 @@ const proposeFromSpoolTypeInput = z.object({
     .min(1, "Bezeichnung der Ausführung ist erforderlich")
     .max(255),
   versionI18n: nameI18nInputSchema,
-  spoolMaterial: z.enum(SPOOL_MATERIALS).nullable().optional(),
+  containerMaterial: z.enum(CONTAINER_MATERIALS).nullable().optional(),
   materialTypes: materialTypesSchema,
   nominalWeight: z
     .number()
@@ -130,7 +133,7 @@ export const presetRouter = createRouter({
       return { ok: true };
     }),
 
-  /** Preset als eigenen, frei editierbaren Rollentyp übernehmen */
+  /** Preset als eigene, frei editierbare Gebindeart übernehmen */
   copyToOwn: authedQuery
     .input(
       z.object({
@@ -146,7 +149,7 @@ export const presetRouter = createRouter({
           message: "Preset-Variante nicht gefunden",
         });
       }
-      const created = await createSpoolType({
+      const created = await createContainerType({
         userId: ctx.user.id,
         name:
           input.name?.trim() ||
@@ -176,26 +179,26 @@ export const presetRouter = createRouter({
           kind: "new",
           targetType: "variant",
           payload: input.payload,
-          sourceSpoolTypeId: input.sourceSpoolTypeId,
+          sourceContainerTypeId: input.sourceContainerTypeId,
           comment: input.comment,
         });
       }),
 
     /**
-     * Bequemer Weg aus der Rollentyp-Liste: Name, Hersteller und Leergewicht
-     * kommen aus dem eigenen Rollentyp, der Rest aus dem Formular.
+     * Bequemer Weg aus der Gebindeliste: Name, Hersteller und Leergewicht
+     * kommen aus der eigenen Gebindeart, der Rest aus dem Formular.
      */
-    submitFromSpoolType: authedQuery
-      .input(proposeFromSpoolTypeInput)
+    submitFromContainerType: authedQuery
+      .input(proposeFromContainerTypeInput)
       .mutation(async ({ ctx, input }) => {
         await assertProposalQuota(ctx.user.id);
-        const own = (await findSpoolTypesByUser(ctx.user.id)).find(
-          s => s.id === input.spoolTypeId
+        const own = (await findContainerTypesByUser(ctx.user.id)).find(
+          s => s.id === input.containerTypeId
         );
         if (!own) {
           throw new TRPCError({
             code: "NOT_FOUND",
-            message: "Rollentyp nicht gefunden",
+            message: "Gebindeart nicht gefunden",
           });
         }
         const payload = proposalNewPayloadSchema.safeParse({
@@ -209,7 +212,7 @@ export const presetRouter = createRouter({
           version: {
             name: input.version,
             nameI18n: input.versionI18n,
-            spoolMaterial: input.spoolMaterial ?? null,
+            containerMaterial: input.containerMaterial ?? null,
           },
           variant: {
             nominalWeight: input.nominalWeight,
@@ -230,7 +233,7 @@ export const presetRouter = createRouter({
           kind: "new",
           targetType: "variant",
           payload: payload.data,
-          sourceSpoolTypeId: own.id,
+          sourceContainerTypeId: own.id,
           comment: input.comment,
         });
       }),

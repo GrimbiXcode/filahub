@@ -1,8 +1,10 @@
 import { Navigate, Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
+  CONTAINER_TYPES_PATH,
   DRYBOXES_PATH,
   LAGER_PATH,
+  LEGACY_CONTAINER_TYPES_PATH,
   LEGACY_DRYBOXES_PATH,
   LEGAL_PATHS,
   RELEASE_NOTES_PATH,
@@ -19,7 +21,7 @@ import Home from "./pages/Home";
 import LagerPage from "./pages/Lager";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
-import SpoolTypes from "./pages/SpoolTypes";
+import ContainerTypes from "./pages/ContainerTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Legal from "./pages/Legal";
 import Login from "./pages/Login";
@@ -36,12 +38,17 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/import" element={<Import />} />
         <Route path="/material/:id" element={<MaterialDetail />} />
-        <Route path="/rollentypen" element={<SpoolTypes />} />
+        <Route path={CONTAINER_TYPES_PATH} element={<ContainerTypes />} />
         <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />
-        {/* Alter Pfad aus 2.1.0 – gesetzte Lesezeichen sollen nicht brechen. */}
+        {/* Alte Pfade aus 2.1.0 bzw. 2.2.0 – gesetzte Lesezeichen sollen nicht
+            brechen. */}
         <Route
           path={LEGACY_DRYBOXES_PATH}
           element={<Navigate to={DRYBOXES_PATH} replace />}
+        />
+        <Route
+          path={LEGACY_CONTAINER_TYPES_PATH}
+          element={<Navigate to={CONTAINER_TYPES_PATH} replace />}
         />
         <Route path={LAGER_PATH} element={<LagerPage />} />
         <Route path="/freunde" element={<Friends />} />

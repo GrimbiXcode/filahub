@@ -35,7 +35,7 @@ const FORBIDDEN_FIELDS = [
   "storageBox",
   "weighings",
   "lastWeighing",
-  "spoolTypeId",
+  "containerTypeId",
   "createdAt",
   "updatedAt",
   /*
@@ -93,8 +93,8 @@ beforeEach(async () => {
       filamentDiameterUm: 1750,
     })
     .returning();
-  const [spoolType] = await db()
-    .insert(schema.spoolTypes)
+  const [containerType] = await db()
+    .insert(schema.containerTypes)
     .values({ userId: alex.id, name: "Kartonrolle", tareWeight: 140 })
     .returning();
   const [box] = await db()
@@ -119,7 +119,7 @@ beforeEach(async () => {
       nominalWeight: 1000,
       priceCents: 2499,
       purchaseDate: "2026-01-15",
-      spoolTypeId: spoolType.id,
+      containerTypeId: containerType.id,
       storageBoxId: box.id,
       notes: "Freitext mit Personenbezug",
     })

@@ -13,7 +13,7 @@ import {
   findWeighing,
   materialBelongsToUser,
   presetVariantIsSelectable,
-  spoolTypeBelongsToUser,
+  containerTypeBelongsToUser,
   storageBoxBelongsToUser,
   updateMaterial,
 } from "./queries/filament";
@@ -49,22 +49,22 @@ const materialInput = z.object({
     .max(25000, "Dichte ist unplausibel hoch")
     .nullable()
     .optional(),
-  spoolTypeId: z.number().int().positive().nullable().optional(),
-  spoolPresetVariantId: z.number().int().positive().nullable().optional(),
+  containerTypeId: z.number().int().positive().nullable().optional(),
+  containerPresetVariantId: z.number().int().positive().nullable().optional(),
   storageBoxId: z.number().int().positive().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
 
 /**
- * Einzige Stelle, an der die Rollenauswahl geprüft wird: entweder ein eigener
- * Rollentyp oder eine Variante aus dem Preset-Katalog, nie beides. Geprüft
+ * Einzige Stelle, an der die Gebindeauswahl geprüft wird: entweder eine eigene
+ * Gebindeart oder eine Variante aus dem Preset-Katalog, nie beides. Geprüft
  * wird immer der Zustand *nach* dem Patch, sonst könnte man über eine
  * Teilaktualisierung beide Felder gleichzeitig belegen.
  */
 async function validateForeignKeys(
   userId: number,
-  spoolTypeId?: number | null,
-  spoolPresetVariantId?: number | null,
+  containerTypeId?: number | null,
+  containerPresetVariantId?: number | null,
   storageBoxId?: number | null,
   lagerId?: number | null
 ) {
@@ -79,29 +79,29 @@ async function validateForeignKeys(
   if (lagerId != null && !(await lagerBelongsToUser(userId, lagerId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiges Lager" });
   }
-  if (spoolTypeId != null && spoolPresetVariantId != null) {
+  if (containerTypeId != null && containerPresetVariantId != null) {
     throw new TRPCError({
       code: "BAD_REQUEST",
       message:
-        "Bitte entweder einen eigenen Rollentyp oder eine Rolle aus dem Katalog wählen.",
+        "Bitte entweder eine eigene Gebindeart oder ein Gebinde aus dem Katalog wählen.",
     });
   }
   if (
-    spoolTypeId != null &&
-    !(await spoolTypeBelongsToUser(userId, spoolTypeId))
+    containerTypeId != null &&
+    !(await containerTypeBelongsToUser(userId, containerTypeId))
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Ungültiger Rollentyp",
+      message: "Ungültige Gebindeart",
     });
   }
   if (
-    spoolPresetVariantId != null &&
-    !(await presetVariantIsSelectable(spoolPresetVariantId))
+    containerPresetVariantId != null &&
+    !(await presetVariantIsSelectable(containerPresetVariantId))
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: "Ungültige Rolle aus dem Katalog",
+      message: "Ungültiges Gebinde aus dem Katalog",
     });
   }
   if (
@@ -151,7 +151,7 @@ export const materialRouter = createRouter({
   create: authedQuery
     .input(
       materialInput.extend({
-        /** Optionale Erstwägung (Bruttogewicht inkl. Rolle/Box) beim Kauf */
+        /** Optionale Erstwägung (Bruttogewicht inkl. Gebinde/Box) beim Kauf */
         initialGrossWeight: z.number().int().positive().nullable().optional(),
       })
     )
@@ -159,8 +159,8 @@ export const materialRouter = createRouter({
       const { initialGrossWeight, ...data } = input;
       await validateForeignKeys(
         ctx.user.id,
-        data.spoolTypeId,
-        data.spoolPresetVariantId,
+        data.containerTypeId,
+        data.containerPresetVariantId,
         data.storageBoxId,
         data.lagerId
       );
@@ -190,17 +190,17 @@ export const materialRouter = createRouter({
         });
       }
       // Effektiven Zustand nach dem Patch prüfen, nicht nur die gesendeten Felder
-      const nextSpoolTypeId =
-        data.spoolTypeId !== undefined
-          ? data.spoolTypeId
-          : existing.spoolTypeId;
+      const nextContainerTypeId =
+        data.containerTypeId !== undefined
+          ? data.containerTypeId
+          : existing.containerTypeId;
       const nextPresetVariantId =
-        data.spoolPresetVariantId !== undefined
-          ? data.spoolPresetVariantId
-          : existing.spoolPresetVariantId;
+        data.containerPresetVariantId !== undefined
+          ? data.containerPresetVariantId
+          : existing.containerPresetVariantId;
       await validateForeignKeys(
         ctx.user.id,
-        nextSpoolTypeId,
+        nextContainerTypeId,
         nextPresetVariantId,
         data.storageBoxId,
         data.lagerId
@@ -263,7 +263,7 @@ export const materialRouter = createRouter({
       return { created };
     }),
 
-  /** Neue Wägung: gemessenes Bruttogewicht (Material + Rolle + ggf. Box) */
+  /** Neue Wägung: gemessenes Bruttogewicht (Material + Gebinde + ggf. Box) */
   addWeighing: authedQuery
     .input(
       z.object({

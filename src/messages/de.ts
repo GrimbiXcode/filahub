@@ -56,7 +56,7 @@ export const de = {
   nav: {
     overview: "Materialübersicht",
     import: "Import",
-    spoolTypes: "Rollentypen",
+    containerTypes: "Gebindearten",
     storageBoxes: "Dryboxen",
     lager: "Lager",
     friends: "Freunde",
@@ -196,7 +196,7 @@ export const de = {
       "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
     dataAndAccount: "Daten und Konto",
     exportHint:
-      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Rollen, Wägungen, Rollentypen, Lagerboxen, ausgeblendete Presets, eingereichte Vorschläge und offene Login-Codes. Das Format ist dasselbe, das der Import wieder einliest.",
+      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
     exportAction: "Daten herunterladen",
     exportPending: "Wird zusammengestellt …",
     exportDone: "Export heruntergeladen",
@@ -304,7 +304,7 @@ export const de = {
     colMaterial: "Material",
     colType: "Art",
     colRemaining: "Restmenge",
-    colSpoolBox: "Rolle / Box",
+    colContainerBox: "Gebinde / Box",
     colPurchase: "Kaufdatum",
     remaining: (vars: { amount: string }) => `${vars.amount} übrig`,
     sortBy: (vars: { label: string }) => `Nach ${vars.label} sortieren`,
@@ -325,7 +325,7 @@ export const de = {
     identifier: "Kennung",
     materialType: "Materialart",
     purchaseDate: "Kaufdatum",
-    spool: "Rolle / Verpackung",
+    container: "Gebinde",
     fromCatalog: "Katalog",
     storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} Tara)`,
@@ -379,41 +379,42 @@ export const de = {
     deleted: "Drybox gelöscht",
   },
 
-  spoolTypes: {
-    title: "Rollentypen",
-    description: "Verpackungen und Spulen mit hinterlegtem Leergewicht (Tara)",
-    newType: "Neuer Rollentyp",
-    firstType: "Ersten Rollentyp anlegen",
-    tabOwn: "Meine Rollentypen",
+  containerTypes: {
+    title: "Gebindearten",
+    description:
+      "Rollen, Beutel, Flaschen und Eimer mit hinterlegtem Leergewicht (Tara)",
+    newType: "Neue Gebindeart",
+    firstType: "Erste Gebindeart anlegen",
+    tabOwn: "Meine Gebindearten",
     tabCatalog: "Preset-Katalog",
     tabProposals: "Meine Vorschläge",
-    emptyTitle: "Noch keine Rollentypen angelegt",
+    emptyTitle: "Noch keine Gebindeart angelegt",
     emptyDescription:
-      "Lege z. B. „Kunststoffspule 1 kg (140 g)“ oder „Pappspule (55 g)“ an – das Leergewicht wird bei jeder Wägung automatisch abgezogen. Fertige Rollen findest du im Preset-Katalog.",
+      "Lege z. B. „Kunststoffspule 1 kg (140 g)“, „Pappspule (55 g)“ oder „Harzflasche 250 g (60 g)“ an – das Leergewicht wird bei jeder Wägung automatisch abgezogen. Fertige Gebinde findest du im Preset-Katalog.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} Tara`,
     fromCatalog: "aus Katalog",
     proposeAsPreset: "Als Preset vorschlagen",
-    deleteType: "Rollentyp löschen",
-    editType: "Rollentyp bearbeiten",
-    deleteTitle: "Rollentyp löschen?",
+    deleteType: "Gebindeart löschen",
+    editType: "Gebindeart bearbeiten",
+    deleteTitle: "Gebindeart löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Materialien, die diesen Typ verwenden, müssen vorher umgehängt werden.`,
+      `„${vars.name}“ wird gelöscht. Materialien, die diese Gebindeart verwenden, müssen vorher umgehängt werden.`,
     namePlaceholder: "z. B. Kunststoffspule 1 kg",
     manufacturerPlaceholder: "z. B. eSun, Prusament",
     tareLabel: "Leergewicht (g) *",
     tarePlaceholder: "z. B. 140",
     calcTitle: "Leergewicht aus Wägung berechnen",
     calcDescription:
-      "Neue (volle) Rolle auf die Waage legen, Gesamtgewicht und Nenn-Füllmenge eintragen – das Leergewicht wird automatisch berechnet und unten übernommen.",
-    calcGross: "Gewicht neue Rolle (g)",
+      "Neues (volles) Gebinde auf die Waage legen, Gesamtgewicht und Nenn-Füllmenge eintragen – das Leergewicht wird automatisch berechnet und unten übernommen.",
+    calcGross: "Gewicht volles Gebinde (g)",
     calcGrossPlaceholder: "z. B. 1250",
     calcNominal: "Nenn-Füllmenge (g)",
     calcNominalPlaceholder: "z. B. 1000",
     calcResult: (vars: { amount: string }) => `Leergewicht: ${vars.amount}`,
     calcInvalid: "Das Gesamtgewicht muss größer als die Nenn-Füllmenge sein.",
-    created: "Rollentyp angelegt",
-    saved: "Rollentyp gespeichert",
-    deleted: "Rollentyp gelöscht",
+    created: "Gebindeart angelegt",
+    saved: "Gebindeart gespeichert",
+    deleted: "Gebindeart gelöscht",
   },
 
   materialForm: {
@@ -439,13 +440,13 @@ export const de = {
       vars.diameter ? `${vars.kind}, ${vars.diameter}` : vars.kind,
     lagerChangeHint:
       "Ein anderes Lager kann eine andere Stärke haben – die Umrechnung in Meter ändert sich dann mit.",
-    spool: "Rolle / Verpackung",
+    container: "Gebinde",
     storageBox: "Drybox",
     chooseBox: "Drybox wählen",
     noBox: "Keine Box",
     noBoxesHint: "Noch keine Dryboxen angelegt – unter „Dryboxen“ hinzufügen.",
     initialLabel: (vars: { withBox: boolean }) =>
-      `Erstwägung inkl. Rolle${vars.withBox ? " + Box" : ""} (g, optional)`,
+      `Erstwägung inkl. Gebinde${vars.withBox ? " + Box" : ""} (g, optional)`,
     initialPlaceholder: "Gemessenes Gesamtgewicht beim Kauf",
     notesPlaceholder: "Drucktemperatur, Besonderheiten …",
     created: "Material angelegt",
@@ -457,24 +458,24 @@ export const de = {
     initialInvalid: "Bitte ein gültiges Anfangsgewicht angeben",
   },
 
-  spoolPicker: {
-    choose: "Rolle wählen",
+  containerPicker: {
+    choose: "Gebinde wählen",
     searchPlaceholder: "Hersteller, Serie oder Gewicht suchen …",
-    empty: "Keine passende Rolle gefunden.",
+    empty: "Kein passendes Gebinde gefunden.",
     none: "Keine / unbekannt",
-    ownTypes: "Eigene Rollentypen",
-    catalogMore: "Weitere Katalog-Rollen",
-    catalog: "Katalog-Rollen",
+    ownTypes: "Eigene Gebindearten",
+    catalogMore: "Weitere aus dem Katalog",
+    catalog: "Aus dem Katalog",
     nothingYet:
-      "Noch keine Rollentypen angelegt – unter „Rollentypen“ hinzufügen oder ein Preset aus dem Katalog wählen.",
+      "Noch keine Gebindeart angelegt – unter „Gebindearten“ hinzufügen oder ein Preset aus dem Katalog wählen.",
   },
 
   presetCatalog: {
     emptyTitle: "Der Preset-Katalog ist noch leer",
     emptyDescription:
-      "Sobald Hersteller und Spulen hinterlegt sind, kannst du sie hier auswählen – das Leergewicht wird dann automatisch übernommen.",
+      "Sobald Hersteller und Gebinde hinterlegt sind, kannst du sie hier auswählen – das Leergewicht wird dann automatisch übernommen.",
     intro:
-      "Vorkonfigurierte Rollen. Was du hier ausblendest, verschwindet aus deiner Auswahl beim Material – bereits zugewiesene Rollen bleiben erhalten. Über „Übernehmen“ wird aus einem Preset ein eigener, frei bearbeitbarer Rollentyp.",
+      "Vorkonfigurierte Gebinde. Was du hier ausblendest, verschwindet aus deiner Auswahl beim Material – bereits zugewiesene Gebinde bleiben erhalten. Über „Übernehmen“ wird aus einem Preset eine eigene, frei bearbeitbare Gebindeart.",
     show: "Wieder einblenden",
     hide: "Für mich ausblenden",
     hidden: "ausgeblendet",
@@ -488,9 +489,9 @@ export const de = {
     validTo: (vars: { date: string }) => `bis ${vars.date}`,
     nominalWeight: "Nenngewicht",
     dimensions: "Abmessungen (Ø × Breite × Bohrung)",
-    adopt: "Als eigenen Rollentyp übernehmen",
+    adopt: "Als eigene Gebindeart übernehmen",
     adopted: (vars: { name: string }) =>
-      `„${vars.name}“ als eigener Rollentyp übernommen`,
+      `„${vars.name}“ als eigene Gebindeart übernommen`,
   },
 
   proposePreset: {
@@ -498,7 +499,7 @@ export const de = {
     description: (vars: { name: string; tare: string }) =>
       `„${vars.name}“ (${vars.tare} Tara)`,
     descriptionSuffix:
-      "für alle vorschlagen. Ordne die Rolle einem Hersteller, einer Serie und einer Ausführung zu – Übersetzungen sind freiwillig.",
+      "für alle vorschlagen. Ordne das Gebinde einem Hersteller, einer Serie und einer Ausführung zu – Übersetzungen sind freiwillig.",
     seriesInLanguage: (vars: { language: string }) =>
       `Serie (${vars.language}, optional)`,
     versionInLanguage: (vars: { language: string }) =>
@@ -506,7 +507,7 @@ export const de = {
     manufacturerLabel: "Hersteller *",
     seriesLabel: "Serie / Produktlinie *",
     versionLabel: "Ausführung *",
-    spoolMaterialLabel: "Spulenmaterial",
+    containerMaterialLabel: "Gebindematerial",
     nominalLabel: "Nenngewicht (g) *",
     materialTypeLabel: "Materialart",
     commentLabel: "Anmerkung",
@@ -588,7 +589,7 @@ export const de = {
     website: "Website",
     materialTypes: "Materialarten",
     materialTypesPlaceholder: "z. B. PLA, PETG – leer = gilt für alle",
-    spoolMaterial: "Spulenmaterial",
+    containerMaterial: "Gebindematerial",
     unknown: "Unbekannt",
     validFrom: "Gültig ab",
     validTo: "Gültig bis",
@@ -674,7 +675,7 @@ export const de = {
     rowSeries: "Serie",
     rowMaterialTypes: "Materialarten",
     rowVersion: "Ausführung",
-    rowSpoolMaterial: "Spulenmaterial",
+    rowContainerMaterial: "Gebindematerial",
   },
 
   adminSystem: {
@@ -701,13 +702,13 @@ export const de = {
   weighing: {
     title: "Material wiegen",
     description: (vars: { name: string; withBox: boolean }) =>
-      `Wiege „${vars.name}“ komplett – inklusive Rolle${
-        vars.withBox ? " und Lagerbox" : ""
+      `Wiege „${vars.name}“ komplett – inklusive Gebinde${
+        vars.withBox ? " und Drybox" : ""
       }. Das Leergewicht wird automatisch abgezogen.`,
     grossLabel: "Gemessenes Gesamtgewicht (g) *",
     grossPlaceholder: "z. B. 740",
     remaining: "Effektiv übrig",
-    tareSpool: "Tara Rolle/Verpackung",
+    tareContainer: "Tara Gebinde",
     tareBox: "Tara Lagerbox",
     tareBoxNamed: (vars: { name: string }) => `Tara Lagerbox (${vars.name})`,
     tareTotal: "Tara gesamt",
@@ -730,7 +731,7 @@ export const de = {
       rejected: "Abgelehnt",
       withdrawn: "Zurückgezogen",
     },
-    spoolMaterial: {
+    containerMaterial: {
       kunststoff: "Kunststoff",
       karton: "Karton",
       metall: "Metall",
@@ -742,7 +743,7 @@ export const de = {
     withdrawn: "Vorschlag zurückgezogen",
     emptyTitle: "Noch keine Vorschläge eingereicht",
     emptyDescription:
-      "Über „Als Preset vorschlagen“ bei einem eigenen Rollentyp oder „Änderung vorschlagen“ im Katalog kannst du den gemeinsamen Katalog verbessern.",
+      "Über „Als Preset vorschlagen“ bei einer eigenen Gebindeart oder „Änderung vorschlagen“ im Katalog kannst du den gemeinsamen Katalog verbessern.",
     submitted: "Eingereicht",
     kind: "Art",
     content: "Inhalt",
@@ -754,8 +755,8 @@ export const de = {
 
   proposeChange: {
     title: "Änderung vorschlagen",
-    description: (vars: { spool: string; size: string }) =>
-      `${vars.spool} · ${vars.size}. Deine Korrektur wird von einer Administratorin oder einem Administrator geprüft, bevor sie im Katalog landet.`,
+    description: (vars: { container: string; size: string }) =>
+      `${vars.container} · ${vars.size}. Deine Korrektur wird von einer Administratorin oder einem Administrator geprüft, bevor sie im Katalog landet.`,
     tareLabel: "Leergewicht (g)",
     outerDiameter: "Außen-Ø (mm)",
     width: "Breite (mm)",

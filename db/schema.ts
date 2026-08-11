@@ -4,7 +4,7 @@ import {
   LOAN_REQUEST_STATUSES,
 } from "@contracts/friends";
 import { MATERIAL_KINDS } from "@contracts/materials";
-import type { NameI18n } from "@contracts/presets";
+import { CONTAINER_MATERIALS, type NameI18n } from "@contracts/presets";
 import {
   pgTable,
   pgEnum,
@@ -96,7 +96,7 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Materiallager: Lager, Gebinde (Rollentypen), Dryboxen, Materialien und
+// Materiallager: Lager, Gebindearten, Dryboxen, Materialien und
 // Wägungen
 // ---------------------------------------------------------------------------
 
@@ -184,16 +184,22 @@ export const lager = pgTable(
 export type Lager = typeof lager.$inferSelect;
 export type InsertLager = typeof lager.$inferInsert;
 
-/** Rollentyp / Verpackung mit hinterlegtem Leergewicht (Tara) */
-export const spoolTypes = pgTable("spool_types", {
+/**
+ * Gebindeart mit hinterlegtem Leergewicht (Tara).
+ *
+ * Bis 2.2.0 hieß das `container_types`. Der Name war eine Annahme über den Inhalt:
+ * Wer Pulver in Eimern führt, hat keine Rollentypen. Die Tabelle selbst hat
+ * sich nicht geändert – ein Name und ein Leergewicht passen auf jedes Gebinde.
+ */
+export const containerTypes = pgTable("container_types", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   userId: bigint("userId", { mode: "number" }).notNull(),
   name: varchar("name", { length: 255 }).notNull(),
   manufacturer: varchar("manufacturer", { length: 255 }),
-  /** Leergewicht der Rolle/Verpackung in Gramm */
+  /** Leergewicht des leeren Gebindes in Gramm */
   tareWeight: integer("tareWeight").notNull(),
   /**
-   * Herkunft: Preset-Variante, aus der dieser Rollentyp per
+   * Herkunft: Preset-Variante, aus der diese Gebindeart per
    * „Kopieren & anpassen“ entstanden ist (nur zur Nachverfolgung –
    * spätere Änderungen am Preset wirken sich nicht mehr aus).
    */
@@ -202,8 +208,8 @@ export const spoolTypes = pgTable("spool_types", {
   createdAt: tsColumn("createdAt").defaultNow().notNull(),
 });
 
-export type SpoolType = typeof spoolTypes.$inferSelect;
-export type InsertSpoolType = typeof spoolTypes.$inferInsert;
+export type ContainerType = typeof containerTypes.$inferSelect;
+export type InsertContainerType = typeof containerTypes.$inferInsert;
 
 /** Lagerbox / Drybox mit hinterlegtem Leergewicht (Tara) */
 export const storageBoxes = pgTable("storage_boxes", {
@@ -270,13 +276,15 @@ export const materials = pgTable(
      * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
      */
     densityGramsPerLiter: integer("densityGramsPerLiter"),
-    /** Gewählte eigene Rolle/Verpackung (Leergewicht) */
-    spoolTypeId: bigint("spoolTypeId", { mode: "number" }),
+    /** Gewählte eigene Gebindeart (Leergewicht) */
+    containerTypeId: bigint("containerTypeId", { mode: "number" }),
     /**
-     * Alternativ zu `spoolTypeId`: direkt referenzierte Preset-Variante aus dem
-     * globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
+     * Alternativ zu `containerTypeId`: direkt referenzierte Preset-Variante aus
+     * dem globalen Katalog. Es darf immer nur eines von beiden gesetzt sein.
      */
-    spoolPresetVariantId: bigint("spoolPresetVariantId", { mode: "number" }),
+    containerPresetVariantId: bigint("containerPresetVariantId", {
+      mode: "number",
+    }),
     /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
     storageBoxId: bigint("storageBoxId", { mode: "number" }),
     notes: text("notes"),
@@ -302,20 +310,20 @@ export const materials = pgTable(
 export type Material = typeof materials.$inferSelect;
 export type InsertMaterial = typeof materials.$inferInsert;
 
-/** Wägung eines Materials: gemessenes Bruttogewicht inkl. Rolle (+ Box) */
+/** Wägung eines Materials: gemessenes Bruttogewicht inkl. Gebinde (+ Box) */
 export const weighings = pgTable(
   "weighings",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     materialId: bigint("materialId", { mode: "number" }).notNull(),
-    /** Gemessenes Gesamtgewicht (Material + Rolle + ggf. Box) in Gramm */
+    /** Gemessenes Gesamtgewicht (Material + Gebinde + ggf. Box) in Gramm */
     grossWeight: integer("grossWeight").notNull(),
     weighedAt: tsColumn("weighedAt").defaultNow().notNull(),
     note: varchar("note", { length: 500 }),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
   },
   // Wägungen hängen am Material – ohne Index wäre das Löschen eines Kontos
-  // ein Full Scan pro Rolle.
+  // ein Full Scan pro Material.
   t => [index("weighings_material_idx").on(t.materialId)]
 );
 
@@ -323,14 +331,14 @@ export type Weighing = typeof weighings.$inferSelect;
 export type InsertWeighing = typeof weighings.$inferInsert;
 
 // ---------------------------------------------------------------------------
-// Preset-Katalog: global gepflegte Hersteller und Spulen
+// Preset-Katalog: global gepflegte Hersteller und Gebinde
 //
 //   Hersteller → Serie → Version → Variante (pro Netto-Materialgewicht)
 //
 // Die Ebenen sind bewusst getrennt: ein Hersteller hat mehrere Produktlinien
 // (Serien), eine Serie kann über die Zeit mehrere Versionen haben (z. B.
 // Wechsel von Kunststoff- auf Kartonspule) und je Version gibt es pro
-// Netto-Materialgewicht (500 g / 1 kg / 3 kg) eine eigene Spule mit eigenem
+// Netto-Materialgewicht (500 g / 1 kg / 3 kg) ein eigenes Gebinde mit eigenem
 // Leergewicht und eigenen Abmessungen.
 //
 // Abmessungen werden in ganzen Millimetern geführt (analog „Gewichte in
@@ -378,8 +386,8 @@ export type PresetManufacturer = typeof presetManufacturers.$inferSelect;
 export type InsertPresetManufacturer = typeof presetManufacturers.$inferInsert;
 
 /** Produktlinie / Serie eines Herstellers (z. B. PolyTerra PLA) */
-export const presetSpoolSeries = pgTable(
-  "preset_spool_series",
+export const presetContainerSeries = pgTable(
+  "preset_container_series",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     manufacturerId: bigint("manufacturerId", { mode: "number" }).notNull(),
@@ -392,18 +400,19 @@ export const presetSpoolSeries = pgTable(
     ...presetMeta(),
   },
   t => [
-    unique("preset_spool_series_slug_unique").on(t.manufacturerId, t.slug),
-    index("preset_spool_series_manufacturer_idx").on(t.manufacturerId),
+    unique("preset_container_series_slug_unique").on(t.manufacturerId, t.slug),
+    index("preset_container_series_manufacturer_idx").on(t.manufacturerId),
   ]
 );
 
-export type PresetSpoolSeries = typeof presetSpoolSeries.$inferSelect;
-export type InsertPresetSpoolSeries = typeof presetSpoolSeries.$inferInsert;
+export type PresetContainerSeries = typeof presetContainerSeries.$inferSelect;
+export type InsertPresetContainerSeries =
+  typeof presetContainerSeries.$inferInsert;
 
 /**
  * Materialarten, für die eine Serie gilt (z. B. PLA). Ohne Eintrag gilt die
- * Serie für alle Materialarten – so kann ein Hersteller pro Materialart eine
- * andere Spule führen.
+ * Serie für alle Materialarten – so kann ein Hersteller pro Materialart ein
+ * anderes Gebinde führen.
  */
 export const presetSeriesMaterialTypes = pgTable(
   "preset_series_material_types",
@@ -423,22 +432,21 @@ export const presetSeriesMaterialTypes = pgTable(
 export type PresetSeriesMaterialType =
   typeof presetSeriesMaterialTypes.$inferSelect;
 
-/** Material der Spule selbst */
-export const PRESET_SPOOL_MATERIALS = [
-  "kunststoff",
-  "karton",
-  "metall",
-  "sonstiges",
-] as const;
-
-export const presetSpoolMaterialEnum = pgEnum(
-  "preset_spool_material",
-  PRESET_SPOOL_MATERIALS
+/*
+  Werkstoff des Gebindes. Die Liste stand bis 2.2.0 hier **und** als
+  `CONTAINER_MATERIALS` in `contracts/presets.ts` – zwei Kopien, von denen beim
+  Umbenennen eine liegen geblieben wäre. Jetzt gilt dieselbe Richtung wie bei
+  `MATERIAL_KINDS`: die Liste gehört in die Contracts, hier wird nur der
+  Postgres-Typ daraus.
+*/
+export const presetContainerMaterialEnum = pgEnum(
+  "preset_container_material",
+  CONTAINER_MATERIALS
 );
 
 /** Revision einer Serie (z. B. „Kartonspule (ab 2023)“) */
-export const presetSpoolVersions = pgTable(
-  "preset_spool_versions",
+export const presetContainerVersions = pgTable(
+  "preset_container_versions",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     seriesId: bigint("seriesId", { mode: "number" }).notNull(),
@@ -448,7 +456,7 @@ export const presetSpoolVersions = pgTable(
     nameI18n: jsonb("nameI18n").$type<NameI18n>(),
     /** Stabiler Schlüssel innerhalb der Serie, z. B. „karton-2023“ */
     slug: varchar("slug", { length: 255 }).notNull(),
-    spoolMaterial: presetSpoolMaterialEnum("spoolMaterial"),
+    containerMaterial: presetContainerMaterialEnum("containerMaterial"),
     /** Gültig ab, ISO-String JJJJ-MM-TT */
     validFrom: date("validFrom", { mode: "string" }),
     /** Gültig bis; null = aktuell im Handel (daraus wird „aktuell“ abgeleitet) */
@@ -456,40 +464,44 @@ export const presetSpoolVersions = pgTable(
     ...presetMeta(),
   },
   t => [
-    unique("preset_spool_versions_slug_unique").on(t.seriesId, t.slug),
-    index("preset_spool_versions_series_idx").on(t.seriesId),
+    unique("preset_container_versions_slug_unique").on(t.seriesId, t.slug),
+    index("preset_container_versions_series_idx").on(t.seriesId),
   ]
 );
 
-export type PresetSpoolVersion = typeof presetSpoolVersions.$inferSelect;
-export type InsertPresetSpoolVersion = typeof presetSpoolVersions.$inferInsert;
+export type PresetContainerVersion =
+  typeof presetContainerVersions.$inferSelect;
+export type InsertPresetContainerVersion =
+  typeof presetContainerVersions.$inferInsert;
 
-/** Spule einer Version für ein bestimmtes Netto-Materialgewicht */
-export const presetSpoolVariants = pgTable(
-  "preset_spool_variants",
+/** Gebinde einer Version für ein bestimmtes Netto-Materialgewicht */
+export const presetContainerVariants = pgTable(
+  "preset_container_variants",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     versionId: bigint("versionId", { mode: "number" }).notNull(),
     /** Netto-Materialgewicht laut Hersteller in Gramm (z. B. 1000) */
     nominalWeight: integer("nominalWeight").notNull(),
-    /** Leergewicht der leeren Spule in Gramm */
+    /** Leergewicht des leeren Gebindes in Gramm */
     tareWeight: integer("tareWeight").notNull(),
     /** Außendurchmesser in Millimetern */
     outerDiameterMm: integer("outerDiameterMm"),
-    /** Breite der Spule in Millimetern */
+    /** Breite in Millimetern */
     widthMm: integer("widthMm"),
     /** Durchmesser der Mittelbohrung in Millimetern */
     boreDiameterMm: integer("boreDiameterMm"),
     ...presetMeta(),
   },
   t => [
-    unique("preset_spool_variants_unique").on(t.versionId, t.nominalWeight),
-    index("preset_spool_variants_version_idx").on(t.versionId),
+    unique("preset_container_variants_unique").on(t.versionId, t.nominalWeight),
+    index("preset_container_variants_version_idx").on(t.versionId),
   ]
 );
 
-export type PresetSpoolVariant = typeof presetSpoolVariants.$inferSelect;
-export type InsertPresetSpoolVariant = typeof presetSpoolVariants.$inferInsert;
+export type PresetContainerVariant =
+  typeof presetContainerVariants.$inferSelect;
+export type InsertPresetContainerVariant =
+  typeof presetContainerVariants.$inferInsert;
 
 /** Ebenen, auf denen ein Benutzer Presets ausblenden kann */
 export const PRESET_SCOPES = [
@@ -500,7 +512,7 @@ export const PRESET_SCOPES = [
 ] as const;
 
 /**
- * Katalogebene. Ein einziger Typ, den sich `hidden_spool_presets.scope` und
+ * Katalogebene. Ein einziger Typ, den sich `hidden_container_presets.scope` und
  * `preset_proposals.targetType` teilen – so können die beiden Spalten nicht
  * auseinanderlaufen.
  */
@@ -510,8 +522,8 @@ export const presetScopeEnum = pgEnum("preset_scope", PRESET_SCOPES);
  * Vom Benutzer ausgeblendete Presets. Wird auf einer höheren Ebene
  * ausgeblendet, verschwinden auch alle darunterliegenden Einträge.
  */
-export const hiddenSpoolPresets = pgTable(
-  "hidden_spool_presets",
+export const hiddenContainerPresets = pgTable(
+  "hidden_container_presets",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
     userId: bigint("userId", { mode: "number" }).notNull(),
@@ -521,12 +533,12 @@ export const hiddenSpoolPresets = pgTable(
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
   },
   t => [
-    unique("hidden_spool_presets_unique").on(t.userId, t.scope, t.refId),
-    index("hidden_spool_presets_user_idx").on(t.userId),
+    unique("hidden_container_presets_unique").on(t.userId, t.scope, t.refId),
+    index("hidden_container_presets_user_idx").on(t.userId),
   ]
 );
 
-export type HiddenSpoolPreset = typeof hiddenSpoolPresets.$inferSelect;
+export type HiddenContainerPreset = typeof hiddenContainerPresets.$inferSelect;
 
 /** Art eines Vorschlags: neuer Katalogeintrag oder Änderung an einem bestehenden */
 export const PRESET_PROPOSAL_KINDS = ["new", "change"] as const;
@@ -567,8 +579,8 @@ export const presetProposals = pgTable(
     targetId: bigint("targetId", { mode: "number" }),
     /** Vorgeschlagene Werte, validiert über contracts/presets.ts */
     payload: jsonb("payload").notNull(),
-    /** Eigener Rollentyp, aus dem der Vorschlag entstanden ist */
-    sourceSpoolTypeId: bigint("sourceSpoolTypeId", { mode: "number" }),
+    /** Eigene Gebindeart, aus der der Vorschlag entstanden ist */
+    sourceContainerTypeId: bigint("sourceContainerTypeId", { mode: "number" }),
     /** Begründung des Einreichers */
     comment: text("comment"),
     status: presetProposalStatusEnum("status").default("pending").notNull(),
@@ -756,7 +768,7 @@ export const loanRequests = pgTable(
     materialId: bigint("materialId", { mode: "number" }).notNull(),
     /**
      * Bezeichnung zum Zeitpunkt der Anfrage. Denormalisiert wie der
-     * JSON-Schnappschuss in `preset_proposals`: Wird die Rolle umbenannt oder
+     * JSON-Schnappschuss in `preset_proposals`: Wird das Material umbenannt oder
      * gelöscht, muss der Vorgang lesbar bleiben – sonst stünde in der Liste
      * beider Seiten irgendwann eine nackte ID.
      */

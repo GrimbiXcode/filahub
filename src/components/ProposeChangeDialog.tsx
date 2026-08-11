@@ -112,7 +112,7 @@ export function ProposeChangeDialog({
           <DialogTitle>{t.proposeChange.title}</DialogTitle>
           <DialogDescription>
             {t.proposeChange.description({
-              spool: label,
+              container: label,
               size: variant ? formatNominalWeight(variant.nominalWeight) : "",
             })}
           </DialogDescription>

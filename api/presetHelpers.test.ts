@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVariantDisplayName,
-  decodeSpoolRef,
-  encodeSpoolRef,
+  decodeContainerRef,
+  encodeContainerRef,
   formatNominalWeight,
   hiddenKey,
   isCurrentVersion,
   isPresetHidden,
   materialTypeMatches,
   normalizeMaterialType,
-  resolveSpoolTare,
+  resolveContainerTare,
   slugify,
 } from "@contracts/presets";
 
@@ -85,45 +85,50 @@ describe("formatNominalWeight / buildVariantDisplayName", () => {
   });
 });
 
-describe("encodeSpoolRef / decodeSpoolRef", () => {
+describe("encodeContainerRef / decodeContainerRef", () => {
   it("kodiert und dekodiert verlustfrei", () => {
-    expect(decodeSpoolRef(encodeSpoolRef("own", 12))).toEqual({
+    expect(decodeContainerRef(encodeContainerRef("own", 12))).toEqual({
       kind: "own",
       id: 12,
     });
-    expect(decodeSpoolRef(encodeSpoolRef("preset", 34))).toEqual({
+    expect(decodeContainerRef(encodeContainerRef("preset", 34))).toEqual({
       kind: "preset",
       id: 34,
     });
   });
 
   it("liefert null bei ungültiger Eingabe", () => {
-    expect(decodeSpoolRef("")).toBeNull();
-    expect(decodeSpoolRef(null)).toBeNull();
-    expect(decodeSpoolRef("foo:1")).toBeNull();
-    expect(decodeSpoolRef("own:abc")).toBeNull();
-    expect(decodeSpoolRef("own:0")).toBeNull();
+    expect(decodeContainerRef("")).toBeNull();
+    expect(decodeContainerRef(null)).toBeNull();
+    expect(decodeContainerRef("foo:1")).toBeNull();
+    expect(decodeContainerRef("own:abc")).toBeNull();
+    expect(decodeContainerRef("own:0")).toBeNull();
   });
 });
 
-describe("resolveSpoolTare", () => {
+describe("resolveContainerTare", () => {
   it("bevorzugt die Preset-Variante", () => {
     expect(
-      resolveSpoolTare({
-        spoolType: { tareWeight: 220 },
-        spoolPresetVariant: { tareWeight: 140 },
+      resolveContainerTare({
+        containerType: { tareWeight: 220 },
+        containerPresetVariant: { tareWeight: 140 },
       })
     ).toBe(140);
   });
 
   it("fällt auf den eigenen Rollentyp zurück", () => {
-    expect(resolveSpoolTare({ spoolType: { tareWeight: 220 } })).toBe(220);
+    expect(resolveContainerTare({ containerType: { tareWeight: 220 } })).toBe(
+      220
+    );
   });
 
   it("liefert ohne Rolle 0", () => {
-    expect(resolveSpoolTare({})).toBe(0);
+    expect(resolveContainerTare({})).toBe(0);
     expect(
-      resolveSpoolTare({ spoolType: null, spoolPresetVariant: null })
+      resolveContainerTare({
+        containerType: null,
+        containerPresetVariant: null,
+      })
     ).toBe(0);
   });
 });

@@ -111,8 +111,8 @@ function materialRow(
     texture: null,
     nominalWeight: 1000,
     densityGramsPerLiter: null,
-    spoolType: { tareWeight: 140 },
-    spoolPresetVariant: null,
+    containerType: { tareWeight: 140 },
+    containerPresetVariant: null,
     storageBox: null,
     lager: { materialKind: "filament", filamentDiameterUm: 1750 },
     weighings: [],
@@ -230,13 +230,13 @@ describe("toFriendMaterial", () => {
   it("bevorzugt die Preset-Variante vor dem eigenen Rollentyp", () => {
     const result = toFriendMaterial(
       materialRow({
-        spoolType: { tareWeight: 140 },
-        spoolPresetVariant: { tareWeight: 220 },
+        containerType: { tareWeight: 140 },
+        containerPresetVariant: { tareWeight: 220 },
         weighings: [{ grossWeight: 720 }],
       }),
       "Alex"
     );
-    // 720 g − 220 g (Preset gewinnt, siehe resolveSpoolTare) = 500 g
+    // 720 g − 220 g (Preset gewinnt, siehe resolveContainerTare) = 500 g
     expect(result.remainingWeight).toBe(500);
   });
 

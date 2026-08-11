@@ -81,8 +81,8 @@ function versionSubtitle(
   t: Messages
 ) {
   const parts: string[] = [];
-  if (version.spoolMaterial)
-    parts.push(t.preset.spoolMaterial[version.spoolMaterial]);
+  if (version.containerMaterial)
+    parts.push(t.preset.containerMaterial[version.containerMaterial]);
   if (version.validFrom)
     parts.push(
       t.presetCatalog.validFrom({ date: formatDate(version.validFrom) })
@@ -116,7 +116,7 @@ export function PresetCatalog() {
   const copyToOwn = trpc.preset.copyToOwn.useMutation({
     onSuccess: created => {
       toast.success(t.presetCatalog.adopted({ name: created?.name ?? "" }));
-      utils.spoolType.list.invalidate();
+      utils.containerType.list.invalidate();
     },
     onError: e => toast.error(e.message),
   });

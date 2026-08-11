@@ -58,8 +58,8 @@ if (env.isProduction) {
   // Startkatalog nachziehen. Idempotent und bewusst nicht startkritisch:
   // ein Fehler hier darf den Server nicht am Hochfahren hindern.
   try {
-    const { seedSpoolPresets } = await import("./queries/presetSeed");
-    const stats = await seedSpoolPresets();
+    const { seedContainerPresets } = await import("./queries/presetSeed");
+    const stats = await seedContainerPresets();
     console.log(
       `Preset-Katalog: ${stats.created} neu, ${stats.updated} aktualisiert, ${stats.skipped} unverändert.`
     );
