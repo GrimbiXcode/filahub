@@ -272,9 +272,11 @@ export const de = {
     statInBoxHint: "Materialien mit Drybox",
     searchAria: "Materialien durchsuchen",
     clearSearch: "Suche leeren",
+    filters: "Filter",
     filterSheetTitle: "Filter und Sortierung",
     reset: "Zurücksetzen",
     resetAll: "Alle zurücksetzen",
+    resetFilters: "Filter zurücksetzen",
     showCount: (vars: { count: number }) => `${vars.count} anzeigen`,
     removeFilter: (vars: { label: string }) =>
       `Filter „${vars.label}“ entfernen`,
@@ -303,6 +305,9 @@ export const de = {
     emptyFiltered: "Keine Treffer für die aktuellen Filter",
     emptyHint: "Lege dein erstes Material an – mit Gebinde, Gewicht und Preis.",
     emptyFilteredHint: "Passe Suche oder Filter an.",
+    emptyAction: "Erstes Material anlegen",
+    countOf: (vars: { shown: number; total: number }) =>
+      `${vars.shown} von ${vars.total} Materialien`,
     colIdentifier: "Kennung",
     colMaterial: "Material",
     colType: "Art",
@@ -508,6 +513,7 @@ export const de = {
     adopt: "Als eigene Gebindeart übernehmen",
     adopted: (vars: { name: string }) =>
       `„${vars.name}“ als eigene Gebindeart übernommen`,
+    noVariants: "Für diese Ausführung ist noch keine Größe hinterlegt.",
   },
 
   proposePreset: {
@@ -526,6 +532,7 @@ export const de = {
     containerMaterialLabel: "Gebindematerial",
     nominalLabel: "Nenngewicht (g) *",
     materialTypeLabel: "Materialart",
+    materialTypePlaceholder: "leer lassen, wenn die Serie für alle Arten gilt",
     commentLabel: "Anmerkung",
     commentPlaceholder: "Woher stammt das Leergewicht?",
     manufacturerRequired: "Bitte einen Hersteller angeben",

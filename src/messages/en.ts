@@ -259,9 +259,11 @@ export const en: Messages = {
     statInBoxHint: "materials in a drybox",
     searchAria: "Search materials",
     clearSearch: "Clear the search",
+    filters: "Filters",
     filterSheetTitle: "Filters and sorting",
     reset: "Reset",
     resetAll: "Reset all",
+    resetFilters: "Reset filters",
     showCount: (vars: { count: number }) => `Show ${vars.count}`,
     removeFilter: (vars: { label: string }) =>
       `Remove the “${vars.label}” filter`,
@@ -290,6 +292,9 @@ export const en: Messages = {
     emptyHint:
       "Add your first filament – with its container, weight and price.",
     emptyFilteredHint: "Adjust the search or the filters.",
+    emptyAction: "Add your first material",
+    countOf: (vars: { shown: number; total: number }) =>
+      `${vars.shown} of ${vars.total} materials`,
     colIdentifier: "Identifier",
     colMaterial: "Material",
     colType: "Type",
@@ -495,6 +500,7 @@ export const en: Messages = {
     adopt: "Copy into my container types",
     adopted: (vars: { name: string }) =>
       `“${vars.name}” copied into your own container types`,
+    noVariants: "No size added for this version yet.",
   },
 
   proposePreset: {
@@ -513,6 +519,7 @@ export const en: Messages = {
     containerMaterialLabel: "Container material",
     nominalLabel: "Nominal weight (g) *",
     materialTypeLabel: "Material type",
+    materialTypePlaceholder: "leave empty if the series covers every type",
     commentLabel: "Note",
     commentPlaceholder: "Where does the empty weight come from?",
     manufacturerRequired: "Please enter a manufacturer",

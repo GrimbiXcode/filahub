@@ -213,7 +213,7 @@ export function ProposePresetDialog({
               list="pp-materialtype-options"
               value={materialType}
               onChange={e => setMaterialType(e.target.value)}
-              placeholder="leer lassen, wenn die Serie für alle Arten gilt"
+              placeholder={t.proposePreset.materialTypePlaceholder}
             />
             <datalist id="pp-materialtype-options">
               {COMMON_MATERIAL_TYPES.map(t => (
