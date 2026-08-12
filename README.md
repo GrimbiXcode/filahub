@@ -1,10 +1,13 @@
 # filahub
 
-Web application for managing a 3D-printing filament inventory: filaments with
-spool/packaging types and storage boxes (dryboxes) including tare weight,
-weigh-ins with automatic remaining-quantity calculation, short IDs for quick
-retrieval, a shared preset catalogue of manufacturers and spools, and
-Telegram-only login.
+Web application for managing an inventory of 3D-printing material — filament,
+resin and powder. Material lives in **stores**, one kind of material per store;
+it sits in a **container** (spool, bag, bottle, pail, cartridge) and optionally
+in a **drybox**, both with a stored tare weight. A weigh-in is a gross weight
+typed in from a kitchen scale, and the remaining quantity is what is left after
+the tare comes off. Short IDs for quick retrieval, a shared preset catalogue of
+manufacturers and containers, per-store sharing with friends, organizations for
+a stock several people work on, and Telegram-only login.
 
 **Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
 Drizzle ORM + PostgreSQL (database)
@@ -100,10 +103,11 @@ startup, so a fresh database initializes itself. For local development you
 can alternatively sync the schema directly with `npm run db:push`; after
 schema changes, regenerate the migration files with `npm run db:generate`.
 
-On startup the app also seeds a small preset catalogue of manufacturers and
-spools (Polymaker, Prusament, Bambu Lab, eSUN). Seeding is idempotent and
-never overwrites entries an administrator edited or that came from an
-accepted community suggestion. Locally you can run it with `npm run db:seed`.
+On startup the app also seeds a preset catalogue of manufacturers and
+containers (Polymaker, Prusament, Bambu Lab, eSUN and others). Seeding is
+idempotent and never overwrites entries an administrator edited or that came
+from an accepted community suggestion. Locally you can run it with
+`npm run db:seed`.
 
 ## 4. Run
 
@@ -224,26 +228,31 @@ first stranger to find a fresh instance would take it over.
 
 ## 7. Preset catalogue
 
-Administrators maintain a shared catalogue of manufacturers and spools so
-users can pick a spool instead of looking up and entering its empty weight
+Administrators maintain a shared catalogue of manufacturers and containers so
+users can pick one instead of looking up and entering its empty weight
 themselves. It has four levels:
 
 **Manufacturer → series → version → size.** A series is a product line
-(e.g. _PolyTerra PLA_), a version is a revision of its spool (e.g. the switch
-from plastic to cardboard, with a validity period), and a size is the spool
-for one net filament weight (500 g / 1 kg / 3 kg) with its empty weight and
-dimensions. A series can be tagged with material types so the right spools
-are offered first for PLA, PETG and so on.
+(e.g. _Panchroma_, formerly PolyTerra PLA), a version is a revision of its
+container (e.g. the switch from a 215 g plastic spool to a 140 g cardboard one,
+with a validity period), and a size is the container for one net fill weight
+(500 g / 1 kg / 3 kg) with its empty weight and, for spools, its dimensions. A
+series can be tagged with material types so the right containers are offered
+first for PLA, PETG and so on.
 
-For users, under **Rollentypen**:
+Catalogue names carry a translation (`nameI18n`), so an entry reads "Cardboard
+spool (from 2021)" on an English interface and „Kartonspule (ab 2021)" on a
+German one. Both have to be maintained in the admin editor.
 
-- **Preset-Katalog** – browse the catalogue, hide manufacturers, series,
-  versions or single sizes you don't need (hiding only affects your own
-  selection; spools already assigned to a filament stay valid), copy a preset
-  into your own editable spool type, or suggest a correction.
-- **Meine Rollentypen** – your own spool types, with an action to suggest one
-  for the shared catalogue.
-- **Meine Vorschläge** – the status of your suggestions, including the
+For users, under **Container types** (`/gebinde`):
+
+- **Preset catalogue** – browse it, hide manufacturers, series, versions or
+  single sizes you don't need (hiding only affects your own selection;
+  containers already assigned to a material stay valid), copy a preset into
+  your own editable container type, or suggest a correction.
+- **My container types** – your own container types, with an action to suggest
+  one for the shared catalogue.
+- **My suggestions** – the status of your suggestions, including the
   moderator's reason if one was rejected.
 
 For administrators, under **Verwaltung**:
@@ -253,6 +262,44 @@ For administrators, under **Verwaltung**:
 - **Vorschläge** (`/verwaltung/vorschlaege`) – accept a suggestion (it is
   applied to the catalogue and becomes visible to everyone) or reject it with
   a reason.
+
+Catalogue limits are set for containers, not just for spools: up to 50 kg of
+content and up to 20 kg empty weight, and the empty weight may exceed the
+content weight — a 2 kg steel container holding 500 g of test powder is a valid
+entry. Outer diameter, width and bore are only asked for when the form is a
+spool.
+
+## 8. Organizations
+
+An instance is no longer one account per stock. An **organization** owns stores
+of its own, and every member works on the same stock rather than on a copy. A
+switcher in the sidebar decides whether a page shows a user's personal stock or
+an organization's; the two never mix, and a store belonging to an organization
+cannot be shared with friends.
+
+Membership comes at one of four levels, each including the ones below it:
+
+| Level      | May                                                                     |
+| ---------- | ----------------------------------------------------------------------- |
+| **View**   | see and search the stock, the stores, container types and dryboxes      |
+| **Weigh**  | also weigh                                                              |
+| **Record** | also add, change, delete and import material; maintain containers/boxes |
+| **Manage** | also create and delete stores, invite people, assign levels, rename     |
+
+People join either through a join code (`ORG-…`, which can never hand out
+"Manage") or through a personal invitation that takes effect once accepted.
+There is always at least one administrator; the last one cannot step down or
+leave without appointing a successor.
+
+This matters for whoever runs the instance: material recorded in an
+organization's store **stays with the organization** when the person who
+entered it leaves or deletes their account, and it is not part of that person's
+data export. Their memberships and invitations are. See
+[PRIVACY.md](PRIVACY.md).
+
+Limits per account and organization (`contracts/organizations.ts`): 3
+organizations founded per account, 10 stores per organization, 100 members per
+organization. Personal accounts get 5 stores (`contracts/materials.ts`).
 
 ## Useful commands
 
@@ -311,8 +358,8 @@ our own measurements. They come from work other people did and share:
 
 Manufacturers change spools without saying so, and cardboard spools take on
 water, so treat every catalogue value as a starting point rather than a
-measurement of the spool in your hand. Weigh the empty spool once and the
-number is yours – that is what the custom spool types are for.
+measurement of the spool in your hand. Weigh the empty container once and the
+number is yours – that is what your own container types are for.
 
 ## Security
 
