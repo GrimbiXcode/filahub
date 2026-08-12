@@ -23,7 +23,9 @@ auslösen – das geht schneller.
 | Bestand: Rollen, Wägungen, Rollentypen, Lagerboxen – samt Preisen, Kaufdaten, Kurz-Kennungen, Lagerorten und Notizen                                                                       | Kernfunktion der Anwendung             | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
 | Einstellungen: Sprache, Währung, Zahlenformat, zuletzt gesehene Neuerungen                                                                                                                 | Darstellung                            | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
 | Anmeldecodes: Telegram-ID, Telegram-Name, Code                                                                                                                                             | Anmeldung ohne Widget                  | Art. 6 Abs. 1 lit. b                          | **automatisch nach 24 Stunden gelöscht**    |
-| Preset-Vorschläge: Inhalt, Begründung, Einreicher, Moderationsvermerk                                                                                                                      | Pflege des gemeinsamen Katalogs        | Art. 6 Abs. 1 lit. b und lit. f               | siehe Abschnitt 8                           |
+| Freundschaften und Freigaben: wer mit wem verbunden ist, welches Lager wie weit freigegeben ist, Ausleih-Anfragen                                                                          | Bestand mit Freunden teilen            | Art. 6 Abs. 1 lit. a (Einwilligung)           | bis eines der Konten gelöscht wird          |
+| Organisationen: Name und Notizen; Mitgliedschaften mit Stufe und Beitritt; Einladungen samt Antwort                                                                                        | gemeinsamer Bestand mehrerer Personen  | Art. 6 Abs. 1 lit. a und lit. b               | siehe Abschnitt 5                           |
+| Preset-Vorschläge: Inhalt, Begründung, Einreicher, Moderationsvermerk                                                                                                                      | Pflege des gemeinsamen Katalogs        | Art. 6 Abs. 1 lit. b und lit. f               | siehe Abschnitt 9                           |
 | Server-Protokolle beim Hoster, u. a. IP-Adresse                                                                                                                                            | Betrieb und Abwehr von Angriffen       | Art. 6 Abs. 1 lit. f                          | nach Vorgabe des Hosters, siehe Abschnitt 4 |
 | Sicherheitsprotokoll: An- und Abmeldungen, fehlgeschlagene Versuche, Kontolöschungen, Moderationsentscheidungen – mit Zeitpunkt und einem **verschlüsselten Fingerabdruck** der IP-Adresse | Erkennung und Aufklärung von Vorfällen | Art. 6 Abs. 1 lit. f                          | **90 Tage**                                 |
 
@@ -62,7 +64,7 @@ gewährleistet werden; insbesondere bestehen dort weitergehende Zugriffsrechte
 staatlicher Stellen und keine vergleichbaren Rechtsbehelfe.
 
 **Einwilligung widerrufen.** Die Entscheidung, das Skript zu laden, wird in
-deinem Browser gespeichert (siehe Abschnitt 6) und lässt sich dort löschen. Der
+deinem Browser gespeichert (siehe Abschnitt 7) und lässt sich dort löschen. Der
 Widerruf wirkt für die Zukunft. Für die Anmeldung selbst brauchst du das Widget
 nicht – der Code-Weg bleibt offen.
 
@@ -79,7 +81,50 @@ Der Hoster verarbeitet die Daten ausschließlich weisungsgebunden als
 Auftragsverarbeiter (Art. 28 DSGVO). Technisch bedingt fallen dabei
 Server-Protokolle mit IP-Adressen an.
 
-## 5. Was nicht stattfindet
+## 5. Weitergabe an andere Nutzerinnen und Nutzer
+
+Alles, was du erfasst, ist zunächst nur für dich sichtbar. Es gibt zwei Wege,
+auf denen andere etwas davon sehen – beide setzt du selbst in Gang, und beide
+kannst du jederzeit beenden.
+
+**Freunde.** Für jedes deiner Lager legst du je Freund eine von drei Stufen
+fest: nichts, nur Suche, oder das ganze Lager. Eine angenommene Freundschaft
+allein gibt **nichts** frei. Sichtbar werden höchstens Name, Kurz-Kennung,
+Materialart, Oberfläche, Hersteller, Farbe, Nennmenge und Restmenge. Niemals
+sichtbar: Preise, Notizen, Kaufdaten, Lagerbox und Lagerort, der Wägungsverlauf
+und in welchem Lager etwas liegt. Ihr seht außerdem gegenseitig euren
+Anzeigenamen und Telegram-Benutzernamen – erst nachdem die Freundschaft
+angenommen wurde.
+
+**Organisationen.** Eine Organisation ist ein gemeinsamer Bestand mehrerer
+Personen, etwa in einer Firma, einem Hochschul-Druckzentrum oder einer
+Werkstatt. Sie geht deutlich weiter als eine Freundes-Freigabe: Mitglieder sehen
+den Bestand **selbst** und dürfen ihn je nach Stufe ändern. Es gibt vier Stufen
+– Ansehen, Wiegen, Erfassen, Verwalten –, und deine Stufe vergibt die
+Verwaltung, nie du selbst. Mitglied wirst du nur durch dein eigenes Zutun: indem
+du eine Einladung annimmst oder einen Beitrittscode eingibst.
+
+Innerhalb einer Organisation sehen die Mitglieder gegenseitig ihren
+Anzeigenamen und Telegram-Benutzernamen. Zwei Punkte, die dich überraschen
+könnten:
+
+- **Was du im Lager einer Organisation erfasst, bleibt dort**, wenn du
+  austrittst oder dein Konto löschst. An diesen Einträgen steht nicht, wer sie
+  angelegt hat – das wäre ein Protokoll deiner Arbeit, und das führen wir
+  bewusst nicht. Deshalb ist daran auch nichts zu löschen.
+- **Der Bestand einer Organisation ist nicht Teil deines Datenexports.** Er ist
+  die Aufzeichnung der Organisation, nicht deine persönliche Auskunft.
+  Enthalten sind deine Mitgliedschaften und deine Einladungen.
+
+Beitritt, Austritt, Einladungen, Stufenänderungen und Entfernungen stehen im
+Sicherheitsprotokoll (90 Tage). Was du mit dem Bestand **tust** – wiegen,
+erfassen – steht dort nicht.
+
+Rechtsgrundlage für beide Wege ist deine Einwilligung (Art. 6 Abs. 1 lit. a
+DSGVO): Du entscheidest über jede Freigabe einzeln, und ein Austritt oder das
+Zurücknehmen einer Freigabe wirkt sofort.
+
+## 6. Was nicht stattfindet
 
 - **Keine Analyse, kein Tracking, keine Werbung.** Die Anwendung bindet keine
   Analysedienste, keine Zählpixel und keine Werbenetzwerke ein.
@@ -92,7 +137,7 @@ Server-Protokolle mit IP-Adressen an.
 - **Kein Profilbild von Telegram.** Es wird weder gespeichert noch angezeigt;
   stattdessen erscheinen die Anfangsbuchstaben deines Namens.
 
-## 6. Was auf deinem Gerät gespeichert wird
+## 7. Was auf deinem Gerät gespeichert wird
 
 | Name                      | Art                | Zweck                                   | Dauer              |
 | ------------------------- | ------------------ | --------------------------------------- | ------------------ |
@@ -106,7 +151,7 @@ Alle diese Einträge sind entweder technisch notwendig oder halten eine
 Einstellung fest, die du selbst getroffen hast. Es gibt deshalb keinen
 Einwilligungsbanner – und nichts davon dient der Analyse deines Verhaltens.
 
-## 7. Import mit Hilfe eines Sprachmodells
+## 8. Import mit Hilfe eines Sprachmodells
 
 Die Importseite erzeugt einen Textbaustein, den du zusammen mit einer Rechnung
 oder Bestellbestätigung in ein Sprachmodell deiner Wahl geben kannst, um daraus
@@ -119,7 +164,7 @@ Prüfe vorher, was in dem Dokument steht, und schwärze, was das Sprachmodell
 nicht braucht. Die hochgeladene Datei selbst verlässt deinen Browser nicht – nur
 die daraus entstandene Liste wird an den Server gesendet.
 
-## 8. Deine Rechte
+## 9. Deine Rechte
 
 Dir stehen zu:
 
@@ -157,13 +202,13 @@ der Schweiz beim Eidgenössischen Datenschutz- und Öffentlichkeitsbeauftragten
 (EDÖB), in der Europäischen Union bei der Behörde deines Wohnsitzstaats oder
 deines Arbeitsplatzes.
 
-## 9. Pflicht zur Bereitstellung
+## 10. Pflicht zur Bereitstellung
 
 Es besteht keine gesetzliche oder vertragliche Pflicht, Daten bereitzustellen.
 Ohne Telegram-Konto ist eine Anmeldung technisch nicht möglich, und ohne
 Angaben zu deinem Bestand hat die Anwendung nichts zu rechnen.
 
-## 10. Änderungen
+## 11. Änderungen
 
 Diese Erklärung wird angepasst, wenn sich die Verarbeitung ändert. Maßgeblich
 ist die hier abrufbare Fassung.

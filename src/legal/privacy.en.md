@@ -23,7 +23,9 @@ faster.
 | Stock: spools, weigh-ins, spool types, storage boxes – including prices, purchase dates, short IDs, locations and notes                                              | core function of the application      | Art. 6(1)(b)                       | until the account is deleted             |
 | Settings: language, currency, number format, last release notes seen                                                                                                 | presentation                          | Art. 6(1)(b)                       | until the account is deleted             |
 | Sign-in codes: Telegram ID, Telegram name, code                                                                                                                      | signing in without the widget         | Art. 6(1)(b)                       | **deleted automatically after 24 hours** |
-| Preset proposals: content, reasoning, submitter, moderation record                                                                                                   | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 8                            |
+| Friendships and shares: who is connected to whom, how far each store is shared, loan requests                                                                        | sharing stock with friends            | Art. 6(1)(a) (consent)             | until either account is deleted          |
+| Organizations: name and notes; memberships with level and join date; invitations and their answer                                                                    | running a stock together              | Art. 6(1)(a) and (b)               | see section 5                            |
+| Preset proposals: content, reasoning, submitter, moderation record                                                                                                   | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 9                            |
 | Server logs at the host, including IP address                                                                                                                        | operation and defence against attacks | Art. 6(1)(f)                       | as configured by the host, see section 4 |
 | Security log: sign-ins and sign-outs, failed attempts, account deletions, moderation decisions – with a timestamp and an **encrypted fingerprint** of the IP address | detecting and investigating incidents | Art. 6(1)(f)                       | **90 days**                              |
 
@@ -59,7 +61,7 @@ in particular, state authorities there have broader powers of access and there
 are no comparable legal remedies.
 
 **Withdrawing consent.** Your decision to load the script is stored in your
-browser (see section 6) and can be deleted there. Withdrawal takes effect going
+browser (see section 7) and can be deleted there. Withdrawal takes effect going
 forward. You do not need the widget to sign in – the code route stays open.
 
 What Telegram does with the data on its own account is governed by Telegram's
@@ -75,7 +77,46 @@ The host processes the data solely on instructions, as a processor under
 Art. 28 GDPR. Server logs containing IP addresses arise as a technical
 necessity.
 
-## 5. What does not happen
+## 5. Sharing with other users
+
+Everything you record is visible only to you at first. There are two ways others
+can see part of it — you start both yourself, and you can end both at any time.
+
+**Friends.** For each of your stores you pick one of three levels per friend:
+nothing, search only, or the whole store. An accepted friendship on its own
+shares **nothing**. At most, a friend sees name, short identifier, material
+type, surface finish, manufacturer, colour, nominal weight and remaining amount.
+Never visible: prices, notes, purchase dates, storage box and its location, the
+weigh-in history, and which store something sits in. You also see each other's
+display name and Telegram username — only once the friendship has been accepted.
+
+**Organizations.** An organization is a stock several people run together, for
+instance in a company, a university print hub or a makerspace. It goes
+considerably further than sharing with a friend: members see the stock
+**itself** and, depending on their level, change it. There are four levels —
+view, weigh, edit, manage — and your level is assigned by the organization's
+administrators, never by you. You only become a member through an act of your
+own: accepting an invitation, or entering a join code.
+
+Within an organization, members see each other's display name and Telegram
+username. Two points that may surprise you:
+
+- **What you record in an organization's store stays there** when you leave or
+  delete your account. Those entries do not say who created them — that would be
+  a log of your work, and we deliberately do not keep one. So there is nothing
+  in them to erase.
+- **An organization's stock is not part of your data export.** It is the
+  organization's record, not your personal information. What the export does
+  contain is your memberships and your invitations.
+
+Joining, leaving, invitations, level changes and removals are kept in the
+security log (90 days). What you _do_ with the stock — weighing, recording — is
+not.
+
+The legal basis for both is your consent (Art. 6(1)(a) GDPR): you decide on each
+share individually, and leaving or withdrawing a share takes effect immediately.
+
+## 6. What does not happen
 
 - **No analytics, no tracking, no advertising.** The application embeds no
   analytics services, no tracking pixels and no ad networks.
@@ -88,7 +129,7 @@ necessity.
 - **No profile picture from Telegram.** It is neither stored nor displayed;
   your initials are shown instead.
 
-## 6. What is stored on your device
+## 7. What is stored on your device
 
 | Name                      | Type               | Purpose                               | Duration           |
 | ------------------------- | ------------------ | ------------------------------------- | ------------------ |
@@ -102,7 +143,7 @@ All of these are either technically necessary or record a setting you chose
 yourself. There is therefore no consent banner – and none of it serves to
 analyse your behaviour.
 
-## 7. Import with help from a language model
+## 8. Import with help from a language model
 
 The import page produces a block of text that you can hand to a language model
 of your choice, together with an invoice or order confirmation, to turn it into
@@ -115,7 +156,7 @@ what the document says beforehand and redact whatever the language model does
 not need. The uploaded file itself never leaves your browser – only the
 resulting list is sent to the server.
 
-## 8. Your rights
+## 9. Your rights
 
 You have the right to:
 
@@ -149,13 +190,13 @@ that way. Those rows disappear after 90 days at the latest (Art. 17(3)(b) and
 Switzerland the Federal Data Protection and Information Commissioner (FDPIC), in
 the European Union the authority of your country of residence or place of work.
 
-## 9. Obligation to provide data
+## 10. Obligation to provide data
 
 There is no statutory or contractual obligation to provide data. Without a
 Telegram account signing in is technically impossible, and without details about
 your stock the application has nothing to calculate.
 
-## 10. Changes
+## 11. Changes
 
 This policy will be adjusted when the processing changes. The version available
 here is the one that applies.
