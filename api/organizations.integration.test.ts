@@ -145,6 +145,149 @@ describe("Anlegen und Beitreten", () => {
     const detail = await callerFor(member).organization.get({ organizationId });
     expect(detail.role).toBe("editor");
   });
+
+  it("findet den Freundescode auch ohne Bindestriche", async () => {
+    const organizationId = await makeOrg();
+    await db()
+      .update(schema.users)
+      .set({ friendCode: "FH-A2B3-C4D5" })
+      .where(eq(schema.users.id, member.id));
+
+    // Genau das, was jemand aus einem Chat kopiert und von Hand eintippt.
+    await expect(
+      callerFor(boss).organization.invite({
+        organizationId,
+        code: "fh a2b3c4d5",
+        role: "viewer",
+      })
+    ).resolves.toMatchObject({ name: "Mia" });
+  });
+
+  it("lädt kein bestehendes Mitglied noch einmal ein", async () => {
+    const organizationId = await makeOrg();
+    await joinAs(organizationId, "viewer");
+    await db()
+      .update(schema.users)
+      .set({ friendCode: "FH-A2B3-C4D5" })
+      .where(eq(schema.users.id, member.id));
+
+    await expect(
+      callerFor(boss).organization.invite({
+        organizationId,
+        code: "FH-A2B3-C4D5",
+        role: "editor",
+      })
+    ).rejects.toThrow(/bereits Mitglied/);
+  });
+
+  /**
+   * Die Einladung überlebt die Vollmacht nicht.
+   *
+   * Ohne diesen Riegel behielte ein entfernter Administrator über eine offene
+   * `admin`-Einladung Einfluss auf die Organisation – und die verbliebenen
+   * Administratoren sähen es nicht kommen.
+   */
+  it("verwirft eine Einladung, deren Urheber nicht mehr verwaltet", async () => {
+    const organizationId = await makeOrg();
+    await joinAs(organizationId, "admin");
+    await db()
+      .update(schema.users)
+      .set({ friendCode: "FH-A2B3-C4D5" })
+      .where(eq(schema.users.id, outsider.id));
+
+    await callerFor(boss).organization.invite({
+      organizationId,
+      code: "FH-A2B3-C4D5",
+      role: "admin",
+    });
+    // Der Einladende verliert die Verwaltungsstufe, bevor geantwortet wird.
+    await callerFor(member).organization.setMemberRole({
+      organizationId,
+      userId: boss.id,
+      role: "viewer",
+    });
+
+    const open = await callerFor(outsider).organization.listInvitations();
+    await expect(
+      callerFor(outsider).organization.respondToInvitation({
+        id: open[0].id,
+        accept: true,
+      })
+    ).rejects.toThrow(/gilt nicht mehr/);
+    await expect(
+      callerFor(outsider).organization.get({ organizationId })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+
+  it("lässt eine offene Einladung zurückziehen", async () => {
+    const organizationId = await makeOrg();
+    await db()
+      .update(schema.users)
+      .set({ friendCode: "FH-A2B3-C4D5" })
+      .where(eq(schema.users.id, member.id));
+    await callerFor(boss).organization.invite({
+      organizationId,
+      code: "FH-A2B3-C4D5",
+      role: "editor",
+    });
+
+    const detail = await callerFor(boss).organization.get({ organizationId });
+    expect(detail.invitations).toHaveLength(1);
+    await callerFor(boss).organization.revokeInvitation({
+      organizationId,
+      id: detail.invitations[0].id,
+    });
+
+    expect(await callerFor(member).organization.listInvitations()).toHaveLength(
+      0
+    );
+    // Und der Platz ist für eine neue Einladung wieder frei.
+    await expect(
+      callerFor(boss).organization.invite({
+        organizationId,
+        code: "FH-A2B3-C4D5",
+        role: "viewer",
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  /**
+   * Scheitert das Aufnehmen, bleibt die Einladung offen.
+   *
+   * Bis 2.5.0 liefen Beantworten und Aufnehmen in getrennten Transaktionen: Die
+   * Einladung stand danach auf `accepted`, ohne dass jemand beigetreten wäre –
+   * verbraucht, und wegen des partiellen Unique-Index auf `pending` nicht
+   * einmal neu auszustellen.
+   */
+  it("verbraucht eine Einladung nicht, wenn das Aufnehmen scheitert", async () => {
+    const organizationId = await makeOrg();
+    await db()
+      .update(schema.users)
+      .set({ friendCode: "FH-A2B3-C4D5" })
+      .where(eq(schema.users.id, member.id));
+    await callerFor(boss).organization.invite({
+      organizationId,
+      code: "FH-A2B3-C4D5",
+      role: "editor",
+    });
+    // Inzwischen über den offenen Code beigetreten – das Aufnehmen muss scheitern.
+    await joinAs(organizationId, "viewer");
+
+    const open = await callerFor(member).organization.listInvitations();
+    await expect(
+      callerFor(member).organization.respondToInvitation({
+        id: open[0].id,
+        accept: true,
+      })
+    ).rejects.toThrow(/bereits Mitglied/);
+
+    // Die Einladung steht noch offen, und die alte Stufe ist unverändert.
+    expect(await callerFor(member).organization.listInvitations()).toHaveLength(
+      1
+    );
+    const detail = await callerFor(member).organization.get({ organizationId });
+    expect(detail.role).toBe("viewer");
+  });
 });
 
 /**
@@ -240,6 +383,69 @@ describe("Stufen", () => {
         materialKind: "resin",
       })
     ).resolves.toBeTruthy();
+    await expect(
+      callerFor(member).organization.setMemberRole({
+        organizationId,
+        userId: boss.id,
+        role: "editor",
+      })
+    ).resolves.toEqual({ ok: true });
+  });
+
+  /**
+   * Die Gegenrichtung für **jede** Verwaltungsprozedur, einzeln.
+   *
+   * Der Grund für die Ausführlichkeit: Ohne sie bliebe die Suite grün, wenn
+   * jemand aus einer dieser Prozeduren die Zeile `resolveScope(…, "admin")`
+   * entfernt – und ein `editor` könnte anschließend den Administrator
+   * entfernen und die Organisation übernehmen. Die Stufenprüfung steht im
+   * Router und nicht im SQL; der Compiler sieht davon nichts, und die
+   * Abfragetests sehen es auch nicht. Bleibt dieser Test.
+   *
+   * Geprüft wird mit `editor` – der höchsten Stufe, die es **nicht** darf. Wer
+   * hier scheitert, scheitert erst recht als `viewer`.
+   */
+  it("verwehrt `editor` jeden Verwaltungsvorgang", async () => {
+    const organizationId = await makeOrg();
+    await joinAs(organizationId, "editor");
+    const asMember = callerFor(member);
+
+    await expect(
+      asMember.organization.update({ organizationId, name: "Umbenannt" })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.delete({ organizationId })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.setJoinCode({ organizationId, enabled: true })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.invite({
+        organizationId,
+        telegramUsername: "olf",
+        role: "viewer",
+      })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.setMemberRole({
+        organizationId,
+        userId: boss.id,
+        role: "viewer",
+      })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.removeMember({ organizationId, userId: boss.id })
+    ).rejects.toThrow(/Rechte/);
+    await expect(
+      asMember.organization.revokeInvitation({ organizationId, id: 1 })
+    ).rejects.toThrow(/Rechte/);
+
+    // Und nichts davon hat gewirkt.
+    const detail = await callerFor(boss).organization.get({ organizationId });
+    expect(detail.name).toBe("Werkstatt");
+    expect(detail.joinCode).toBeNull();
+    expect(detail.members).toHaveLength(2);
+    expect(detail.members.find(m => m.userId === boss.id)?.role).toBe("admin");
   });
 
   /**
@@ -354,6 +560,37 @@ describe("Trennung der Bereiche", () => {
     expect(shares).toHaveLength(0);
   });
 
+  /**
+   * Derselbe Riegel darf kein Orakel sein.
+   *
+   * Die erklärende Meldung bekommt nur, wer die Organisation ohnehin kennt. Wer
+   * fremde IDs durchprobiert, unterschiede sonst an der Antwort „gibt es nicht“
+   * von „gehört einer Organisation“ – und erführe aus einer Prozedur, die nur
+   * den eigenen Bestand betrifft, etwas über fremden.
+   */
+  it("verrät einem Nicht-Mitglied nicht, dass es das Org-Lager gibt", async () => {
+    const organizationId = await makeOrg();
+    const lager = await callerFor(boss).lager.create({
+      organizationId,
+      name: "Filament",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
+    await db().insert(schema.friendships).values({
+      userId: outsider.id,
+      friendUserId: member.id,
+      status: "accepted",
+    });
+
+    await expect(
+      callerFor(outsider).friend.setLagerVisibility({
+        friendId: member.id,
+        lagerId: lager!.id,
+        visibility: "full",
+      })
+    ).rejects.toThrow(/nicht gefunden/);
+  });
+
   /** Namen sind je Bereich eindeutig – nicht bereichsübergreifend. */
   it("erlaubt denselben Lagernamen privat und in der Organisation", async () => {
     const organizationId = await makeOrg();
@@ -421,6 +658,39 @@ describe("Löschen", () => {
       name: "Gemeinsam",
       materialKind: "filament",
       filamentDiameterUm: 1750,
+    });
+    await expect(
+      callerFor(boss).organization.delete({ organizationId })
+    ).rejects.toThrow(/hängen noch/);
+  });
+
+  /**
+   * „Leer“ heißt: **kein** Bestand, nicht bloß kein Lager.
+   *
+   * Bis 2.5.0 zählte die Prüfung allein die Lager – und `deleteOrganizationCascade`
+   * riss danach Gebindearten und Dryboxen mit, die niemand gesehen hatte. Eine
+   * Werkstatt, die ihre Tara-Werte gepflegt, aber noch kein Lager angelegt hat,
+   * verlöre sie ohne Rückfrage.
+   */
+  it("zählt auch Gebindearten und Dryboxen als Bestand", async () => {
+    const organizationId = await makeOrg();
+    const created = await callerFor(boss).containerType.create({
+      organizationId,
+      name: "Org-Rolle",
+      tareWeight: 140,
+    });
+    await expect(
+      callerFor(boss).organization.delete({ organizationId })
+    ).rejects.toThrow(/hängen noch/);
+
+    await callerFor(boss).containerType.delete({
+      organizationId,
+      id: created!.id,
+    });
+    await callerFor(boss).storageBox.create({
+      organizationId,
+      name: "Drybox",
+      tareWeight: 500,
     });
     await expect(
       callerFor(boss).organization.delete({ organizationId })

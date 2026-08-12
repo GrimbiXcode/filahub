@@ -63,6 +63,14 @@ export default function ContainerTypes() {
   const t = useT();
   const { data: containerTypes, isLoading } =
     trpc.containerType.list.useQuery(scope);
+  /*
+    Vorschlagen geht nur aus dem **persönlichen** Bestand: Eine Gebindeart der
+    Organisation einzureichen hieße, fremde Angaben unter eigenem Namen in den
+    globalen Katalog zu geben – `preset.submitFromContainerType` lehnt es
+    entsprechend ab. Der Knopf verschwindet deshalb im Org-Kontext, statt in
+    eine Fehlermeldung zu führen.
+  */
+  const canPropose = scope.organizationId == null;
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContainerTypeItem | null>(null);
@@ -228,10 +236,12 @@ export default function ContainerTypes() {
                   <p className="max-w-md text-sm text-muted-foreground">
                     {t.containerTypes.emptyDescription}
                   </p>
-                  <Button onClick={() => openDialog(null)}>
-                    <Plus className="mr-2 h-4 w-4" />{" "}
-                    {t.containerTypes.firstType}
-                  </Button>
+                  {roleAllows(role, "editor") && (
+                    <Button onClick={() => openDialog(null)}>
+                      <Plus className="mr-2 h-4 w-4" />{" "}
+                      {t.containerTypes.firstType}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ) : (
@@ -269,33 +279,37 @@ export default function ContainerTypes() {
                           {s.notes}
                         </p>
                       )}
-                      <div className="mt-3 flex gap-2 border-t pt-2">
-                        <Button
-                          variant="ghost"
-                          className="h-10 flex-1"
-                          onClick={() => openDialog(s)}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10"
-                          aria-label={t.containerTypes.proposeAsPreset}
-                          onClick={() => setProposing(s)}
-                        >
-                          <Upload className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-10 w-10"
-                          aria-label={t.containerTypes.deleteType}
-                          onClick={() => setDeleting(s)}
-                        >
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
-                      </div>
+                      {roleAllows(role, "editor") && (
+                        <div className="mt-3 flex gap-2 border-t pt-2">
+                          <Button
+                            variant="ghost"
+                            className="h-10 flex-1"
+                            onClick={() => openDialog(s)}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
+                          </Button>
+                          {canPropose && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-10 w-10"
+                              aria-label={t.containerTypes.proposeAsPreset}
+                              onClick={() => setProposing(s)}
+                            >
+                              <Upload className="h-4 w-4 text-muted-foreground" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-10 w-10"
+                            aria-label={t.containerTypes.deleteType}
+                            onClick={() => setDeleting(s)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -339,33 +353,41 @@ export default function ContainerTypes() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t.containerTypes.proposeAsPreset}
-                                  title={t.containerTypes.proposeAsPreset}
-                                  onClick={() => setProposing(s)}
-                                >
-                                  <Upload className="h-4 w-4 text-muted-foreground" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t.common.edit}
-                                  title={t.common.edit}
-                                  onClick={() => openDialog(s)}
-                                >
-                                  <Pencil className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t.common.delete}
-                                  title={t.common.delete}
-                                  onClick={() => setDeleting(s)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                </Button>
+                                {canPropose && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={
+                                      t.containerTypes.proposeAsPreset
+                                    }
+                                    title={t.containerTypes.proposeAsPreset}
+                                    onClick={() => setProposing(s)}
+                                  >
+                                    <Upload className="h-4 w-4 text-muted-foreground" />
+                                  </Button>
+                                )}
+                                {roleAllows(role, "editor") && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={t.common.edit}
+                                      title={t.common.edit}
+                                      onClick={() => openDialog(s)}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      aria-label={t.common.delete}
+                                      title={t.common.delete}
+                                      onClick={() => setDeleting(s)}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                    </Button>
+                                  </>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>

@@ -11,7 +11,8 @@ import {
 import type { LoanDecision } from "@contracts/notifications";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { recordAudit } from "./queries/audit";
-import { lagerBelongsToOrganization } from "./queries/lager";
+import { organizationOfLager } from "./queries/lager";
+import { findMembership } from "./queries/organizations";
 import {
   countPendingForUser,
   createFriendship,
@@ -226,8 +227,19 @@ export const friendRouter = createRouter({
         kein Riegel, sondern ein Zufall, der beim nächsten Umbau kippt. Und die
         Meldung sagt den Grund, statt „nicht gefunden“ zu behaupten – das Lager
         gibt es ja, der Aufrufer sieht es in seiner Liste.
+
+        **Die Meldung bekommt aber nur, wer die Organisation kennt.** Sonst wäre
+        der Riegel ein Orakel: Wer fremde IDs durchprobiert, unterschiede an der
+        Antwort „gibt es nicht“ von „gehört einer Organisation“ – und erführe so
+        aus einer Prozedur, die nur den eigenen Bestand betrifft, etwas über
+        fremden. Für alle anderen bleibt es beim `NOT_FOUND` weiter unten,
+        genauso, als hätte es das Lager nie gegeben.
       */
-      if (await lagerBelongsToOrganization(input.lagerId)) {
+      const owningOrganization = await organizationOfLager(input.lagerId);
+      if (
+        owningOrganization != null &&
+        (await findMembership(ctx.user.id, owningOrganization))
+      ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:

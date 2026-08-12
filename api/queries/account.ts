@@ -293,6 +293,16 @@ export type AccountDeletionResult = {
    * Betroffenen – in der Transaktion selbst wäre beides zurückgerollt worden.
    */
   organizations: AdminSuccession[];
+  /**
+   * Organisationen, deren Mitgliedschaft mit dem Konto verschwunden ist –
+   * ebenfalls für das Protokoll des Aufrufers.
+   *
+   * **Ohne die gelöschten**: Deren Mitgliedszeilen hat schon Schritt 0
+   * mitgenommen, und für sie steht `organization.deleted` im Protokoll. Ein
+   * zweiter Eintrag „Mitglied entfernt“ zu einer Organisation, die es nicht
+   * mehr gibt, sagte nichts.
+   */
+  leftOrganizationIds: number[];
 };
 
 /**
@@ -499,9 +509,18 @@ export async function deleteUserAccount(
           eq(schema.organizationInvitations.invitedByUserId, userId)
         )
       );
-    await tx
+    /*
+      Die verlassenen Organisationen werden **beim Löschen zurückgegeben**, weil
+      der Aufrufer sie protokollieren muss: `contracts/audit.ts` nennt für
+      `organization.member_removed` drei Wege – entfernt, ausgetreten, mit dem
+      Konto gelöscht – und der dritte entstünde sonst nirgends. Für die
+      verbleibenden Administratoren verschwände ein Mitglied spurlos, also genau
+      so, wie es auch bei einer unbefugten Entfernung aussähe.
+    */
+    const leftOrganizations = await tx
       .delete(schema.organizationMembers)
-      .where(eq(schema.organizationMembers.userId, userId));
+      .where(eq(schema.organizationMembers.userId, userId))
+      .returning({ organizationId: schema.organizationMembers.organizationId });
 
     /*
       11. Sicherheitsprotokoll anonymisieren, nicht löschen.
@@ -528,6 +547,10 @@ export async function deleteUserAccount(
     // 12. Zuletzt das Konto selbst
     await tx.delete(schema.users).where(eq(schema.users.id, userId));
 
-    return { anonymizedProposals: anonymized.length, organizations };
+    return {
+      anonymizedProposals: anonymized.length,
+      organizations,
+      leftOrganizationIds: leftOrganizations.map(row => row.organizationId),
+    };
   });
 }

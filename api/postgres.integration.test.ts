@@ -431,7 +431,10 @@ describe("Presets ausblenden", () => {
 describe("Preset als eigenen Rollentyp übernehmen", () => {
   it("übernimmt Leergewicht und Herkunft", async () => {
     const [option] = await asUser.preset.options();
-    const created = await asUser.preset.copyToOwn({ variantId: option.id });
+    const created = await asUser.preset.copyToOwn({
+      variantId: option.id,
+      ...PERSONAL,
+    });
 
     expect(created?.id).toBeTypeOf("number");
     expect(created?.tareWeight).toBe(option.tareWeight);

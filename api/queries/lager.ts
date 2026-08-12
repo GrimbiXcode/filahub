@@ -3,6 +3,7 @@ import type { MaterialKind } from "@contracts/materials";
 import { lager, lagerShares, materials } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
+import { hasChanges } from "./patch";
 
 /**
  * Lager – die Ebene über den Materialien.
@@ -112,10 +113,12 @@ export async function updateLager(
   }>
 ) {
   try {
-    await getDb()
-      .update(lager)
-      .set(data)
-      .where(and(eq(lager.id, id), scopeWhere(lager, scope)));
+    if (hasChanges(data)) {
+      await getDb()
+        .update(lager)
+        .set(data)
+        .where(and(eq(lager.id, id), scopeWhere(lager, scope)));
+    }
   } catch (error) {
     if (isDuplicateLagerName(error))
       throw new Error(LAGER_NAME_TAKEN, { cause: error });
@@ -254,18 +257,25 @@ export async function lagerInScope(scope: Scope, id: number) {
 }
 
 /**
- * Gehört dieses Lager einer Organisation?
+ * Welcher Organisation gehört dieses Lager – oder `null`, wenn einer Person
+ * oder wenn es das Lager nicht gibt.
  *
  * Ohne Bereichsfilter, und das ist hier der Punkt: Gefragt wird nicht „darf ich
  * darauf zugreifen“, sondern „was für ein Lager ist das“. Gebraucht wird es an
  * genau einer Stelle – dem Riegel in `friendRouter.setLagerVisibility`, der
  * eine verständliche Meldung geben soll statt „nicht gefunden“.
+ *
+ * **Geliefert wird die ID und kein `boolean`**, weil der Aufrufer sie braucht:
+ * Die verständliche Meldung darf nur bekommen, wer die Organisation ohnehin
+ * kennt. Ein bloßes Ja/Nein zwänge ihn, sie allen zu geben – und damit jedem
+ * zu verraten, welche Lager-IDs es gibt und welche davon einer Organisation
+ * gehören.
  */
-export async function lagerBelongsToOrganization(id: number): Promise<boolean> {
+export async function organizationOfLager(id: number): Promise<number | null> {
   const rows = await getDb()
     .select({ organizationId: lager.organizationId })
     .from(lager)
     .where(eq(lager.id, id))
     .limit(1);
-  return rows.at(0)?.organizationId != null;
+  return rows.at(0)?.organizationId ?? null;
 }

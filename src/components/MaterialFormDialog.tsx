@@ -196,12 +196,20 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     ohne dass der Dialog neu aufgebaut werden muss. Wer die Übersicht eines
     Lagers ansieht und dort etwas anlegt, meint fast immer dieses.
   */
-  const effectiveLagerId =
-    lagerId !== ""
-      ? lagerId
-      : activeLagerId != null
-        ? String(activeLagerId)
-        : "";
+  /*
+    Und abgeglichen gegen die geladene Liste: Wechselt der Bereich, während der
+    Dialog offen steht, zeigte das Feld sonst weiter auf ein Lager der anderen
+    Seite – die Auswahl bliebe leer, und das Speichern liefe in einen Fehler aus
+    `validateForeignKeys`. Dieselbe Versöhnung macht `useActiveLagerId` für den
+    Umschalter.
+  */
+  const chosenIsKnown =
+    lagerId !== "" && (lagerList ?? []).some(l => String(l.id) === lagerId);
+  const effectiveLagerId = chosenIsKnown
+    ? lagerId
+    : activeLagerId != null
+      ? String(activeLagerId)
+      : "";
 
   const selectedLager = useMemo(
     () => lagerList?.find(l => String(l.id) === effectiveLagerId) ?? null,

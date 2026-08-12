@@ -24,6 +24,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useActiveScope } from "@/lib/activeScope";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import type { Messages } from "@/messages/de";
@@ -95,6 +96,13 @@ function versionSubtitle(
 export function PresetCatalog() {
   const utils = trpc.useUtils();
   const { formatGrams, formatDate } = useFormat();
+  /*
+    Der Katalog selbst ist global und persönlich – was jemand darin ausblendet,
+    geht die Organisation nichts an. **Die Kopie** ist es nicht: Sie wird zu
+    einer Gebindeart, und die gehört dem aktiven Bereich. Ohne diesen Wert
+    landete sie im Org-Kontext still im privaten Bestand.
+  */
+  const scope = useActiveScope();
   const t = useT();
   const presetNames = usePresetNames();
   const { data: tree, isLoading } = trpc.preset.tree.useQuery();
@@ -287,6 +295,7 @@ export function PresetCatalog() {
                                         onClick={() =>
                                           copyToOwn.mutate({
                                             variantId: variant.id,
+                                            ...scope,
                                           })
                                         }
                                       >

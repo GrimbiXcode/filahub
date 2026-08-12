@@ -114,8 +114,19 @@ export default function Import() {
 
   const { data: lagerList } = trpc.lager.list.useQuery(scope);
   const aktivesLager = useActiveLagerId(lagerList);
-  const gewaehltesLager =
-    zielLager !== "" ? Number(zielLager) : (aktivesLager ?? null);
+  /*
+    Abgeglichen gegen die geladene Liste, nicht bloß gelesen – dieselbe
+    Versöhnung, die `useActiveLagerId` für das aktive Lager macht: Wer den
+    Bereich wechselt, während die Seite offen ist, hätte hier sonst weiter das
+    Lager der anderen Seite stehen. Der Import liefe dann in einen Fehler aus
+    `validateForeignKeys`, und die Auswahl zeigte einen Namen, den es in dieser
+    Liste gar nicht gibt.
+  */
+  const gewaehltAusListe =
+    zielLager !== "" && (lagerList ?? []).some(l => l.id === Number(zielLager));
+  const gewaehltesLager = gewaehltAusListe
+    ? Number(zielLager)
+    : (aktivesLager ?? null);
   const importMutation = trpc.material.importMany.useMutation({
     onSuccess: async data => {
       toast.success(`${data.created} Materialien importiert`);

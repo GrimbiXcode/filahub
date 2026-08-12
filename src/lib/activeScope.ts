@@ -37,6 +37,20 @@ function readStored(): number | null {
 
 let activeOrganizationId: number | null = readStored();
 
+/*
+  Der Lager-Schlüssel muss den wiederhergestellten Bereich **sofort** kennen.
+
+  Ohne diese Zeile galt er nach jedem Neuladen zunächst als `personal`, obwohl
+  eine Organisation aktiv war: `useActiveLagerId` schrieb das gewählte Org-Lager
+  dann unter `active-lager:personal` – und im persönlichen Bereich zeigte der
+  Umschalter anschließend auf ein Lager, das es dort nicht gibt. Beim Wechsel
+  über `setActiveOrganizationId` geschieht dasselbe; hier fehlte nur der
+  allererste Fall, der ganz ohne Wechsel auskommt.
+*/
+if (activeOrganizationId != null) {
+  setScopeKey(`org:${activeOrganizationId}`);
+}
+
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -119,13 +133,18 @@ export function useActiveScope(): { organizationId: number | null } {
  * Administration an.
  */
 export function useScopeRole(): OrganizationRole {
-  const { organizationId } = useActiveScope();
+  /*
+    Gelesen wird der **gespeicherte** Bereich und nicht der abgeglichene aus
+    `useActiveScope`. Der liefert `null`, solange die Mitgliedschaften laden –
+    dasselbe `null` wie im persönlichen Bereich. Wer die beiden nicht
+    unterscheidet, gibt während des Ladens `admin` heraus und zeigt genau die
+    Knöpfe, die der Absatz oben ausschließen will.
+  */
+  const stored = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const { data: memberships } = trpc.organization.list.useQuery(undefined, {
     staleTime: 1000 * 60 * 5,
   });
-  if (organizationId == null) return "admin";
-  return (
-    memberships?.find(m => m.organizationId === organizationId)?.role ??
-    "viewer"
-  );
+  if (stored == null) return "admin";
+  if (!memberships) return "viewer";
+  return memberships.find(m => m.organizationId === stored)?.role ?? "viewer";
 }

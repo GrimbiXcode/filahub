@@ -2,9 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { deletionConfirmationMatches } from "@contracts/account";
 import { clearSessionCookie } from "./lib/cookies";
+import { ORGANIZATIONS_PATH, notify } from "./lib/notify";
 import { authedQuery, createRouter } from "./middleware";
 import { deleteUserAccount, exportUserData } from "./queries/account";
 import { recordAudit } from "./queries/audit";
+import { findOrganization } from "./queries/organizations";
 
 /**
  * Betroffenenrechte am eigenen Konto: Auskunft, Datenübertragbarkeit, Löschung.
@@ -74,6 +76,22 @@ export const accountRouter = createRouter({
         Administrator: Für ihn ändert sich ein Zugriffsrecht, ohne dass er
         etwas getan hat.
       */
+      /*
+        Die Mitgliedschaften, die mit dem Konto verschwunden sind. Ohne diesen
+        Eintrag verschwände ein Mitglied aus Sicht der verbliebenen
+        Administratoren spurlos – nicht unterscheidbar von einer unbefugten
+        Entfernung, also genau dem Fall, für den das Protokoll da ist.
+        `contracts/audit.ts` nennt diesen dritten Weg ausdrücklich.
+      */
+      for (const organizationId of result.leftOrganizationIds) {
+        recordAudit({
+          event: "organization.member_removed",
+          subjectUserId: ctx.user.id,
+          ip: ctx.clientIp,
+          detail: { organizationId, reason: "account_deleted" },
+        });
+      }
+
       for (const org of result.organizations) {
         if (org.outcome === "promoted") {
           recordAudit({
@@ -86,6 +104,24 @@ export const accountRouter = createRouter({
               reason: "last_admin_deleted",
             },
           });
+          /*
+            Und ein Hinweis an den Nachfolger. Er hat nichts getan und trägt
+            jetzt allein die Verantwortung für die Organisation: Er kann von
+            niemandem mehr entfernt werden, muss die Mitglieder verwalten und ist
+            der Einzige, der sie löschen könnte. Jede andere Stufenänderung im
+            Feature meldet sich – diese ist die einzige, die niemand ausgelöst
+            hat, und damit die, von der er am wenigsten von selbst erführe.
+          */
+          const promoted = await findOrganization(org.organizationId);
+          await notify(
+            org.newAdminUserId,
+            m =>
+              m.organizationRoleChanged({
+                organization: promoted?.name ?? "",
+                role: "admin",
+              }),
+            ORGANIZATIONS_PATH
+          );
         } else {
           recordAudit({
             event: "organization.deleted",

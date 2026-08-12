@@ -349,16 +349,34 @@ export async function updateOrganization(
  *
  * Gezählt wird **in** der Transaktion, nicht davor: Sonst könnte zwischen
  * Zählen und Löschen ein Lager hineinwandern.
+ *
+ * Gezählt werden **alle drei** Bestandstabellen, nicht nur die Lager. Bis 2.5.0
+ * stand hier allein `lager` – und `deleteOrganizationCascade` riss danach
+ * Gebindearten und Dryboxen mit, die niemand gesehen hatte. Genau der Fall, den
+ * die Regel oben ausschließen soll: Eine Organisation ohne Lager, aber mit
+ * gepflegten Gebindearten galt als „leer“. Material braucht ein Lager und ist
+ * damit mitgezählt.
  */
 export async function deleteOrganizationIfEmpty(
   id: number
 ): Promise<{ blockedBy: number | null }> {
   return getDb().transaction(async tx => {
-    const rows = await tx
+    const lagerRows = await tx
       .select({ value: count() })
       .from(lager)
       .where(eq(lager.organizationId, id));
-    const inside = Number(rows.at(0)?.value ?? 0);
+    const containerRows = await tx
+      .select({ value: count() })
+      .from(containerTypes)
+      .where(eq(containerTypes.organizationId, id));
+    const boxRows = await tx
+      .select({ value: count() })
+      .from(storageBoxes)
+      .where(eq(storageBoxes.organizationId, id));
+    const inside =
+      Number(lagerRows.at(0)?.value ?? 0) +
+      Number(containerRows.at(0)?.value ?? 0) +
+      Number(boxRows.at(0)?.value ?? 0);
     if (inside > 0) return { blockedBy: inside };
     await deleteOrganizationCascade(tx, id);
     return { blockedBy: null };
@@ -405,6 +423,24 @@ export async function listMembers(
 /** Warum ein Mitgliederschritt nicht ging – oder `null`, wenn er ging. */
 export type MemberBlock = "last_admin" | "full" | "not_a_member" | "duplicate";
 
+const MEMBER_UNIQUE = "organization_members_unique";
+
+/**
+ * Erkennt den Doppel-Beitritt am **Namen des verletzten Constraints**.
+ *
+ * Dieselbe Begründung wie bei `isDuplicateLagerName` (`queries/lager.ts`):
+ * Drizzle verpackt den Postgres-Fehler, der Index steht am `cause`. Ein bloßes
+ * `catch {}` hätte hier jeden Fehler zu „ist bereits Mitglied“ erklärt – auch
+ * eine abgerissene Verbindung –, und der Beitretende suchte den Fehler dann an
+ * der falschen Stelle.
+ */
+function isDuplicateMember(error: unknown): boolean {
+  const constraint = (error as { cause?: { constraint?: string } })?.cause
+    ?.constraint;
+  if (constraint === MEMBER_UNIQUE) return true;
+  return error instanceof Error && error.message.includes(MEMBER_UNIQUE);
+}
+
 /**
  * Nimmt jemanden auf.
  *
@@ -412,29 +448,47 @@ export type MemberBlock = "last_admin" | "full" | "not_a_member" | "duplicate";
  * Einfügen: Der offene Beitrittscode ist die einzige Stelle, an der jemand ohne
  * Zutun eines Verwalters hinzukommt, und dort ist gleichzeitiges Beitreten
  * nicht bloß theoretisch.
+ *
+ * Gezählt wird über die **gesperrten** Zeilen (`FOR UPDATE`) und nicht per
+ * `count()`, aus demselben Grund wie in `changeMembership`: Zwei gleichzeitige
+ * Beitritte über denselben Code läsen sonst beide denselben Stand und kämen
+ * beide durch. Die Sperre greift, weil jede Organisation mindestens eine
+ * Mitgliedszeile hat – die des Gründers.
  */
+async function addMemberTx(
+  tx: DbTransaction,
+  organizationId: number,
+  userId: number,
+  role: OrganizationRole,
+  maxMembers: number
+): Promise<MemberBlock | null> {
+  const existing = await tx
+    .select({ userId: organizationMembers.userId })
+    .from(organizationMembers)
+    .where(eq(organizationMembers.organizationId, organizationId))
+    .for("update");
+  if (existing.some(m => m.userId === userId)) return "duplicate";
+  if (existing.length >= maxMembers) return "full";
+  try {
+    await tx
+      .insert(organizationMembers)
+      .values({ organizationId, userId, role });
+  } catch (error) {
+    if (isDuplicateMember(error)) return "duplicate";
+    throw error;
+  }
+  return null;
+}
+
 export async function addMember(
   organizationId: number,
   userId: number,
   role: OrganizationRole,
   maxMembers: number
 ): Promise<MemberBlock | null> {
-  return getDb().transaction(async tx => {
-    const rows = await tx
-      .select({ value: count() })
-      .from(organizationMembers)
-      .where(eq(organizationMembers.organizationId, organizationId));
-    if (Number(rows.at(0)?.value ?? 0) >= maxMembers) return "full";
-    try {
-      await tx
-        .insert(organizationMembers)
-        .values({ organizationId, userId, role });
-    } catch {
-      // Der Unique-Schlüssel (organizationId, userId) – schon Mitglied.
-      return "duplicate";
-    }
-    return null;
-  });
+  return getDb().transaction(tx =>
+    addMemberTx(tx, organizationId, userId, role, maxMembers)
+  );
 }
 
 /**
@@ -593,31 +647,169 @@ export async function createInvitation(data: {
   return row;
 }
 
+/** Was aus einer beantworteten Einladung geworden ist. */
+export type InvitationOutcome =
+  | { outcome: "gone" }
+  | { outcome: "declined"; organizationId: number }
+  | { outcome: "void"; organizationId: number }
+  | { outcome: "blocked"; block: MemberBlock }
+  | { outcome: "joined"; organizationId: number; role: OrganizationRole };
+
+/** Nur zum Zurückrollen der angenommenen Einladung – verlässt diese Datei nicht. */
+class InvitationBlocked extends Error {
+  block: MemberBlock;
+  constructor(block: MemberBlock) {
+    super("invitation blocked");
+    this.block = block;
+  }
+}
+
 /**
- * Beantwortet eine Einladung.
+ * Beantwortet eine Einladung – und nimmt beim Annehmen gleich auf.
  *
- * Der `pending`-Filter im `WHERE` wirkt als optimistische Sperre – wie beim
- * Anwenden eines Preset-Vorschlags: Zwei gleichzeitige Antworten können nicht
- * beide durchkommen, und die zweite bekommt `undefined` statt einer stillen
- * Doppelbuchung.
+ * **Beides in einer Transaktion, und das ist der Punkt.** Bis 2.5.0 stand das
+ * Beantworten hier und das Aufnehmen im Router, jedes in seiner eigenen
+ * Transaktion. Scheiterte das zweite – Organisation voll, inzwischen schon
+ * Mitglied –, war die Einladung trotzdem auf `accepted` gesetzt: verbraucht,
+ * ohne dass jemand beigetreten wäre, und wegen des partiellen Unique-Index auf
+ * `pending` nicht einmal neu ausstellbar. Jetzt fällt in dem Fall alles zurück
+ * und die Einladung bleibt offen.
+ *
+ * Der `pending`-Filter im `WHERE` wirkt weiterhin als optimistische Sperre: Zwei
+ * gleichzeitige Antworten können nicht beide durchkommen.
+ *
+ * **Eine Einladung gilt nur, solange die einladende Person die Organisation
+ * verwaltet.** Sonst überlebte die Vollmacht ihren Träger: Ein entfernter oder
+ * herabgestufter Administrator hätte über eine offene `admin`-Einladung weiter
+ * Einfluss, und die verbliebenen Administratoren sähen es kommen. Das
+ * widerspräche der Regel am Kopf dieser Datei, dass das Verschwinden der
+ * Mitgliedszeile den Zugriff sofort beendet. Der Preis ist eine Einladung, die
+ * ins Leere läuft, wenn der Einladende die Organisation regulär verlässt – das
+ * ist selten, sichtbar und mit einer neuen Einladung behoben.
  */
 export async function respondToInvitation(
   id: number,
   invitedUserId: number,
-  status: "accepted" | "declined"
-) {
+  accept: boolean,
+  maxMembers: number
+): Promise<InvitationOutcome> {
+  try {
+    return await getDb().transaction(async (tx): Promise<InvitationOutcome> => {
+      const [row] = await tx
+        .update(organizationInvitations)
+        .set({
+          status: accept ? "accepted" : "declined",
+          respondedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(organizationInvitations.id, id),
+            eq(organizationInvitations.invitedUserId, invitedUserId),
+            eq(organizationInvitations.status, "pending")
+          )
+        )
+        .returning();
+      if (!row) return { outcome: "gone" };
+      if (!accept) {
+        return { outcome: "declined", organizationId: row.organizationId };
+      }
+
+      const inviter = await tx
+        .select({ role: organizationMembers.role })
+        .from(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, row.organizationId),
+            eq(organizationMembers.userId, row.invitedByUserId)
+          )
+        )
+        .limit(1);
+      if (inviter.at(0)?.role !== "admin") {
+        /*
+          Die Einladung wird gelöscht statt beantwortet: „abgelehnt“ wäre eine
+          Falschaussage über den Eingeladenen, und ein eigener Status kostete
+          einen Enum-Wert samt Migration für einen Randfall.
+        */
+        await tx
+          .delete(organizationInvitations)
+          .where(eq(organizationInvitations.id, row.id));
+        return { outcome: "void", organizationId: row.organizationId };
+      }
+
+      const block = await addMemberTx(
+        tx,
+        row.organizationId,
+        invitedUserId,
+        row.role,
+        maxMembers
+      );
+      if (block) throw new InvitationBlocked(block);
+      return {
+        outcome: "joined",
+        organizationId: row.organizationId,
+        role: row.role,
+      };
+    });
+  } catch (error) {
+    if (error instanceof InvitationBlocked) {
+      return { outcome: "blocked", block: error.block };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Zieht eine offene Einladung zurück.
+ *
+ * Gelöscht statt auf einen Endstand gesetzt: Eine zurückgezogene Einladung ist
+ * keine Antwort des Eingeladenen, und der partielle Unique-Index auf `pending`
+ * gibt den Platz damit sauber für eine neue frei.
+ *
+ * Die `organizationId` steht **im `WHERE`** und wird nicht bloß vorher geprüft –
+ * sonst ließe sich mit der Verwaltungsstufe in der eigenen Organisation eine
+ * fremde Einladung löschen.
+ */
+export async function revokeInvitation(organizationId: number, id: number) {
   const [row] = await getDb()
-    .update(organizationInvitations)
-    .set({ status, respondedAt: new Date() })
+    .delete(organizationInvitations)
     .where(
       and(
         eq(organizationInvitations.id, id),
-        eq(organizationInvitations.invitedUserId, invitedUserId),
+        eq(organizationInvitations.organizationId, organizationId),
         eq(organizationInvitations.status, "pending")
       )
     )
     .returning();
   return row;
+}
+
+/**
+ * Die offenen Einladungen einer Organisation – für ihre Administratoren.
+ *
+ * Ohne diese Liste wäre eine ausgesprochene Einladung unsichtbar: Wer sie
+ * ausgesprochen hat, sähe nicht, dass sie noch offen ist, und die übrigen
+ * Administratoren erführen von ihr überhaupt erst, wenn jemand Neues in der
+ * Mitgliederliste steht.
+ */
+export async function listPendingInvitations(organizationId: number) {
+  return getDb()
+    .select({
+      id: organizationInvitations.id,
+      invitedUserId: organizationInvitations.invitedUserId,
+      name: users.name,
+      telegramUsername: users.telegramUsername,
+      role: organizationInvitations.role,
+      createdAt: organizationInvitations.createdAt,
+    })
+    .from(organizationInvitations)
+    .innerJoin(users, eq(users.id, organizationInvitations.invitedUserId))
+    .where(
+      and(
+        eq(organizationInvitations.organizationId, organizationId),
+        eq(organizationInvitations.status, "pending")
+      )
+    )
+    .orderBy(asc(organizationInvitations.id));
 }
 
 /** Offene Einladungen an diese Person – für die Liste und das Abzeichen. */

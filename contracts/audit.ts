@@ -84,10 +84,26 @@ export const AUDIT_EVENTS = [
   /** Einladung abgelehnt */
   "organization.invite_declined",
   /**
+   * Offene Einladung von einem Administrator zurückgezogen.
+   *
+   * Getrennt von `invite_declined`, weil der Handelnde ein anderer ist: Dort
+   * entscheidet der Eingeladene, hier die Organisation über ihn.
+   */
+  "organization.invite_revoked",
+  /**
+   * Stammdaten geändert; `detail.fields` nennt die betroffenen Felder.
+   *
+   * Steht hier wegen **eines** dieser Felder: `joinRole` entscheidet, welche
+   * Stufe der offene Beitrittscode vergibt. Wer sie anhebt, ändert die
+   * Zugriffsrechte jedes künftigen Beitritts – ohne diesen Eintrag zeigte das
+   * Protokoll nur die Beitritte selbst und nie die Entscheidung dahinter.
+   */
+  "organization.updated",
+  /**
    * Mitglied hinzugekommen. `detail` trägt `{ organizationId, role, via }` –
    * `via` unterscheidet den offenen Beitrittscode vom angenommenen
    * Einladungsschreiben, und das ist der Unterschied zwischen „jemand kannte
-   * den Code" und „ein Administrator hat diese Person geholt".
+   * den Code“ und „ein Administrator hat diese Person geholt“.
    */
   "organization.member_added",
   /**

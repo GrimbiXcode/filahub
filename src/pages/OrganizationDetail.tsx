@@ -98,6 +98,13 @@ export default function OrganizationDetail() {
     },
     onError: e => toast.error(e.message),
   });
+  const revokeMutation = trpc.organization.revokeInvitation.useMutation({
+    onSuccess: () => {
+      toast.success(t.organizations.invitationRevoked);
+      refresh();
+    },
+    onError: e => toast.error(e.message),
+  });
   const roleMutation = trpc.organization.setMemberRole.useMutation({
     onSuccess: () => {
       toast.success(t.organizations.roleChanged);
@@ -271,6 +278,66 @@ export default function OrganizationDetail() {
             ))}
           </CardContent>
         </Card>
+
+        {/*
+          Offene Einladungen – nur für Administratoren, wie der Beitrittscode.
+          Ohne diese Liste wäre eine ausgesprochene Einladung unsichtbar: Wer
+          sich vertippt hat, könnte sie nicht zurücknehmen, und die übrigen
+          Administratoren erführen von ihr erst, wenn jemand Neues in der
+          Mitgliederliste steht.
+        */}
+        {isAdmin && data.invitations.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">
+                {t.organizations.pendingInvitationsTitle}
+              </CardTitle>
+              <CardDescription>
+                {t.organizations.pendingInvitationsHint}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {data.invitations.map(invitation => (
+                <div
+                  key={invitation.id}
+                  className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">
+                      {invitation.name ?? t.common.none}
+                    </p>
+                    {invitation.telegramUsername && (
+                      <p className="truncate text-xs text-muted-foreground">
+                        @{invitation.telegramUsername}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground">
+                      {roleLabel(invitation.role, t)}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      aria-label={t.organizations.revokeInvitation}
+                      title={t.organizations.revokeInvitation}
+                      className="text-destructive hover:text-destructive"
+                      disabled={revokeMutation.isPending}
+                      onClick={() =>
+                        revokeMutation.mutate({
+                          organizationId,
+                          id: invitation.id,
+                        })
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
         {isAdmin && (
           <>

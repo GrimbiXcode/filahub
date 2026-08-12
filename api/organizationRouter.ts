@@ -1,6 +1,9 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { normalizeTelegramUsername } from "@contracts/friends";
+import {
+  normalizeFriendCode,
+  normalizeTelegramUsername,
+} from "@contracts/friends";
 import {
   MAX_MEMBERS_PER_ORGANIZATION,
   MAX_ORGANIZATIONS_PER_USER,
@@ -8,7 +11,7 @@ import {
   normalizeJoinCode,
   organizationRoleSchema,
 } from "@contracts/organizations";
-import { createRouter, authedQuery } from "./middleware";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { ORGANIZATIONS_PATH, notify } from "./lib/notify";
 import { resolveScope } from "./scope";
 import { recordAudit } from "./queries/audit";
@@ -24,6 +27,7 @@ import {
   createInvitation,
   createOrganization,
   deleteOrganizationIfEmpty,
+  findMembership,
   findOpenInvitation,
   findOrganization,
   findOrganizationByJoinCode,
@@ -31,7 +35,9 @@ import {
   listMembers,
   listMemberships,
   listOpenInvitations,
+  listPendingInvitations,
   respondToInvitation,
+  revokeInvitation,
   setJoinCode,
   updateOrganization,
   type MemberBlock,
@@ -58,31 +64,34 @@ const idInput = z.object({
 const nameInput = z.string().trim().min(1, "Name ist erforderlich").max(255);
 
 /** Übersetzt die Absagegründe aus `queries/organizations.ts` in Meldungen. */
-function assertNotBlocked(block: MemberBlock | null): void {
-  if (block === null) return;
+function blockError(block: MemberBlock): TRPCError {
   if (block === "last_admin") {
-    throw new TRPCError({
+    return new TRPCError({
       code: "CONFLICT",
       message:
         "Die Organisation braucht mindestens einen Administrator. Ernenne zuerst jemand anderen.",
     });
   }
   if (block === "full") {
-    throw new TRPCError({
+    return new TRPCError({
       code: "CONFLICT",
       message: `Mehr als ${MAX_MEMBERS_PER_ORGANIZATION} Mitglieder sind derzeit nicht möglich.`,
     });
   }
   if (block === "duplicate") {
-    throw new TRPCError({
+    return new TRPCError({
       code: "CONFLICT",
       message: "Diese Person ist bereits Mitglied.",
     });
   }
-  throw new TRPCError({
+  return new TRPCError({
     code: "NOT_FOUND",
     message: "Mitglied nicht gefunden",
   });
+}
+
+function assertNotBlocked(block: MemberBlock | null): void {
+  if (block !== null) throw blockError(block);
 }
 
 export const organizationRouter = createRouter({
@@ -138,6 +147,16 @@ export const organizationRouter = createRouter({
       });
     }
     const members = await listMembers(scope.organizationId);
+    /*
+      Offene Einladungen nur für Administratoren, und zwar aus demselben Grund
+      wie der Beitrittscode: Sie sind ein Verwaltungsvorgang, kein Stammdatum.
+      Ohne sie wäre eine ausgesprochene Einladung unsichtbar – niemand könnte
+      sie zurückziehen, und niemand wüsste, dass sie offen ist.
+    */
+    const invitations =
+      scope.role === "admin"
+        ? await listPendingInvitations(scope.organizationId)
+        : [];
     return {
       id: org.id,
       name: org.name,
@@ -145,6 +164,7 @@ export const organizationRouter = createRouter({
       joinRole: org.joinRole,
       role: scope.role,
       members,
+      invitations,
       joinCode: scope.role === "admin" ? org.joinCode : null,
     };
   }),
@@ -160,24 +180,56 @@ export const organizationRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...data } = input;
       await resolveScope(ctx.user.id, organizationId, "admin");
-      const updated = await updateOrganization(organizationId, data);
+      /*
+        Ein leeres Feld-Set ergäbe `SET` ohne Zuweisung – Postgres antwortet
+        darauf mit einem Syntaxfehler, und der käme als 500 heraus. Nichts zu
+        ändern ist keine Störung, also ist die Antwort der unveränderte Stand.
+      */
+      const patch = Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== undefined)
+      );
+      const updated =
+        Object.keys(patch).length === 0
+          ? await findOrganization(organizationId)
+          : await updateOrganization(organizationId, patch);
       if (!updated) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Organisation nicht gefunden",
         });
       }
+      /*
+        Protokolliert, obwohl es nach einem Stammdatum aussieht: `joinRole`
+        entscheidet, was der offene Beitrittscode vergibt. Wer sie anhebt,
+        ändert Zugriffsrechte für jeden künftigen Beitritt – dieselbe Begründung,
+        aus der das Erzeugen des Codes protokolliert wird. Der Name steht mit im
+        Eintrag, weil eine umbenannte Organisation in älteren Einträgen sonst
+        nicht wiederzuerkennen ist.
+      */
+      if (Object.keys(patch).length > 0) {
+        recordAudit({
+          event: "organization.updated",
+          actorUserId: ctx.user.id,
+          ip: ctx.clientIp,
+          detail: { organizationId, fields: Object.keys(patch).sort() },
+        });
+      }
       return updated;
     }),
 
-  /** Löschen nur, wenn kein Lager mehr daran hängt – wie beim Lager selbst. */
+  /**
+   * Löschen nur, wenn kein Bestand mehr daran hängt – wie beim Lager selbst.
+   *
+   * Gezählt werden Lager, Gebindearten und Dryboxen. Material braucht ein Lager
+   * und ist damit mitgezählt.
+   */
   delete: authedQuery.input(idInput).mutation(async ({ ctx, input }) => {
     await resolveScope(ctx.user.id, input.organizationId, "admin");
     const { blockedBy } = await deleteOrganizationIfEmpty(input.organizationId);
     if (blockedBy != null) {
       throw new TRPCError({
         code: "CONFLICT",
-        message: `An dieser Organisation hängen noch ${blockedBy} Lager. Lösche sie zuerst.`,
+        message: `An dieser Organisation hängen noch ${blockedBy} Einträge (Lager, Gebindearten, Dryboxen). Lösche sie zuerst.`,
       });
     }
     recordAudit({
@@ -213,7 +265,22 @@ export const organizationRouter = createRouter({
       return { joinCode: code };
     }),
 
+  /**
+   * Beitritt über den offenen Code.
+   *
+   * **Ratenbegrenzt**, und das ist keine Vorsicht auf Vorrat: Ohne sie wäre die
+   * Prozedur ein Orakel zum Durchprobieren von Codes – genau das, was
+   * `friend.request` mit derselben Grenze schon verhindert. 20 Versuche in der
+   * Stunde reichen für jedes Vertippen und für nichts sonst.
+   */
   joinByCode: authedQuery
+    .use(
+      rateLimited({
+        key: "organization.join",
+        limit: 20,
+        windowMs: 60 * 60_000,
+      })
+    )
     .input(z.object({ code: z.string().min(1).max(32) }))
     .mutation(async ({ ctx, input }) => {
       const normalized = normalizeJoinCode(input.code);
@@ -261,8 +328,21 @@ export const organizationRouter = createRouter({
    * Fassung derselben Suche wäre eine zweite Stelle, an der sie zu weit greifen
    * könnte. Wirksam wird die Einladung erst mit dem Annehmen: Niemand landet
    * ohne sein Zutun in einer Organisation.
+   *
+   * **Ratenbegrenzt wie `friend.request`**: Wer einlädt, erfährt aus der
+   * Antwort, ob es zu einem Code oder Benutzernamen ein Konto gibt. Diese
+   * Auskunft ist für den Zweck nötig, taugt in Menge aber zum Durchprobieren –
+   * und die Verwaltungsstufe in einer selbst gegründeten Organisation hat
+   * jeder, der eine anlegt.
    */
   invite: authedQuery
+    .use(
+      rateLimited({
+        key: "organization.invite",
+        limit: 20,
+        windowMs: 60 * 60_000,
+      })
+    )
     .input(
       idInput.extend({
         code: z.string().max(32).optional(),
@@ -273,7 +353,15 @@ export const organizationRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       await resolveScope(ctx.user.id, input.organizationId, "admin");
 
-      const byCode = input.code ? await findUserByFriendCode(input.code) : null;
+      /*
+        Der Freundescode wird **normalisiert**, bevor er nachgeschlagen wird.
+        `findUserByFriendCode` verlangt die Normalform und liefert für alles
+        andere `undefined` – ohne diesen Schritt fand eine Eingabe wie
+        `fh-a2b3-c4d5` niemanden, und die Meldung behauptete, es gebe kein
+        Konto. Derselbe Weg wie `resolveByCode` in `api/friendRouter.ts`.
+      */
+      const code = input.code ? normalizeFriendCode(input.code) : null;
+      const byCode = code ? await findUserByFriendCode(code) : null;
       const username = input.telegramUsername
         ? normalizeTelegramUsername(input.telegramUsername)
         : null;
@@ -291,6 +379,18 @@ export const organizationRouter = createRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Du bist bereits Mitglied.",
+        });
+      }
+      /*
+        Wer schon Mitglied ist, braucht keine Einladung. Ohne diese Prüfung
+        entstünde eine, die niemand annehmen kann: `addMember` meldet beim
+        Annehmen „bereits Mitglied“, und die Einladung bliebe für immer offen
+        in der Liste stehen.
+      */
+      if (await findMembership(target.id, input.organizationId)) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Diese Person ist bereits Mitglied.",
         });
       }
       if (await findOpenInvitation(input.organizationId, target.id)) {
@@ -352,15 +452,27 @@ export const organizationRouter = createRouter({
       const answered = await respondToInvitation(
         input.id,
         ctx.user.id,
-        input.accept ? "accepted" : "declined"
+        input.accept,
+        MAX_MEMBERS_PER_ORGANIZATION
       );
-      if (!answered) {
+      if (answered.outcome === "gone") {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Einladung nicht gefunden",
         });
       }
-      if (!input.accept) {
+      if (answered.outcome === "void") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Diese Einladung gilt nicht mehr – wer sie ausgesprochen hat, verwaltet die Organisation nicht mehr.",
+        });
+      }
+      if (answered.outcome === "blocked") {
+        // Die Einladung ist dabei offen geblieben; ein zweiter Versuch lohnt.
+        throw blockError(answered.block);
+      }
+      if (answered.outcome === "declined") {
         recordAudit({
           event: "organization.invite_declined",
           actorUserId: ctx.user.id,
@@ -369,14 +481,6 @@ export const organizationRouter = createRouter({
         });
         return { joined: false };
       }
-      assertNotBlocked(
-        await addMember(
-          answered.organizationId,
-          ctx.user.id,
-          answered.role,
-          MAX_MEMBERS_PER_ORGANIZATION
-        )
-      );
       recordAudit({
         event: "organization.member_added",
         actorUserId: ctx.user.id,
@@ -389,6 +493,35 @@ export const organizationRouter = createRouter({
         },
       });
       return { joined: true, organizationId: answered.organizationId };
+    }),
+
+  /**
+   * Zieht eine offene Einladung zurück.
+   *
+   * Ohne diesen Weg wäre eine ausgesprochene Einladung endgültig: Wer sich
+   * vertippt oder es sich anders überlegt, könnte sie nicht mehr aus der Welt
+   * schaffen, und eine offene `admin`-Einladung überlebte jede spätere
+   * Herabstufung des Einladenden.
+   */
+  revokeInvitation: authedQuery
+    .input(idInput.extend({ id: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      await resolveScope(ctx.user.id, input.organizationId, "admin");
+      const removed = await revokeInvitation(input.organizationId, input.id);
+      if (!removed) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Einladung nicht gefunden",
+        });
+      }
+      recordAudit({
+        event: "organization.invite_revoked",
+        actorUserId: ctx.user.id,
+        subjectUserId: removed.invitedUserId,
+        ip: ctx.clientIp,
+        detail: { organizationId: input.organizationId },
+      });
+      return { ok: true };
     }),
 
   // -------------------------------------------------------------------------

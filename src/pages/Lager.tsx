@@ -223,10 +223,12 @@ export default function LagerPage() {
               <p className="max-w-sm text-sm text-muted-foreground">
                 {t.lager.emptyDescription}
               </p>
-              <Button onClick={() => openDialog(null)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t.lager.firstLager}
-              </Button>
+              {roleAllows(role, "admin") && (
+                <Button onClick={() => openDialog(null)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t.lager.firstLager}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -281,24 +283,26 @@ export default function LagerPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t.lager.editLager}
-                        onClick={() => openDialog(item)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t.lager.deleteLager}
-                        onClick={() => setDeleting(item)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {roleAllows(role, "admin") && (
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={t.lager.editLager}
+                          onClick={() => openDialog(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={t.lager.deleteLager}
+                          onClick={() => setDeleting(item)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );

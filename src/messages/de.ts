@@ -954,8 +954,8 @@ export const de = {
    * Organisationen – gemeinsamer Bestand mehrerer Personen.
    *
    * Die Stufen heißen in der Oberfläche nach dem, was sie dürfen, nicht nach
-   * ihrem technischen Namen: `viewer` ist „Ansehen", `weigher` „Wiegen". Wer
-   * die Rolle vergibt, soll nicht überlegen müssen, was „viewer" bedeutet.
+   * ihrem technischen Namen: `viewer` ist „Ansehen“, `weigher` „Wiegen“. Wer
+   * die Rolle vergibt, soll nicht überlegen müssen, was „viewer“ bedeutet.
    */
   organizations: {
     title: "Organisationen",
@@ -1004,7 +1004,7 @@ export const de = {
     // Einladungen
     invitationsTitle: "Einladungen",
     invitationFrom: (vars: { name: string; role: string }) =>
-      `${vars.name} lädt dich als „${vars.role}" ein.`,
+      `${vars.name} lädt dich als „${vars.role}“ ein.`,
     accept: "Annehmen",
     decline: "Ablehnen",
     invitationAccepted: "Einladung angenommen",
@@ -1020,6 +1020,14 @@ export const de = {
     invited: (vars: { name: string }) => `${vars.name} wurde eingeladen.`,
     inviteNotNotified:
       "Eingeladen – der Hinweis über Telegram kam allerdings nicht an.",
+
+    // Offene Einladungen
+    pendingInvitationsTitle: "Offene Einladungen",
+    pendingInvitationsHint:
+      "Noch nicht beantwortet. Eine Einladung gilt nur, solange die einladende Person die Organisation verwaltet.",
+    revokeInvitation: "Einladung zurückziehen",
+    invitationRevoked: "Einladung zurückgezogen",
+
     roleChanged: "Rolle geändert",
     removeMember: "Entfernen",
     removeMemberTitle: "Mitglied entfernen?",
@@ -1054,9 +1062,9 @@ export const de = {
 
     // Stufen-Hinweise
     needEditor:
-      'Dafür brauchst du in dieser Organisation mindestens die Stufe „Erfassen".',
+      "Dafür brauchst du in dieser Organisation mindestens die Stufe „Erfassen“.",
     needAdmin:
-      'Dafür brauchst du in dieser Organisation die Stufe „Verwalten".',
+      "Dafür brauchst du in dieser Organisation die Stufe „Verwalten“.",
   },
 
   loan: {

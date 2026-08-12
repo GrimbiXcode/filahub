@@ -11,7 +11,7 @@ import {
   materialTypesSchema,
 } from "@contracts/presets";
 import { createRouter, authedQuery } from "./middleware";
-import { resolveScope } from "./scope";
+import { resolveScope, scopeInput } from "./scope";
 import {
   createContainerType,
   findContainerTypesInScope,
@@ -134,12 +134,24 @@ export const presetRouter = createRouter({
       return { ok: true };
     }),
 
-  /** Preset als eigene, frei editierbare Gebindeart übernehmen */
+  /**
+   * Preset als eigene, frei editierbare Gebindeart übernehmen.
+   *
+   * **Legt im aktiven Bereich an.** Der Katalog selbst bleibt global und
+   * persönlich – was jemand darin ausblendet (`hidden_container_presets`) und
+   * was er einreicht (`preset_proposals`), geht die Organisation nichts an. Die
+   * Kopie ist aber eine `container_types`-Zeile, und die gehört seit 2.5.0
+   * entweder einer Person oder einer Organisation. Legte sie immer persönlich
+   * an, verschwände sie im Org-Kontext beim Kopieren aus der Liste, in die man
+   * gerade schaut – und eine Werkstatt, die genau diese Spule führt, müsste sie
+   * von Hand nachbauen.
+   */
   copyToOwn: authedQuery
     .input(
       z.object({
         variantId: z.number().int().positive(),
         name: z.string().trim().max(255).optional(),
+        ...scopeInput.shape,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -150,15 +162,12 @@ export const presetRouter = createRouter({
           message: "Preset-Variante nicht gefunden",
         });
       }
-      /*
-        „Kopieren & anpassen" legt immer im **persönlichen** Bereich an. Der
-        Katalog ist global und die Kopie eine Vorliebe des Einzelnen; wer eine
-        Gebindeart für seine Organisation braucht, legt sie dort an. Sonst
-        bräuchte diese Prozedur einen Bereich in der Eingabe, und der
-        Preset-Dialog kennt keinen.
-      */
-      const personal = await resolveScope(ctx.user.id, null, "editor");
-      const created = await createContainerType(personal, {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      const created = await createContainerType(scope, {
         name:
           input.name?.trim() ||
           buildVariantDisplayName({

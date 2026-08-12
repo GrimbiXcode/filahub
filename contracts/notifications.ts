@@ -1,4 +1,5 @@
 import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
+import type { OrganizationRole } from "./organizations";
 
 /**
  * Texte der Telegram-Benachrichtigungen.
@@ -23,6 +24,34 @@ import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
 
 /** Was eine Ausleih-Anfrage beantwortet: zugesagt oder abgelehnt. */
 export type LoanDecision = "accepted" | "declined";
+
+/**
+ * Die Stufen, wie sie **außerhalb** der App heißen.
+ *
+ * Dieselbe Übersetzung wie `roleLabel` in `src/lib/organizationRole.ts` – dort
+ * aus `src/messages/`, hier aus diesem Katalog, weil der Server nichts aus
+ * `src/` laden darf. Ohne sie stünde in der Nachricht der technische Name
+ * („als „weigher““), und der sagt einem Empfänger, der die App noch nie gesehen
+ * hat, genau nichts.
+ *
+ * `Record<OrganizationRole, string>` und kein loser Zugriff: Eine fünfte Stufe
+ * wäre damit ein Compile-Fehler in **jeder** Sprache.
+ */
+type RoleNames = Record<OrganizationRole, string>;
+
+const deRoleNames: RoleNames = {
+  viewer: "Ansehen",
+  weigher: "Wiegen",
+  editor: "Erfassen",
+  admin: "Verwalten",
+};
+
+const enRoleNames: RoleNames = {
+  viewer: "View",
+  weigher: "Weigh",
+  editor: "Edit",
+  admin: "Manage",
+};
 
 const de = {
   friendRequest: (v: { from: string }) =>
@@ -58,16 +87,19 @@ const de = {
     gehen sie hinaus, während das Wiegen und Erfassen im Alltag es nicht tut.
     Dieselbe Grenze zieht `contracts/audit.ts` fürs Protokoll.
   */
-  organizationInvited: (v: { organization: string; role: string }) =>
-    `Du wurdest zu „${v.organization}" auf filahub eingeladen – als „${v.role}".\n\n` +
-    `Die Einladung liegt unter „Organisationen"; dort kannst du sie annehmen ` +
+  organizationInvited: (v: { organization: string; role: OrganizationRole }) =>
+    `Du wurdest zu „${v.organization}“ auf filahub eingeladen – als „${deRoleNames[v.role]}“.\n\n` +
+    `Die Einladung liegt unter „Organisationen“; dort kannst du sie annehmen ` +
     `oder ablehnen. Bis dahin ändert sich für dich nichts.`,
 
-  organizationRoleChanged: (v: { organization: string; role: string }) =>
-    `Deine Rolle bei „${v.organization}" auf filahub ist jetzt „${v.role}".`,
+  organizationRoleChanged: (v: {
+    organization: string;
+    role: OrganizationRole;
+  }) =>
+    `Deine Rolle bei „${v.organization}“ auf filahub ist jetzt „${deRoleNames[v.role]}“.`,
 
   organizationRemoved: (v: { organization: string }) =>
-    `Du bist nicht mehr Mitglied von „${v.organization}" auf filahub.\n\n` +
+    `Du bist nicht mehr Mitglied von „${v.organization}“ auf filahub.\n\n` +
     `Der Bestand der Organisation ist damit für dich nicht mehr sichtbar. ` +
     `Dein eigener Bestand ist davon nicht betroffen.`,
 
@@ -102,12 +134,12 @@ const en: NotificationMessages = {
       : `${v.from} cannot lend you ${v.material} right now.`,
 
   organizationInvited: v =>
-    `You have been invited to "${v.organization}" on filahub – as "${v.role}".\n\n` +
+    `You have been invited to "${v.organization}" on filahub – as "${enRoleNames[v.role]}".\n\n` +
     `The invitation is under "Organizations"; accept or decline it there. ` +
     `Nothing changes for you until then.`,
 
   organizationRoleChanged: v =>
-    `Your role at "${v.organization}" on filahub is now "${v.role}".`,
+    `Your role at "${v.organization}" on filahub is now "${enRoleNames[v.role]}".`,
 
   organizationRemoved: v =>
     `You are no longer a member of "${v.organization}" on filahub.\n\n` +

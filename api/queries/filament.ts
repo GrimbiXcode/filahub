@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   resolveName,
@@ -28,6 +28,7 @@ import {
 } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
+import { hasChanges } from "./patch";
 
 // ---------------------------------------------------------------------------
 // Rollentypen (Verpackung / Spule mit Leergewicht)
@@ -81,10 +82,12 @@ export async function updateContainerType(
     notes: string | null;
   }>
 ) {
-  await getDb()
-    .update(containerTypes)
-    .set(data)
-    .where(and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)));
+  if (hasChanges(data)) {
+    await getDb()
+      .update(containerTypes)
+      .set(data)
+      .where(and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)));
+  }
   /*
     Der Bereichsfilter gehört **auch** ans Rücklesen. Ohne ihn traf das UPDATE
     keine Zeile, das `findFirst` aber die fremde – und der Router gab sie samt
@@ -170,10 +173,12 @@ export async function updateStorageBox(
     notes: string | null;
   }>
 ) {
-  await getDb()
-    .update(storageBoxes)
-    .set(data)
-    .where(and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)));
+  if (hasChanges(data)) {
+    await getDb()
+      .update(storageBoxes)
+      .set(data)
+      .where(and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)));
+  }
   // Bereichsfilter auch beim Rücklesen – siehe `updateContainerType`.
   return getDb().query.storageBoxes.findFirst({
     where: and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)),
@@ -462,18 +467,37 @@ export async function updateMaterial(
     notes: string | null;
   }>
 ) {
+  if (!hasChanges(data)) return;
   await getDb()
     .update(materials)
     .set(data)
     .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
 }
 
+/**
+ * Löscht ein Material samt seinen Wägungen.
+ *
+ * **In einer Transaktion und beide Schritte im Bereich.** Bis 2.5.0 lief das
+ * Löschen der Wägungen ohne Bereichsfilter und außerhalb jeder Transaktion:
+ * Traf das zweite `DELETE` keine Zeile – fremdes Material, oder die
+ * Mitgliedschaft ist zwischen Prüfung und Löschen erloschen –, war die
+ * Wägungsgeschichte trotzdem weg und das Material blieb mit voller Nennmenge
+ * stehen. Genau die Zahl, um die es in dieser App geht.
+ *
+ * Die Wägungen gehen über einen Unterabfrage-Filter auf das **bereichsgeprüfte**
+ * Material, nicht über die rohe `materialId`.
+ */
 export async function deleteMaterial(scope: Scope, id: number) {
-  const db = getDb();
-  await db.delete(weighings).where(eq(weighings.materialId, id));
-  await db
-    .delete(materials)
-    .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+  await getDb().transaction(async tx => {
+    const scoped = tx
+      .select({ id: materials.id })
+      .from(materials)
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+    await tx.delete(weighings).where(inArray(weighings.materialId, scoped));
+    await tx
+      .delete(materials)
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+  });
 }
 
 export async function addWeighing(data: {

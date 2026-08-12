@@ -976,6 +976,13 @@ export const en: Messages = {
     invite: "Invite",
     invited: vars => `${vars.name} has been invited.`,
     inviteNotNotified: "Invited \u2013 but the Telegram notice did not arrive.",
+
+    pendingInvitationsTitle: "Open invitations",
+    pendingInvitationsHint:
+      "Not answered yet. An invitation is only valid while the person who sent it still manages the organization.",
+    revokeInvitation: "Withdraw invitation",
+    invitationRevoked: "Invitation withdrawn",
+
     roleChanged: "Role changed",
     removeMember: "Remove",
     removeMemberTitle: "Remove member?",
