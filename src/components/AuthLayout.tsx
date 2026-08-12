@@ -137,11 +137,17 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 
-/** Tastenkürzel beschriften – auf dem Mac ⌘, sonst Strg */
+/**
+ * Tastenkürzel beschriften – auf dem Mac ⌘, sonst die Steuerungstaste. Die
+ * heißt je nach Sprache anders, deshalb kommt sie aus dem Katalog statt aus
+ * einer Konstante.
+ */
 const isMac =
   typeof navigator !== "undefined" &&
   /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
-const SEARCH_SHORTCUT = isMac ? "⌘K" : "Strg K";
+function searchShortcut(t: Messages): string {
+  return isMac ? "⌘K" : `${t.common.ctrlKey} K`;
+}
 
 /** Titel für die Kopfzeile auf schmalen Geräten */
 function titleForPath(pathname: string, t: Messages): string {
@@ -352,14 +358,14 @@ function AuthLayoutContent({
                     openPalette();
                   }}
                   tooltip={t.nav.searchWithShortcut({
-                    shortcut: SEARCH_SHORTCUT,
+                    shortcut: searchShortcut(t),
                   })}
                   className="h-10 font-normal text-muted-foreground"
                 >
                   <Search className="h-4 w-4" />
                   <span>{t.common.search}</span>
                   <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
-                    {SEARCH_SHORTCUT}
+                    {searchShortcut(t)}
                   </kbd>
                 </SidebarMenuButton>
               </SidebarMenuItem>

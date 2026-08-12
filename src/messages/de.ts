@@ -27,6 +27,7 @@ export const de = {
     back: "Zurück",
     loading: "Laden …",
     search: "Suchen …",
+    ctrlKey: "Strg",
     actions: "Aktionen",
     name: "Name",
     notes: "Notizen",
