@@ -40,13 +40,15 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 export default function StorageBoxes() {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
   const t = useT();
-  const { data: boxes, isLoading } = trpc.storageBox.list.useQuery();
-  const { data: materials } = trpc.material.list.useQuery();
+  const { data: boxes, isLoading } =
+    trpc.storageBox.list.useQuery(PERSONAL_SCOPE);
+  const { data: materials } = trpc.material.list.useQuery(PERSONAL_SCOPE);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StorageBoxItem | null>(null);
@@ -115,8 +117,9 @@ export default function StorageBoxes() {
       tareWeight: tare,
       notes: notes.trim() || undefined,
     };
-    if (editing) updateMutation.mutate({ id: editing.id, ...payload });
-    else createMutation.mutate(payload);
+    if (editing)
+      updateMutation.mutate({ ...PERSONAL_SCOPE, id: editing.id, ...payload });
+    else createMutation.mutate({ ...PERSONAL_SCOPE, ...payload });
   };
 
   const list = boxes ?? [];
@@ -378,7 +381,8 @@ export default function StorageBoxes() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting && deleteMutation.mutate({ id: deleting.id })
+                deleting &&
+                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

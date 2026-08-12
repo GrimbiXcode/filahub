@@ -16,6 +16,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 type Props = {
   open: boolean;
@@ -73,6 +74,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
     if (!Number.isFinite(gross) || gross <= 0)
       return toast.error(t.weighing.invalidWeight);
     addWeighing.mutate({
+      ...PERSONAL_SCOPE,
       materialId: material.id,
       grossWeight: gross,
       note: note.trim() || undefined,

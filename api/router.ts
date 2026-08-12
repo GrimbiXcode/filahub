@@ -6,6 +6,7 @@ import { lagerRouter } from "./lagerRouter";
 import { legalRouter } from "./legalRouter";
 import { createRouter, publicQuery } from "./middleware";
 import { materialRouter } from "./materialRouter";
+import { organizationRouter } from "./organizationRouter";
 import { presetRouter } from "./presetRouter";
 import { containerTypeRouter } from "./containerTypeRouter";
 import { storageBoxRouter } from "./storageBoxRouter";
@@ -19,6 +20,7 @@ export const appRouter = createRouter({
   storageBox: storageBoxRouter,
   material: materialRouter,
   friend: friendRouter,
+  organization: organizationRouter,
   preset: presetRouter,
   admin: adminRouter,
   legal: legalRouter,

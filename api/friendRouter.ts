@@ -14,6 +14,7 @@ import {
 } from "@contracts/notifications";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { recordAudit } from "./queries/audit";
+import { lagerBelongsToOrganization } from "./queries/lager";
 import {
   countPendingForUser,
   createFriendship,
@@ -245,6 +246,27 @@ export const friendRouter = createRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      /*
+        **Ein Lager einer Organisation lässt sich nicht an Freunde freigeben.**
+
+        Semantisch: Ein einzelner Administrator dürfte nicht den Bestand aller
+        Mitglieder nach außen öffnen. Technisch fiele es ohnehin zu –
+        `setLagerShare` verlangt `lager.userId = ownerId`, und der ist bei einem
+        Org-Lager NULL, also käme unten schon `false` heraus.
+
+        Der Riegel steht trotzdem ausdrücklich hier: „fällt von selbst zu“ ist
+        kein Riegel, sondern ein Zufall, der beim nächsten Umbau kippt. Und die
+        Meldung sagt den Grund, statt „nicht gefunden“ zu behaupten – das Lager
+        gibt es ja, der Aufrufer sieht es in seiner Liste.
+      */
+      if (await lagerBelongsToOrganization(input.lagerId)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Ein Lager einer Organisation lässt sich nicht mit Freunden teilen.",
+        });
+      }
+
       const ok = await setLagerShare(
         ctx.user.id,
         input.lagerId,

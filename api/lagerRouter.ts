@@ -6,17 +6,19 @@ import {
   lagerConfigIsValid,
   materialKindSchema,
 } from "@contracts/materials";
+import { MAX_LAGER_PER_ORGANIZATION } from "@contracts/organizations";
 import { createRouter, authedQuery } from "./middleware";
+import { resolveScope, scopeInput, type Scope } from "./scope";
 import { recordAudit } from "./queries/audit";
 import { countSharesByLager } from "./queries/friends";
 import {
   LAGER_NAME_TAKEN,
-  countLagerByUser,
+  countLagerInScope,
   countMaterialsByLager,
   createLager,
   deleteLager,
-  findLagerById,
-  findLagerByUser,
+  findLagerInScope,
+  findLagerInScopeById,
   updateLager,
 } from "./queries/lager";
 
@@ -34,6 +36,20 @@ const lagerInput = z.object({
   filamentDiameterUm: filamentDiameterSchema.nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
+
+/**
+ * Obergrenze und Meldung hängen am Bereich.
+ *
+ * Bewusst nur hier und nicht in der Datenbank: Ein Zähler ist weder als
+ * Unique- noch als partieller Index ausdrückbar. Zwei gleichzeitige Anfragen
+ * können daher ein Lager zu viel erzeugen – der Schaden ist gering, aber die
+ * Lücke soll benannt sein und nicht als Garantie durchgehen.
+ */
+function lagerLimitFor(scope: Scope): number {
+  return scope.kind === "personal"
+    ? MAX_LAGER_PER_USER
+    : MAX_LAGER_PER_ORGANIZATION;
+}
 
 /**
  * Wandelt den Namenskonflikt in eine Meldung um, die man einem Benutzer zeigen
@@ -89,18 +105,29 @@ export const lagerRouter = createRouter({
    * unsichtbar sein. Wer seine Lager ansieht, soll erkennen, welche davon
    * hinausgehen – ohne dafür jede Freundeskarte durchklicken zu müssen.
    */
-  list: authedQuery.query(async ({ ctx }) => {
+  list: authedQuery.input(scopeInput).query(async ({ ctx, input }) => {
+    const scope = await resolveScope(
+      ctx.user.id,
+      input.organizationId,
+      "viewer"
+    );
     /*
       Die Belegung kommt als Zahl mit, nicht als Bestand. Die Lager-Seite lud
       dafür vorher den gesamten Bestand – hunderte Kilobyte samt Wägungsverlauf
       für eine Handvoll Zahlen – und zählte im Browser nur die **eigenen** Zeilen,
       während die Löschsperre alles im Lager zählt. Beide Zahlen konnten sich
       widersprechen.
+
+      `countSharesByLager` läuft nur im persönlichen Bereich: Ein Lager einer
+      Organisation lässt sich nicht an Freunde freigeben, die Zahl wäre dort
+      immer 0 – und die Abfrage eine Runde zur Datenbank für eine Konstante.
     */
     const [rows, shares, counts] = await Promise.all([
-      findLagerByUser(ctx.user.id),
-      countSharesByLager(ctx.user.id),
-      countMaterialsByLager(ctx.user.id),
+      findLagerInScope(scope),
+      scope.kind === "personal"
+        ? countSharesByLager(scope.userId)
+        : new Map<number, number>(),
+      countMaterialsByLager(scope),
     ]);
     return rows.map(row => ({
       ...row,
@@ -109,38 +136,43 @@ export const lagerRouter = createRouter({
     }));
   }),
 
-  create: authedQuery.input(lagerInput).mutation(async ({ ctx, input }) => {
-    /*
-      Obergrenze. Vorerst für alle Konten gleich (siehe MAX_LAGER_PER_USER).
+  create: authedQuery
+    .input(lagerInput.extend(scopeInput.shape))
+    .mutation(async ({ ctx, input }) => {
+      const { organizationId, ...data } = input;
+      /*
+        `admin`, obwohl Material schon `editor` darf: Ein Lager ist Struktur,
+        und sein Löschen wirkt auf alle Mitglieder.
+      */
+      const scope = await resolveScope(ctx.user.id, organizationId, "admin");
 
-      Bewusst nur hier und nicht in der Datenbank: Ein Zähler ist weder als
-      Unique- noch als partieller Index ausdrückbar. Zwei gleichzeitige
-      Anfragen können daher ein Lager zu viel erzeugen – der Schaden ist
-      gering, aber die Lücke soll benannt sein und nicht als Garantie
-      durchgehen.
-    */
-    const existing = await countLagerByUser(ctx.user.id);
-    if (existing >= MAX_LAGER_PER_USER) {
-      throw new TRPCError({
-        code: "CONFLICT",
-        message: `Mehr als ${MAX_LAGER_PER_USER} Lager sind derzeit nicht möglich.`,
-      });
-    }
-    assertConfigValid(input);
-    return withNameConflict(() =>
-      createLager({
-        ...input,
-        filamentDiameterUm: input.filamentDiameterUm ?? null,
-        userId: ctx.user.id,
-      })
-    );
-  }),
+      const limit = lagerLimitFor(scope);
+      const existing = await countLagerInScope(scope);
+      if (existing >= limit) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Mehr als ${limit} Lager sind derzeit nicht möglich.`,
+        });
+      }
+      assertConfigValid(data);
+      return withNameConflict(() =>
+        createLager(scope, {
+          ...data,
+          filamentDiameterUm: data.filamentDiameterUm ?? null,
+        })
+      );
+    }),
 
   update: authedQuery
-    .input(lagerInput.partial().extend({ id: z.number().int().positive() }))
+    .input(
+      lagerInput
+        .partial()
+        .extend({ id: z.number().int().positive(), ...scopeInput.shape })
+    )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
-      const existing = await findLagerById(ctx.user.id, id);
+      const { id, organizationId, ...data } = input;
+      const scope = await resolveScope(ctx.user.id, organizationId, "admin");
+      const existing = await findLagerInScopeById(scope, id);
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -166,7 +198,7 @@ export const lagerRouter = createRouter({
       });
 
       const updated = await withNameConflict(() =>
-        updateLager(ctx.user.id, id, {
+        updateLager(scope, id, {
           ...data,
           filamentDiameterUm: diameter,
         })
@@ -181,14 +213,19 @@ export const lagerRouter = createRouter({
     }),
 
   delete: authedQuery
-    .input(z.object({ id: z.number().int().positive() }))
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
     .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "admin"
+      );
       /*
         Erst die Zugehörigkeit, dann der Inhalt: Sonst verriete die
         Konfliktmeldung („noch 3 Materialien") die Belegung eines fremden
         Lagers.
       */
-      const own = await findLagerById(ctx.user.id, input.id);
+      const own = await findLagerInScopeById(scope, input.id);
       if (!own) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -203,7 +240,7 @@ export const lagerRouter = createRouter({
         Gezählt wird **in** der Transaktion (`deleteLager`), nicht hier davor:
         Sonst könnte zwischen Zählen und Löschen Material hineinwandern.
       */
-      const { revoked, blockedBy } = await deleteLager(ctx.user.id, input.id);
+      const { revoked, blockedBy } = await deleteLager(scope, input.id);
       if (blockedBy != null) {
         throw new TRPCError({
           code: "CONFLICT",

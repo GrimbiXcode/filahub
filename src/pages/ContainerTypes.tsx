@@ -52,13 +52,14 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { ContainerTypeItem } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 export default function ContainerTypes() {
   const utils = trpc.useUtils();
   const { formatGrams } = useFormat();
   const t = useT();
   const { data: containerTypes, isLoading } =
-    trpc.containerType.list.useQuery();
+    trpc.containerType.list.useQuery(PERSONAL_SCOPE);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContainerTypeItem | null>(null);
@@ -163,8 +164,9 @@ export default function ContainerTypes() {
       tareWeight: tare,
       notes: notes.trim() || undefined,
     };
-    if (editing) updateMutation.mutate({ id: editing.id, ...payload });
-    else createMutation.mutate(payload);
+    if (editing)
+      updateMutation.mutate({ ...PERSONAL_SCOPE, id: editing.id, ...payload });
+    else createMutation.mutate({ ...PERSONAL_SCOPE, ...payload });
   };
 
   const list = containerTypes ?? [];
@@ -566,7 +568,8 @@ export default function ContainerTypes() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting && deleteMutation.mutate({ id: deleting.id })
+                deleting &&
+                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

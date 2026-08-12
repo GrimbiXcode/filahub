@@ -53,6 +53,7 @@ import {
 import { useT, type TextKey } from "@/lib/i18nContext";
 import { useAppTheme } from "@/lib/theme";
 import { trpc } from "@/lib/trpc";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 /**
  * Rendert die Dialoge der Schnellaktionen. Gehört genau einmal ins Layout;
@@ -156,7 +157,7 @@ function CommandPalette({
   const { theme, setTheme } = useAppTheme();
   const t = useT();
   // Erst laden, wenn die Suche wirklich geöffnet wird
-  const { data: materials } = trpc.material.list.useQuery(undefined, {
+  const { data: materials } = trpc.material.list.useQuery(PERSONAL_SCOPE, {
     enabled: open,
   });
 

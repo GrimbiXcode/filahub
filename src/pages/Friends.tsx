@@ -33,6 +33,7 @@ import { LAGER_PATH, friendInventoryPath } from "@/const";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { FriendshipItem, LagerItem, LoanRequestItem } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 /**
  * Freunde, Sichtbarkeit und Ausleih-Vorgänge.
@@ -53,7 +54,7 @@ export default function Friends() {
     Namen sind für alle Karten dieselben, und `friend.list` gibt bewusst nur
     IDs heraus (ein Lagername ist Freitext und geht nie an Freunde).
   */
-  const { data: lager } = trpc.lager.list.useQuery();
+  const { data: lager } = trpc.lager.list.useQuery(PERSONAL_SCOPE);
 
   const [removing, setRemoving] = useState<FriendshipItem | null>(null);
 

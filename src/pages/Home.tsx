@@ -60,6 +60,7 @@ import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -107,7 +108,7 @@ function compareBy(
 export default function Home() {
   const navigate = useNavigate();
   const { data: lagerList, isPending: lagerPending } =
-    trpc.lager.list.useQuery();
+    trpc.lager.list.useQuery(PERSONAL_SCOPE);
   const activeLagerId = useActiveLagerId(lagerList);
   /*
     Auf das gewählte Lager eingeschränkt. Ohne Einschränkung käme der gesamte
@@ -123,7 +124,9 @@ export default function Home() {
   */
   const { data: materials, isPending: materialsPending } =
     trpc.material.list.useQuery(
-      activeLagerId != null ? { lagerId: activeLagerId } : skipToken
+      activeLagerId != null
+        ? { ...PERSONAL_SCOPE, lagerId: activeLagerId }
+        : skipToken
     );
   /*
     Über die Kennung wird über **alle** Lager gesucht: Wer eine Kennung von einem
@@ -131,7 +134,9 @@ export default function Home() {
     ist – und „nicht gefunden“ für etwas, das man in der Hand hält, ist die
     schlechteste Antwort. Die Schnellsuche tut dasselbe.
   */
-  const { data: allMaterials } = trpc.material.list.useQuery({});
+  const { data: allMaterials } = trpc.material.list.useQuery({
+    ...PERSONAL_SCOPE,
+  });
   /*
     Solange die Lagerliste noch unterwegs ist, ist „kein Material“ nicht wahr,
     sondern unbekannt. Eine abgeschaltete Abfrage meldet `isLoading === false`

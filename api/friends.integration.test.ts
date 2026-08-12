@@ -26,6 +26,16 @@ import { callerFor, closeDb, resetSchema } from "./test/integration-db";
 
 const db = () => getDb();
 
+/**
+ * Der persönliche Bereich.
+ *
+ * Seit 2.5.0 trägt **jede** bereichsbezogene Eingabe das Feld – Pflicht und
+ * nicht optional, damit `{}` und `{ organizationId: undefined }` nicht auf
+ * denselben Query-Cache-Schlüssel fallen. In den Tests steht es ausgeschrieben
+ * statt in einem Wrapper versteckt: Es ist Teil des Vertrags, den sie prüfen.
+ */
+const PERSONAL = { organizationId: null } as const;
+
 /** Felder, die in **keiner** Antwort über ein fremdes Material auftauchen dürfen. */
 const FORBIDDEN_FIELDS = [
   "priceCents",
@@ -657,7 +667,10 @@ describe("Sichtbarkeitsstufen", () => {
     await db()
       .delete(schema.materials)
       .where(eq(schema.materials.id, alexResinMaterialId));
-    await callerFor(alex).lager.delete({ id: alexResinLagerId });
+    await callerFor(alex).lager.delete({
+      ...PERSONAL,
+      id: alexResinLagerId,
+    });
 
     const rows = await db().select().from(schema.lagerShares);
     expect(rows.map(r => r.lagerId)).toEqual([alexLagerId]);
@@ -693,7 +706,7 @@ describe("Sichtbarkeitsstufen", () => {
       recipientId: stranger.id,
     });
 
-    const list = await callerFor(alex).lager.list();
+    const list = await callerFor(alex).lager.list(PERSONAL);
     const byId = new Map(list.map(l => [l.id, l.sharedWith]));
     expect(byId.get(alexLagerId)).toBe(2);
     expect(byId.get(alexResinLagerId)).toBe(0);
@@ -847,7 +860,10 @@ describe("Was ein Freund zu sehen bekommt", () => {
     expect(hits[0].remainingPercent).toBe(50);
 
     // Dieselbe Zahl, die der Besitzer sieht.
-    const own = await callerFor(alex).material.byId({ id: alexMaterialId });
+    const own = await callerFor(alex).material.byId({
+      ...PERSONAL,
+      id: alexMaterialId,
+    });
     expect(hits[0].remainingWeight).toBe(own.remainingWeight);
   });
 
@@ -975,7 +991,10 @@ describe("Ausleih-Anfragen", () => {
   it("behält die Bezeichnung, wenn das Material verschwindet", async () => {
     await befriend({ main: "search" });
     await callerFor(bea).friend.requestLoan({ materialId: alexMaterialId });
-    await callerFor(alex).material.delete({ id: alexMaterialId });
+    await callerFor(alex).material.delete({
+      ...PERSONAL,
+      id: alexMaterialId,
+    });
 
     const [request] = await callerFor(bea).friend.loanRequests();
     expect(request.materialName).toBe("PolyTerra PLA Schwarz");

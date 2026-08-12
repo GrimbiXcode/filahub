@@ -85,6 +85,7 @@ import { useT, type TextKey } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { Messages } from "@/messages/de";
 import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 import { Button } from "./ui/button";
 
 /**
@@ -609,7 +610,7 @@ function LagerSwitcher() {
   const t = useT();
   const navigate = useNavigate();
   const { setOpenMobile } = useSidebar();
-  const { data: lagerList } = trpc.lager.list.useQuery(undefined, {
+  const { data: lagerList } = trpc.lager.list.useQuery(PERSONAL_SCOPE, {
     staleTime: 1000 * 60 * 5,
     retry: false,
   });

@@ -32,6 +32,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 export default function MaterialDetail() {
   const { id } = useParams<{ id: string }>();
@@ -50,7 +51,7 @@ export default function MaterialDetail() {
   const t = useT();
 
   const { data: material, isLoading } = trpc.material.byId.useQuery(
-    { id: materialId },
+    { ...PERSONAL_SCOPE, id: materialId },
     { enabled: Number.isFinite(materialId) }
   );
 
@@ -463,7 +464,9 @@ export default function MaterialDetail() {
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deleteMutation.mutate({ id: material.id })}
+              onClick={() =>
+                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: material.id })
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {t.common.delete}
@@ -493,7 +496,10 @@ export default function MaterialDetail() {
               disabled={deleteWeighing.isPending}
               onClick={() =>
                 deletingWeighing != null &&
-                deleteWeighing.mutate({ id: deletingWeighing })
+                deleteWeighing.mutate({
+                  ...PERSONAL_SCOPE,
+                  id: deletingWeighing,
+                })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

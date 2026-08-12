@@ -26,51 +26,52 @@ import {
   type StorageBox,
   type Weighing,
 } from "@db/schema";
+import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 
 // ---------------------------------------------------------------------------
 // Rollentypen (Verpackung / Spule mit Leergewicht)
 // ---------------------------------------------------------------------------
 
-export function findContainerTypesByUser(userId: number) {
+export function findContainerTypesInScope(scope: Scope) {
   return getDb().query.containerTypes.findMany({
-    where: eq(containerTypes.userId, userId),
+    where: scopeWhere(containerTypes, scope),
     orderBy: (t, { asc }) => [asc(t.name)],
   });
 }
 
-export async function createContainerType(data: {
-  userId: number;
-  name: string;
-  manufacturer?: string;
-  /**
-   * Gebindeform. Fehlt sie, greift die Spaltenvorgabe `rolle`.
-   *
-   * Steht hier ausdrücklich, obwohl Drizzle die Spalte auch ohne Typeintrag
-   * schreiben würde: Ein Feld, das der Parametertyp nicht kennt, lässt sich vom
-   * Aufrufer nicht setzen (Fehler wegen überzähliger Eigenschaft) – genau daran
-   * ist `preset.copyToOwn` gescheitert und hat jede kopierte Flasche zur Rolle
-   * gemacht.
-   */
-  form?: ContainerForm;
-  tareWeight: number;
-  sourceVariantId?: number | null;
-  notes?: string;
-}) {
+export async function createContainerType(
+  scope: Scope,
+  data: {
+    name: string;
+    manufacturer?: string;
+    /**
+     * Gebindeform. Fehlt sie, greift die Spaltenvorgabe `rolle`.
+     *
+     * Steht hier ausdrücklich, obwohl Drizzle die Spalte auch ohne Typeintrag
+     * schreiben würde: Ein Feld, das der Parametertyp nicht kennt, lässt sich
+     * vom Aufrufer nicht setzen (Fehler wegen überzähliger Eigenschaft) – genau
+     * daran ist `preset.copyToOwn` gescheitert und hat jede kopierte Flasche zur
+     * Rolle gemacht.
+     */
+    form?: ContainerForm;
+    tareWeight: number;
+    sourceVariantId?: number | null;
+    notes?: string;
+  }
+) {
   const [{ id }] = await getDb()
     .insert(containerTypes)
-    .values(data)
+    // Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe.
+    .values({ ...data, ...scopeOwner(scope) })
     .returning({ id: containerTypes.id });
   return getDb().query.containerTypes.findFirst({
-    where: and(
-      eq(containerTypes.id, id),
-      eq(containerTypes.userId, data.userId)
-    ),
+    where: and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)),
   });
 }
 
 export async function updateContainerType(
-  userId: number,
+  scope: Scope,
   id: number,
   data: Partial<{
     name: string;
@@ -83,74 +84,84 @@ export async function updateContainerType(
   await getDb()
     .update(containerTypes)
     .set(data)
-    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)));
+    .where(and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)));
   /*
-    Der Besitzerfilter gehört **auch** ans Rücklesen. Ohne ihn traf das UPDATE
+    Der Bereichsfilter gehört **auch** ans Rücklesen. Ohne ihn traf das UPDATE
     keine Zeile, das `findFirst` aber die fremde – und der Router gab sie samt
     Name, Hersteller und Freitext-Notizen an den Aufrufer zurück. Die Prüfung
     „nichts gefunden“ schlug nicht an, weil eine Zeile gefunden wurde, nur nicht
     seine.
   */
   return getDb().query.containerTypes.findFirst({
-    where: and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)),
+    where: and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)),
   });
 }
 
 /**
  * Wie viele Materialien diese Gebindeart benutzen – Grundlage der Löschsperre.
  *
- * Besitzergebunden, weil die Anzahl in einer Konfliktmeldung landet: Ohne den
+ * Bereichsgebunden, weil die Anzahl in einer Konfliktmeldung landet: Ohne den
  * Filter verriete „wird noch von 3 Material(ien) verwendet“ die Belegung einer
  * fremden Gebindeart. Dieselbe Erwägung wie bei `lager.delete`.
  */
 export async function countMaterialsWithContainerType(
-  userId: number,
+  scope: Scope,
   id: number
 ) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
     .where(
-      and(eq(materials.containerTypeId, id), eq(materials.userId, userId))
+      and(eq(materials.containerTypeId, id), scopeWhere(materials, scope))
     );
   return rows.length;
 }
 
-export async function deleteContainerType(userId: number, id: number) {
+export async function deleteContainerType(scope: Scope, id: number) {
   await getDb()
     .delete(containerTypes)
-    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)));
+    .where(and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)));
 }
 
 // ---------------------------------------------------------------------------
 // Lagerboxen / Dryboxen (mit Leergewicht)
 // ---------------------------------------------------------------------------
 
-export function findStorageBoxesByUser(userId: number) {
+export function findStorageBoxesInScope(scope: Scope) {
   return getDb().query.storageBoxes.findMany({
-    where: eq(storageBoxes.userId, userId),
+    where: scopeWhere(storageBoxes, scope),
     orderBy: (t, { asc }) => [asc(t.name)],
   });
 }
 
-export async function createStorageBox(data: {
-  userId: number;
-  name: string;
-  location?: string;
-  tareWeight: number;
-  notes?: string;
-}) {
+export async function createStorageBox(
+  scope: Scope,
+  data: {
+    name: string;
+    location?: string;
+    tareWeight: number;
+    notes?: string;
+  }
+) {
   const [{ id }] = await getDb()
     .insert(storageBoxes)
-    .values(data)
+    // Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe.
+    .values({ ...data, ...scopeOwner(scope) })
     .returning({ id: storageBoxes.id });
+  /*
+    Der Bereichsfilter steht seit 2.5.0 auch hier. Bis dahin las die Funktion
+    die frisch eingefügte Zeile ohne ihn zurück – richtig, weil die ID gerade
+    erst vergeben wurde, aber als einzige der vier Anlegefunktionen aus der
+    Reihe. Gleiche Form heißt: Beim nächsten Umbau muss man nicht prüfen,
+    welche der vier die Ausnahme war.
+  */
   return getDb().query.storageBoxes.findFirst({
-    where: eq(storageBoxes.id, id),
+    where: and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)),
   });
 }
 
 export async function updateStorageBox(
-  userId: number,
+  scope: Scope,
   id: number,
   data: Partial<{
     name: string;
@@ -162,26 +173,26 @@ export async function updateStorageBox(
   await getDb()
     .update(storageBoxes)
     .set(data)
-    .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)));
-  // Besitzerfilter auch beim Rücklesen – siehe `updateContainerType`.
+    .where(and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)));
+  // Bereichsfilter auch beim Rücklesen – siehe `updateContainerType`.
   return getDb().query.storageBoxes.findFirst({
-    where: and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)),
+    where: and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)),
   });
 }
 
-/** Besitzergebunden, weil die Anzahl in eine Konfliktmeldung geht. */
-export async function countMaterialsWithStorageBox(userId: number, id: number) {
+/** Bereichsgebunden, weil die Anzahl in eine Konfliktmeldung geht. */
+export async function countMaterialsWithStorageBox(scope: Scope, id: number) {
   const rows = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(and(eq(materials.storageBoxId, id), eq(materials.userId, userId)));
+    .where(and(eq(materials.storageBoxId, id), scopeWhere(materials, scope)));
   return rows.length;
 }
 
-export async function deleteStorageBox(userId: number, id: number) {
+export async function deleteStorageBox(scope: Scope, id: number) {
   await getDb()
     .delete(storageBoxes)
-    .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)));
+    .where(and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)));
 }
 
 // ---------------------------------------------------------------------------
@@ -308,11 +319,11 @@ export function computeMaterialStats(
   };
 }
 
-export async function findMaterialsByUser(
-  userId: number,
+export async function findMaterialsInScope(
+  scope: Scope,
   language: LanguageCode = FALLBACK_LANGUAGE,
   /**
-   * Auf ein Lager einschränken. `undefined` = alle Lager des Benutzers – so
+   * Auf ein Lager einschränken. `undefined` = alle Lager des Bereichs – so
    * bleibt die Schnellsuche über den gesamten Bestand möglich, während die
    * Übersicht auf das gewählte Lager filtert.
    */
@@ -322,8 +333,8 @@ export async function findMaterialsByUser(
   const rows = await db.query.materials.findMany({
     where:
       lagerId != null
-        ? and(eq(materials.userId, userId), eq(materials.lagerId, lagerId))
-        : eq(materials.userId, userId),
+        ? and(scopeWhere(materials, scope), eq(materials.lagerId, lagerId))
+        : scopeWhere(materials, scope),
     with: {
       containerType: true,
       storageBox: true,
@@ -354,13 +365,13 @@ export async function findMaterialsByUser(
   });
 }
 
-export async function findMaterialById(
-  userId: number,
+export async function findMaterialInScope(
+  scope: Scope,
   id: number,
   language: LanguageCode = FALLBACK_LANGUAGE
 ) {
   const row = await getDb().query.materials.findFirst({
-    where: and(eq(materials.id, id), eq(materials.userId, userId)),
+    where: and(eq(materials.id, id), scopeWhere(materials, scope)),
     with: {
       containerType: true,
       storageBox: true,
@@ -390,8 +401,8 @@ export async function findMaterialById(
 }
 
 export async function createMaterial(
+  scope: Scope,
   data: {
-    userId: number;
     lagerId: number;
     name: string;
     identifier?: string | null;
@@ -413,7 +424,14 @@ export async function createMaterial(
   const db = getDb();
   const [{ id }] = await db
     .insert(materials)
-    .values(data)
+    /*
+      Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe – und der
+      Bereich stammt aus dem **Lager**, das `validateForeignKeys` vorher
+      aufgelöst hat. Damit kann die Kopie am Material nicht vom Lager abweichen,
+      und ein Material wechselt seinen Bereich nicht dadurch, dass jemand eine
+      fremde `lagerId` mitschickt.
+    */
+    .values({ ...data, ...scopeOwner(scope) })
     .returning({ id: materials.id });
   if (initialGrossWeight != null) {
     await db
@@ -424,7 +442,7 @@ export async function createMaterial(
 }
 
 export async function updateMaterial(
-  userId: number,
+  scope: Scope,
   id: number,
   data: Partial<{
     lagerId: number;
@@ -447,15 +465,15 @@ export async function updateMaterial(
   await getDb()
     .update(materials)
     .set(data)
-    .where(and(eq(materials.id, id), eq(materials.userId, userId)));
+    .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
 }
 
-export async function deleteMaterial(userId: number, id: number) {
+export async function deleteMaterial(scope: Scope, id: number) {
   const db = getDb();
   await db.delete(weighings).where(eq(weighings.materialId, id));
   await db
     .delete(materials)
-    .where(and(eq(materials.id, id), eq(materials.userId, userId)));
+    .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
 }
 
 export async function addWeighing(data: {
@@ -479,34 +497,31 @@ export async function deleteWeighing(id: number) {
   await getDb().delete(weighings).where(eq(weighings.id, id));
 }
 
-/** Prüft, ob ein Material dem Benutzer gehört. */
-export async function materialBelongsToUser(
-  userId: number,
-  materialId: number
-) {
+/** Prüft, ob ein Material zum Bereich gehört. */
+export async function materialInScope(scope: Scope, materialId: number) {
   const row = await getDb()
     .select({ id: materials.id })
     .from(materials)
-    .where(and(eq(materials.id, materialId), eq(materials.userId, userId)))
+    .where(and(eq(materials.id, materialId), scopeWhere(materials, scope)))
     .limit(1);
   return row.length > 0;
 }
 
-/** IDs der ContainerTypes/Boxen des Benutzers (zur Validierung von FKs). */
-export async function containerTypeBelongsToUser(userId: number, id: number) {
+/** Gebindearten und Dryboxen des Bereichs (zur Validierung von FKs). */
+export async function containerTypeInScope(scope: Scope, id: number) {
   const row = await getDb()
     .select({ id: containerTypes.id })
     .from(containerTypes)
-    .where(and(eq(containerTypes.id, id), eq(containerTypes.userId, userId)))
+    .where(and(eq(containerTypes.id, id), scopeWhere(containerTypes, scope)))
     .limit(1);
   return row.length > 0;
 }
 
-export async function storageBoxBelongsToUser(userId: number, id: number) {
+export async function storageBoxInScope(scope: Scope, id: number) {
   const row = await getDb()
     .select({ id: storageBoxes.id })
     .from(storageBoxes)
-    .where(and(eq(storageBoxes.id, id), eq(storageBoxes.userId, userId)))
+    .where(and(eq(storageBoxes.id, id), scopeWhere(storageBoxes, scope)))
     .limit(1);
   return row.length > 0;
 }
@@ -539,13 +554,13 @@ export async function countMaterialsWithPresetVariant(id: number) {
   return rows.length;
 }
 
-/** Letzte Wägungen aller Materialien des Benutzers (für Statistik). */
-export async function findRecentWeighings(userId: number, limit = 10) {
+/** Letzte Wägungen aller Materialien des Bereichs (für Statistik). */
+export async function findRecentWeighings(scope: Scope, limit = 10) {
   const db = getDb();
   const mats = await db
     .select({ id: materials.id })
     .from(materials)
-    .where(eq(materials.userId, userId));
+    .where(scopeWhere(materials, scope));
   const ids = mats.map(m => m.id);
   if (ids.length === 0) return [];
   const rows = await db.query.weighings.findMany({

@@ -45,6 +45,7 @@ import { useI18n } from "@/lib/i18nContext";
 import type { Messages } from "@/messages/de";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 /** Editierbare Tabellenzeile: alle Werte als Text, Validierung live. */
 type ImportZeile = {
@@ -108,7 +109,7 @@ export default function Import() {
   const [zielLager, setZielLager] = useState<string>("");
   const [promptSichtbar, setPromptSichtbar] = useState(false);
 
-  const { data: lagerList } = trpc.lager.list.useQuery();
+  const { data: lagerList } = trpc.lager.list.useQuery(PERSONAL_SCOPE);
   const aktivesLager = useActiveLagerId(lagerList);
   const gewaehltesLager =
     zielLager !== "" ? Number(zielLager) : (aktivesLager ?? null);
@@ -210,6 +211,7 @@ export default function Import() {
       return;
     }
     importMutation.mutate({
+      ...PERSONAL_SCOPE,
       // Alle Positionen landen im gewählten Lager – ein Modell kann es nicht
       // kennen, deshalb kommt es aus der Oberfläche.
       lagerId: gewaehltesLager,

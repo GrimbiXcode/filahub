@@ -56,6 +56,7 @@ import { useT } from "@/lib/i18nContext";
 import { kindHint, kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import type { LagerItem } from "@/types";
+import { PERSONAL_SCOPE } from "@/lib/scope";
 
 /** Symbol je Materialart – rein zur Wiedererkennung in der Liste. */
 const KIND_ICONS: Record<MaterialKind, typeof Package> = {
@@ -74,7 +75,8 @@ export default function LagerPage() {
   const utils = trpc.useUtils();
   const t = useT();
   const { formatDiameter } = useFormat();
-  const { data: lagerList, isLoading } = trpc.lager.list.useQuery();
+  const { data: lagerList, isLoading } =
+    trpc.lager.list.useQuery(PERSONAL_SCOPE);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<LagerItem | null>(null);
@@ -148,8 +150,9 @@ export default function LagerPage() {
       filamentDiameterUm: kind === "filament" ? diameter : null,
       notes: notes.trim() || null,
     };
-    if (editing) updateMutation.mutate({ id: editing.id, ...payload });
-    else createMutation.mutate(payload);
+    if (editing)
+      updateMutation.mutate({ ...PERSONAL_SCOPE, id: editing.id, ...payload });
+    else createMutation.mutate({ ...PERSONAL_SCOPE, ...payload });
   };
 
   const list = lagerList ?? [];
@@ -403,7 +406,8 @@ export default function LagerPage() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting && deleteMutation.mutate({ id: deleting.id })
+                deleting &&
+                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: deleting.id })
               }
             >
               {t.common.delete}

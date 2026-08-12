@@ -11,9 +11,10 @@ import {
   materialTypesSchema,
 } from "@contracts/presets";
 import { createRouter, authedQuery } from "./middleware";
+import { resolveScope } from "./scope";
 import {
   createContainerType,
-  findContainerTypesByUser,
+  findContainerTypesInScope,
 } from "./queries/filament";
 import {
   closeProposal,
@@ -149,8 +150,15 @@ export const presetRouter = createRouter({
           message: "Preset-Variante nicht gefunden",
         });
       }
-      const created = await createContainerType({
-        userId: ctx.user.id,
+      /*
+        „Kopieren & anpassen" legt immer im **persönlichen** Bereich an. Der
+        Katalog ist global und die Kopie eine Vorliebe des Einzelnen; wer eine
+        Gebindeart für seine Organisation braucht, legt sie dort an. Sonst
+        bräuchte diese Prozedur einen Bereich in der Eingabe, und der
+        Preset-Dialog kennt keinen.
+      */
+      const personal = await resolveScope(ctx.user.id, null, "editor");
+      const created = await createContainerType(personal, {
         name:
           input.name?.trim() ||
           buildVariantDisplayName({
@@ -201,8 +209,14 @@ export const presetRouter = createRouter({
       .input(proposeFromContainerTypeInput)
       .mutation(async ({ ctx, input }) => {
         await assertProposalQuota(ctx.user.id);
-        const own = (await findContainerTypesByUser(ctx.user.id)).find(
-          s => s.id === input.containerTypeId
+        /*
+          Vorschläge kommen aus dem persönlichen Bestand. Eine Gebindeart einer
+          Organisation einzureichen hieße, fremde Angaben unter eigenem Namen in
+          den globalen Katalog zu geben.
+        */
+        const personal = await resolveScope(ctx.user.id, null, "editor");
+        const own = (await findContainerTypesInScope(personal)).find(
+          entry => entry.id === input.containerTypeId
         );
         if (!own) {
           throw new TRPCError({

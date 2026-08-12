@@ -2,22 +2,23 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { importManyInputSchema } from "@contracts/import";
 import { createRouter, authedQuery } from "./middleware";
+import { resolveScope, scopeInput, type Scope } from "./scope";
 import {
   addWeighing,
   createMaterial,
   deleteMaterial,
   deleteWeighing,
-  findMaterialById,
-  findMaterialsByUser,
+  findMaterialInScope,
+  findMaterialsInScope,
   findRecentWeighings,
   findWeighing,
-  materialBelongsToUser,
+  materialInScope,
   presetVariantIsSelectable,
-  containerTypeBelongsToUser,
-  storageBoxBelongsToUser,
+  containerTypeInScope,
+  storageBoxInScope,
   updateMaterial,
 } from "./queries/filament";
-import { lagerBelongsToUser } from "./queries/lager";
+import { lagerInScope } from "./queries/lager";
 
 const dateString = z
   .string()
@@ -62,7 +63,7 @@ const materialInput = z.object({
  * Teilaktualisierung beide Felder gleichzeitig belegen.
  */
 async function validateForeignKeys(
-  userId: number,
+  scope: Scope,
   containerTypeId?: number | null,
   containerPresetVariantId?: number | null,
   storageBoxId?: number | null,
@@ -76,7 +77,7 @@ async function validateForeignKeys(
     Materialart und Filamentstärke stehen **nur** am Lager, es kann also nichts
     auseinanderlaufen. Genau das ist der Gewinn dieser Modellierung.
   */
-  if (lagerId != null && !(await lagerBelongsToUser(userId, lagerId))) {
+  if (lagerId != null && !(await lagerInScope(scope, lagerId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiges Lager" });
   }
   if (containerTypeId != null && containerPresetVariantId != null) {
@@ -88,7 +89,7 @@ async function validateForeignKeys(
   }
   if (
     containerTypeId != null &&
-    !(await containerTypeBelongsToUser(userId, containerTypeId))
+    !(await containerTypeInScope(scope, containerTypeId))
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
@@ -104,10 +105,7 @@ async function validateForeignKeys(
       message: "Ungültiges Gebinde aus dem Katalog",
     });
   }
-  if (
-    storageBoxId != null &&
-    !(await storageBoxBelongsToUser(userId, storageBoxId))
-  ) {
+  if (storageBoxId != null && !(await storageBoxInScope(scope, storageBoxId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültige Lagerbox" });
   }
 }
@@ -122,20 +120,29 @@ export const materialRouter = createRouter({
    */
   list: authedQuery
     .input(
-      z.object({ lagerId: z.number().int().positive().optional() }).optional()
+      z.object({
+        lagerId: z.number().int().positive().optional(),
+        ...scopeInput.shape,
+      })
     )
-    .query(({ ctx, input }) =>
-      findMaterialsByUser(ctx.user.id, ctx.language, input?.lagerId)
-    ),
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "viewer"
+      );
+      return findMaterialsInScope(scope, ctx.language, input.lagerId);
+    }),
 
   byId: authedQuery
-    .input(z.object({ id: z.number().int().positive() }))
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
     .query(async ({ ctx, input }) => {
-      const material = await findMaterialById(
+      const scope = await resolveScope(
         ctx.user.id,
-        input.id,
-        ctx.language
+        input.organizationId,
+        "viewer"
       );
+      const material = await findMaterialInScope(scope, input.id, ctx.language);
       if (!material)
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -144,34 +151,43 @@ export const materialRouter = createRouter({
       return material;
     }),
 
-  recentWeighings: authedQuery.query(({ ctx }) =>
-    findRecentWeighings(ctx.user.id, 10)
-  ),
+  recentWeighings: authedQuery
+    .input(scopeInput)
+    .query(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "viewer"
+      );
+      return findRecentWeighings(scope, 10);
+    }),
 
   create: authedQuery
     .input(
       materialInput.extend({
         /** Optionale Erstwägung (Bruttogewicht inkl. Gebinde/Box) beim Kauf */
         initialGrossWeight: z.number().int().positive().nullable().optional(),
+        ...scopeInput.shape,
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { initialGrossWeight, ...data } = input;
+      const { initialGrossWeight, organizationId, ...data } = input;
+      const scope = await resolveScope(ctx.user.id, organizationId, "editor");
       await validateForeignKeys(
-        ctx.user.id,
+        scope,
         data.containerTypeId,
         data.containerPresetVariantId,
         data.storageBoxId,
         data.lagerId
       );
       const id = await createMaterial(
+        scope,
         {
           ...data,
           identifier: data.identifier ?? undefined,
           manufacturer: data.manufacturer ?? undefined,
           color: data.color ?? undefined,
           notes: data.notes ?? undefined,
-          userId: ctx.user.id,
         },
         initialGrossWeight
       );
@@ -179,10 +195,15 @@ export const materialRouter = createRouter({
     }),
 
   update: authedQuery
-    .input(materialInput.partial().extend({ id: z.number().int().positive() }))
+    .input(
+      materialInput
+        .partial()
+        .extend({ id: z.number().int().positive(), ...scopeInput.shape })
+    )
     .mutation(async ({ ctx, input }) => {
-      const { id, ...data } = input;
-      const existing = await findMaterialById(ctx.user.id, id);
+      const { id, organizationId, ...data } = input;
+      const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      const existing = await findMaterialInScope(scope, id);
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
@@ -199,33 +220,43 @@ export const materialRouter = createRouter({
           ? data.containerPresetVariantId
           : existing.containerPresetVariantId;
       await validateForeignKeys(
-        ctx.user.id,
+        scope,
         nextContainerTypeId,
         nextPresetVariantId,
         data.storageBoxId,
         data.lagerId
       );
-      await updateMaterial(ctx.user.id, id, data);
+      await updateMaterial(scope, id, data);
       return { ok: true };
     }),
 
   delete: authedQuery
-    .input(z.object({ id: z.number().int().positive() }))
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
     .mutation(async ({ ctx, input }) => {
-      if (!(await materialBelongsToUser(ctx.user.id, input.id))) {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      if (!(await materialInScope(scope, input.id))) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Material nicht gefunden",
         });
       }
-      await deleteMaterial(ctx.user.id, input.id);
+      await deleteMaterial(scope, input.id);
       return { ok: true };
     }),
 
   /** Massenimport: erzeugt pro Position `anzahl` identische Materialien. */
   importMany: authedQuery
-    .input(importManyInputSchema)
+    .input(importManyInputSchema.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
       const gesamt = input.items.reduce(
         (summe, item) => summe + item.anzahl,
         0
@@ -237,7 +268,7 @@ export const materialRouter = createRouter({
         });
       }
       // Einmal vorab statt je Position – es ist für alle dasselbe Lager.
-      await validateForeignKeys(ctx.user.id, null, null, null, input.lagerId);
+      await validateForeignKeys(scope, null, null, null, input.lagerId);
       let created = 0;
       for (const item of input.items) {
         // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
@@ -246,8 +277,7 @@ export const materialRouter = createRouter({
           .filter(Boolean)
           .join(" ");
         for (let i = 0; i < item.anzahl; i++) {
-          await createMaterial({
-            userId: ctx.user.id,
+          await createMaterial(scope, {
             lagerId: input.lagerId,
             name,
             materialType: item.typ,
@@ -271,26 +301,36 @@ export const materialRouter = createRouter({
         grossWeight: z.number().int().positive("Gewicht muss > 0 sein"),
         weighedAt: z.date().optional(),
         note: z.string().max(500).optional(),
+        ...scopeInput.shape,
       })
     )
     .mutation(async ({ ctx, input }) => {
-      if (!(await materialBelongsToUser(ctx.user.id, input.materialId))) {
+      const { organizationId, ...data } = input;
+      /*
+        `weigher` und nicht `editor`: Wiegen ist das Abbuchen von Material und
+        die häufigste Handlung überhaupt. Wer es darf, muss deshalb nicht auch
+        Material anlegen oder löschen dürfen – genau dafür gibt es die Stufe.
+      */
+      const scope = await resolveScope(ctx.user.id, organizationId, "weigher");
+      if (!(await materialInScope(scope, data.materialId))) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Material nicht gefunden",
         });
       }
-      return addWeighing(input);
+      return addWeighing(data);
     }),
 
   deleteWeighing: authedQuery
-    .input(z.object({ id: z.number().int().positive() }))
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
     .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "weigher"
+      );
       const weighing = await findWeighing(input.id);
-      if (
-        !weighing ||
-        !(await materialBelongsToUser(ctx.user.id, weighing.materialId))
-      ) {
+      if (!weighing || !(await materialInScope(scope, weighing.materialId))) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Wägung nicht gefunden",
