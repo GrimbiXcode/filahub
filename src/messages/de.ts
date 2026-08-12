@@ -62,6 +62,9 @@ export const de = {
     friends: "Freunde",
     friendsPending: (vars: { count: number }) =>
       `Freunde (${vars.count} offen)`,
+    organizations: "Organisationen",
+    organizationsPending: (vars: { count: number }) =>
+      `Organisationen (${vars.count} Einladungen)`,
     administration: "Verwaltung",
     presetCatalog: "Preset-Katalog",
     proposals: "Vorschläge",
@@ -945,6 +948,115 @@ export const de = {
       vars.count === 1 ? "1 Treffer" : `${vars.count} Treffer`,
     ownerLabel: (vars: { name: string }) => `bei ${vars.name}`,
     ownerColumn: "Bei",
+  },
+
+  /**
+   * Organisationen – gemeinsamer Bestand mehrerer Personen.
+   *
+   * Die Stufen heißen in der Oberfläche nach dem, was sie dürfen, nicht nach
+   * ihrem technischen Namen: `viewer` ist „Ansehen", `weigher` „Wiegen". Wer
+   * die Rolle vergibt, soll nicht überlegen müssen, was „viewer" bedeutet.
+   */
+  organizations: {
+    title: "Organisationen",
+    description:
+      "Gemeinsamer Bestand für Firmen, Hochschul-Hubs und Werkstätten. Wer dazugehört, arbeitet am selben Lager – abgestuft nach dem, was er darf.",
+
+    // Umschalter
+    scopeLabel: "Bereich",
+    scopeAria: "Bereich wechseln",
+    personal: "Privat",
+
+    // Rollen
+    roleViewer: "Ansehen",
+    roleWeigher: "Wiegen",
+    roleEditor: "Erfassen",
+    roleAdmin: "Verwalten",
+    roleViewerHint: "Bestand nachschlagen und suchen.",
+    roleWeigherHint: "Zusätzlich wiegen, also Material abbuchen.",
+    roleEditorHint:
+      "Zusätzlich Material, Gebindearten und Dryboxen anlegen und ändern.",
+    roleAdminHint:
+      "Zusätzlich Lager anlegen, Mitglieder verwalten und Rollen vergeben.",
+
+    // Liste
+    emptyTitle: "Noch keine Organisation",
+    emptyDescription:
+      "Lege eine an, um Bestand mit anderen zu teilen – oder tritt einer mit einem Beitrittscode bei.",
+    newOrganization: "Organisation anlegen",
+    nameLabel: "Name *",
+    namePlaceholder: "z. B. Makerspace der Hochschule",
+    created: "Organisation angelegt",
+    saved: "Gespeichert",
+    deleted: "Organisation gelöscht",
+    memberCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 Mitglied" : `${vars.count} Mitglieder`,
+
+    // Beitreten
+    joinTitle: "Mit Code beitreten",
+    joinHint:
+      "Den Beitrittscode bekommst du von jemandem, der die Organisation verwaltet.",
+    joinCodeLabel: "Beitrittscode",
+    joinCodePlaceholder: "ORG-A2B3-C4D5",
+    join: "Beitreten",
+    joined: (vars: { name: string }) => `Du bist jetzt bei ${vars.name} dabei.`,
+
+    // Einladungen
+    invitationsTitle: "Einladungen",
+    invitationFrom: (vars: { name: string; role: string }) =>
+      `${vars.name} lädt dich als „${vars.role}" ein.`,
+    accept: "Annehmen",
+    decline: "Ablehnen",
+    invitationAccepted: "Einladung angenommen",
+    invitationDeclined: "Einladung abgelehnt",
+
+    // Mitglieder
+    membersTitle: "Mitglieder",
+    inviteTitle: "Person einladen",
+    inviteHint:
+      "Freundescode oder Telegram-Name. Wirksam wird die Einladung erst, wenn sie angenommen wird.",
+    inviteRoleLabel: "Rolle",
+    invite: "Einladen",
+    invited: (vars: { name: string }) => `${vars.name} wurde eingeladen.`,
+    inviteNotNotified:
+      "Eingeladen – der Hinweis über Telegram kam allerdings nicht an.",
+    roleChanged: "Rolle geändert",
+    removeMember: "Entfernen",
+    removeMemberTitle: "Mitglied entfernen?",
+    removeMemberDescription: (vars: { name: string }) =>
+      `${vars.name} verliert damit sofort jeden Zugriff auf den Bestand dieser Organisation. Was ${vars.name} erfasst hat, bleibt.`,
+    memberRemoved: "Mitglied entfernt",
+
+    // Beitrittscode verwalten
+    joinCodeTitle: "Offener Beitritt",
+    joinCodeHint:
+      "Wer den Code hat, tritt ohne weitere Bestätigung bei. Er lässt sich jederzeit abschalten oder neu erzeugen.",
+    joinCodeOff: "Offener Beitritt ist aus.",
+    joinRoleLabel: "Stufe beim Beitritt",
+    joinRoleHint:
+      "Die Verwaltungsstufe lässt sich so nicht vergeben – ein Code, der sie mitbrächte, wäre eine Übernahme.",
+    enableJoinCode: "Code erzeugen",
+    rotateJoinCode: "Neuen Code erzeugen",
+    disableJoinCode: "Offenen Beitritt abschalten",
+    copyJoinCode: "Code kopieren",
+    joinCodeCopied: "Beitrittscode kopiert",
+
+    // Verlassen und Löschen
+    leave: "Organisation verlassen",
+    leaveTitle: "Organisation verlassen?",
+    leaveDescription:
+      "Du verlierst damit den Zugriff auf ihren Bestand. Was du erfasst hast, bleibt bei der Organisation.",
+    left: "Organisation verlassen",
+    deleteOrganization: "Organisation löschen",
+    deleteTitle: "Organisation löschen?",
+    deleteDescription:
+      "Das lässt sich nicht rückgängig machen. Möglich ist es nur, solange kein Lager mehr daran hängt.",
+
+    // Stufen-Hinweise
+    needEditor:
+      'Dafür brauchst du in dieser Organisation mindestens die Stufe „Erfassen".',
+    needAdmin:
+      'Dafür brauchst du in dieser Organisation die Stufe „Verwalten".',
   },
 
   loan: {

@@ -9,6 +9,7 @@ import {
   organizationRoleSchema,
 } from "@contracts/organizations";
 import { createRouter, authedQuery } from "./middleware";
+import { ORGANIZATIONS_PATH, notify } from "./lib/notify";
 import { resolveScope } from "./scope";
 import { recordAudit } from "./queries/audit";
 import {
@@ -312,7 +313,24 @@ export const organizationRouter = createRouter({
         ip: ctx.clientIp,
         detail: { organizationId: input.organizationId, role: input.role },
       });
-      return { id: invitation.id, name: target.name };
+      /*
+        `notified` wandert bis in die Oberfläche: Telegram lässt einen Bot nur
+        schreiben, wenn der Empfänger den Chat einmal geöffnet hat. Wer sich nur
+        über das Login-Widget angemeldet hat, sieht die Einladung erst beim
+        nächsten Besuch – das soll der Einladende wissen, statt auf eine Antwort
+        zu warten, die nie kommt.
+      */
+      const org = await findOrganization(input.organizationId);
+      const notified = await notify(
+        target.id,
+        m =>
+          m.organizationInvited({
+            organization: org?.name ?? "",
+            role: input.role,
+          }),
+        ORGANIZATIONS_PATH
+      );
+      return { id: invitation.id, name: target.name, notified };
     }),
 
   listInvitations: authedQuery.query(({ ctx }) =>
@@ -396,6 +414,16 @@ export const organizationRouter = createRouter({
         ip: ctx.clientIp,
         detail: { organizationId: input.organizationId, role: input.role },
       });
+      const org = await findOrganization(input.organizationId);
+      await notify(
+        input.userId,
+        m =>
+          m.organizationRoleChanged({
+            organization: org?.name ?? "",
+            role: input.role,
+          }),
+        ORGANIZATIONS_PATH
+      );
       return { ok: true };
     }),
 
@@ -413,6 +441,12 @@ export const organizationRouter = createRouter({
         ip: ctx.clientIp,
         detail: { organizationId: input.organizationId, reason: "removed" },
       });
+      const org = await findOrganization(input.organizationId);
+      await notify(
+        input.userId,
+        m => m.organizationRemoved({ organization: org?.name ?? "" }),
+        ORGANIZATIONS_PATH
+      );
       return { ok: true };
     }),
 

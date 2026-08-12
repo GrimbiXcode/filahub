@@ -21,6 +21,12 @@ export const SETTINGS_PATH = "/einstellungen";
 export const RELEASE_NOTES_PATH = "/neuerungen";
 export const FRIENDS_PATH = "/freunde";
 export const LAGER_PATH = "/lager";
+export const ORGANIZATIONS_PATH = "/organisationen";
+
+/** Eine einzelne Organisation: Mitglieder, Rollen, Beitrittscode. */
+export function organizationPath(id: number): string {
+  return `${ORGANIZATIONS_PATH}/${id}`;
+}
 
 /**
  * Dryboxen. Bis 2.1.0 hieß die Seite „Lagerboxen" und lag unter

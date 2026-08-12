@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Calculator, Disc3, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { CONTAINER_FORMS, type ContainerForm } from "@contracts/materials";
+import { roleAllows } from "@contracts/organizations";
 import AuthLayout from "@/components/AuthLayout";
 import { MyPresetProposals } from "@/components/MyPresetProposals";
 import { PageHeader } from "@/components/PageHeader";
@@ -52,14 +53,16 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { ContainerTypeItem } from "@/types";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 export default function ContainerTypes() {
   const utils = trpc.useUtils();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   const { formatGrams } = useFormat();
   const t = useT();
   const { data: containerTypes, isLoading } =
-    trpc.containerType.list.useQuery(PERSONAL_SCOPE);
+    trpc.containerType.list.useQuery(scope);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ContainerTypeItem | null>(null);
@@ -165,8 +168,8 @@ export default function ContainerTypes() {
       notes: notes.trim() || undefined,
     };
     if (editing)
-      updateMutation.mutate({ ...PERSONAL_SCOPE, id: editing.id, ...payload });
-    else createMutation.mutate({ ...PERSONAL_SCOPE, ...payload });
+      updateMutation.mutate({ ...scope, id: editing.id, ...payload });
+    else createMutation.mutate({ ...scope, ...payload });
   };
 
   const list = containerTypes ?? [];
@@ -178,12 +181,15 @@ export default function ContainerTypes() {
           title={t.containerTypes.title}
           description={t.containerTypes.description}
           actions={
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => openDialog(null)}
-            >
-              <Plus className="mr-2 h-4 w-4" /> {t.containerTypes.newType}
-            </Button>
+            // Ausgeblendet statt deaktiviert – siehe `Lager.tsx`.
+            roleAllows(role, "editor") && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => openDialog(null)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> {t.containerTypes.newType}
+              </Button>
+            )
           }
         />
 
@@ -568,8 +574,7 @@ export default function ContainerTypes() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting &&
-                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: deleting.id })
+                deleting && deleteMutation.mutate({ ...scope, id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

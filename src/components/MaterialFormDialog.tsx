@@ -33,7 +33,7 @@ import { useT } from "@/lib/i18nContext";
 import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope } from "@/lib/activeScope";
 
 type Props = {
   open: boolean;
@@ -66,14 +66,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     parseMoney,
   } = useFormat();
   const t = useT();
-  const { data: containerTypes } =
-    trpc.containerType.list.useQuery(PERSONAL_SCOPE);
+  const scope = useActiveScope();
+  const { data: containerTypes } = trpc.containerType.list.useQuery(scope);
   const { data: presetOptions } = trpc.preset.options.useQuery();
-  const { data: storageBoxes } = trpc.storageBox.list.useQuery(PERSONAL_SCOPE);
+  const { data: storageBoxes } = trpc.storageBox.list.useQuery(scope);
   const { data: allMaterials } = trpc.material.list.useQuery({
-    ...PERSONAL_SCOPE,
+    ...scope,
   });
-  const { data: lagerList } = trpc.lager.list.useQuery(PERSONAL_SCOPE);
+  const { data: lagerList } = trpc.lager.list.useQuery(scope);
   const activeLagerId = useActiveLagerId(lagerList);
 
   const [identifier, setIdentifier] = useState("");
@@ -309,7 +309,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     };
 
     if (isEdit && material) {
-      updateMutation.mutate({ ...PERSONAL_SCOPE, id: material.id, ...base });
+      updateMutation.mutate({ ...scope, id: material.id, ...base });
     } else {
       const initial = initialGrossWeight.trim()
         ? parseInt(initialGrossWeight, 10)
@@ -317,7 +317,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       if (initial != null && (!Number.isFinite(initial) || initial <= 0))
         return toast.error(t.materialForm.initialInvalid);
       createMutation.mutate({
-        ...PERSONAL_SCOPE,
+        ...scope,
         ...base,
         initialGrossWeight: initial,
       });

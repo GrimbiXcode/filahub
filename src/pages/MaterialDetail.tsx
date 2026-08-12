@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { roleAllows } from "@contracts/organizations";
 import { useNavigate, useParams } from "react-router";
 import { Archive, ArrowLeft, Disc3, Pencil, Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,7 +33,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 export default function MaterialDetail() {
   const { id } = useParams<{ id: string }>();
@@ -49,9 +50,11 @@ export default function MaterialDetail() {
     formatSecondary,
   } = useFormat();
   const t = useT();
+  const scope = useActiveScope();
+  const role = useScopeRole();
 
   const { data: material, isLoading } = trpc.material.byId.useQuery(
-    { ...PERSONAL_SCOPE, id: materialId },
+    { ...scope, id: materialId },
     { enabled: Number.isFinite(materialId) }
   );
 
@@ -132,28 +135,35 @@ export default function MaterialDetail() {
           }
           actions={
             <>
-              <Button
-                className="flex-1 sm:flex-none"
-                onClick={() => openWeighing(asOverview)}
-              >
-                <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 sm:flex-none"
-                onClick={() => openMaterialForm(asOverview)}
-              >
-                <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                aria-label={t.materialDetail.deleteMaterial}
-                className="text-destructive hover:text-destructive"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              {/* Wiegen ist `weigher`, Bearbeiten und Löschen `editor`. */}
+              {roleAllows(role, "weigher") && (
+                <Button
+                  className="flex-1 sm:flex-none"
+                  onClick={() => openWeighing(asOverview)}
+                >
+                  <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
+                </Button>
+              )}
+              {roleAllows(role, "editor") && (
+                <>
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => openMaterialForm(asOverview)}
+                  >
+                    <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    aria-label={t.materialDetail.deleteMaterial}
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
+              )}
             </>
           }
         />
@@ -465,7 +475,7 @@ export default function MaterialDetail() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: material.id })
+                deleteMutation.mutate({ ...scope, id: material.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
@@ -497,7 +507,7 @@ export default function MaterialDetail() {
               onClick={() =>
                 deletingWeighing != null &&
                 deleteWeighing.mutate({
-                  ...PERSONAL_SCOPE,
+                  ...scope,
                   id: deletingWeighing,
                 })
               }

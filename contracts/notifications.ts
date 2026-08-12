@@ -53,6 +53,24 @@ const de = {
       ? `${v.from} leiht dir ${v.material}. Ihr klärt die Übergabe am besten direkt.`
       : `${v.from} kann dir ${v.material} gerade nicht ausleihen.`,
 
+  /*
+    Organisationen. Alle drei ändern **Zugriffsrechte** des Empfängers – deshalb
+    gehen sie hinaus, während das Wiegen und Erfassen im Alltag es nicht tut.
+    Dieselbe Grenze zieht `contracts/audit.ts` fürs Protokoll.
+  */
+  organizationInvited: (v: { organization: string; role: string }) =>
+    `Du wurdest zu „${v.organization}" auf filahub eingeladen – als „${v.role}".\n\n` +
+    `Die Einladung liegt unter „Organisationen"; dort kannst du sie annehmen ` +
+    `oder ablehnen. Bis dahin ändert sich für dich nichts.`,
+
+  organizationRoleChanged: (v: { organization: string; role: string }) =>
+    `Deine Rolle bei „${v.organization}" auf filahub ist jetzt „${v.role}".`,
+
+  organizationRemoved: (v: { organization: string }) =>
+    `Du bist nicht mehr Mitglied von „${v.organization}" auf filahub.\n\n` +
+    `Der Bestand der Organisation ist damit für dich nicht mehr sichtbar. ` +
+    `Dein eigener Bestand ist davon nicht betroffen.`,
+
   /**
    * Ohne `APP_BASE_URL` fehlt der Link. Der Satz nennt dann nur den Ort in der
    * App – besser als ein kaputter Link oder eine erratene Adresse.
@@ -82,6 +100,19 @@ const en: NotificationMessages = {
     v.decision === "accepted"
       ? `${v.from} will lend you ${v.material}. Best to arrange the handover directly.`
       : `${v.from} cannot lend you ${v.material} right now.`,
+
+  organizationInvited: v =>
+    `You have been invited to "${v.organization}" on filahub – as "${v.role}".\n\n` +
+    `The invitation is under "Organizations"; accept or decline it there. ` +
+    `Nothing changes for you until then.`,
+
+  organizationRoleChanged: v =>
+    `Your role at "${v.organization}" on filahub is now "${v.role}".`,
+
+  organizationRemoved: v =>
+    `You are no longer a member of "${v.organization}" on filahub.\n\n` +
+    `The organization's stock is no longer visible to you. Your own stock is ` +
+    `not affected.`,
 
   openLink: v => `\n\n${v.url}`,
 };

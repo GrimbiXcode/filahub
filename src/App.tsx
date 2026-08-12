@@ -4,6 +4,7 @@ import {
   CONTAINER_TYPES_PATH,
   DRYBOXES_PATH,
   LAGER_PATH,
+  ORGANIZATIONS_PATH,
   LEGACY_CONTAINER_TYPES_PATH,
   LEGACY_DRYBOXES_PATH,
   LEGAL_PATHS,
@@ -26,6 +27,8 @@ import StorageBoxes from "./pages/StorageBoxes";
 import Legal from "./pages/Legal";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
+import OrganizationDetail from "./pages/OrganizationDetail";
+import Organizations from "./pages/Organizations";
 import ReleaseNotes from "./pages/ReleaseNotes";
 import Settings from "./pages/Settings";
 
@@ -51,6 +54,11 @@ export default function App() {
           element={<Navigate to={CONTAINER_TYPES_PATH} replace />}
         />
         <Route path={LAGER_PATH} element={<LagerPage />} />
+        <Route path={ORGANIZATIONS_PATH} element={<Organizations />} />
+        <Route
+          path={`${ORGANIZATIONS_PATH}/:id`}
+          element={<OrganizationDetail />}
+        />
         <Route path="/freunde" element={<Friends />} />
         <Route path="/freunde/:id" element={<FriendInventory />} />
         <Route path={RELEASE_NOTES_PATH} element={<ReleaseNotes />} />

@@ -8,10 +8,7 @@ import {
   normalizeFriendCode,
   normalizeTelegramUsername,
 } from "@contracts/friends";
-import {
-  notificationMessages,
-  type LoanDecision,
-} from "@contracts/notifications";
+import type { LoanDecision } from "@contracts/notifications";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { recordAudit } from "./queries/audit";
 import { lagerBelongsToOrganization } from "./queries/lager";
@@ -25,7 +22,6 @@ import {
   findFriendMaterial,
   findFriendMaterialsForSearch,
   findFriendshipBetween,
-  findNotificationTarget,
   findOpenLoanRequest,
   findUserByFriendCode,
   findUserByTelegramUsername,
@@ -37,7 +33,7 @@ import {
   setLagerShare,
   withdrawLoanRequest,
 } from "./queries/friends";
-import { appLink, sendTelegramMessage } from "./telegram/send";
+import { displayName, notify } from "./lib/notify";
 
 /**
  * Freundschaften, geteiltes Lager und Ausleih-Anfragen.
@@ -50,34 +46,6 @@ import { appLink, sendTelegramMessage } from "./telegram/send";
  */
 
 const idInput = z.object({ id: z.number().int().positive() });
-
-/**
- * Verschickt eine Benachrichtigung, wenn der Empfänger erreichbar ist.
- *
- * Der Rückgabewert wandert bis in die Oberfläche: Telegram lässt einen Bot nur
- * schreiben, wenn der Empfänger den Chat einmal geöffnet hat. Wer sich nur über
- * das Login-Widget angemeldet hat, erfährt von seiner Anfrage erst beim
- * nächsten Besuch – das soll der Absender wissen, statt auf eine Antwort zu
- * warten, die nie kommt.
- */
-async function notify(
-  recipientId: number,
-  build: (m: ReturnType<typeof notificationMessages>) => string,
-  path: string
-): Promise<boolean> {
-  const target = await findNotificationTarget(recipientId);
-  if (!target) return false;
-  const messages = notificationMessages(target.language);
-  const link = appLink(path);
-  const text = build(messages) + (link ? messages.openLink({ url: link }) : "");
-  return sendTelegramMessage(target.unionId, text);
-}
-
-/** Anzeigename für Benachrichtigungen. `users.name` ist nullable. */
-function displayName(name: string | null | undefined): string {
-  const trimmed = (name ?? "").trim();
-  return trimmed === "" ? "Jemand" : trimmed;
-}
 
 export const friendRouter = createRouter({
   // -------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Archive,
+  Building2,
   Boxes,
   Disc3,
   FileUp,
@@ -18,6 +19,7 @@ import {
   Users,
 } from "lucide-react";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import { roleAllows } from "@contracts/organizations";
 import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
 import { WeighingDialog } from "@/components/WeighingDialog";
@@ -37,6 +39,7 @@ import {
   DRYBOXES_PATH,
   FRIENDS_PATH,
   LAGER_PATH,
+  ORGANIZATIONS_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
 } from "@/const";
@@ -53,7 +56,7 @@ import {
 import { useT, type TextKey } from "@/lib/i18nContext";
 import { useAppTheme } from "@/lib/theme";
 import { trpc } from "@/lib/trpc";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 /**
  * Rendert die Dialoge der Schnellaktionen. Gehört genau einmal ins Layout;
@@ -128,6 +131,7 @@ const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
   { icon: Archive, label: "storageBoxes", path: DRYBOXES_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
+  { icon: Building2, label: "organizations", path: ORGANIZATIONS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Sparkles, label: "releaseNotes", path: RELEASE_NOTES_PATH },
   { icon: SettingsIcon, label: "settings", path: SETTINGS_PATH },
@@ -156,8 +160,10 @@ function CommandPalette({
   const { formatGrams } = useFormat();
   const { theme, setTheme } = useAppTheme();
   const t = useT();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   // Erst laden, wenn die Suche wirklich geöffnet wird
-  const { data: materials } = trpc.material.list.useQuery(PERSONAL_SCOPE, {
+  const { data: materials } = trpc.material.list.useQuery(scope, {
     enabled: open,
   });
 
@@ -296,22 +302,32 @@ function CommandPalette({
           </CommandGroup>
         ) : (
           <>
-            <CommandGroup heading={t.quick.groupActions}>
-              <CommandItem
-                value={t.quick.keywordsWeigh}
-                onSelect={() => onModeChange("weigh")}
-              >
-                <Scale className="mr-2 h-4 w-4" />
-                {t.quick.weighTitle}
-              </CommandItem>
-              <CommandItem
-                value={t.quick.keywordsNewMaterial}
-                onSelect={() => run(() => quickActions.openMaterialForm())}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t.quick.newMaterial}
-              </CommandItem>
-            </CommandGroup>
+            {/*
+              Die Palette ist die häufigste Abkürzung zum Wiegen und Anlegen –
+              unterhalb der nötigen Stufe muss sie deshalb genauso zumachen wie
+              die Knöpfe auf den Seiten. Bleibt nichts übrig, entfällt die
+              Gruppe ganz, statt eine leere Überschrift zu zeigen.
+            */}
+            {roleAllows(role, "weigher") && (
+              <CommandGroup heading={t.quick.groupActions}>
+                <CommandItem
+                  value={t.quick.keywordsWeigh}
+                  onSelect={() => onModeChange("weigh")}
+                >
+                  <Scale className="mr-2 h-4 w-4" />
+                  {t.quick.weighTitle}
+                </CommandItem>
+                {roleAllows(role, "editor") && (
+                  <CommandItem
+                    value={t.quick.keywordsNewMaterial}
+                    onSelect={() => run(() => quickActions.openMaterialForm())}
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t.quick.newMaterial}
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            )}
 
             <CommandSeparator />
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { roleAllows } from "@contracts/organizations";
 import { Archive, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
@@ -40,15 +41,16 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 export default function StorageBoxes() {
   const utils = trpc.useUtils();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   const { formatGrams } = useFormat();
   const t = useT();
-  const { data: boxes, isLoading } =
-    trpc.storageBox.list.useQuery(PERSONAL_SCOPE);
-  const { data: materials } = trpc.material.list.useQuery(PERSONAL_SCOPE);
+  const { data: boxes, isLoading } = trpc.storageBox.list.useQuery(scope);
+  const { data: materials } = trpc.material.list.useQuery(scope);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StorageBoxItem | null>(null);
@@ -118,8 +120,8 @@ export default function StorageBoxes() {
       notes: notes.trim() || undefined,
     };
     if (editing)
-      updateMutation.mutate({ ...PERSONAL_SCOPE, id: editing.id, ...payload });
-    else createMutation.mutate({ ...PERSONAL_SCOPE, ...payload });
+      updateMutation.mutate({ ...scope, id: editing.id, ...payload });
+    else createMutation.mutate({ ...scope, ...payload });
   };
 
   const list = boxes ?? [];
@@ -131,12 +133,15 @@ export default function StorageBoxes() {
           title={t.storageBoxes.title}
           description={t.storageBoxes.description}
           actions={
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => openDialog(null)}
-            >
-              <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.newBox}
-            </Button>
+            // Ausgeblendet statt deaktiviert – siehe `Lager.tsx`.
+            roleAllows(role, "editor") && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => openDialog(null)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.newBox}
+              </Button>
+            )
           }
         />
 
@@ -381,8 +386,7 @@ export default function StorageBoxes() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting &&
-                deleteMutation.mutate({ ...PERSONAL_SCOPE, id: deleting.id })
+                deleting && deleteMutation.mutate({ ...scope, id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

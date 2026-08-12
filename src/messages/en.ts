@@ -53,6 +53,9 @@ export const en: Messages = {
     friends: "Friends",
     friendsPending: (vars: { count: number }) =>
       `Friends (${vars.count} pending)`,
+    organizations: "Organizations",
+    organizationsPending: (vars: { count: number }) =>
+      `Organizations (${vars.count} invitations)`,
     administration: "Administration",
     presetCatalog: "Preset catalogue",
     proposals: "Suggestions",
@@ -915,6 +918,97 @@ export const en: Messages = {
       vars.count === 1 ? "1 match" : `${vars.count} matches`,
     ownerLabel: (vars: { name: string }) => `at ${vars.name}`,
     ownerColumn: "At",
+  },
+
+  organizations: {
+    title: "Organizations",
+    description:
+      "Shared inventory for companies, university hubs and makerspaces. Everyone who belongs works on the same stock \u2013 graded by what they may do.",
+
+    scopeLabel: "Area",
+    scopeAria: "Switch area",
+    personal: "Personal",
+
+    roleViewer: "View",
+    roleWeigher: "Weigh",
+    roleEditor: "Record",
+    roleAdmin: "Manage",
+    roleViewerHint: "Look up and search the stock.",
+    roleWeigherHint: "Additionally weigh, that is, draw material down.",
+    roleEditorHint:
+      "Additionally create and change material, container types and dry boxes.",
+    roleAdminHint:
+      "Additionally create storages, manage members and assign roles.",
+
+    emptyTitle: "No organization yet",
+    emptyDescription:
+      "Create one to share stock with others \u2013 or join an existing one with a join code.",
+    newOrganization: "Create organization",
+    nameLabel: "Name *",
+    namePlaceholder: "e.g. University makerspace",
+    created: "Organization created",
+    saved: "Saved",
+    deleted: "Organization deleted",
+    memberCount: vars =>
+      vars.count === 1 ? "1 member" : `${vars.count} members`,
+
+    joinTitle: "Join with a code",
+    joinHint:
+      "You get the join code from someone who manages the organization.",
+    joinCodeLabel: "Join code",
+    joinCodePlaceholder: "ORG-A2B3-C4D5",
+    join: "Join",
+    joined: vars => `You are now part of ${vars.name}.`,
+
+    invitationsTitle: "Invitations",
+    invitationFrom: vars =>
+      `${vars.name} invites you as \u201c${vars.role}\u201d.`,
+    accept: "Accept",
+    decline: "Decline",
+    invitationAccepted: "Invitation accepted",
+    invitationDeclined: "Invitation declined",
+
+    membersTitle: "Members",
+    inviteTitle: "Invite someone",
+    inviteHint:
+      "Friend code or Telegram name. The invitation only takes effect once it is accepted.",
+    inviteRoleLabel: "Role",
+    invite: "Invite",
+    invited: vars => `${vars.name} has been invited.`,
+    inviteNotNotified: "Invited \u2013 but the Telegram notice did not arrive.",
+    roleChanged: "Role changed",
+    removeMember: "Remove",
+    removeMemberTitle: "Remove member?",
+    removeMemberDescription: vars =>
+      `${vars.name} immediately loses all access to this organization\u2019s stock. Whatever ${vars.name} recorded stays.`,
+    memberRemoved: "Member removed",
+
+    joinCodeTitle: "Open joining",
+    joinCodeHint:
+      "Anyone with the code joins without further confirmation. It can be switched off or regenerated at any time.",
+    joinCodeOff: "Open joining is off.",
+    joinRoleLabel: "Level on joining",
+    joinRoleHint:
+      "The management level cannot be granted this way \u2013 a code carrying it would be a takeover.",
+    enableJoinCode: "Generate code",
+    rotateJoinCode: "Generate new code",
+    disableJoinCode: "Switch off open joining",
+    copyJoinCode: "Copy code",
+    joinCodeCopied: "Join code copied",
+
+    leave: "Leave organization",
+    leaveTitle: "Leave organization?",
+    leaveDescription:
+      "You lose access to its stock. Whatever you recorded stays with the organization.",
+    left: "Left the organization",
+    deleteOrganization: "Delete organization",
+    deleteTitle: "Delete organization?",
+    deleteDescription:
+      "This cannot be undone. It is only possible while no storage is attached any more.",
+
+    needEditor:
+      "This needs at least the \u201cRecord\u201d level in this organization.",
+    needAdmin: "This needs the \u201cManage\u201d level in this organization.",
   },
 
   loan: {

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import { roleAllows } from "@contracts/organizations";
 import AuthLayout from "@/components/AuthLayout";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
 import { PageHeader } from "@/components/PageHeader";
@@ -60,7 +61,7 @@ import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
-import { PERSONAL_SCOPE } from "@/lib/scope";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -107,8 +108,10 @@ function compareBy(
 
 export default function Home() {
   const navigate = useNavigate();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   const { data: lagerList, isPending: lagerPending } =
-    trpc.lager.list.useQuery(PERSONAL_SCOPE);
+    trpc.lager.list.useQuery(scope);
   const activeLagerId = useActiveLagerId(lagerList);
   /*
     Auf das gewählte Lager eingeschränkt. Ohne Einschränkung käme der gesamte
@@ -124,9 +127,7 @@ export default function Home() {
   */
   const { data: materials, isPending: materialsPending } =
     trpc.material.list.useQuery(
-      activeLagerId != null
-        ? { ...PERSONAL_SCOPE, lagerId: activeLagerId }
-        : skipToken
+      activeLagerId != null ? { ...scope, lagerId: activeLagerId } : skipToken
     );
   /*
     Über die Kennung wird über **alle** Lager gesucht: Wer eine Kennung von einem
@@ -135,7 +136,7 @@ export default function Home() {
     schlechteste Antwort. Die Schnellsuche tut dasselbe.
   */
   const { data: allMaterials } = trpc.material.list.useQuery({
-    ...PERSONAL_SCOPE,
+    ...scope,
   });
   /*
     Solange die Lagerliste noch unterwegs ist, ist „kein Material“ nicht wahr,
@@ -485,37 +486,45 @@ export default function Home() {
           title={t.home.title}
           description={t.home.description}
           actions={
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => openMaterialForm()}
-            >
-              <Plus className="mr-2 h-4 w-4" /> {t.home.newMaterial}
-            </Button>
+            // Ausgeblendet statt deaktiviert – siehe `Lager.tsx`.
+            roleAllows(role, "editor") && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => openMaterialForm()}
+              >
+                <Plus className="mr-2 h-4 w-4" /> {t.home.newMaterial}
+              </Button>
+            )
           }
         />
 
-        {/* Schnellzugriff: Kennung vom Gebinde ablesen und sofort wiegen */}
-        <Card>
-          <CardContent className="p-3 sm:p-4">
-            <form className="flex gap-2" onSubmit={quickWeigh}>
-              <div className="relative min-w-0 flex-1">
-                <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  id="identifier-lookup"
-                  className="h-11 pl-9"
-                  placeholder={t.home.lookupPlaceholder}
-                  autoComplete="off"
-                  value={identifierLookup}
-                  onChange={e => setIdentifierLookup(e.target.value)}
-                  aria-label={t.home.lookupAria}
-                />
-              </div>
-              <Button type="submit" className="h-11 shrink-0">
-                <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        {/*
+          Schnellzugriff: Kennung vom Gebinde ablesen und sofort wiegen.
+          Ab `weigher` – das Feld führt nirgendwo anders hin als ins Wiegen.
+        */}
+        {roleAllows(role, "weigher") && (
+          <Card>
+            <CardContent className="p-3 sm:p-4">
+              <form className="flex gap-2" onSubmit={quickWeigh}>
+                <div className="relative min-w-0 flex-1">
+                  <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="identifier-lookup"
+                    className="h-11 pl-9"
+                    placeholder={t.home.lookupPlaceholder}
+                    autoComplete="off"
+                    value={identifierLookup}
+                    onChange={e => setIdentifierLookup(e.target.value)}
+                    aria-label={t.home.lookupAria}
+                  />
+                </div>
+                <Button type="submit" className="h-11 shrink-0">
+                  <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Kennzahlen – zwei Spalten auf dem Telefon, vier ab dem Laptop */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -695,9 +704,11 @@ export default function Home() {
                   : t.home.emptyFilteredHint}
               </p>
               {(materials ?? []).length === 0 ? (
-                <Button onClick={() => openMaterialForm()}>
-                  <Plus className="mr-2 h-4 w-4" /> Erstes Material anlegen
-                </Button>
+                roleAllows(role, "editor") && (
+                  <Button onClick={() => openMaterialForm()}>
+                    <Plus className="mr-2 h-4 w-4" /> Erstes Material anlegen
+                  </Button>
+                )
               ) : (
                 <Button variant="outline" onClick={resetFilters}>
                   Filter zurücksetzen
@@ -717,7 +728,11 @@ export default function Home() {
                   key={material.id}
                   material={material}
                   onOpen={() => navigate(`/material/${material.id}`)}
-                  onWeigh={() => openWeighing(material)}
+                  onWeigh={
+                    roleAllows(role, "weigher")
+                      ? () => openWeighing(material)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -856,14 +871,16 @@ export default function Home() {
                             className="flex justify-end gap-1"
                             onClick={e => e.stopPropagation()}
                           >
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => openWeighing(m)}
-                            >
-                              <Scale className="mr-1 h-3.5 w-3.5" />{" "}
-                              {t.nav.weigh}
-                            </Button>
+                            {roleAllows(role, "weigher") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => openWeighing(m)}
+                              >
+                                <Scale className="mr-1 h-3.5 w-3.5" />{" "}
+                                {t.nav.weigh}
+                              </Button>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1060,7 +1077,8 @@ function MaterialCard({
 }: {
   material: MaterialOverview;
   onOpen: () => void;
-  onWeigh: () => void;
+  /** Fehlt unterhalb der Stufe `weigher` – dann entfällt der Knopf. */
+  onWeigh?: () => void;
 }) {
   const { formatGrams, formatPercent, formatSecondary } = useFormat();
   const t = useT();
@@ -1125,11 +1143,13 @@ function MaterialCard({
           )}
         </div>
       </button>
-      <div className="border-t p-2">
-        <Button variant="ghost" className="h-10 w-full" onClick={onWeigh}>
-          <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-        </Button>
-      </div>
+      {onWeigh && (
+        <div className="border-t p-2">
+          <Button variant="ghost" className="h-10 w-full" onClick={onWeigh}>
+            <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
