@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>filahub — self-hosted filament inventory</title>
+    <title>filahub — self-hosted inventory for 3D-printing material</title>
     <meta
       name="description"
-      content="Self-hosted inventory for 3D-printing filament. Put a spool on a scale and type the number: filahub subtracts the empty weight of the spool and of the drybox, and keeps the result."
+      content="Self-hosted inventory for 3D-printing material — filament, resin and powder. Put a container on a kitchen scale and type the number: filahub subtracts the empty weight of the container and of the drybox, and keeps the result."
     />
     <link rel="canonical" href="https://grimbixcode.github.io/filahub/" />
 
@@ -14,11 +14,11 @@
     <meta property="og:url" content="https://grimbixcode.github.io/filahub/" />
     <meta
       property="og:title"
-      content="filahub — self-hosted filament inventory"
+      content="filahub — self-hosted inventory for 3D-printing material"
     />
     <meta
       property="og:description"
-      content="Put a spool on a scale and type the number. filahub subtracts the tare of the spool and the drybox, and keeps the result."
+      content="Put a container on a kitchen scale and type the number. filahub subtracts the tare of the container and the drybox, and keeps the result — for filament, resin and powder."
     />
     <meta
       property="og:image"
@@ -28,7 +28,7 @@
 
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23eab308' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%23a9a9b2' stroke-width='2.5'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a9a9b1' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23f0b100' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%23a9a9b1' stroke-width='2.5'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -69,7 +69,8 @@
         </a>
         <nav class="header-nav">
           <a href="#tare">Weighing</a>
-          <a href="#catalogue">Catalogue</a>
+          <a href="#stores">Stores</a>
+          <a href="#sharing">Sharing</a>
           <a href="#self-hosting">Self-hosting</a>
         </nav>
         <div class="header-cta">
@@ -88,13 +89,14 @@
         <div class="wrap hero-grid">
           <div class="hero-text">
             <p class="eyebrow">
-              <span class="dot"></span>Self-hosted · filament inventory
+              <span class="dot"></span>Self-hosted · material inventory
             </p>
-            <h1 class="display">How much is actually left on that spool?</h1>
+            <h1 class="display">How much is actually left?</h1>
             <p class="lede">
               Put it on a kitchen scale and type in what the scale says. filahub
-              subtracts the empty weight of the spool and of the drybox it lives
-              in, and keeps the result — for every spool, every time.
+              subtracts the empty weight of the container and of the drybox it
+              lives in, and keeps the result — for every spool, bottle and pail,
+              every time.
             </p>
             <div class="cta-row">
               <a class="btn btn-solid btn-lg" href="https://filahub.weblabor.io"
@@ -112,22 +114,22 @@
           <figure class="ledger" aria-labelledby="ledger-cap">
             <div class="ledger-row" style="--i: 0">
               <span class="ledger-key">on the scale</span>
-              <span class="ledger-note">gross, spool and box included</span>
+              <span class="ledger-note">gross, container and box included</span>
               <span class="ledger-val">1,954 g</span>
             </div>
             <div class="ledger-row" style="--i: 1">
-              <span class="ledger-key">spool</span>
-              <span class="ledger-note">PolyTerra PLA · cardboard · 1 kg</span>
+              <span class="ledger-key">container</span>
+              <span class="ledger-note">Panchroma PLA · cardboard · 1 kg</span>
               <span class="ledger-val ledger-sub">− 140 g</span>
             </div>
             <div class="ledger-row" style="--i: 2">
               <span class="ledger-key">drybox</span>
-              <span class="ledger-note">Drybox A · PLA/PETG</span>
+              <span class="ledger-note">Drybox A</span>
               <span class="ledger-val ledger-sub">− 1,450 g</span>
             </div>
             <div class="ledger-rule" style="--i: 3"></div>
             <div class="ledger-row ledger-total" style="--i: 4">
-              <span class="ledger-key">filament left</span>
+              <span class="ledger-key">material left</span>
               <span class="ledger-note">of 1,000 g nominal</span>
               <span class="ledger-val">364 g <em>36%</em></span>
             </div>
@@ -135,9 +137,8 @@
               <div class="bar-fill"></div>
             </div>
             <figcaption id="ledger-cap">
-              Real numbers from the weigh-in dialog below. The percentage colour
-              is the app's own scale: orange at 25% and under, yellow to 50%,
-              green above.
+              Real numbers from the weigh-in dialog below, down to the colour of
+              the percentage.
             </figcaption>
           </figure>
         </div>
@@ -148,10 +149,10 @@
           src="assets/overview.png"
           width="2160"
           height="1500"
-          alt="The filahub overview: stat cards for count, remaining grams, remaining value and spools in a drybox, above a table of nine filaments with fill bars."
+          alt="The filahub overview: a sidebar with an area switcher set to Personal and a store switcher set to Filament 1.75 mm, stat cards for materials, remaining grams, remaining value and materials in a drybox, and a table of filaments with coloured fill bars and remaining amounts in grams and metres."
         />
         <figcaption>
-          Nine spools, 6,508 g left, three of them under 25%.
+          Nine materials, 4,194 g left, three of them running low.
         </figcaption>
       </figure>
 
@@ -166,18 +167,29 @@
               box underneath it weigh. So filahub stores those two numbers as
               data and does the subtraction for you:
             </p>
-            <p class="formula">remaining = gross − spool tare − drybox tare</p>
+            <p class="formula">
+              remaining = gross − container tare − drybox tare
+            </p>
             <p>
               Nothing is derived from slicer estimates or print jobs. The
               remaining quantity is whatever the last weigh-in said, so it is
               wrong only if the scale was.
             </p>
             <p>
-              Give a spool a short identifier — <code>F01</code> — and write it
-              on the label. Typing it into the box at the top of the overview
-              opens the weigh-in dialog on that spool. Standing at the printer,
-              the whole loop is: scale, F01, number, done.
+              Give a material a short identifier — <code>F01</code> — and write
+              it on the label. Typing it into the box at the top of the overview
+              opens the weigh-in dialog on that one. The field searches every
+              store, because whoever reads a code off a spool in their hand has
+              no idea which store happens to be selected. Standing at the
+              printer, the whole loop is: scale, F01, number, done.
             </p>
+            <p>The fill level is coloured on one scale throughout:</p>
+            <ul class="ramp">
+              <li style="--c: var(--crit)">10% and under</li>
+              <li style="--c: var(--low)">to 25%</li>
+              <li style="--c: var(--mid)">to 50%</li>
+              <li style="--c: var(--full)">above</li>
+            </ul>
           </div>
         </div>
 
@@ -186,7 +198,7 @@
             src="assets/weighing.png"
             width="2160"
             height="1500"
-            alt="The weigh-in dialog: an entered gross weight of 1954 g, a highlighted result of 364 g (36%), and a breakdown listing 140 g spool tare, 1450 g storage-box tare and 1590 g total tare."
+            alt="The weigh-in dialog: an entered total weight of 1954 g, a highlighted result of 364 g at 36 percent, and a breakdown listing 140 g container tare, 1,450 g drybox tare for Drybox A, and 1,590 g total tare."
             loading="lazy"
           />
           <figcaption>
@@ -197,10 +209,10 @@
         <div class="wrap">
           <div class="col">
             <p>
-              Every weigh-in is kept, not overwritten. A spool's page lists them
-              with gross and net side by side, which is what turns an inventory
-              into a consumption record: 995 g in March, 812 g in April, 590 g
-              in June, 408 g at the end of July.
+              Every weigh-in is kept, not overwritten. A material's page lists
+              them with gross and net side by side, which is what turns an
+              inventory into a consumption record: 1,000 g in March, 812 g in
+              April, 590 g in June, 364 g in August.
             </p>
           </div>
         </div>
@@ -210,7 +222,7 @@
             src="assets/detail.png"
             width="2160"
             height="1500"
-            alt="A filament's detail page: fill level 408 g of 1000 g at 41 percent, cards for consumed grams, total tare, last gross weight and remaining value, master data, and a weighing history table with four dated entries."
+            alt="A material's detail page: fill level 364 g of 1,000 g nominal at 36 percent with approximately 122 metres, cards for consumed grams, total tare, last gross weight and remaining value, a details list naming the container and drybox with their tare, and a weighing history table with four dated entries."
             loading="lazy"
           />
           <figcaption>
@@ -220,10 +232,97 @@
         </figure>
       </section>
 
-      <section class="band" id="catalogue" style="--accent: var(--full)">
+      <section class="band" id="stores" style="--accent: var(--full)">
         <div class="wrap">
           <div class="col">
-            <p class="eyebrow"><span class="dot dot-full"></span>Catalogue</p>
+            <p class="eyebrow"><span class="dot dot-full"></span>Stores</p>
+            <h2>Not everything you print comes on a spool</h2>
+            <p>
+              If you sinter powder or print with resin, it needs somewhere to
+              live. A store groups what belongs together and carries the
+              settings that apply to everything inside it — which kind of
+              material it holds, and for filament, which diameter:
+            </p>
+            <dl class="spec">
+              <dt>Filament</dt>
+              <dd>Spools and reels. Remaining amount also in metres.</dd>
+              <dt>Powder</dt>
+              <dd>Sintering powder in bags or buckets. Grams only.</dd>
+              <dt>Resin</dt>
+              <dd>Liquid resin. Remaining amount also in litres.</dd>
+            </dl>
+            <p>
+              Up to five of them, switched in the sidebar; the overview, the
+              statistics and the filters all follow that choice. The diameter
+              belongs to the store rather than to each material, because it
+              changes the answer more than anything else does: 1 kg of PLA is
+              about 335 m at 1.75 mm, and only about 126 m at 2.85 mm.
+            </p>
+            <p>
+              Grams are still what you weigh and what you type in. But next to
+              the remaining amount you also see roughly how much is left in the
+              unit that matters — and it is prefixed with
+              <code>approx.</code> on purpose. The number rests on a density
+              that is usually an estimate, and filahub would rather say so than
+              pretend. Powder gets no second unit at all: bulk density depends
+              on grain size and packing, so any figure would be a guess, and a
+              wrong number is worse than none.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/stores.png"
+            width="2160"
+            height="930"
+            alt="The stores page with three stores: Filament 1.75 mm holding nine materials and shared with one friend, Powder holding one material, and Resin holding two materials and shared with one friend."
+            loading="lazy"
+          />
+          <figcaption>
+            Three stores, three kinds of material — and each one says whether it
+            leaves your account.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="band" id="containers" style="--accent: var(--low)">
+        <div class="wrap">
+          <div class="col">
+            <p class="eyebrow"><span class="dot dot-low"></span>Containers</p>
+            <h2>A container is not always a spool</h2>
+            <p>
+              What holds your material is a container, and every container type
+              has a form: <strong>spool</strong>, <strong>bag</strong>,
+              <strong>bottle</strong>, <strong>pail</strong>,
+              <strong>cartridge</strong> — or <strong>other</strong>, because
+              not every container in the world fits five boxes.
+            </p>
+            <p>
+              The form is a hint, not a rule. In a resin store, bottles and
+              cartridges sort to the top under a heading that says “Fits Resin”,
+              but every container stays selectable. If you have a reason to put
+              filament in a bucket, filahub is not going to argue.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/containers.png"
+            width="2160"
+            height="1350"
+            alt="The new container type dialog over the list of container types, with the form dropdown open showing spool, bag, bottle, pail, cartridge and other, and below it a calculator that works out the empty weight from the weight of a full container and its nominal fill."
+            loading="lazy"
+          />
+          <figcaption>
+            Six forms, and a calculator that works the empty weight out from one
+            weigh-in of a full container.
+          </figcaption>
+        </figure>
+
+        <div class="wrap">
+          <div class="col">
             <h2>An empty weight is a fact, so it is shared</h2>
             <p>
               Weighing an empty Prusament spool is a job exactly one person
@@ -233,15 +332,15 @@
             <p class="formula">manufacturer → series → version → size</p>
             <p>
               The version level is the one that earns its keep. Polymaker moved
-              PolyTerra PLA from a 215 g plastic spool to a 140 g cardboard one,
-              and both are in the catalogue with the period each was sold in.
-              Pick the wrong one and every weigh-in on that spool is off by 75 g
-              — quietly, forever.
+              its PLA from a 215 g plastic spool to a 140 g cardboard one, and
+              both are in the catalogue with the period each was sold in. Pick
+              the wrong one and every weigh-in on that spool is off by 75 g —
+              quietly, forever.
             </p>
             <p>
               A size carries the empty weight and, where it is known, outer
-              diameter, width and bore. A series can be tagged with the material
-              types it is sold in, so PLA offers PLA spools first.
+              diameter, width and bore. Those three only show up for spools; a
+              bottle has no bore.
             </p>
           </div>
         </div>
@@ -250,13 +349,13 @@
           <img
             src="assets/presets.png"
             width="2160"
-            height="1725"
-            alt="The preset catalogue with Polymaker expanded: the PolyLite series in 1 kg and 3 kg sizes, and PolyTerra PLA with a cardboard version from 2021 and an older plastic version up to 2020, each listing empty weight and dimensions."
+            height="1500"
+            alt="The preset catalogue with Polymaker expanded: the Fiberon series in 500 g and 2 kg sizes, and Panchroma, formerly PolyTerra PLA, with a cardboard spool from 2021 at 140 g and an older plastic spool up to 2020 at 215 g, each listing empty weight and dimensions."
             loading="lazy"
           />
           <figcaption>
-            Polymaker expanded: two series, and two spool versions with the
-            dates that tell them apart.
+            Polymaker expanded: the two spool versions, with the dates that tell
+            them apart.
           </figcaption>
         </figure>
 
@@ -264,32 +363,149 @@
           <div class="col">
             <p>
               Hide any manufacturer, series, version or single size you will
-              never own. Hiding changes only your own picker — a spool already
-              assigned to a filament stays valid and keeps its tare. You can
-              also copy a preset into your own, freely editable spool type when
-              yours differs from the catalogue.
+              never own. Hiding changes only your own picker — a container
+              already assigned to a material stays valid and keeps its tare. You
+              can also copy a preset into your own, freely editable container
+              type when yours differs from the catalogue.
             </p>
             <p>
-              Found a wrong number? Send a correction. Suggestions go into a
-              moderation queue; an accepted one is applied to the catalogue and
-              becomes visible to everyone, and a rejected one comes back with
-              the reason.
+              Found a wrong number? Send a correction, with the reason you know
+              better. Suggestions go into a moderation queue; an accepted one is
+              applied to the catalogue and becomes visible to everyone, and a
+              rejected one comes back with the reason. That is also how resin
+              and powder entries will arrive. None ship with the app, and that
+              is deliberate: a wrong starting value is worse than a missing one.
             </p>
           </div>
         </div>
       </section>
 
-      <section class="band" id="import" style="--accent: var(--low)">
+      <section class="band" id="sharing">
         <div class="wrap">
           <div class="col">
-            <p class="eyebrow"><span class="dot dot-low"></span>Bulk import</p>
+            <p class="eyebrow"><span class="dot"></span>Sharing</p>
+            <h2>Friends see what you choose, store by store</h2>
+            <p>
+              You have 200 g of PETG left, you need 600, and someone you know
+              has a full spool sitting in a drybox. Swap friend codes —
+              something like <code>FH-A2B3-C4D5</code> — and you can see it.
+              Nobody can find you without the code, so your account cannot be
+              discovered by guessing names.
+            </p>
+            <p>
+              What you show is decided per store and per friend, and nothing is
+              shared by default:
+            </p>
+            <dl class="spec">
+              <dt>Nothing</dt>
+              <dd>
+                The store stays completely hidden. This is where every
+                friendship starts.
+              </dd>
+              <dt>Search only</dt>
+              <dd>
+                Your material turns up when your friend searches for something
+                specific. No browsing.
+              </dd>
+              <dt>Whole store</dt>
+              <dd>Your friend can open that store and look through it.</dd>
+            </dl>
+            <p>
+              Prices never leave. Neither do notes, purchase dates, dryboxes,
+              weigh-in history, or the store's own name — a store name is free
+              text and can name a place. What a friend gets is one plain list,
+              so they cannot tell whether two matches came from one store or
+              two, or that you keep separate stores at all. Found something
+              useful? “Ask” sends a message through the bot.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/friends.png"
+            width="2160"
+            height="1500"
+            alt="The friends page: a friend code card, a form to add a friend by code or Telegram name, and a friend's card listing all three of your stores with their own sharing level — whole store, nothing and search only — above a single read-only line showing what that friend shows you."
+            loading="lazy"
+          />
+          <figcaption>
+            One row per store, per friend. A store you have not shared says so
+            rather than being left out.
+          </figcaption>
+        </figure>
+
+        <div class="wrap">
+          <div class="col">
+            <h2>An organization is one stock, several people</h2>
+            <p>
+              A company, a university print hub or a makerspace has one shelf of
+              filament and a dozen people reaching into it. Create an
+              organization, give it stores, and everyone you let in works on the
+              same stock — not a copy, not a shared view, the stock itself. A
+              switcher above the store switcher decides which side you are
+              looking at, and nothing mixes: your personal stock stays exactly
+              as private as it was.
+            </p>
+            <p>
+              Not everyone in a workshop should be able to delete a store, so
+              membership comes at one of four levels, each including the ones
+              below it:
+            </p>
+            <dl class="spec">
+              <dt>View</dt>
+              <dd>Look up and search the stock.</dd>
+              <dt>Weigh</dt>
+              <dd>
+                Also weigh — the everyday act of booking material out again.
+              </dd>
+              <dt>Record</dt>
+              <dd>
+                Also add, change and import material, and maintain containers
+                and dryboxes.
+              </dd>
+              <dt>Manage</dt>
+              <dd>Also create stores, invite people and assign levels.</dd>
+            </dl>
+            <p>
+              Buttons you are not allowed to use are not shown, rather than
+              shown greyed out. There are two ways in: a join code —
+              <code>ORG-…</code> — that anyone can enter, and which can never
+              hand out “Manage”, because a code gets passed around and pinned to
+              a wall and whoever found it should not end up running the place;
+              or a personal invitation at whichever level you pick, which takes
+              effect only once the invited person accepts.
+            </p>
+          </div>
+        </div>
+
+        <figure class="shot">
+          <img
+            src="assets/organizations.png"
+            width="2160"
+            height="1500"
+            alt="An organization page for Makerspace Bern with four members at the levels manage, record, weigh and view, a card for inviting someone by friend code or Telegram name, and a card showing the join code ORG-7H4K-2N9P with the level it hands out."
+            loading="lazy"
+          />
+          <figcaption>
+            Four members, four levels, and a join code that hands out the level
+            you picked for it.
+          </figcaption>
+        </figure>
+      </section>
+
+      <section class="band" id="import" style="--accent: var(--mid)">
+        <div class="wrap">
+          <div class="col">
+            <p class="eyebrow"><span class="dot dot-mid"></span>Bulk import</p>
             <h2>A whole order in one pass</h2>
             <p>
               filahub generates a prompt. Hand it to an LLM together with your
               order confirmation, paste the JSON that comes back, and you get an
               editable table — manufacturer, type, colour, nominal weight,
               price, quantity. Correct what the model got wrong, drop the lines
-              you do not want, and only then does anything get written.
+              you do not want, pick the store it all goes into, and only then
+              does anything get written.
             </p>
             <p>
               A line with quantity 2 becomes two separate materials, because two
@@ -302,6 +518,12 @@
               server validates against, so translating them would break the
               import.
             </p>
+            <p>
+              An order confirmation usually carries your name, your address and
+              how you paid. That goes to the model's provider, not to filahub,
+              so redact whatever it does not need — the page says as much where
+              you paste.
+            </p>
           </div>
         </div>
 
@@ -310,7 +532,7 @@
             src="assets/import.png"
             width="2160"
             height="1500"
-            alt="The import page: pasted JSON in a text area, and below it a review table with four order lines from Polymaker, Prusament, Bambu Lab and SUNLU, ending in a button labelled import 5 materials."
+            alt="The import page: pasted JSON with German keys in a text area, and below it a review table with four order lines from Polymaker, Prusament, Bambu Lab and SUNLU, a picker for the target store, and a button labelled import 5 materials."
             loading="lazy"
           />
           <figcaption>
@@ -334,9 +556,11 @@
               </p>
               <p>
                 Sign-in goes through Telegram — either the official login widget
-                or a six-digit code from your own bot — with an optional
-                whitelist of user IDs. Every row belongs to exactly one account;
-                the shared preset catalogue is the deliberate exception.
+                or a six-digit code from your own bot — with a whitelist of user
+                IDs. Open registration exists but is off unless you set it,
+                because the moment someone else signs in you are the data
+                controller for their data, and nobody should end up there by
+                overlooking a variable.
               </p>
               <p>
                 The interface is available in English and German, and the
@@ -349,6 +573,11 @@
                 reverse-proxy setup are in the
                 <a href="https://github.com/GrimbiXcode/filahub#readme"
                   >README</a
+                >; what the app stores and what running it for other people
+                means is in
+                <a
+                  href="https://github.com/GrimbiXcode/filahub/blob/main/PRIVACY.md"
+                  >PRIVACY.md</a
                 >. It is free software under the
                 <a
                   href="https://github.com/GrimbiXcode/filahub/blob/main/LICENSE"
@@ -374,7 +603,7 @@
                 src="assets/mobile.png"
                 width="780"
                 height="1688"
-                alt="filahub on a phone: the overview as stacked cards, each with fill percentage, remaining grams, drybox and a weigh button."
+                alt="filahub on a phone: the overview as stacked cards, each with fill percentage, remaining grams and metres, drybox and a weigh button."
                 loading="lazy"
               />
               <figcaption>
@@ -394,7 +623,7 @@
           <a href="https://filahub.weblabor.io">filahub.weblabor.io</a>
           <a href="https://github.com/GrimbiXcode/filahub">GitHub</a>
           <a href="https://github.com/GrimbiXcode/filahub#readme">README</a>
-          <a href="https://github.com/GrimbiXcode/filahub/releases">Releases</a>
+          <a href="https://filahub.weblabor.io/neuerungen">What's new</a>
           <a href="https://github.com/GrimbiXcode/filahub/blob/main/LICENSE"
             >AGPL-3.0</a
           >
