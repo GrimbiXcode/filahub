@@ -85,6 +85,67 @@ export function roleAllows(
 }
 
 // ---------------------------------------------------------------------------
+// Wägungen korrigieren
+// ---------------------------------------------------------------------------
+
+/**
+ * Wie lange eine frisch erfasste Wägung noch als **Korrektur** gilt.
+ *
+ * Der Korrekturfall dauert Sekunden: Waage ablesen, Zahl eintippen, Fehler
+ * sehen. Eine Viertelstunde deckt zusätzlich die Unterbrechung ab – Telefon,
+ * Kollege kommt dazwischen – und ist kurz genug, dass eine Schicht später nichts
+ * mehr löschbar ist.
+ */
+export const WEIGHING_CORRECTION_MINUTES = 15;
+
+/**
+ * Darf diese Stufe **diese** Wägung löschen?
+ *
+ * Die Regel, die `weigher` von der Zerstörung der Aufzeichnung trennt, ohne ihm
+ * die Korrektur zu nehmen – und der Grund, warum sie hier steht und nicht im
+ * Router: Server und Oberfläche rufen dieselbe Funktion auf. Zwei Fassungen
+ * derselben Bedingung liefen beim nächsten Umbau auseinander, und das Ergebnis
+ * wäre ein Knopf, der `FORBIDDEN` liefert, oder einer, der fehlt, obwohl er
+ * dürfte.
+ *
+ * **Das Problem, das sie löst:** `weigher` ist die Stufe, die man freigebig
+ * vergibt (siehe `addWeighing` in `api/materialRouter.ts`). Sie erlaubte bis
+ * 2.5.0 auch, jede Wägung jedes Materials der Organisation zu löschen – in
+ * Schleife also die gesamte Wägungsgeschichte, unwiderruflich und ohne Spur,
+ * weil Wiegen bewusst nicht protokolliert wird. Zum Vergleich: `material.delete`
+ * verlangt `editor` und zerstört weniger.
+ *
+ * **Warum nicht einfach `editor` verlangen?** Weil der Alltagsfall die
+ * vertippte Zahl ist. Bräuchte es dafür jedes Mal jemand anderen, wäre `weigher`
+ * in einer Werkstatt unbrauchbar.
+ *
+ * Beide Bedingungen zusammen ergeben genau den Korrekturfall:
+ *
+ * - **Zuletzt erfasst.** Ein Eintrag mitten aus dem Verlauf ist nie eine
+ *   Korrektur, sondern ein Eingriff in die Aufzeichnung. Allein trüge die
+ *   Bedingung allerdings nichts – wer die letzte löscht, macht die vorletzte zur
+ *   letzten und käme in Schleife doch durch. Erst das Zeitfenster schließt das.
+ * - **Frisch.** Das ist der tragende Teil: Geschichte ist per Definition alt.
+ *
+ * `now` als Parameter, damit die Grenze ohne Uhr prüfbar ist.
+ */
+export function mayDeleteWeighing(
+  role: OrganizationRole,
+  weighing: { id: number; createdAt: Date },
+  latestWeighingId: number,
+  now: Date = new Date()
+): boolean {
+  // Wer Material löschen darf, darf erst recht eine einzelne Wägung entfernen.
+  if (roleAllows(role, "editor")) return true;
+  if (!roleAllows(role, "weigher")) return false;
+  if (weighing.id !== latestWeighingId) return false;
+  return (
+    now.getTime() - weighing.createdAt.getTime() <
+    WEIGHING_CORRECTION_MINUTES * 60_000
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Beitrittscode
 // ---------------------------------------------------------------------------
 

@@ -364,15 +364,29 @@ required)` in `api/scope.ts` löst die Behauptung aus der Eingabe gegen die
 Die vier Stufen (`contracts/organizations.ts`, `roleAllows` nach dem Vorbild von
 `visibilityAllows`):
 
-| Vorgang                                                                        | Stufe     |
-| ------------------------------------------------------------------------------ | --------- |
-| Bestand, Lager, Gebindearten, Dryboxen ansehen; suchen                         | `viewer`  |
-| Wägung erfassen (**abbuchen**)                                                 | `weigher` |
-| Material anlegen/ändern/löschen, Import, Gebindearten und Dryboxen pflegen     | `editor`  |
-| Lager anlegen/ändern/löschen, Mitglieder und Stufen, Beitrittscode, Org selbst | `admin`   |
+| Vorgang                                                                                             | Stufe     |
+| --------------------------------------------------------------------------------------------------- | --------- |
+| Bestand, Lager, Gebindearten, Dryboxen ansehen; suchen                                              | `viewer`  |
+| Wägung erfassen (**abbuchen**); die eigene gerade eben korrigieren                                  | `weigher` |
+| Material anlegen/ändern/löschen, Import, Gebindearten und Dryboxen pflegen; **jede** Wägung löschen | `editor`  |
+| Lager anlegen/ändern/löschen, Mitglieder und Stufen, Beitrittscode, Org selbst                      | `admin`   |
 
 Ein Lager ist Struktur und sein Löschen wirkt auf alle – deshalb `admin`, obwohl
 das Material darin schon `editor` darf.
+
+**`weigher` darf korrigieren, nicht aufräumen.** Eine Wägung löschen darf diese
+Stufe nur, wenn es die **zuletzt erfasste** des Materials ist und ihr
+`createdAt` weniger als `WEIGHING_CORRECTION_MINUTES` (15) zurückliegt.
+Andernfalls braucht es `editor`. Der Grund: `weigher` ist die Stufe, die man
+freigebig vergibt – ohne diese Grenze könnte sie die gesamte Wägungsgeschichte
+der Organisation abräumen, unwiderruflich und ohne Spur, weil Wiegen bewusst
+nicht protokolliert wird. Die Regel steht als `mayDeleteWeighing` in
+`contracts/organizations.ts` und wird von **beiden** Seiten aufgerufen, vom
+Riegel in `material.deleteWeighing` und von der Sichtbarkeit des Knopfes in
+`MaterialDetail.tsx`; zwei Fassungen liefen auseinander. Verglichen wird
+`createdAt` und nicht `weighedAt` – letzteres ist eine Eingabe und ließe sich
+auf „jetzt“ setzen. „Zuletzt erfasst“ heißt höchste `id`, nicht jüngstes
+`weighedAt`.
 
 **`admin` heißt zweierlei, und die beiden haben nichts miteinander zu tun.**
 `users.role = "admin"` ist der Betreiber der Instanz (Preset-Katalog,

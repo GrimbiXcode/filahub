@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { roleAllows } from "@contracts/organizations";
+import { mayDeleteWeighing, roleAllows } from "@contracts/organizations";
 import { useNavigate, useParams } from "react-router";
 import { Archive, ArrowLeft, Disc3, Pencil, Scale, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -111,6 +111,15 @@ export default function MaterialDetail() {
   // Für die Dialoge (erwarten MaterialOverview ohne weighings-Liste)
   const { weighings, ...overview } = material;
   const asOverview = overview as MaterialOverview;
+
+  /*
+    Die zuletzt **erfasste** Wägung – höchste `id`, nicht die erste der Liste:
+    Die ist nach `weighedAt` sortiert, und eine nachgetragene Wägung mit altem
+    Datum stünde dort weiter unten. Entschieden wird ohnehin serverseitig
+    (`material.deleteWeighing`); hier geht es nur darum, keinen Knopf zu zeigen,
+    der `FORBIDDEN` liefert.
+  */
+  const latestWeighingId = weighings.reduce((max, w) => Math.max(max, w.id), 0);
 
   return (
     <AuthLayout>
@@ -355,14 +364,17 @@ export default function MaterialDetail() {
               <CardTitle className="text-base">
                 {t.materialDetail.history}
               </CardTitle>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => openWeighing(asOverview)}
-              >
-                <Scale className="mr-2 h-3.5 w-3.5" />{" "}
-                {t.materialDetail.newWeighing}
-              </Button>
+              {/* Ausgeblendet statt deaktiviert – siehe `Lager.tsx`. */}
+              {roleAllows(role, "weigher") && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openWeighing(asOverview)}
+                >
+                  <Scale className="mr-2 h-3.5 w-3.5" />{" "}
+                  {t.materialDetail.newWeighing}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {weighings.length === 0 ? (
@@ -399,14 +411,16 @@ export default function MaterialDetail() {
                             </div>
                           )}
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          aria-label={t.materialDetail.deleteWeighing}
-                          onClick={() => setDeletingWeighing(w.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                        {mayDeleteWeighing(role, w, latestWeighingId) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={t.materialDetail.deleteWeighing}
+                            onClick={() => setDeletingWeighing(w.id)}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        )}
                       </li>
                     ))}
                   </ul>
@@ -438,14 +452,16 @@ export default function MaterialDetail() {
                               {w.note ?? "–"}
                             </TableCell>
                             <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={t.materialDetail.deleteWeighing}
-                                onClick={() => setDeletingWeighing(w.id)}
-                              >
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                              </Button>
+                              {mayDeleteWeighing(role, w, latestWeighingId) && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  aria-label={t.materialDetail.deleteWeighing}
+                                  onClick={() => setDeletingWeighing(w.id)}
+                                >
+                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                </Button>
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}

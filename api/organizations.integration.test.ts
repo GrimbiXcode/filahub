@@ -13,7 +13,10 @@
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import type { OrganizationRole } from "@contracts/organizations";
+import {
+  WEIGHING_CORRECTION_MINUTES,
+  type OrganizationRole,
+} from "@contracts/organizations";
 import { getDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import * as schema from "@db/schema";
@@ -647,6 +650,170 @@ describe("Die Regel vom letzten Administrator", () => {
     await expect(
       callerFor(boss).organization.leave({ organizationId })
     ).resolves.toEqual({ ok: true });
+  });
+});
+
+/**
+ * Korrigieren, nicht aufräumen.
+ *
+ * `weigher` ist die Stufe, die man freigebig vergibt – und sie erlaubte bis
+ * 2.5.0, jede Wägung jedes Materials zu löschen. In Schleife war damit die
+ * gesamte Wägungsgeschichte weg: unwiderruflich, und ohne Spur, weil Wiegen
+ * bewusst nicht protokolliert wird.
+ *
+ * Geprüft wird hier durch die echte Middleware, weil die Regel aus zwei Teilen
+ * besteht, die getrennt liegen: die Stufe aus `resolveScope` und die Bedingung
+ * aus `mayDeleteWeighing`. Der Funktionstest daneben
+ * (`api/weighingCorrection.test.ts`) prüft die Bedingung allein.
+ */
+describe("Wägungen korrigieren", () => {
+  /** Ein Org-Material mit einer Wägung; gibt beide IDs zurück. */
+  async function seedWeighing(organizationId: number) {
+    const lager = await callerFor(boss).lager.create({
+      organizationId,
+      name: "Filament",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
+    const material = await callerFor(boss).material.create({
+      organizationId,
+      lagerId: lager!.id,
+      name: "PLA",
+      materialType: "PLA",
+      nominalWeight: 1000,
+    });
+    const weighing = await callerFor(boss).material.addWeighing({
+      organizationId,
+      materialId: material.id,
+      grossWeight: 1200,
+    });
+    return { materialId: material.id, weighingId: weighing!.id };
+  }
+
+  /** Schiebt `createdAt` zurück – der einzige Weg, „alt" zu erzeugen. */
+  async function backdate(weighingId: number, minutes: number) {
+    await db()
+      .update(schema.weighings)
+      .set({ createdAt: new Date(Date.now() - minutes * 60_000) })
+      .where(eq(schema.weighings.id, weighingId));
+  }
+
+  it("lässt `weigher` die eben erfasste Wägung löschen", async () => {
+    const organizationId = await makeOrg();
+    const { weighingId } = await seedWeighing(organizationId);
+    await joinAs(organizationId, "weigher");
+
+    await expect(
+      callerFor(member).material.deleteWeighing({
+        organizationId,
+        id: weighingId,
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  it("verwehrt `weigher` eine Wägung außerhalb des Fensters", async () => {
+    const organizationId = await makeOrg();
+    const { weighingId } = await seedWeighing(organizationId);
+    await backdate(weighingId, WEIGHING_CORRECTION_MINUTES + 5);
+    await joinAs(organizationId, "weigher");
+
+    await expect(
+      callerFor(member).material.deleteWeighing({
+        organizationId,
+        id: weighingId,
+      })
+    ).rejects.toThrow(/älter als/);
+
+    // Und sie steht noch.
+    const detail = await callerFor(member).material.byId({
+      organizationId,
+      id: (await callerFor(member).material.list({ organizationId }))[0].id,
+    });
+    expect(detail!.weighings).toHaveLength(1);
+  });
+
+  /*
+    Der Fall, der die Schleife schließt: Wer die letzte löschte, machte die
+    vorletzte zur letzten. Sie ist dann aber alt – und zusätzlich greift diese
+    Bedingung schon vorher.
+  */
+  it("verwehrt `weigher` eine Wägung mitten aus dem Verlauf", async () => {
+    const organizationId = await makeOrg();
+    const { materialId, weighingId: erste } =
+      await seedWeighing(organizationId);
+    await callerFor(boss).material.addWeighing({
+      organizationId,
+      materialId,
+      grossWeight: 1100,
+    });
+    await joinAs(organizationId, "weigher");
+
+    // Beide frisch – abgelehnt wird allein, weil `erste` nicht die letzte ist.
+    await expect(
+      callerFor(member).material.deleteWeighing({ organizationId, id: erste })
+    ).rejects.toThrow(/zuletzt erfasste/);
+  });
+
+  it("lässt `editor` auch alte Wägungen löschen", async () => {
+    const organizationId = await makeOrg();
+    const { weighingId } = await seedWeighing(organizationId);
+    await backdate(weighingId, 60 * 24);
+    await joinAs(organizationId, "editor");
+
+    await expect(
+      callerFor(member).material.deleteWeighing({
+        organizationId,
+        id: weighingId,
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  /*
+    Im eigenen Bestand gilt man als `admin` (`scopeRole`). Die Regel darf dort
+    nicht greifen – sonst nähme dieses Feature persönlichen Konten etwas weg,
+    das sie seit jeher haben.
+  */
+  it("lässt den persönlichen Bereich unberührt", async () => {
+    const lager = await callerFor(boss).lager.create({
+      ...PERSONAL,
+      name: "Privat",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
+    const material = await callerFor(boss).material.create({
+      ...PERSONAL,
+      lagerId: lager!.id,
+      name: "PETG",
+      materialType: "PETG",
+      nominalWeight: 1000,
+    });
+    const weighing = await callerFor(boss).material.addWeighing({
+      ...PERSONAL,
+      materialId: material.id,
+      grossWeight: 1200,
+    });
+    await backdate(weighing!.id, 60 * 24);
+
+    await expect(
+      callerFor(boss).material.deleteWeighing({ ...PERSONAL, id: weighing!.id })
+    ).resolves.toBeTruthy();
+  });
+
+  /*
+    Ein `viewer` scheitert weiterhin an der Stufe und nicht an der
+    Korrekturregel – die Meldung muss die von `resolveScope` sein.
+  */
+  it("weist `viewer` schon an der Stufe ab", async () => {
+    const organizationId = await makeOrg();
+    const { weighingId } = await seedWeighing(organizationId);
+    await joinAs(organizationId, "viewer");
+
+    await expect(
+      callerFor(member).material.deleteWeighing({
+        organizationId,
+        id: weighingId,
+      })
+    ).rejects.toThrow(/Rechte/);
   });
 });
 

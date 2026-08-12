@@ -521,6 +521,29 @@ export async function deleteWeighing(id: number) {
   await getDb().delete(weighings).where(eq(weighings.id, id));
 }
 
+/**
+ * Die zuletzt **erfasste** Wägung eines Materials, oder `null`.
+ *
+ * Sortiert nach `id` und nicht nach `weighedAt`: Gefragt ist, was zuletzt
+ * eingetragen wurde, nicht was zuletzt gewogen wurde. Eine nachgetragene Wägung
+ * mit altem Datum ist trotzdem die zuletzt erfasste – und genau sie will jemand
+ * korrigieren, der sich gerade vertippt hat.
+ *
+ * Grundlage von `mayDeleteWeighing` (`contracts/organizations.ts`). Nutzt den
+ * vorhandenen Index `weighings_material_idx`.
+ */
+export async function findLatestWeighingId(
+  materialId: number
+): Promise<number | null> {
+  const rows = await getDb()
+    .select({ id: weighings.id })
+    .from(weighings)
+    .where(eq(weighings.materialId, materialId))
+    .orderBy(desc(weighings.id))
+    .limit(1);
+  return rows.at(0)?.id ?? null;
+}
+
 /** Prüft, ob ein Material zum Bereich gehört. */
 export async function materialInScope(scope: Scope, materialId: number) {
   const row = await getDb()

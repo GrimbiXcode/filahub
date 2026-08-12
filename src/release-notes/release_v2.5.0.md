@@ -40,6 +40,14 @@ and the button appears on their next visit.
 Creating a store is a manage-level action even though adding material is not. A
 store is structure — deleting one affects everyone.
 
+Weighing has one wrinkle worth knowing. Misread the scale and you can delete the
+weigh-in you just entered — that is the everyday correction, and needing a
+colleague for it would make the weigh level useless. What you cannot do at that
+level is reach back into the history: only the most recent entry counts, and
+only for fifteen minutes. After that, removing a weigh-in takes the edit level.
+A weighing history is the record of how the stock got to where it is, and it is
+not something a slip of the hand should be able to erase.
+
 ## Two ways in
 
 **A join code** (`ORG-…`) that anyone can enter to join straight away. You

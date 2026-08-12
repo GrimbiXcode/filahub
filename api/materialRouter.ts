@@ -1,13 +1,19 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { importManyInputSchema } from "@contracts/import";
+import {
+  WEIGHING_CORRECTION_MINUTES,
+  mayDeleteWeighing,
+  roleAllows,
+} from "@contracts/organizations";
 import { createRouter, authedQuery } from "./middleware";
-import { resolveScope, scopeInput, type Scope } from "./scope";
+import { resolveScope, scopeInput, scopeRole, type Scope } from "./scope";
 import {
   addWeighing,
   createMaterial,
   deleteMaterial,
   deleteWeighing,
+  findLatestWeighingId,
   findMaterialInScope,
   findMaterialsInScope,
   findRecentWeighings,
@@ -335,6 +341,34 @@ export const materialRouter = createRouter({
           code: "NOT_FOUND",
           message: "Wägung nicht gefunden",
         });
+      }
+      /*
+        Ab hier steht fest, dass die Wägung im Bereich liegt – die beiden
+        Meldungen unten verraten also nichts, was der Aufrufer nicht ohnehin
+        sieht. Deshalb dürfen sie den Grund nennen, statt „nicht gefunden“ zu
+        behaupten.
+
+        Ein `weigher` darf **korrigieren, nicht aufräumen**: die zuletzt
+        erfasste Wägung, solange sie frisch ist. Die Regel selbst steht in
+        `contracts/organizations.ts`, weil die Oberfläche dieselbe braucht, um
+        den Knopf auszublenden.
+      */
+      const role = scopeRole(scope);
+      if (!roleAllows(role, "editor")) {
+        const latestId = await findLatestWeighingId(weighing.materialId);
+        if (weighing.id !== latestId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Nur die zuletzt erfasste Wägung lässt sich so entfernen. Ältere Einträge kann bereinigen, wer Material erfassen darf.",
+          });
+        }
+        if (!mayDeleteWeighing(role, weighing, latestId)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Diese Wägung ist älter als ${WEIGHING_CORRECTION_MINUTES} Minuten. Nur wer Material erfassen darf, kann sie noch löschen.`,
+          });
+        }
       }
       await deleteWeighing(input.id);
       return { ok: true };

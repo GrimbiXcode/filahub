@@ -132,3 +132,20 @@ export function scopeOwner(scope: Scope): {
 export function scopeOrganizationId(scope: Scope): number | null {
   return scope.kind === "organization" ? scope.organizationId : null;
 }
+
+/**
+ * Die eigene Stufe im Bereich – im persönlichen `admin`.
+ *
+ * Im eigenen Bestand darf man alles, und ein Wert, der einfach stimmt, ist die
+ * bessere Antwort als eine Sonderbehandlung an jeder Aufrufstelle. Genau
+ * dieselbe Regel steht im Client in `useScopeRole` (`src/lib/activeScope.ts`);
+ * beide Seiten müssen sie gleich beantworten, sonst zeigt die Oberfläche etwas
+ * anderes, als der Server zulässt.
+ *
+ * Gebraucht wird das dort, wo die Stufe **nach** `resolveScope` noch einmal
+ * genauer befragt wird – die Prozedur lässt `weigher` herein, die Entscheidung
+ * hängt aber daran, ob es für `editor` reicht.
+ */
+export function scopeRole(scope: Scope): OrganizationRole {
+  return scope.kind === "personal" ? "admin" : scope.role;
+}
