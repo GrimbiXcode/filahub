@@ -13,11 +13,22 @@ import { useSyncExternalStore } from "react";
  * damit umgehen können, statt auf einen Wert zu warten.
  */
 
-const STORAGE_KEY = "active-lager";
+/**
+ * Der Schlüssel hängt seit 2.5.0 am **Bereich**: In einer Organisation liegen
+ * andere Lager als privat, und eine gemeinsame Merkstelle zeigte nach dem
+ * Wechsel auf ein Lager der anderen Seite. Gepflegt wird er von
+ * `setActiveOrganizationId` (`src/lib/activeScope.ts`) – hier steht nur, wie er
+ * aussieht und was beim Umschalten passiert.
+ */
+let scopeKey = "personal";
+
+function storageKey(): string {
+  return `active-lager:${scopeKey}`;
+}
 
 function readStored(): number | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey());
     if (!raw) return null;
     const parsed = Number.parseInt(raw, 10);
     return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
@@ -35,6 +46,20 @@ function emit() {
   listeners.forEach(listener => listener());
 }
 
+/**
+ * Wechselt den Bereich und liest das dort zuletzt gewählte Lager ein.
+ *
+ * Gemeldet wird über dasselbe `emit()`: Der Wechsel ist für jede Seite, die
+ * `useActiveLagerId` liest, nicht von einer Auswahl von Hand zu unterscheiden –
+ * und soll es auch nicht sein.
+ */
+export function setScopeKey(next: string) {
+  if (scopeKey === next) return;
+  scopeKey = next;
+  activeLagerId = readStored();
+  emit();
+}
+
 export function getActiveLagerId(): number | null {
   return activeLagerId;
 }
@@ -43,8 +68,8 @@ export function setActiveLagerId(id: number | null) {
   if (activeLagerId === id) return;
   activeLagerId = id;
   try {
-    if (id == null) localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, String(id));
+    if (id == null) localStorage.removeItem(storageKey());
+    else localStorage.setItem(storageKey(), String(id));
   } catch {
     // Siehe `readStored` – die Auswahl gilt dann nur für diese Sitzung.
   }

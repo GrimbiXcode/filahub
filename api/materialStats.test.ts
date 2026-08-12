@@ -10,6 +10,7 @@ function material(
   return {
     id: 1,
     userId: 1,
+    organizationId: null,
     name: "Testfilament",
     identifier: null,
     materialType: "PLA",
@@ -39,6 +40,7 @@ function material(
     lager: {
       id: 1,
       userId: 1,
+      organizationId: null,
       name: "Mein Lager",
       materialKind: "filament",
       filamentDiameterUm: 1750,
@@ -53,6 +55,7 @@ function material(
 const ownContainer = {
   id: 7,
   userId: 1,
+  organizationId: null,
   name: "Kunststoffspule 1 kg",
   manufacturer: "eSun",
   form: "rolle" as const,
@@ -116,6 +119,7 @@ const presetVariant = {
 const box = {
   id: 3,
   userId: 1,
+  organizationId: null,
   name: "Drybox A",
   location: null,
   tareWeight: 500,
@@ -239,6 +243,7 @@ describe("computeMaterialStats", () => {
         lager: {
           id: 1,
           userId: 1,
+          organizationId: null,
           name: "Pulver",
           materialKind: "powder",
           filamentDiameterUm: null,

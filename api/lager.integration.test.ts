@@ -20,6 +20,16 @@ import { callerFor, closeDb, resetSchema } from "./test/integration-db";
 
 const db = () => getDb();
 
+/**
+ * Der persönliche Bereich.
+ *
+ * Seit 2.5.0 trägt **jede** bereichsbezogene Eingabe das Feld – Pflicht und
+ * nicht optional, damit `{}` und `{ organizationId: undefined }` nicht auf
+ * denselben Query-Cache-Schlüssel fallen. In den Tests steht es ausgeschrieben
+ * statt in einem Wrapper versteckt: Es ist Teil des Vertrags, den sie prüfen.
+ */
+const PERSONAL = { organizationId: null } as const;
+
 let anna: User;
 let bert: User;
 
@@ -42,6 +52,7 @@ beforeEach(async () => {
 /** Ein Filament-Lager mit 1,75 mm – der Normalfall. */
 function filamentLager(name = "Filament") {
   return {
+    ...PERSONAL,
     name,
     materialKind: "filament" as const,
     // `as const` auch hier: Der Router nimmt die Literal-Union, nicht `number`.
@@ -56,13 +67,14 @@ describe("Lager anlegen und ändern", () => {
     expect(created?.materialKind).toBe("filament");
     expect(created?.filamentDiameterUm).toBe(1750);
 
-    const list = await callerFor(anna).lager.list();
+    const list = await callerFor(anna).lager.list(PERSONAL);
     expect(list).toHaveLength(1);
   });
 
   it("verlangt beim Filament eine Stärke", async () => {
     await expect(
       callerFor(anna).lager.create({
+        ...PERSONAL,
         name: "Ohne Stärke",
         materialKind: "filament",
       })
@@ -77,6 +89,7 @@ describe("Lager anlegen und ändern", () => {
     for (const kind of ["resin", "powder"] as const) {
       await expect(
         callerFor(anna).lager.create({
+          ...PERSONAL,
           name: `Mit Stärke ${kind}`,
           materialKind: kind,
           filamentDiameterUm: 1750,
@@ -87,11 +100,13 @@ describe("Lager anlegen und ändern", () => {
 
   it("legt Harz und Pulver ohne Stärke an", async () => {
     const resin = await callerFor(anna).lager.create({
+      ...PERSONAL,
       name: "Harz",
       materialKind: "resin",
     });
     expect(resin?.filamentDiameterUm).toBeNull();
     const powder = await callerFor(anna).lager.create({
+      ...PERSONAL,
       name: "Pulver",
       materialKind: "powder",
     });
@@ -100,9 +115,17 @@ describe("Lager anlegen und ändern", () => {
 
   it("hält Namen je Benutzer eindeutig", async () => {
     await callerFor(anna).lager.create(filamentLager("Doppelt"));
+    /*
+      Geprüft wird die **Meldung**, nicht bloß, dass irgendetwas fliegt. Bis
+      2.4.1 stand hier ein nacktes `rejects.toThrow()` – und genau darunter
+      versteckte sich, dass `isDuplicateLagerName` den Konflikt gar nicht mehr
+      erkannte: Drizzle verpackt den Postgres-Fehler, der Indexname steht am
+      `cause`. Die Lager-Seite zeigte deshalb die rohe Postgres-Meldung samt
+      Constraint-Namen im Toast.
+    */
     await expect(
       callerFor(anna).lager.create(filamentLager("Doppelt"))
-    ).rejects.toThrow();
+    ).rejects.toThrow(/Lager mit diesem Namen gibt es schon/);
     // Bei einem anderen Benutzer ist derselbe Name in Ordnung.
     await expect(
       callerFor(bert).lager.create(filamentLager("Doppelt"))
@@ -116,6 +139,7 @@ describe("Lager anlegen und ändern", () => {
   it("räumt die Stärke beim Wechsel auf Harz ab", async () => {
     const created = await callerFor(anna).lager.create(filamentLager());
     const updated = await callerFor(anna).lager.update({
+      ...PERSONAL,
       id: created!.id,
       materialKind: "resin",
     });
@@ -125,11 +149,13 @@ describe("Lager anlegen und ändern", () => {
 
   it("verlangt beim Wechsel auf Filament eine Stärke", async () => {
     const created = await callerFor(anna).lager.create({
+      ...PERSONAL,
       name: "Harz",
       materialKind: "resin",
     });
     await expect(
       callerFor(anna).lager.update({
+        ...PERSONAL,
         id: created!.id,
         materialKind: "filament",
       })
@@ -140,12 +166,19 @@ describe("Lager anlegen und ändern", () => {
     const created = await callerFor(anna).lager.create(filamentLager());
     // `NOT_FOUND`, nicht `FORBIDDEN` – die Existenz soll nicht verraten werden.
     await expect(
-      callerFor(bert).lager.update({ id: created!.id, name: "Gekapert" })
+      callerFor(bert).lager.update({
+        ...PERSONAL,
+        id: created!.id,
+        name: "Gekapert",
+      })
     ).rejects.toThrow(/nicht gefunden/);
     await expect(
-      callerFor(bert).lager.delete({ id: created!.id })
+      callerFor(bert).lager.delete({
+        ...PERSONAL,
+        id: created!.id,
+      })
     ).rejects.toThrow(/nicht gefunden/);
-    expect(await callerFor(bert).lager.list()).toEqual([]);
+    expect(await callerFor(bert).lager.list(PERSONAL)).toEqual([]);
   });
 });
 
@@ -155,7 +188,7 @@ describe("Obergrenze", () => {
     for (let i = 0; i < MAX_LAGER_PER_USER; i++) {
       await caller.lager.create(filamentLager(`Lager ${i + 1}`));
     }
-    expect(await caller.lager.list()).toHaveLength(MAX_LAGER_PER_USER);
+    expect(await caller.lager.list(PERSONAL)).toHaveLength(MAX_LAGER_PER_USER);
     await expect(
       caller.lager.create(filamentLager("Eins zu viel"))
     ).rejects.toThrow(new RegExp(`${MAX_LAGER_PER_USER}`));
@@ -177,7 +210,10 @@ describe("Obergrenze", () => {
     for (let i = 0; i < MAX_LAGER_PER_USER; i++) {
       created.push(await caller.lager.create(filamentLager(`Lager ${i}`)));
     }
-    await caller.lager.delete({ id: created[0]!.id });
+    await caller.lager.delete({
+      ...PERSONAL,
+      id: created[0]!.id,
+    });
     await expect(
       caller.lager.create(filamentLager("Neu"))
     ).resolves.toBeTruthy();
@@ -189,23 +225,32 @@ describe("Löschen", () => {
     const caller = callerFor(anna);
     const created = await caller.lager.create(filamentLager());
     await caller.material.create({
+      ...PERSONAL,
       lagerId: created!.id,
       name: "PLA",
       materialType: "PLA",
       nominalWeight: 1000,
     });
-    await expect(caller.lager.delete({ id: created!.id })).rejects.toThrow(
-      /noch 1 Material/
-    );
+    await expect(
+      caller.lager.delete({
+        ...PERSONAL,
+        id: created!.id,
+      })
+    ).rejects.toThrow(/noch 1 Material/);
   });
 
   it("löscht ein leeres Lager", async () => {
     const caller = callerFor(anna);
     const created = await caller.lager.create(filamentLager());
-    await expect(caller.lager.delete({ id: created!.id })).resolves.toEqual({
+    await expect(
+      caller.lager.delete({
+        ...PERSONAL,
+        id: created!.id,
+      })
+    ).resolves.toEqual({
       ok: true,
     });
-    expect(await caller.lager.list()).toEqual([]);
+    expect(await caller.lager.list(PERSONAL)).toEqual([]);
   });
 
   /*
@@ -215,13 +260,17 @@ describe("Löschen", () => {
   it("verrät die Belegung eines fremden Lagers nicht", async () => {
     const created = await callerFor(anna).lager.create(filamentLager());
     await callerFor(anna).material.create({
+      ...PERSONAL,
       lagerId: created!.id,
       name: "PLA",
       materialType: "PLA",
       nominalWeight: 1000,
     });
     await expect(
-      callerFor(bert).lager.delete({ id: created!.id })
+      callerFor(bert).lager.delete({
+        ...PERSONAL,
+        id: created!.id,
+      })
     ).rejects.toThrow(/nicht gefunden/);
   });
 
@@ -234,12 +283,14 @@ describe("Löschen", () => {
   */
   it("verrät die Belegung einer fremden Gebindeart nicht", async () => {
     const own = await callerFor(anna).containerType.create({
+      ...PERSONAL,
       name: "Kartonrolle",
       form: "rolle",
       tareWeight: 140,
     });
     const annasLager = await callerFor(anna).lager.create(filamentLager());
     await callerFor(anna).material.create({
+      ...PERSONAL,
       lagerId: annasLager!.id,
       name: "PLA",
       materialType: "PLA",
@@ -247,17 +298,24 @@ describe("Löschen", () => {
       containerTypeId: own!.id,
     });
     await expect(
-      callerFor(bert).containerType.delete({ id: own!.id })
+      callerFor(bert).containerType.delete({
+        ...PERSONAL,
+        id: own!.id,
+      })
     ).rejects.toThrow(/nicht gefunden/);
   });
 
   it("verrät die Belegung einer fremden Drybox nicht", async () => {
     const own = await callerFor(anna).storageBox.create({
+      ...PERSONAL,
       name: "Drybox 1",
       tareWeight: 800,
     });
     await expect(
-      callerFor(bert).storageBox.delete({ id: own!.id })
+      callerFor(bert).storageBox.delete({
+        ...PERSONAL,
+        id: own!.id,
+      })
     ).rejects.toThrow(/nicht gefunden/);
   });
 });
@@ -272,31 +330,45 @@ describe("Fremde Zeilen bleiben unsichtbar", () => {
   it("gibt bei `lager.update` auf ein fremdes Lager nichts heraus", async () => {
     const annas = await callerFor(anna).lager.create(filamentLager("Annas"));
     await expect(
-      callerFor(bert).lager.update({ id: annas!.id, notes: "x" })
+      callerFor(bert).lager.update({
+        ...PERSONAL,
+        id: annas!.id,
+        notes: "x",
+      })
     ).rejects.toThrow(/nicht gefunden/);
   });
 
   it("gibt bei `containerType.update` auf eine fremde Zeile nichts heraus", async () => {
     const annas = await callerFor(anna).containerType.create({
+      ...PERSONAL,
       name: "Annas Kartonrolle",
       form: "rolle",
       tareWeight: 140,
     });
     await expect(
-      callerFor(bert).containerType.update({ id: annas!.id, tareWeight: 250 })
+      callerFor(bert).containerType.update({
+        ...PERSONAL,
+        id: annas!.id,
+        tareWeight: 250,
+      })
     ).rejects.toThrow(/nicht gefunden/);
     // Und die Zeile ist unverändert.
-    const [mine] = await callerFor(anna).containerType.list();
+    const [mine] = await callerFor(anna).containerType.list(PERSONAL);
     expect(mine.tareWeight).toBe(140);
   });
 
   it("gibt bei `storageBox.update` auf eine fremde Zeile nichts heraus", async () => {
     const annas = await callerFor(anna).storageBox.create({
+      ...PERSONAL,
       name: "Annas Drybox",
       tareWeight: 800,
     });
     await expect(
-      callerFor(bert).storageBox.update({ id: annas!.id, tareWeight: 1 })
+      callerFor(bert).storageBox.update({
+        ...PERSONAL,
+        id: annas!.id,
+        tareWeight: 1,
+      })
     ).rejects.toThrow(/nicht gefunden/);
   });
 });
@@ -306,6 +378,7 @@ describe("Material und Lager", () => {
     const annas = await callerFor(anna).lager.create(filamentLager());
     await expect(
       callerFor(bert).material.create({
+        ...PERSONAL,
         lagerId: annas!.id,
         name: "Untergeschoben",
         materialType: "PLA",
@@ -318,26 +391,43 @@ describe("Material und Lager", () => {
     const caller = callerFor(anna);
     const a = await caller.lager.create(filamentLager("A"));
     const b = await caller.lager.create({
+      ...PERSONAL,
       name: "Harz",
       materialKind: "resin",
     });
     await caller.material.create({
+      ...PERSONAL,
       lagerId: a!.id,
       name: "PLA",
       materialType: "PLA",
       nominalWeight: 1000,
     });
     await caller.material.create({
+      ...PERSONAL,
       lagerId: b!.id,
       name: "Standard Resin",
       materialType: "Resin",
       nominalWeight: 1000,
     });
 
-    expect(await caller.material.list({ lagerId: a!.id })).toHaveLength(1);
-    expect(await caller.material.list({ lagerId: b!.id })).toHaveLength(1);
+    expect(
+      await caller.material.list({
+        ...PERSONAL,
+        lagerId: a!.id,
+      })
+    ).toHaveLength(1);
+    expect(
+      await caller.material.list({
+        ...PERSONAL,
+        lagerId: b!.id,
+      })
+    ).toHaveLength(1);
     // Ohne Einschränkung der gesamte Bestand – das braucht die Schnellsuche.
-    expect(await caller.material.list({})).toHaveLength(2);
+    expect(
+      await caller.material.list({
+        ...PERSONAL,
+      })
+    ).toHaveLength(2);
   });
 
   /**
@@ -348,16 +438,19 @@ describe("Material und Lager", () => {
     const caller = callerFor(anna);
     const thin = await caller.lager.create(filamentLager("1,75"));
     const thick = await caller.lager.create({
+      ...PERSONAL,
       name: "2,85",
       materialKind: "filament",
       filamentDiameterUm: 2850,
     });
     const resin = await caller.lager.create({
+      ...PERSONAL,
       name: "Harz",
       materialKind: "resin",
     });
 
     const { id } = await caller.material.create({
+      ...PERSONAL,
       lagerId: thin!.id,
       name: "PLA",
       materialType: "PLA",
@@ -365,35 +458,57 @@ describe("Material und Lager", () => {
     });
 
     // 1 kg PLA bei 1,75 mm ≈ 335 m
-    const inThin = await caller.material.byId({ id });
+    const inThin = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(inThin.secondary?.unit).toBe("m");
     expect(inThin.secondary?.value).toBeCloseTo(335.3, 0);
     expect(inThin.densityUsed).toBe(1240);
 
     // Dasselbe Material in ein 2,85-mm-Lager: rund 126 m
-    await caller.material.update({ id, lagerId: thick!.id });
-    const inThick = await caller.material.byId({ id });
+    await caller.material.update({
+      ...PERSONAL,
+      id,
+      lagerId: thick!.id,
+    });
+    const inThick = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(inThick.secondary?.value).toBeCloseTo(126.4, 0);
 
     // Und im Harzlager wird aus Metern ein Volumen
-    await caller.material.update({ id, lagerId: resin!.id });
-    const inResin = await caller.material.byId({ id });
+    await caller.material.update({
+      ...PERSONAL,
+      id,
+      lagerId: resin!.id,
+    });
+    const inResin = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(inResin.secondary?.unit).toBe("l");
   });
 
   it("liefert beim Pulver keine Zweitanzeige", async () => {
     const caller = callerFor(anna);
     const powder = await caller.lager.create({
+      ...PERSONAL,
       name: "Pulver",
       materialKind: "powder",
     });
     const { id } = await caller.material.create({
+      ...PERSONAL,
       lagerId: powder!.id,
       name: "PA12",
       materialType: "PA12",
       nominalWeight: 5000,
     });
-    const material = await caller.material.byId({ id });
+    const material = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(material.secondary).toBeNull();
     expect(material.densityUsed).toBeNull();
   });
@@ -402,13 +517,17 @@ describe("Material und Lager", () => {
     const caller = callerFor(anna);
     const lager = await caller.lager.create(filamentLager());
     const { id } = await caller.material.create({
+      ...PERSONAL,
       lagerId: lager!.id,
       name: "Exotisch",
       materialType: "PLA",
       nominalWeight: 1000,
       densityGramsPerLiter: 2000,
     });
-    const material = await caller.material.byId({ id });
+    const material = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(material.densityUsed).toBe(2000);
     // Dichter heißt kürzer: 2000 statt 1240 g/l
     expect(material.secondary!.value).toBeLessThan(300);
@@ -418,31 +537,53 @@ describe("Material und Lager", () => {
     const caller = callerFor(anna);
     const lager = await caller.lager.create(filamentLager());
     const { id } = await caller.material.create({
+      ...PERSONAL,
       lagerId: lager!.id,
       name: "PLA Silk",
       materialType: "PLA",
       texture: "Silk",
       nominalWeight: 1000,
     });
-    const material = await caller.material.byId({ id });
+    const material = await caller.material.byId({
+      ...PERSONAL,
+      id,
+    });
     expect(material.texture).toBe("Silk");
     // Auch ein unbekannter Wert muss durchgehen – es ist kein Enum.
-    await caller.material.update({ id, texture: "Sparkle" });
-    expect((await caller.material.byId({ id })).texture).toBe("Sparkle");
+    await caller.material.update({
+      ...PERSONAL,
+      id,
+      texture: "Sparkle",
+    });
+    expect(
+      (
+        await caller.material.byId({
+          ...PERSONAL,
+          id,
+        })
+      ).texture
+    ).toBe("Sparkle");
   });
 
   it("nimmt das Ziel-Lager beim Massenimport an", async () => {
     const caller = callerFor(anna);
     const lager = await caller.lager.create(filamentLager());
     const result = await caller.material.importMany({
+      ...PERSONAL,
       lagerId: lager!.id,
       items: [{ typ: "PLA", nenngewicht: 1000, anzahl: 2 }],
     });
     expect(result.created).toBe(2);
-    expect(await caller.material.list({ lagerId: lager!.id })).toHaveLength(2);
+    expect(
+      await caller.material.list({
+        ...PERSONAL,
+        lagerId: lager!.id,
+      })
+    ).toHaveLength(2);
 
     await expect(
       callerFor(bert).material.importMany({
+        ...PERSONAL,
         lagerId: lager!.id,
         items: [{ typ: "PLA", nenngewicht: 1000, anzahl: 1 }],
       })
@@ -459,6 +600,7 @@ describe("Kontolöschung", () => {
     const caller = callerFor(anna);
     const lager = await caller.lager.create(filamentLager());
     await caller.material.create({
+      ...PERSONAL,
       lagerId: lager!.id,
       name: "PLA",
       materialType: "PLA",
@@ -482,7 +624,7 @@ describe("Kontolöschung", () => {
       })
     ).toEqual([]);
     // Berts Lager bleibt unberührt.
-    expect(await callerFor(bert).lager.list()).toHaveLength(1);
+    expect(await callerFor(bert).lager.list(PERSONAL)).toHaveLength(1);
     expect(bertsLager?.name).toBe("Berts");
   });
 
@@ -513,6 +655,7 @@ describe("Migration 0009 – Backfill", () => {
     const caller = callerFor(anna);
     const lager = await caller.lager.create(filamentLager());
     await caller.material.create({
+      ...PERSONAL,
       lagerId: lager!.id,
       name: "PLA",
       materialType: "PLA",
@@ -530,6 +673,7 @@ describe("Migration 0009 – Backfill", () => {
       const caller = callerFor(user);
       const lager = await caller.lager.create(filamentLager());
       await caller.material.create({
+        ...PERSONAL,
         lagerId: lager!.id,
         name: "PLA",
         materialType: "PLA",

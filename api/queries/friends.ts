@@ -1,4 +1,14 @@
-import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  or,
+} from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import {
   FRIEND_CODE_ALPHABET,
@@ -131,7 +141,14 @@ export async function shareLevelFor(
         )
       )
     )
-    .where(eq(lager.id, lagerId))
+    /*
+      `isNotNull` schließt die Lager von Organisationen aus. Ohne die Bedingung
+      liefe es zwar auch zu – der Freundschafts-Join trifft bei `userId IS NULL`
+      nichts, und `resolveShare` sagt dann `none` –, aber das wäre eine
+      Nebenwirkung und keine Aussage. Freigaben gibt es nur für persönliche
+      Lager; das steht seit 2.5.0 im SQL.
+    */
+    .where(and(eq(lager.id, lagerId), isNotNull(lager.userId)))
     .limit(1);
 
   const row = rows.at(0);
@@ -176,7 +193,15 @@ export async function listVisibleLager(
       status: friendships.status,
     })
     .from(lagerShares)
-    .innerJoin(lager, eq(lager.id, lagerShares.lagerId))
+    /*
+      Nur persönliche Lager – siehe die Begründung in `shareLevelFor`. Die
+      Bedingung steht in der Join-Klausel und nicht im `where`, damit sie
+      zusammen mit der Zuordnung gelesen wird, auf die sie sich bezieht.
+    */
+    .innerJoin(
+      lager,
+      and(eq(lager.id, lagerShares.lagerId), isNotNull(lager.userId))
+    )
     .leftJoin(
       friendships,
       or(
@@ -192,10 +217,20 @@ export async function listVisibleLager(
     )
     .where(eq(lagerShares.sharedWithUserId, viewerId));
 
-  const names = await loadDisplayNames(rows.map(r => r.ownerId));
+  /*
+    Dass `ownerId` hier nie NULL sein kann, sichert die Join-Bedingung oben –
+    der Compiler sieht das nicht. Gefiltert und nicht behauptet (`!`): Käme wider
+    Erwarten doch eine Zeile durch, fehlt sie in der Liste. Bei einer Frage der
+    Sichtbarkeit ist das die sichere Richtung.
+  */
+  const owned = rows.filter(
+    (row): row is typeof row & { ownerId: number } => row.ownerId != null
+  );
+
+  const names = await loadDisplayNames(owned.map(r => r.ownerId));
 
   const result: VisibleLager[] = [];
-  for (const row of rows) {
+  for (const row of owned) {
     const visibility = resolveShare({
       friendshipStatus: row.status,
       shareVisibility: row.visibility,
@@ -381,6 +416,23 @@ export type FriendMaterialRow = {
 };
 
 /**
+ * Verengt eine geladene Materialzeile auf eine mit **menschlichem** Besitzer.
+ *
+ * Seit 2.5.0 ist `materials.userId` nullable: Bei Material einer Organisation
+ * steht dort NULL. Über die Freundes-Pfade kann so eine Zeile nicht kommen –
+ * `listVisibleLager` liefert nur persönliche Lager, und die Abfragen filtern
+ * zusätzlich auf den Besitzer. Der Compiler sieht das nicht, und ein `!` wäre
+ * eine Behauptung an der einen Stelle, an der Behauptungen nichts zu suchen
+ * haben. Gefiltert fehlt im schlimmsten Fall eine Zeile; behauptet stünde
+ * fremdes Material in der Liste eines Freundes.
+ */
+function ownedByPerson<T extends { userId: number | null }>(
+  row: T
+): row is T & { userId: number } {
+  return row.userId != null;
+}
+
+/**
  * Bildet eine geladene Zeile auf das ab, was hinausgehen darf.
  *
  * Rein und exportiert, damit der Unit-Test die Schlüsselmenge prüfen kann, ohne
@@ -490,7 +542,9 @@ export async function findFriendMaterialsForSearch(
     limit,
   });
 
-  return rows.map(row => toFriendMaterial(row, names.get(row.userId) ?? ""));
+  return rows
+    .filter(ownedByPerson)
+    .map(row => toFriendMaterial(row, names.get(row.userId) ?? ""));
 }
 
 /**
@@ -530,7 +584,9 @@ export async function findFriendInventory(
   });
   return {
     ownerName,
-    materials: rows.map(row => toFriendMaterial(row, ownerName)),
+    materials: rows
+      .filter(ownedByPerson)
+      .map(row => toFriendMaterial(row, ownerName)),
   };
 }
 
@@ -550,7 +606,14 @@ export async function findFriendMaterial(
     with: FRIEND_MATERIAL_WITH,
     where: eq(materials.id, materialId),
   });
-  if (!row || row.userId === viewerId) return null;
+  /*
+    `ownedByPerson` schließt Material einer Organisation aus. Als einzige der
+    drei Lesefunktionen lädt diese hier über die blanke Material-ID, ohne
+    Besitzerfilter – die Freigabe wird erst danach geprüft. Ohne die Bedingung
+    liefe es zwar auch zu (`shareLevelFor` sagt bei einem Org-Lager `none`),
+    aber genau hier ist die zweite Sperre billig und richtig.
+  */
+  if (!row || !ownedByPerson(row) || row.userId === viewerId) return null;
 
   /*
     Geprüft wird das **Lager des Materials**, nicht der Besitzer: Wer nur ein
@@ -760,10 +823,16 @@ async function loadReceivedShares(
     .where(
       and(
         eq(lagerShares.sharedWithUserId, viewerId),
+        // Schließt zugleich die Lager von Organisationen aus: `inArray` trifft
+        // NULL nicht. Die Verengung darunter holt nur nach, was das SQL schon
+        // sagt – siehe die Begründung bei `ownedByPerson`.
         inArray(lager.userId, unique)
       )
     );
-  for (const row of rows) {
+  const owned = rows.filter(
+    (row): row is typeof row & { ownerId: number } => row.ownerId != null
+  );
+  for (const row of owned) {
     const current = result.get(row.ownerId);
     // `full` schlägt `search`; die Rangfolge steht allein in `visibilityAllows`.
     if (current == null || visibilityAllows(row.visibility, current))

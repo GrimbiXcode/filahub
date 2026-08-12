@@ -11,9 +11,10 @@ import {
   materialTypesSchema,
 } from "@contracts/presets";
 import { createRouter, authedQuery } from "./middleware";
+import { resolveScope, scopeInput } from "./scope";
 import {
   createContainerType,
-  findContainerTypesByUser,
+  findContainerTypesInScope,
 } from "./queries/filament";
 import {
   closeProposal,
@@ -133,12 +134,24 @@ export const presetRouter = createRouter({
       return { ok: true };
     }),
 
-  /** Preset als eigene, frei editierbare Gebindeart übernehmen */
+  /**
+   * Preset als eigene, frei editierbare Gebindeart übernehmen.
+   *
+   * **Legt im aktiven Bereich an.** Der Katalog selbst bleibt global und
+   * persönlich – was jemand darin ausblendet (`hidden_container_presets`) und
+   * was er einreicht (`preset_proposals`), geht die Organisation nichts an. Die
+   * Kopie ist aber eine `container_types`-Zeile, und die gehört seit 2.5.0
+   * entweder einer Person oder einer Organisation. Legte sie immer persönlich
+   * an, verschwände sie im Org-Kontext beim Kopieren aus der Liste, in die man
+   * gerade schaut – und eine Werkstatt, die genau diese Spule führt, müsste sie
+   * von Hand nachbauen.
+   */
   copyToOwn: authedQuery
     .input(
       z.object({
         variantId: z.number().int().positive(),
         name: z.string().trim().max(255).optional(),
+        ...scopeInput.shape,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -149,8 +162,12 @@ export const presetRouter = createRouter({
           message: "Preset-Variante nicht gefunden",
         });
       }
-      const created = await createContainerType({
-        userId: ctx.user.id,
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      const created = await createContainerType(scope, {
         name:
           input.name?.trim() ||
           buildVariantDisplayName({
@@ -201,8 +218,14 @@ export const presetRouter = createRouter({
       .input(proposeFromContainerTypeInput)
       .mutation(async ({ ctx, input }) => {
         await assertProposalQuota(ctx.user.id);
-        const own = (await findContainerTypesByUser(ctx.user.id)).find(
-          s => s.id === input.containerTypeId
+        /*
+          Vorschläge kommen aus dem persönlichen Bestand. Eine Gebindeart einer
+          Organisation einzureichen hieße, fremde Angaben unter eigenem Namen in
+          den globalen Katalog zu geben.
+        */
+        const personal = await resolveScope(ctx.user.id, null, "editor");
+        const own = (await findContainerTypesInScope(personal)).find(
+          entry => entry.id === input.containerTypeId
         );
         if (!own) {
           throw new TRPCError({

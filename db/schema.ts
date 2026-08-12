@@ -1,9 +1,14 @@
+import { sql } from "drizzle-orm";
 import {
   FRIEND_VISIBILITIES,
   FRIENDSHIP_STATUSES,
   LOAN_REQUEST_STATUSES,
 } from "@contracts/friends";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
+import {
+  ORGANIZATION_INVITATION_STATUSES,
+  ORGANIZATION_ROLES,
+} from "@contracts/organizations";
 import { CONTAINER_MATERIALS, type NameI18n } from "@contracts/presets";
 import {
   pgTable,
@@ -17,9 +22,33 @@ import {
   integer,
   date,
   jsonb,
+  check,
   index,
   unique,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+
+/**
+ * Eigentum einer Fachtabelle: **entweder** ein Mensch **oder** eine
+ * Organisation, nie beides und nie keines.
+ *
+ * Seit 2.5.0 tragen `lager`, `materials`, `container_types` und `storage_boxes`
+ * beide Spalten nullable. Dass genau eine gesetzt ist, garantiert die Datenbank
+ * – sonst wäre die wichtigste Zusicherung des Entwurfs eine Frage der
+ * Disziplin am Schreibort.
+ *
+ * **Warum `userId` bei Org-Zeilen NULL ist und nicht der Ersteller darin
+ * steht:** Jede bestehende Abfrage filtert `userId = ctx.user.id`. Mit NULL
+ * schließen sie Org-Zeilen von selbst aus – eine vergessene Bedingung fällt
+ * damit **zu** und nicht auf. Stünde dort der Ersteller, lieferte jede noch
+ * nicht angepasste Abfrage still fremde Daten in die private Ansicht, ein
+ * ausgetretenes Mitglied behielte Zugriff auf alles selbst Angelegte, und die
+ * Löschkaskade in `api/queries/account.ts` risse beim Kontolöschen den Bestand
+ * der Organisation mit.
+ */
+function ownerXor(name: string) {
+  return check(name, sql`num_nonnulls("userId", "organizationId") = 1`);
+}
 
 /**
  * Zeitstempel-Spalte in UTC.
@@ -143,7 +172,10 @@ export const lager = pgTable(
   "lager",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    userId: bigint("userId", { mode: "number" }).notNull(),
+    /** Eigentümer, wenn es ein persönliches Lager ist – siehe `ownerXor` */
+    userId: bigint("userId", { mode: "number" }),
+    /** Eigentümerin, wenn es ein Lager einer Organisation ist */
+    organizationId: bigint("organizationId", { mode: "number" }),
     name: varchar("name", { length: 255 }).notNull(),
     /** Welche Materialart hier liegt – steuert Felder und Zweiteinheit */
     materialKind: materialKindEnum("materialKind").notNull(),
@@ -171,13 +203,26 @@ export const lager = pgTable(
       .$onUpdate(() => new Date()),
   },
   t => [
+    ownerXor("lager_owner_xor"),
     /*
-      Namen sind je Benutzer eindeutig – zwei Lager „Harz" wären in der Auswahl
-      nicht unterscheidbar. Die Obergrenze von fünf steht dagegen **nicht** hier:
-      Ein Zähler ist als Index nicht ausdrückbar, siehe MAX_LAGER_PER_USER.
+      Namen sind je Eigentümer eindeutig – zwei Lager „Harz" wären in der
+      Auswahl nicht unterscheidbar. Die Obergrenze von fünf bzw. zehn steht
+      dagegen **nicht** hier: Ein Zähler ist als Index nicht ausdrückbar, siehe
+      MAX_LAGER_PER_USER und MAX_LAGER_PER_ORGANIZATION.
+
+      Zwei **partielle** Indizes und nicht mehr ein `unique(userId, name)`: In
+      Postgres sind NULL-Werte in einem Unique-Index voneinander verschieden,
+      der alte Schlüssel ließe also beliebig viele gleichnamige Org-Lager zu.
+      Je Bedingung ein eigener Index sagt genau, was gilt.
     */
-    unique("lager_name_per_user_unique").on(t.userId, t.name),
+    uniqueIndex("lager_name_per_user_unique")
+      .on(t.userId, t.name)
+      .where(sql`"organizationId" IS NULL`),
+    uniqueIndex("lager_name_per_organization_unique")
+      .on(t.organizationId, t.name)
+      .where(sql`"organizationId" IS NOT NULL`),
     index("lager_user_idx").on(t.userId),
+    index("lager_organization_idx").on(t.organizationId),
   ]
 );
 
@@ -195,45 +240,72 @@ export const containerFormEnum = pgEnum("container_form", CONTAINER_FORMS);
  * sich beim Umbenennen nicht geändert – ein Name und ein Leergewicht passen auf
  * jedes Gebinde.
  */
-export const containerTypes = pgTable("container_types", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: bigint("userId", { mode: "number" }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  manufacturer: varchar("manufacturer", { length: 255 }),
-  /**
-   * Form des Gebindes.
-   *
-   * `rolle` als Vorgabe, und die Migration trägt sie für jeden bestehenden
-   * Eintrag ein: Bis 2.2.0 konnte hier nichts anderes stehen, das ist keine
-   * Annahme, sondern der tatsächliche Stand.
-   */
-  form: containerFormEnum("form").default("rolle").notNull(),
-  /** Leergewicht des leeren Gebindes in Gramm */
-  tareWeight: integer("tareWeight").notNull(),
-  /**
-   * Herkunft: Preset-Variante, aus der diese Gebindeart per
-   * „Kopieren & anpassen“ entstanden ist (nur zur Nachverfolgung –
-   * spätere Änderungen am Preset wirken sich nicht mehr aus).
-   */
-  sourceVariantId: bigint("sourceVariantId", { mode: "number" }),
-  notes: text("notes"),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-});
+export const containerTypes = pgTable(
+  "container_types",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Eigentümer bzw. Organisation – genau eines von beiden, siehe `ownerXor` */
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    manufacturer: varchar("manufacturer", { length: 255 }),
+    /**
+     * Form des Gebindes.
+     *
+     * `rolle` als Vorgabe, und die Migration trägt sie für jeden bestehenden
+     * Eintrag ein: Bis 2.2.0 konnte hier nichts anderes stehen, das ist keine
+     * Annahme, sondern der tatsächliche Stand.
+     */
+    form: containerFormEnum("form").default("rolle").notNull(),
+    /** Leergewicht des leeren Gebindes in Gramm */
+    tareWeight: integer("tareWeight").notNull(),
+    /**
+     * Herkunft: Preset-Variante, aus der diese Gebindeart per
+     * „Kopieren & anpassen“ entstanden ist (nur zur Nachverfolgung –
+     * spätere Änderungen am Preset wirken sich nicht mehr aus).
+     */
+    sourceVariantId: bigint("sourceVariantId", { mode: "number" }),
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    ownerXor("container_types_owner_xor"),
+    index("container_types_user_idx").on(t.userId),
+    index("container_types_organization_idx").on(t.organizationId),
+  ]
+);
 
 export type ContainerType = typeof containerTypes.$inferSelect;
 export type InsertContainerType = typeof containerTypes.$inferInsert;
 
-/** Lagerbox / Drybox mit hinterlegtem Leergewicht (Tara) */
-export const storageBoxes = pgTable("storage_boxes", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  userId: bigint("userId", { mode: "number" }).notNull(),
-  name: varchar("name", { length: 255 }).notNull(),
-  location: varchar("location", { length: 255 }),
-  /** Leergewicht der Box in Gramm */
-  tareWeight: integer("tareWeight").notNull(),
-  notes: text("notes"),
-  createdAt: tsColumn("createdAt").defaultNow().notNull(),
-});
+/**
+ * Lagerbox / Drybox mit hinterlegtem Leergewicht (Tara).
+ *
+ * Gehört wie die Gebindeart entweder einer Person oder einer Organisation. Das
+ * ist kein Selbstzweck: Ihr Leergewicht geht in die Restmenge ein
+ * (`grossWeight − Gebindetara − Boxtara`). Läge Org-Material in einer
+ * persönlichen Box, bekäme jedes andere Mitglied eine zu hohe Restmenge
+ * gemeldet – also genau die Zahl falsch, um die es geht.
+ */
+export const storageBoxes = pgTable(
+  "storage_boxes",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    location: varchar("location", { length: 255 }),
+    /** Leergewicht der Box in Gramm */
+    tareWeight: integer("tareWeight").notNull(),
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    ownerXor("storage_boxes_owner_xor"),
+    index("storage_boxes_user_idx").on(t.userId),
+    index("storage_boxes_organization_idx").on(t.organizationId),
+  ]
+);
 
 export type StorageBox = typeof storageBoxes.$inferSelect;
 export type InsertStorageBox = typeof storageBoxes.$inferInsert;
@@ -243,15 +315,24 @@ export const materials = pgTable(
   "materials",
   {
     id: bigserial("id", { mode: "number" }).primaryKey(),
-    userId: bigint("userId", { mode: "number" }).notNull(),
+    /**
+     * Eigentümer bzw. Organisation – genau eines von beiden, siehe `ownerXor`.
+     *
+     * Beide werden **immer aus dem Lager übernommen** und nie aus der Eingabe
+     * gesetzt (`validateForeignKeys` in `api/materialRouter.ts`). Damit kann die
+     * Kopie nicht vom Lager abweichen, und ein Material kann seinen Bereich
+     * nicht wechseln, indem es in ein fremdes Lager geschoben wird.
+     */
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
     /**
      * Zugehöriges Lager. Pflicht – die Migration `0009_lager.sql` legt für jeden
      * bestehenden Benutzer ein Lager an und trägt es hier ein.
      *
-     * `userId` bleibt daneben stehen, obwohl es über das Lager erreichbar wäre:
-     * Jede Abfrage filtert darauf (siehe `materials_user_idx`), und ein Join für
-     * die Mandantenprüfung wäre an der heikelsten Stelle der Anwendung ein
-     * Rückschritt.
+     * Der Eigentümer bleibt daneben stehen, obwohl er über das Lager erreichbar
+     * wäre: Jede Abfrage filtert darauf (siehe `materials_user_idx`), und ein
+     * Join für die Mandantenprüfung wäre an der heikelsten Stelle der Anwendung
+     * ein Rückschritt.
      */
     lagerId: bigint("lagerId", { mode: "number" }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
@@ -307,9 +388,11 @@ export const materials = pgTable(
       .$onUpdate(() => new Date()),
   },
   t => [
+    ownerXor("materials_owner_xor"),
     // Jede Abfrage filtert nach Besitzer; der Löschlauf beim Kontolöschen
     // ebenfalls.
     index("materials_user_idx").on(t.userId),
+    index("materials_organization_idx").on(t.organizationId),
     /*
       Seit 2.2.0 filtert der Lesepfad zusätzlich auf das Lager, und die Prüfung
       „ist dieses Lager leer?" beim Löschen ebenso. Ohne Index wäre beides ein
@@ -868,3 +951,163 @@ export const loanRequests = pgTable(
 
 export type LoanRequest = typeof loanRequests.$inferSelect;
 export type InsertLoanRequest = typeof loanRequests.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Organisationen: gemeinsamer Bestand mehrerer Personen
+//
+// Die zweite Art, Eigentümer zu sein – siehe `ownerXor` oben. Die drei Tabellen
+// hier tragen die Organisation selbst, wer dazugehört und mit welcher Stufe,
+// und die offenen Einladungen. Der Bestand hängt nicht hier, sondern über
+// `organizationId` an den vier Fachtabellen.
+// ---------------------------------------------------------------------------
+
+export const organizationRoleEnum = pgEnum(
+  "organization_role",
+  ORGANIZATION_ROLES
+);
+
+export const organizationInvitationStatusEnum = pgEnum(
+  "organization_invitation_status",
+  ORGANIZATION_INVITATION_STATUSES
+);
+
+/**
+ * Eine Organisation: Firma, Hochschul-Hub, Bastelwerkstatt.
+ *
+ * **Bewusst ohne `ownerUserId`.** Wer verwaltet, steht in
+ * `organization_members.role` – eine zweite Spalte wäre eine zweite Wahrheit,
+ * und der Zustand „Eigentümer ist gar kein Mitglied mehr“ ließe sich damit
+ * nicht ausschließen. Dass immer mindestens ein `admin` übrig bleibt, sichert
+ * stattdessen der Code (`api/queries/organizations.ts`); die einzige Ausnahme
+ * ist die Kontolöschung nach Art. 17 DSGVO, die nicht scheitern darf.
+ *
+ * Der Name ist **nicht** eindeutig: Zwei Werkstätten dürfen „3D-Hub“ heißen.
+ * Eindeutig ist nur der Beitrittscode, und der muss es sein, weil er
+ * nachgeschlagen wird.
+ */
+export const organizations = pgTable("organizations", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  /**
+   * Offener Beitrittscode (`ORG-XXXX-XXXX`, siehe
+   * `contracts/organizations.ts`). `NULL` heißt: kein offener Beitritt – und
+   * das ist der Grundzustand nach dem Anlegen. Wie bei den Freigaben ist der
+   * geschlossene Zustand die Vorgabe und kein Wert, den erst jemand setzen
+   * muss.
+   */
+  joinCode: varchar("joinCode", { length: 16 }).unique(),
+  /**
+   * Stufe, die ein Beitritt über den Code bekommt. `admin` ist ausgeschlossen
+   * (`joinRoleSchema`): Ein Code hängt in Chats und auf Zetteln an der
+   * Werkbank; wer ihn hat, könnte sonst alle anderen entfernen.
+   */
+  joinRole: organizationRoleEnum("joinRole").default("viewer").notNull(),
+  notes: text("notes"),
+  createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  updatedAt: tsColumn("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = typeof organizations.$inferInsert;
+
+/**
+ * Mitgliedschaft: eine Zeile je Person und Organisation, mit ihrer Stufe.
+ *
+ * Anders als bei den Freigaben gibt es hier **keine** zweite Bedingung: Die
+ * Zeile allein gewährt den Zugriff. Deshalb muss ihr Verschwinden ihn auch
+ * sofort beenden – geprüft wird das bei jedem Aufruf in `resolveScope`, nicht
+ * einmalig beim Anmelden.
+ */
+export const organizationMembers = pgTable(
+  "organization_members",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    organizationId: bigint("organizationId", { mode: "number" }).notNull(),
+    /**
+     * Personenbezogen, und deshalb im Datenexport enthalten. Der DSGVO-Wächter
+     * in `api/account.integration.test.ts` findet die Spalte über
+     * `ILIKE '%userid%'`.
+     */
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    role: organizationRoleEnum("role").notNull(),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    /*
+      Eine Stufe je Person und Organisation. Ohne den Schlüssel könnten zwei
+      Zeilen widersprechen, und welche gilt, entschiede die Sortierung.
+    */
+    unique("organization_members_unique").on(t.organizationId, t.userId),
+    /*
+      Beide Richtungen werden gelesen: „welchen Organisationen gehöre ich an?“
+      (Person) und „wer ist hier Mitglied?“ samt der Frage nach dem letzten
+      Administrator (Organisation).
+    */
+    index("organization_members_user_idx").on(t.userId),
+    index("organization_members_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = typeof organizationMembers.$inferInsert;
+
+/**
+ * Gezielte Einladung einer bestimmten Person.
+ *
+ * Der zweite Weg hinein, neben dem offenen Beitrittscode. Er ist der engere:
+ * Ein Verwalter schlägt jemanden über Freundescode oder Telegram-Benutzernamen
+ * nach, und wirksam wird die Einladung erst mit dem Annehmen. Niemand landet
+ * ohne sein Zutun in einer Organisation.
+ *
+ * Die Zeile bleibt nach der Antwort stehen (`status`), statt gelöscht zu
+ * werden – anders als eine zurückgenommene Freigabe. Sie ist ein Vorgang
+ * zwischen zwei Personen, und beide Seiten sollen ihn in ihrer Liste
+ * wiederfinden.
+ */
+export const organizationInvitations = pgTable(
+  "organization_invitations",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    organizationId: bigint("organizationId", { mode: "number" }).notNull(),
+    /** Wer eingeladen wurde */
+    invitedUserId: bigint("invitedUserId", { mode: "number" }).notNull(),
+    /** Wer eingeladen hat – zum Zeitpunkt der Einladung ein `admin` */
+    invitedByUserId: bigint("invitedByUserId", { mode: "number" }).notNull(),
+    role: organizationRoleEnum("role").notNull(),
+    status: organizationInvitationStatusEnum("status")
+      .default("pending")
+      .notNull(),
+    respondedAt: tsColumn("respondedAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  /*
+    Die Regel „höchstens eine *offene* Einladung je Organisation und Person“
+    steckt in einem partiellen Unique-Index – wie bei den offenen
+    Ausleih-Anfragen in `db/migrations/0008_friends.sql`. Als voller
+    Unique-Schlüssel ginge es nicht: Wer einmal abgelehnt hat, muss ein zweites
+    Mal eingeladen werden können.
+  */
+  t => [
+    uniqueIndex("organization_invitations_open_unique")
+      .on(t.organizationId, t.invitedUserId)
+      .where(sql`"status" = 'pending'`),
+    index("organization_invitations_invited_idx").on(t.invitedUserId),
+    index("organization_invitations_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type OrganizationInvitation =
+  typeof organizationInvitations.$inferSelect;
+export type InsertOrganizationInvitation =
+  typeof organizationInvitations.$inferInsert;

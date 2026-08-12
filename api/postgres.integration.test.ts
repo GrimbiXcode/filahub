@@ -31,6 +31,16 @@ import {
 
 const db = () => getDb();
 
+/**
+ * Der persönliche Bereich.
+ *
+ * Seit 2.5.0 trägt **jede** bereichsbezogene Eingabe das Feld – Pflicht und
+ * nicht optional, damit `{}` und `{ organizationId: undefined }` nicht auf
+ * denselben Query-Cache-Schlüssel fallen. In den Tests steht es ausgeschrieben
+ * statt in einem Wrapper versteckt: Es ist Teil des Vertrags, den sie prüfen.
+ */
+const PERSONAL = { organizationId: null } as const;
+
 let admin: User;
 let user: User;
 let asAdmin: ReturnType<typeof callerFor>;
@@ -72,6 +82,9 @@ describe("Migrationen", () => {
       "friendships",
       "lager_shares",
       "loan_requests",
+      "organizations",
+      "organization_members",
+      "organization_invitations",
     ]) {
       expect(names).toContain(table);
     }
@@ -114,9 +127,75 @@ describe("Migrationen", () => {
       "loan_request_status",
       "material_kind",
       "container_form",
+      "organization_role",
+      "organization_invitation_status",
     ]) {
       expect(names).toContain(type);
     }
+  });
+
+  /**
+   * Der XOR-Check auf den vier Fachtabellen.
+   *
+   * Er ist die einzige Zusicherung des Organisationen-Entwurfs, die **die
+   * Datenbank** gibt und nicht der Code – und die einzige, die der Compiler
+   * nicht sieht. Beide Fehlrichtungen werden geprüft: keiner der beiden
+   * Eigentümer gesetzt, und beide zugleich. Ohne die zweite Richtung könnte
+   * eine Zeile einer Person **und** einer Organisation gehören, und welche
+   * Abfrage sie findet, entschiede der Zufall des Filters.
+   */
+  it("lässt genau einen Eigentümer je Fachzeile zu", async () => {
+    const owner = await upsertUser({ unionId: "xor-probe", name: "Probe" });
+    const [org] = await db()
+      .insert(schema.organizations)
+      .values({ name: "XOR-Probe" })
+      .returning();
+
+    const base = { name: "Probe", materialKind: "filament" as const };
+
+    /*
+      Geprüft wird der **Name des verletzten Constraints**, nicht der
+      Meldungstext. Drizzle verpackt den Postgres-Fehler, und seine äußere
+      Meldung nennt nur die Anweisung – ein `toThrow(/…/)` darauf wäre schon
+      grün, wenn das Insert aus irgendeinem anderen Grund scheitert. Der Name
+      steht am `cause`.
+    */
+    const violated = async (
+      run: Promise<unknown>
+    ): Promise<string | undefined> => {
+      try {
+        await run;
+      } catch (error) {
+        return (error as { cause?: { constraint?: string } })?.cause
+          ?.constraint;
+      }
+      throw new Error("Die Anweisung ist unerwartet durchgegangen");
+    };
+
+    expect(
+      await violated(
+        db()
+          .insert(schema.lager)
+          .values({ ...base })
+      )
+    ).toBe("lager_owner_xor");
+
+    expect(
+      await violated(
+        db()
+          .insert(schema.lager)
+          .values({ ...base, userId: owner.id, organizationId: org.id })
+      )
+    ).toBe("lager_owner_xor");
+
+    // Die erlaubten Fälle gehen durch – sonst prüfte der Test nur, dass alles
+    // scheitert.
+    await db()
+      .insert(schema.lager)
+      .values({ ...base, name: "Privat", userId: owner.id });
+    await db()
+      .insert(schema.lager)
+      .values({ ...base, name: "Gemeinsam", organizationId: org.id });
   });
 
   /**
@@ -352,7 +431,10 @@ describe("Presets ausblenden", () => {
 describe("Preset als eigenen Rollentyp übernehmen", () => {
   it("übernimmt Leergewicht und Herkunft", async () => {
     const [option] = await asUser.preset.options();
-    const created = await asUser.preset.copyToOwn({ variantId: option.id });
+    const created = await asUser.preset.copyToOwn({
+      variantId: option.id,
+      ...PERSONAL,
+    });
 
     expect(created?.id).toBeTypeOf("number");
     expect(created?.tareWeight).toBe(option.tareWeight);
@@ -570,17 +652,20 @@ describe("Materialien und Wiegungen", () => {
   it("legt Material mit Preset-Bezug an und berechnet die Restmenge", async () => {
     const [option] = await asUser.preset.options();
     const box = await asUser.storageBox.create({
+      ...PERSONAL,
       name: "IT Box",
       tareWeight: 50,
     });
     expect(box?.id).toBeTypeOf("number");
 
     const lager = await asUser.lager.create({
+      ...PERSONAL,
       name: "IT Lager",
       materialKind: "filament",
       filamentDiameterUm: 1750,
     });
     const material = await asUser.material.create({
+      ...PERSONAL,
       lagerId: lager!.id,
       name: "IT Filament",
       materialType: "PLA",
@@ -590,26 +675,31 @@ describe("Materialien und Wiegungen", () => {
     });
 
     await asUser.material.addWeighing({
+      ...PERSONAL,
       materialId: material.id,
       grossWeight: 1180,
     });
     await asUser.material.addWeighing({
+      ...PERSONAL,
       materialId: material.id,
       grossWeight: 1100,
     });
 
-    const listed = (await asUser.material.list()).find(
+    const listed = (await asUser.material.list(PERSONAL)).find(
       m => m.id === material.id
     );
     expect(listed?.remainingWeight).toBeTypeOf("number");
 
-    const detail = await asUser.material.byId({ id: material.id });
+    const detail = await asUser.material.byId({
+      ...PERSONAL,
+      id: material.id,
+    });
     expect(detail?.weighings).toHaveLength(2);
     expect(detail?.containerPresetVariantId).toBe(option.id);
   });
 
   it("trennt die Daten der Benutzer", async () => {
-    expect(await asAdmin.material.list()).toHaveLength(0);
+    expect(await asAdmin.material.list(PERSONAL)).toHaveLength(0);
   });
 });
 
@@ -623,11 +713,10 @@ describe("Postgres-Eigenheiten", () => {
     const found = await findUserByUnionId("it-utf8");
     expect(found?.name).toBe("Jörg Müller-Straße 🧵✨");
 
-    const containerType = await createContainerType({
-      userId: found!.id,
-      name: "Rolle „Grün“ – 1 kg · Ø200 mm",
-      tareWeight: 200,
-    });
+    const containerType = await createContainerType(
+      { kind: "personal", userId: found!.id },
+      { name: "Rolle „Grün“ – 1 kg · Ø200 mm", tareWeight: 200 }
+    );
     expect(containerType?.name).toBe("Rolle „Grün“ – 1 kg · Ø200 mm");
   });
 

@@ -26,6 +26,14 @@
  * Dieselbe Erwägung wie bei `3`, nur eine Version später bemerkt: Der Abschnitt
  * bleibt, seine Zeilen haben eine andere Form, und ohne Erhöhung hießen beide
  * Formen `3`.
+ *
+ * **Bleibt `4` in 2.5.0**, obwohl die Organisationen zwei Abschnitte ergänzen
+ * und die Fachzeilen ein Feld `organizationId` dazubekommen. Beides macht einen
+ * älteren Export nicht falsch: Neue Abschnitte fehlen dort schlicht (wie
+ * `lager` vor 2.2.0, das ebenfalls ohne Erhöhung dazukam), und das neue Feld
+ * steht in einer Auskunft ohnehin immer auf `null` – exportiert werden nur die
+ * **persönlichen** Zeilen der Person. Erhöht wird, wenn sich die Form
+ * bestehender Zeilen ändert, nicht wenn etwas dazukommt.
  */
 export const ACCOUNT_EXPORT_VERSION = 4;
 
@@ -68,6 +76,20 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   */
   "lagerShares",
   "loanRequests",
+  /*
+    Mitgliedschaften in Organisationen und die Einladungen dazu, letztere in
+    **beiden** Richtungen (bekommene und selbst ausgesprochene) – dieselbe
+    Erwägung wie bei den Freundschaften.
+
+    Was hier **nicht** hineingehört, ist der Bestand der Organisation. Er ist
+    nicht die Auskunft dieser Person, sondern das Material einer anderen
+    Stelle; sie hat Zugriff darauf, aber er gehört ihr nicht. Genau deshalb
+    tragen Org-Zeilen keinen Personenbezug (siehe `ownerXor` in
+    `db/schema.ts`) – gäbe es dort einen „erfasst von“, stünde hier die Frage,
+    wie viel davon mitmuss.
+  */
+  "organizationMemberships",
+  "organizationInvitations",
   /*
     Das Sicherheitsprotokoll gehört dazu: Es enthält Ereignisse über diese
     Person, also ihre Daten. Auskunft heißt Auskunft – auch über das, was

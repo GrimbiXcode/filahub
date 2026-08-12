@@ -33,6 +33,7 @@ import { useT } from "@/lib/i18nContext";
 import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
+import { useActiveScope } from "@/lib/activeScope";
 
 type Props = {
   open: boolean;
@@ -65,11 +66,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     parseMoney,
   } = useFormat();
   const t = useT();
-  const { data: containerTypes } = trpc.containerType.list.useQuery();
+  const scope = useActiveScope();
+  const { data: containerTypes } = trpc.containerType.list.useQuery(scope);
   const { data: presetOptions } = trpc.preset.options.useQuery();
-  const { data: storageBoxes } = trpc.storageBox.list.useQuery();
-  const { data: allMaterials } = trpc.material.list.useQuery({});
-  const { data: lagerList } = trpc.lager.list.useQuery();
+  const { data: storageBoxes } = trpc.storageBox.list.useQuery(scope);
+  const { data: allMaterials } = trpc.material.list.useQuery({
+    ...scope,
+  });
+  const { data: lagerList } = trpc.lager.list.useQuery(scope);
   const activeLagerId = useActiveLagerId(lagerList);
 
   const [identifier, setIdentifier] = useState("");
@@ -192,12 +196,20 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     ohne dass der Dialog neu aufgebaut werden muss. Wer die Übersicht eines
     Lagers ansieht und dort etwas anlegt, meint fast immer dieses.
   */
-  const effectiveLagerId =
-    lagerId !== ""
-      ? lagerId
-      : activeLagerId != null
-        ? String(activeLagerId)
-        : "";
+  /*
+    Und abgeglichen gegen die geladene Liste: Wechselt der Bereich, während der
+    Dialog offen steht, zeigte das Feld sonst weiter auf ein Lager der anderen
+    Seite – die Auswahl bliebe leer, und das Speichern liefe in einen Fehler aus
+    `validateForeignKeys`. Dieselbe Versöhnung macht `useActiveLagerId` für den
+    Umschalter.
+  */
+  const chosenIsKnown =
+    lagerId !== "" && (lagerList ?? []).some(l => String(l.id) === lagerId);
+  const effectiveLagerId = chosenIsKnown
+    ? lagerId
+    : activeLagerId != null
+      ? String(activeLagerId)
+      : "";
 
   const selectedLager = useMemo(
     () => lagerList?.find(l => String(l.id) === effectiveLagerId) ?? null,
@@ -305,14 +317,18 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     };
 
     if (isEdit && material) {
-      updateMutation.mutate({ id: material.id, ...base });
+      updateMutation.mutate({ ...scope, id: material.id, ...base });
     } else {
       const initial = initialGrossWeight.trim()
         ? parseInt(initialGrossWeight, 10)
         : null;
       if (initial != null && (!Number.isFinite(initial) || initial <= 0))
         return toast.error(t.materialForm.initialInvalid);
-      createMutation.mutate({ ...base, initialGrossWeight: initial });
+      createMutation.mutate({
+        ...scope,
+        ...base,
+        initialGrossWeight: initial,
+      });
     }
   };
 

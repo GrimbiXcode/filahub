@@ -2,6 +2,8 @@ import { relations } from "drizzle-orm";
 import {
   lager,
   materials,
+  organizationMembers,
+  organizations,
   presetManufacturers,
   presetContainerSeries,
   presetContainerVariants,
@@ -17,10 +19,44 @@ export const usersRelations = relations(users, ({ many }) => ({
   containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   lager: many(lager),
+  organizationMemberships: many(organizationMembers),
 }));
+
+/*
+  Die `organization`-Relation steht neben `user` und nicht statt ihr: Ein Lager
+  gehört genau einem von beiden (`ownerXor` in `db/schema.ts`), die jeweils
+  andere Seite ist `null`. Für `organization_invitations` gibt es bewusst keine
+  Relations – sie zeigt doppelt auf `users`, wie `friendships` (siehe der
+  Abschnitt weiter unten).
+*/
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  members: many(organizationMembers),
+  lager: many(lager),
+  containerTypes: many(containerTypes),
+  storageBoxes: many(storageBoxes),
+  materials: many(materials),
+}));
+
+export const organizationMembersRelations = relations(
+  organizationMembers,
+  ({ one }) => ({
+    organization: one(organizations, {
+      fields: [organizationMembers.organizationId],
+      references: [organizations.id],
+    }),
+    user: one(users, {
+      fields: [organizationMembers.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 export const lagerRelations = relations(lager, ({ one, many }) => ({
   user: one(users, { fields: [lager.userId], references: [users.id] }),
+  organization: one(organizations, {
+    fields: [lager.organizationId],
+    references: [organizations.id],
+  }),
   materials: many(materials),
 }));
 
@@ -31,6 +67,10 @@ export const containerTypesRelations = relations(
       fields: [containerTypes.userId],
       references: [users.id],
     }),
+    organization: one(organizations, {
+      fields: [containerTypes.organizationId],
+      references: [organizations.id],
+    }),
     materials: many(materials),
   })
 );
@@ -39,12 +79,20 @@ export const storageBoxesRelations = relations(
   storageBoxes,
   ({ one, many }) => ({
     user: one(users, { fields: [storageBoxes.userId], references: [users.id] }),
+    organization: one(organizations, {
+      fields: [storageBoxes.organizationId],
+      references: [organizations.id],
+    }),
     materials: many(materials),
   })
 );
 
 export const materialsRelations = relations(materials, ({ one, many }) => ({
   user: one(users, { fields: [materials.userId], references: [users.id] }),
+  organization: one(organizations, {
+    fields: [materials.organizationId],
+    references: [organizations.id],
+  }),
   /*
     Wird mitgeladen, wo die Zweitanzeige gebraucht wird: Materialart und
     Filamentstärke stehen am Lager, nicht am Material.

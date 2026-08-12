@@ -30,6 +30,19 @@ export function getDb() {
 }
 
 /**
+ * Der Transaktionsgriff, wie ihn `getDb().transaction(...)` übergibt.
+ *
+ * Abgeleitet statt von Hand geschrieben: Die Drizzle-Signatur trägt das ganze
+ * Schema samt Relations im Typ, und jede handgetippte Fassung liefe beim
+ * nächsten Schema-Umbau davon. Gebraucht wird er dort, wo mehrere Module an
+ * **einer** Transaktion mitschreiben – etwa die Kontolöschung, die den
+ * Organisationsteil aus `queries/organizations.ts` mit hineinnimmt.
+ */
+export type DbTransaction = Parameters<
+  Parameters<ReturnType<typeof getDb>["transaction"]>[0]
+>[0];
+
+/**
  * Führt ausstehende SQL-Migrationen aus db/migrations aus.
  * Wird beim Server-Start (Produktion) aufgerufen, damit sich frische
  * Deployments (z. B. Coolify) selbst initialisieren.

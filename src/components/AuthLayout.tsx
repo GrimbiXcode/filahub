@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import { roleAllows } from "@contracts/organizations";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -33,6 +34,7 @@ import {
   DRYBOXES_PATH,
   FRIENDS_PATH,
   LAGER_PATH,
+  ORGANIZATIONS_PATH,
   LEGAL_DOCUMENTS,
   LEGAL_PATHS,
   LOGIN_PATH,
@@ -41,6 +43,7 @@ import {
 } from "@/const";
 import {
   Archive,
+  Building2,
   Boxes,
   Database,
   Disc3,
@@ -85,6 +88,11 @@ import { useT, type TextKey } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { Messages } from "@/messages/de";
 import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
+import {
+  setActiveOrganizationId,
+  useActiveScope,
+  useScopeRole,
+} from "@/lib/activeScope";
 import { Button } from "./ui/button";
 
 /**
@@ -104,6 +112,7 @@ const menuItems: {
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
   { icon: Archive, label: "storageBoxes", path: DRYBOXES_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
+  { icon: Building2, label: "organizations", path: ORGANIZATIONS_PATH },
 ];
 
 /** Nur für Administratoren sichtbar; abgesichert wird serverseitig (adminQuery) */
@@ -143,6 +152,9 @@ function titleForPath(pathname: string, t: Messages): string {
   if (pathname === RELEASE_NOTES_PATH) return t.nav.releaseNotes;
   if (pathname === SETTINGS_PATH) return t.nav.settings;
   if (pathname.startsWith("/material/")) return t.nav.material;
+  // Eine einzelne Organisation trägt ihren Namen erst nach dem Laden – die
+  // Kopfzeile nennt bis dahin den Bereich.
+  if (pathname.startsWith(`${ORGANIZATIONS_PATH}/`)) return t.nav.organizations;
   return APP_NAME;
 }
 
@@ -230,6 +242,19 @@ function AuthLayoutContent({
     retry: false,
   });
   const pendingFriends = pending?.count ?? 0;
+  /*
+    Offene Einladungen in Organisationen – dieselbe Bauart und derselbe
+    `staleTime` wie beim Freundes-Zähler darüber.
+  */
+  const { data: pendingInvitations } = trpc.organization.pendingCount.useQuery(
+    undefined,
+    {
+      staleTime: 1000 * 60 * 5,
+      retry: false,
+    }
+  );
+  const pendingOrganizations = pendingInvitations ?? 0;
+  const role = useScopeRole();
   const t = useT();
   const isCollapsed = state === "collapsed";
   const [isDragging, setIsDragging] = useState(false);
@@ -294,23 +319,32 @@ function AuthLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
+            <OrganizationSwitcher />
             <LagerSwitcher />
 
             {/* Häufigste Aktionen ganz oben: wiegen und suchen */}
             <SidebarMenu className="px-2 py-1">
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setOpenMobile(false);
-                    openPalette("weigh");
-                  }}
-                  tooltip={t.nav.weighMaterial}
-                  className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-                >
-                  <Scale className="h-4 w-4" />
-                  <span>{t.nav.weigh}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/*
+                Der auffälligste Knopf der ganzen Oberfläche – unterhalb von
+                `weigher` gehört er weg, sonst führt der wichtigste Weg der App
+                in ein `FORBIDDEN`. Die Schnellsuche darunter bleibt: Suchen
+                darf jedes Mitglied.
+              */}
+              {roleAllows(role, "weigher") && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      setOpenMobile(false);
+                      openPalette("weigh");
+                    }}
+                    tooltip={t.nav.weighMaterial}
+                    className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                  >
+                    <Scale className="h-4 w-4" />
+                    <span>{t.nav.weigh}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => {
@@ -342,16 +376,23 @@ function AuthLayoutContent({
                   eines `badge`-Feldes in der Tabelle oben, das bei allen
                   anderen leer bliebe.
                 */
-                const badge = item.path === FRIENDS_PATH ? pendingFriends : 0;
+                const badge =
+                  item.path === FRIENDS_PATH
+                    ? pendingFriends
+                    : item.path === ORGANIZATIONS_PATH
+                      ? pendingOrganizations
+                      : 0;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       isActive={isActive}
                       onClick={() => go(item.path)}
                       tooltip={
-                        badge > 0
-                          ? t.nav.friendsPending({ count: badge })
-                          : t.nav[item.label]
+                        badge === 0
+                          ? t.nav[item.label]
+                          : item.path === FRIENDS_PATH
+                            ? t.nav.friendsPending({ count: badge })
+                            : t.nav.organizationsPending({ count: badge })
                       }
                       className="h-10 font-normal transition-all"
                     >
@@ -555,15 +596,17 @@ function AuthLayoutContent({
           <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
             {titleForPath(location.pathname, t)}
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-10"
-            aria-label={t.nav.weighMaterial}
-            onClick={() => openPalette("weigh")}
-          >
-            <Scale className="h-5 w-5" />
-          </Button>
+          {roleAllows(role, "weigher") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10"
+              aria-label={t.nav.weighMaterial}
+              onClick={() => openPalette("weigh")}
+            >
+              <Scale className="h-5 w-5" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -605,11 +648,77 @@ function AuthLayoutContent({
  * ohne Auswahl, und mit keinem hätte es nichts anzuzeigen – dann führt der
  * Verweis auf die Verwaltung weiter.
  */
+/**
+ * Umschalter zwischen dem eigenen Bestand und den Organisationen.
+ *
+ * Anders als der `LagerSwitcher` darunter erscheint er schon ab **einer**
+ * Organisation: „Privat" gibt es immer, also stehen dann bereits zwei Einträge
+ * zur Wahl. Wer in keiner ist, sieht ihn nicht – der Weg führt über den
+ * Navigationseintrag.
+ *
+ * Das Umschalten lädt alles Betroffene von selbst neu: `organizationId` ist
+ * Teil des Query-Schlüssels jeder bereichsbezogenen Abfrage. Genau dafür ist
+ * das Feld serverseitig Pflicht und nicht optional.
+ */
+function OrganizationSwitcher() {
+  const t = useT();
+  const { organizationId } = useActiveScope();
+  const { data: memberships } = trpc.organization.list.useQuery(undefined, {
+    staleTime: 1000 * 60 * 5,
+    retry: false,
+  });
+
+  if (!memberships || memberships.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2 group-data-[collapsible=icon]:hidden">
+      <span className="text-xs font-medium text-muted-foreground">
+        {t.organizations.scopeLabel}
+      </span>
+      <Select
+        value={organizationId == null ? PERSONAL_VALUE : String(organizationId)}
+        onValueChange={value =>
+          setActiveOrganizationId(
+            value === PERSONAL_VALUE ? null : Number(value)
+          )
+        }
+      >
+        <SelectTrigger
+          className="h-9 w-full"
+          aria-label={t.organizations.scopeAria}
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={PERSONAL_VALUE}>
+            {t.organizations.personal}
+          </SelectItem>
+          {memberships.map(entry => (
+            <SelectItem
+              key={entry.organizationId}
+              value={String(entry.organizationId)}
+            >
+              {entry.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+/**
+ * Der persönliche Bereich braucht im `Select` einen Wert – `""` behandelt Radix
+ * als „nichts gewählt" und zeigte dann den Platzhalter statt „Privat".
+ */
+const PERSONAL_VALUE = "personal";
+
 function LagerSwitcher() {
   const t = useT();
   const navigate = useNavigate();
   const { setOpenMobile } = useSidebar();
-  const { data: lagerList } = trpc.lager.list.useQuery(undefined, {
+  const scope = useActiveScope();
+  const { data: lagerList } = trpc.lager.list.useQuery(scope, {
     staleTime: 1000 * 60 * 5,
     retry: false,
   });

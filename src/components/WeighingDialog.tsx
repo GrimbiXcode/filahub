@@ -16,6 +16,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
+import { useActiveScope } from "@/lib/activeScope";
 
 type Props = {
   open: boolean;
@@ -27,6 +28,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
   const utils = trpc.useUtils();
   const { formatGrams, formatPercent } = useFormat();
   const t = useT();
+  const scope = useActiveScope();
   const [grossWeight, setGrossWeight] = useState("");
   const [note, setNote] = useState("");
 
@@ -73,6 +75,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
     if (!Number.isFinite(gross) || gross <= 0)
       return toast.error(t.weighing.invalidWeight);
     addWeighing.mutate({
+      ...scope,
       materialId: material.id,
       grossWeight: gross,
       note: note.trim() || undefined,

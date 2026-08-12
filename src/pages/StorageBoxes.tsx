@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { roleAllows } from "@contracts/organizations";
 import { Archive, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
@@ -40,13 +41,16 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { StorageBoxItem } from "@/types";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 export default function StorageBoxes() {
   const utils = trpc.useUtils();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   const { formatGrams } = useFormat();
   const t = useT();
-  const { data: boxes, isLoading } = trpc.storageBox.list.useQuery();
-  const { data: materials } = trpc.material.list.useQuery();
+  const { data: boxes, isLoading } = trpc.storageBox.list.useQuery(scope);
+  const { data: materials } = trpc.material.list.useQuery(scope);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<StorageBoxItem | null>(null);
@@ -115,8 +119,9 @@ export default function StorageBoxes() {
       tareWeight: tare,
       notes: notes.trim() || undefined,
     };
-    if (editing) updateMutation.mutate({ id: editing.id, ...payload });
-    else createMutation.mutate(payload);
+    if (editing)
+      updateMutation.mutate({ ...scope, id: editing.id, ...payload });
+    else createMutation.mutate({ ...scope, ...payload });
   };
 
   const list = boxes ?? [];
@@ -128,12 +133,15 @@ export default function StorageBoxes() {
           title={t.storageBoxes.title}
           description={t.storageBoxes.description}
           actions={
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => openDialog(null)}
-            >
-              <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.newBox}
-            </Button>
+            // Ausgeblendet statt deaktiviert – siehe `Lager.tsx`.
+            roleAllows(role, "editor") && (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => openDialog(null)}
+              >
+                <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.newBox}
+              </Button>
+            )
           }
         />
 
@@ -151,9 +159,11 @@ export default function StorageBoxes() {
               <p className="max-w-md text-sm text-muted-foreground">
                 {t.storageBoxes.emptyDescription}
               </p>
-              <Button onClick={() => openDialog(null)}>
-                <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.firstBox}
-              </Button>
+              {roleAllows(role, "editor") && (
+                <Button onClick={() => openDialog(null)}>
+                  <Plus className="mr-2 h-4 w-4" /> {t.storageBoxes.firstBox}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -195,24 +205,26 @@ export default function StorageBoxes() {
                         {b.notes}
                       </p>
                     )}
-                    <div className="mt-3 flex gap-2 border-t pt-2">
-                      <Button
-                        variant="ghost"
-                        className="h-10 flex-1"
-                        onClick={() => openDialog(b)}
-                      >
-                        <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-10 w-10"
-                        aria-label={t.storageBoxes.deleteBox}
-                        onClick={() => setDeleting(b)}
-                      >
-                        <Trash2 className="h-4 w-4 text-muted-foreground" />
-                      </Button>
-                    </div>
+                    {roleAllows(role, "editor") && (
+                      <div className="mt-3 flex gap-2 border-t pt-2">
+                        <Button
+                          variant="ghost"
+                          className="h-10 flex-1"
+                          onClick={() => openDialog(b)}
+                        >
+                          <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10"
+                          aria-label={t.storageBoxes.deleteBox}
+                          onClick={() => setDeleting(b)}
+                        >
+                          <Trash2 className="h-4 w-4 text-muted-foreground" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -261,22 +273,26 @@ export default function StorageBoxes() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={t.common.edit}
-                                onClick={() => openDialog(b)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={t.common.delete}
-                                onClick={() => setDeleting(b)}
-                              >
-                                <Trash2 className="h-4 w-4 text-muted-foreground" />
-                              </Button>
+                              {roleAllows(role, "editor") && (
+                                <>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={t.common.edit}
+                                    onClick={() => openDialog(b)}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label={t.common.delete}
+                                    onClick={() => setDeleting(b)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-muted-foreground" />
+                                  </Button>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -378,7 +394,7 @@ export default function StorageBoxes() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting && deleteMutation.mutate({ id: deleting.id })
+                deleting && deleteMutation.mutate({ ...scope, id: deleting.id })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

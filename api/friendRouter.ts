@@ -8,12 +8,11 @@ import {
   normalizeFriendCode,
   normalizeTelegramUsername,
 } from "@contracts/friends";
-import {
-  notificationMessages,
-  type LoanDecision,
-} from "@contracts/notifications";
+import type { LoanDecision } from "@contracts/notifications";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { recordAudit } from "./queries/audit";
+import { organizationOfLager } from "./queries/lager";
+import { findMembership } from "./queries/organizations";
 import {
   countPendingForUser,
   createFriendship,
@@ -24,7 +23,6 @@ import {
   findFriendMaterial,
   findFriendMaterialsForSearch,
   findFriendshipBetween,
-  findNotificationTarget,
   findOpenLoanRequest,
   findUserByFriendCode,
   findUserByTelegramUsername,
@@ -36,7 +34,7 @@ import {
   setLagerShare,
   withdrawLoanRequest,
 } from "./queries/friends";
-import { appLink, sendTelegramMessage } from "./telegram/send";
+import { displayName, notify } from "./lib/notify";
 
 /**
  * Freundschaften, geteiltes Lager und Ausleih-Anfragen.
@@ -49,34 +47,6 @@ import { appLink, sendTelegramMessage } from "./telegram/send";
  */
 
 const idInput = z.object({ id: z.number().int().positive() });
-
-/**
- * Verschickt eine Benachrichtigung, wenn der Empfänger erreichbar ist.
- *
- * Der Rückgabewert wandert bis in die Oberfläche: Telegram lässt einen Bot nur
- * schreiben, wenn der Empfänger den Chat einmal geöffnet hat. Wer sich nur über
- * das Login-Widget angemeldet hat, erfährt von seiner Anfrage erst beim
- * nächsten Besuch – das soll der Absender wissen, statt auf eine Antwort zu
- * warten, die nie kommt.
- */
-async function notify(
-  recipientId: number,
-  build: (m: ReturnType<typeof notificationMessages>) => string,
-  path: string
-): Promise<boolean> {
-  const target = await findNotificationTarget(recipientId);
-  if (!target) return false;
-  const messages = notificationMessages(target.language);
-  const link = appLink(path);
-  const text = build(messages) + (link ? messages.openLink({ url: link }) : "");
-  return sendTelegramMessage(target.unionId, text);
-}
-
-/** Anzeigename für Benachrichtigungen. `users.name` ist nullable. */
-function displayName(name: string | null | undefined): string {
-  const trimmed = (name ?? "").trim();
-  return trimmed === "" ? "Jemand" : trimmed;
-}
 
 export const friendRouter = createRouter({
   // -------------------------------------------------------------------------
@@ -245,6 +215,38 @@ export const friendRouter = createRouter({
       })
     )
     .mutation(async ({ ctx, input }) => {
+      /*
+        **Ein Lager einer Organisation lässt sich nicht an Freunde freigeben.**
+
+        Semantisch: Ein einzelner Administrator dürfte nicht den Bestand aller
+        Mitglieder nach außen öffnen. Technisch fiele es ohnehin zu –
+        `setLagerShare` verlangt `lager.userId = ownerId`, und der ist bei einem
+        Org-Lager NULL, also käme unten schon `false` heraus.
+
+        Der Riegel steht trotzdem ausdrücklich hier: „fällt von selbst zu“ ist
+        kein Riegel, sondern ein Zufall, der beim nächsten Umbau kippt. Und die
+        Meldung sagt den Grund, statt „nicht gefunden“ zu behaupten – das Lager
+        gibt es ja, der Aufrufer sieht es in seiner Liste.
+
+        **Die Meldung bekommt aber nur, wer die Organisation kennt.** Sonst wäre
+        der Riegel ein Orakel: Wer fremde IDs durchprobiert, unterschiede an der
+        Antwort „gibt es nicht“ von „gehört einer Organisation“ – und erführe so
+        aus einer Prozedur, die nur den eigenen Bestand betrifft, etwas über
+        fremden. Für alle anderen bleibt es beim `NOT_FOUND` weiter unten,
+        genauso, als hätte es das Lager nie gegeben.
+      */
+      const owningOrganization = await organizationOfLager(input.lagerId);
+      if (
+        owningOrganization != null &&
+        (await findMembership(ctx.user.id, owningOrganization))
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Ein Lager einer Organisation lässt sich nicht mit Freunden teilen.",
+        });
+      }
+
       const ok = await setLagerShare(
         ctx.user.id,
         input.lagerId,

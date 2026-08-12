@@ -120,16 +120,26 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
 - **Controller**: from `LEGAL_OPERATOR_*`
 - **Purposes**: managing a personal filament stock; authentication; maintaining
   the shared preset catalogue; sharing stock between users who have connected as
-  friends, and passing on loan requests between them
+  friends, and passing on loan requests between them; since 2.5.0, running a
+  stock jointly in an organization (companies, university print hubs,
+  makerspaces)
 - **Categories of data subjects**: registered users of this instance
 - **Categories of data**: see the table in [PRIVACY.md](PRIVACY.md)
-- **Recipients**: Telegram FZ-LLC (authentication, loan notifications); the
-  hosting provider (processor); **other users of this instance**, limited to what
-  the data subject shared with an accepted friend and never including monetary
-  amounts (see "Who else gets data" in [PRIVACY.md](PRIVACY.md))
+- **Recipients**: Telegram FZ-LLC (authentication, loan and organization
+  notifications); the hosting provider (processor); **other users of this
+  instance** — either limited to what the data subject shared with an accepted
+  friend and never including monetary amounts, or, within an organization, its
+  fellow members, who see the shared stock itself and each other's display name
+  and Telegram username (see "Who else gets data" in [PRIVACY.md](PRIVACY.md))
 - **Legal basis for sharing between users**: Art. 6(1)(a) GDPR — the sharing
   level is a per-friend choice by the data subject, defaults to the narrowest
-  useful setting, and is revocable at any time with immediate effect
+  useful setting, and is revocable at any time with immediate effect. The same
+  basis covers organizations: nobody is added without their own act (accepting
+  an invitation, or entering a join code), and leaving takes effect immediately
+- **Organization stock is not personal data of its members**: rows owned by an
+  organization carry no author column, deliberately. Consequence for Art. 15 and
+  Art. 20: the export contains a member's memberships and invitations, not the
+  organization's inventory — that is the organization's record, not theirs
 - **Third-country transfers**: Telegram, United Arab Emirates — no adequacy
   decision; based on explicit consent (Art. 49(1)(a) GDPR / Art. 17(1)(a)
   revFADP), obtained through the click-to-load gate on the login page
@@ -199,6 +209,9 @@ Known gaps, deliberately recorded rather than glossed over:
 | Sign-in codes                                                               | deleted                                                                          |
 | Friendships — in both directions                                            | deleted                                                                          |
 | Loan requests — asked and been asked                                        | deleted                                                                          |
+| Organization memberships and invitations — in both directions               | deleted                                                                          |
+| Organizations where the account was the **last** administrator              | successor promoted, or the organization and its stock deleted if nobody is left  |
+| Stock owned by an organization the account belonged to                      | kept; it carries no author and is not the member's personal data                 |
 | Friend code                                                                 | deleted with the account row                                                     |
 | Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
 | Account                                                                     | deleted                                                                          |
@@ -226,12 +239,30 @@ side of a row that describes both people; that is inherent to joint data, and th
 erasure right of the person leaving takes precedence over the other's
 convenience.
 
+Organizations get a third treatment, because neither of the first two fits. The
+memberships and invitations go the way the friendships do — joint data, no
+moderation purpose, deleted in both directions. The **stock** stays, and that is
+a consequence of a design decision rather than an exception carved out for it:
+rows owned by an organization have no author column, so they contain nothing to
+erase. Recording who booked what in would have been a usage log, which this
+project declines to keep for the same reason it does not log loan requests.
+
+The last-administrator case is the one place where erasure forces a decision
+instead of a rule. Everywhere else the app refuses a step that would leave an
+organization without an administrator, since nobody could then repair it. An
+Art. 17 request is not refusable, so `handleAdminAccountDeletion` decides: the
+longest-standing remaining member is promoted (logged as
+`organization.member_role_changed` with `reason: "last_admin_deleted"`, and told
+over Telegram), or, if nobody remains, the organization and its entire stock are
+deleted — data no one can ever reach again is worse than deleting it.
+
 The order in the table is load-bearing, not tidiness. There are no foreign keys
 anywhere in this schema, so a row deleted too late is a row pointing at an ID the
 database will hand out again: a leftover `lager_shares` row would grant a stranger
 access to whoever next receives that store ID. The same reasoning puts the stores
-after the materials that reference them, and both are enforced by the order of
-statements in `deleteUserAccount` with the reasoning in the comments there.
+after the materials that reference them, puts the organization cascade **before**
+the personal one, and all of it is enforced by the order of statements in
+`deleteUserAccount` with the reasoning in the comments there.
 
 ## Decisions on record
 

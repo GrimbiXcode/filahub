@@ -1,5 +1,9 @@
 import { useState } from "react";
 import {
+  MAX_LAGER_PER_ORGANIZATION,
+  roleAllows,
+} from "@contracts/organizations";
+import {
   Boxes,
   Droplet,
   Grip,
@@ -56,6 +60,7 @@ import { useT } from "@/lib/i18nContext";
 import { kindHint, kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import type { LagerItem } from "@/types";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 /** Symbol je Materialart – rein zur Wiedererkennung in der Liste. */
 const KIND_ICONS: Record<MaterialKind, typeof Package> = {
@@ -72,9 +77,11 @@ const KIND_ICONS: Record<MaterialKind, typeof Package> = {
  */
 export default function LagerPage() {
   const utils = trpc.useUtils();
+  const scope = useActiveScope();
+  const role = useScopeRole();
   const t = useT();
   const { formatDiameter } = useFormat();
-  const { data: lagerList, isLoading } = trpc.lager.list.useQuery();
+  const { data: lagerList, isLoading } = trpc.lager.list.useQuery(scope);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<LagerItem | null>(null);
@@ -148,12 +155,22 @@ export default function LagerPage() {
       filamentDiameterUm: kind === "filament" ? diameter : null,
       notes: notes.trim() || null,
     };
-    if (editing) updateMutation.mutate({ id: editing.id, ...payload });
-    else createMutation.mutate(payload);
+    if (editing)
+      updateMutation.mutate({ ...scope, id: editing.id, ...payload });
+    else createMutation.mutate({ ...scope, ...payload });
   };
 
   const list = lagerList ?? [];
-  const limitReached = list.length >= MAX_LAGER_PER_USER;
+  /*
+    Die Obergrenze hängt am Bereich: Ein Hub führt leicht beide Filamentstärken,
+    Harz und Pulver – fünf wie bei einer Person wären zu eng. Entschieden wird
+    das serverseitig in `lager.create`; hier steht nur, was der Knopf anzeigt.
+  */
+  const limit =
+    scope.organizationId == null
+      ? MAX_LAGER_PER_USER
+      : MAX_LAGER_PER_ORGANIZATION;
+  const limitReached = list.length >= limit;
   const pending = createMutation.isPending || updateMutation.isPending;
 
   return (
@@ -163,25 +180,32 @@ export default function LagerPage() {
           title={t.lager.title}
           description={t.lager.description}
           actions={
-            <Button
-              onClick={() => openDialog(null)}
-              disabled={limitReached}
-              title={
-                limitReached
-                  ? t.lager.limitReached({ max: MAX_LAGER_PER_USER })
-                  : undefined
-              }
-              className="w-full sm:w-auto"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {t.lager.newLager}
-            </Button>
+            /*
+              Unterhalb von `admin` **ausgeblendet**, nicht deaktiviert: Ein
+              grauer Knopf ohne Erklärung lässt den Benutzer raten. Die Sperre
+              selbst sitzt serverseitig in `resolveScope`.
+            */
+            roleAllows(role, "admin") && (
+              <Button
+                onClick={() => openDialog(null)}
+                disabled={limitReached}
+                title={
+                  limitReached
+                    ? t.lager.limitReached({ max: limit })
+                    : undefined
+                }
+                className="w-full sm:w-auto"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t.lager.newLager}
+              </Button>
+            )
           }
         />
 
         {limitReached && (
           <p className="text-xs text-muted-foreground">
-            {t.lager.limitReached({ max: MAX_LAGER_PER_USER })}
+            {t.lager.limitReached({ max: limit })}
           </p>
         )}
 
@@ -199,10 +223,12 @@ export default function LagerPage() {
               <p className="max-w-sm text-sm text-muted-foreground">
                 {t.lager.emptyDescription}
               </p>
-              <Button onClick={() => openDialog(null)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t.lager.firstLager}
-              </Button>
+              {roleAllows(role, "admin") && (
+                <Button onClick={() => openDialog(null)}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  {t.lager.firstLager}
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -257,24 +283,26 @@ export default function LagerPage() {
                         )}
                       </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t.lager.editLager}
-                        onClick={() => openDialog(item)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        aria-label={t.lager.deleteLager}
-                        onClick={() => setDeleting(item)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    {roleAllows(role, "admin") && (
+                      <div className="flex shrink-0 gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={t.lager.editLager}
+                          onClick={() => openDialog(item)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          aria-label={t.lager.deleteLager}
+                          onClick={() => setDeleting(item)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -403,7 +431,7 @@ export default function LagerPage() {
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() =>
-                deleting && deleteMutation.mutate({ id: deleting.id })
+                deleting && deleteMutation.mutate({ ...scope, id: deleting.id })
               }
             >
               {t.common.delete}

@@ -27,20 +27,23 @@ details into the Markdown** — the next person to pull the image would ship the
 
 ## What the application stores
 
-| Data                                                                                                                                    | Where              | How long                               |
-| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------ | -------------------------------------- |
-| Telegram ID, display name, Telegram username                                                                                            | `users`            | until the account is deleted           |
-| Last sign-in timestamp                                                                                                                  | `users`            | until the account is deleted           |
-| Display settings (language, currency, format)                                                                                           | `users`            | until the account is deleted           |
-| Stores (name, material kind, filament diameter, free-text notes)                                                                        | `lager`            | until the account is deleted           |
-| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes       | own tables         | until the account is deleted           |
-| Friendships: who is connected to whom and who asked                                                                                     | `friendships`      | until either account is deleted        |
-| Store sharing: which of a user's stores a given friend may see, and how much                                                            | `lager_shares`     | until either account is deleted        |
-| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                         | `loan_requests`    | until either account is deleted        |
-| Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`            | until the account is deleted           |
-| Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals` | see "Deletion" below                   |
-| Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`      | **purged automatically after 24 h**    |
-| Security log: sign-ins, failed attempts, deletions, moderation decisions — with an HMAC of the client address, never the address itself | `audit_log`        | **purged automatically after 90 days** |
+| Data                                                                                                                                    | Where                      | How long                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ |
+| Telegram ID, display name, Telegram username                                                                                            | `users`                    | until the account is deleted                     |
+| Last sign-in timestamp                                                                                                                  | `users`                    | until the account is deleted                     |
+| Display settings (language, currency, format)                                                                                           | `users`                    | until the account is deleted                     |
+| Stores (name, material kind, filament diameter, free-text notes)                                                                        | `lager`                    | until the account is deleted                     |
+| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes       | own tables                 | until the account is deleted                     |
+| Friendships: who is connected to whom and who asked                                                                                     | `friendships`              | until either account is deleted                  |
+| Store sharing: which of a user's stores a given friend may see, and how much                                                            | `lager_shares`             | until either account is deleted                  |
+| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                         | `loan_requests`            | until either account is deleted                  |
+| Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`                    | until the account is deleted                     |
+| Organizations: name and free-text notes. **No owner column** — who administers one is a membership, not a property of the organization  | `organizations`            | until the last member's account is deleted       |
+| Memberships: who belongs to which organization, at which level, since when                                                              | `organization_members`     | until the account or the organization is deleted |
+| Invitations: who invited whom into which organization, at which level, and the answer                                                   | `organization_invitations` | until either account is deleted                  |
+| Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals`         | see "Deletion" below                             |
+| Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`              | **purged automatically after 24 h**              |
+| Security log: sign-ins, failed attempts, deletions, moderation decisions — with an HMAC of the client address, never the address itself | `audit_log`                | **purged automatically after 90 days**           |
 
 No profile pictures. No email addresses — the column existed until 1.1.1 and was
 dropped, because nothing ever wrote to it except the legacy MySQL import.
@@ -125,6 +128,36 @@ a shared store writes one such entry per affected friend. Loan requests are
 deliberately **not** logged there — they are usage, not security, and logging them
 would build the movement profile the log is designed to avoid.
 
+**Fellow members of an organization**, and this is the widest disclosure in the
+app. Since 2.5.0 a store can belong to an organization instead of a person —
+companies, university print hubs, makerspaces. Unlike friend sharing, this is
+not a filtered projection: members see the stock **itself**, and from the
+`weigher` level upwards they change it. There are four levels — view, weigh,
+edit, manage — and the level is what a member is given, never something they can
+raise for themselves.
+
+Members see each other's **display name and Telegram username**, the same two
+fields as in the friends list. In a workshop that feels self-evident, which is
+exactly why it is written down: it is a disclosure to third parties, and joining
+via an open code means the group can grow without any further consent step.
+
+Two consequences worth telling your users plainly:
+
+- **What a member records in an organization's store stays with the
+  organization** when they leave or delete their account. Organization rows carry
+  no author (there is deliberately no `createdBy` column — that would be a usage
+  log), so there is nothing personal in them to erase. This contradicts the
+  usual expectation enough to say out loud.
+- **The organization's stock is not part of a member's data export.** It is the
+  organization's record, not the member's personal information. What the export
+  does contain is the membership itself and the invitations in both directions.
+
+Creating, joining, leaving, invitations, level changes and removals are recorded
+in the security log (`organization.*` events, purged after 90 days) — they change
+access rights, the same reason friendships are logged. What a member _does_ with
+the stock is not: weighing and recording are usage, and logging them would build
+the movement profile the log is designed to avoid.
+
 **Nobody else.** No analytics, no tracking, no CDN, no external fonts, no error
 reporting service. Verifiable: the only third-party host in the codebase is
 `telegram.org`.
@@ -164,6 +197,19 @@ The shares are deleted **before** the stores, and that order is not cosmetic:
 there are no foreign keys, so a leftover share row would keep pointing at a store
 ID that the database later hands out again — someone would see a stock nobody ever
 shared with them.
+
+Memberships and invitations go the same way, in both directions. **The
+organization's stock does not**, and that is the point of organization rows
+carrying no author: there is nothing personal in them to erase, so the deletion
+leaves the workshop's inventory intact for the people still using it.
+
+One case needs a decision rather than a rule. Everywhere else the app refuses
+the step that would remove an organization's last administrator — an
+organization nobody can administer is unrepairable. An Art. 17 request is not a
+request the app may refuse, so deletion decides instead: if other members remain,
+the longest-standing one becomes administrator (logged, and told about it over
+Telegram); if none remain, the organization **and its entire stock** are deleted,
+because keeping data nobody can ever reach again would be the worse answer.
 
 If you find that unacceptable for your instance, the logic is in
 `deleteUserAccount` (`api/queries/account.ts`) and the reasoning is in the

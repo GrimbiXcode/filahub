@@ -64,6 +64,65 @@ export const AUDIT_EVENTS = [
   "friend.visibility_changed",
   /** Freundescode neu erzeugt, alter damit entwertet */
   "friend.code_rotated",
+  /*
+    Organisationen. Sie stehen aus demselben Grund hier wie die Freundschaften:
+    Eine Mitgliedschaft **ist** ein Zugriffsrecht, und anders als eine Freigabe
+    hat sie keine zweite Bedingung – die Zeile allein gewährt den Zugang zum
+    gesamten Bestand der Organisation. Wer wann hinzukam, welche Stufe er bekam
+    und wer sie ihm gab, muss rekonstruierbar sein.
+
+    Was ein Mitglied mit dem Bestand **tut**, steht auch hier nicht: Wiegen und
+    Erfassen sind Nutzung, nicht Sicherheit – dieselbe Grenze wie oben bei den
+    Ausleih-Anfragen.
+  */
+  /** Organisation angelegt; der Ersteller wird ihr erster Administrator */
+  "organization.created",
+  /** Organisation gelöscht, mitsamt ihrem Bestand */
+  "organization.deleted",
+  /** Person gezielt eingeladen (wirksam erst mit dem Annehmen) */
+  "organization.invited",
+  /** Einladung abgelehnt */
+  "organization.invite_declined",
+  /**
+   * Offene Einladung von einem Administrator zurückgezogen.
+   *
+   * Getrennt von `invite_declined`, weil der Handelnde ein anderer ist: Dort
+   * entscheidet der Eingeladene, hier die Organisation über ihn.
+   */
+  "organization.invite_revoked",
+  /**
+   * Stammdaten geändert; `detail.fields` nennt die betroffenen Felder.
+   *
+   * Steht hier wegen **eines** dieser Felder: `joinRole` entscheidet, welche
+   * Stufe der offene Beitrittscode vergibt. Wer sie anhebt, ändert die
+   * Zugriffsrechte jedes künftigen Beitritts – ohne diesen Eintrag zeigte das
+   * Protokoll nur die Beitritte selbst und nie die Entscheidung dahinter.
+   */
+  "organization.updated",
+  /**
+   * Mitglied hinzugekommen. `detail` trägt `{ organizationId, role, via }` –
+   * `via` unterscheidet den offenen Beitrittscode vom angenommenen
+   * Einladungsschreiben, und das ist der Unterschied zwischen „jemand kannte
+   * den Code“ und „ein Administrator hat diese Person geholt“.
+   */
+  "organization.member_added",
+  /**
+   * Stufe eines Mitglieds geändert; `detail` trägt `{ organizationId, role }`.
+   *
+   * Bei der Zwangsbeförderung, wenn der letzte Administrator sein Konto löscht,
+   * steht zusätzlich `reason: "last_admin_deleted"` darin – nach dem Vorbild von
+   * `friend.visibility_changed` mit `reason: "lager_deleted"`. Ein eigenes
+   * Ereignis dafür sagte nicht, **wer** die Stufe bekam.
+   */
+  "organization.member_role_changed",
+  /**
+   * Mitglied entfernt. `detail.reason` unterscheidet die Wege: entfernt,
+   * selbst ausgetreten oder mit dem Konto gelöscht. Für den Betroffenen ist die
+   * Folge dieselbe – sein Zugriff endet –, die Ursache ist es nicht.
+   */
+  "organization.member_removed",
+  /** Beitrittscode neu erzeugt oder abgeschaltet, alter damit entwertet */
+  "organization.join_code_rotated",
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

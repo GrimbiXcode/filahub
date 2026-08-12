@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CODE_ALPHABET, CODE_LENGTH, isCode, normalizeCode } from "./codes";
 
 /**
  * Freundschaften und geteilte Lager – gemeinsamer Code für Client und Server.
@@ -79,54 +80,34 @@ export function visibilityAllows(
 // ---------------------------------------------------------------------------
 
 /**
- * Alphabet des Freundescodes – ohne `I`, `O`, `0`, `1`.
+ * Präfix des Freundescodes: `FH-A2B3-C4D5`.
  *
- * Der Code wird abgetippt, vorgelesen und weitergeschickt; verwechselbare
- * Zeichen kosten dabei mehr, als das größere Alphabet einbringt. Bei acht
- * Stellen aus 32 Zeichen bleiben rund 1,1 Billionen Möglichkeiten – genug,
- * dass Erraten keine Rolle spielt.
+ * Alphabet, Länge und die Nachsicht beim Einlesen teilt er sich seit 2.5.0 mit
+ * dem Beitrittscode der Organisationen – beides steht in `contracts/codes.ts`.
  */
-export const FRIEND_CODE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
-
-/** Stellen im Code, ohne Präfix und Bindestriche */
-export const FRIEND_CODE_LENGTH = 8;
-
-/** `FH-A2B3-C4D5` – Präfix, damit ein Code als solcher erkennbar ist */
-const FRIEND_CODE_PATTERN = new RegExp(
-  `^FH-[${FRIEND_CODE_ALPHABET}]{4}-[${FRIEND_CODE_ALPHABET}]{4}$`
-);
+export const FRIEND_CODE_PREFIX = "FH";
 
 /**
- * Bringt eine Eingabe in die Normalform.
+ * Alphabet und Länge des Freundescodes.
  *
- * Nachsichtig bei allem, was beim Abtippen und Kopieren passiert:
- * Kleinschreibung, fehlende oder zusätzliche Bindestriche, Leerzeichen,
- * vergessenes Präfix. Wer `fh a2b3c4d5` eintippt, meint denselben Code – ihn
- * daran scheitern zu lassen wäre schlechte Laune ohne Sicherheitsgewinn.
- *
- * Gibt `null` zurück, wenn daraus kein gültiger Code werden kann.
+ * Weiterhin unter diesen Namen exportiert, weil `api/queries/friends.ts` beim
+ * Erzeugen darauf zugreift und `api/friendCode.test.ts` sie prüft.
+ */
+export const FRIEND_CODE_ALPHABET = CODE_ALPHABET;
+export const FRIEND_CODE_LENGTH = CODE_LENGTH;
+
+/**
+ * Bringt eine Eingabe in die Normalform, oder `null`, wenn daraus kein gültiger
+ * Code werden kann. Einzelheiten und die Begründung der Nachsicht stehen bei
+ * `normalizeCode` (`contracts/codes.ts`).
  */
 export function normalizeFriendCode(input: string): string | null {
-  const stripped = input.toUpperCase().replace(/[\s-]/g, "");
-  /*
-    Das Präfix nur abschneiden, wenn danach noch ein voller Code übrig bleibt.
-    `F` und `H` stehen beide im Alphabet, also fängt etwa jeder 1024ste Code
-    selbst mit `FH` an – unbedingtes Abschneiden fraß dort echte Stellen, und der
-    Eigentümer bekam für seinen gültigen Code „Zu diesem Freundescode gibt es
-    kein Konto“ zu sehen. Ein `FH` bleibt stehen, wenn es zum Code gehört.
-  */
-  const bare =
-    stripped.length === FRIEND_CODE_LENGTH + 2 && stripped.startsWith("FH")
-      ? stripped.slice(2)
-      : stripped;
-  if (bare.length !== FRIEND_CODE_LENGTH) return null;
-  if (![...bare].every(c => FRIEND_CODE_ALPHABET.includes(c))) return null;
-  return `FH-${bare.slice(0, 4)}-${bare.slice(4)}`;
+  return normalizeCode(FRIEND_CODE_PREFIX, input);
 }
 
 /** Prüft die Normalform. Für Tests und als Zusicherung beim Erzeugen. */
 export function isFriendCode(value: string): boolean {
-  return FRIEND_CODE_PATTERN.test(value);
+  return isCode(FRIEND_CODE_PREFIX, value);
 }
 
 // ---------------------------------------------------------------------------

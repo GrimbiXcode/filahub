@@ -6,7 +6,9 @@ Gebindearten (Rolle, Beutel, Flasche, Eimer, Kartusche) und Dryboxen inkl.
 Leergewicht (Tara), Wägungen mit automatischer Restmengenberechnung,
 Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
-anfragen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
+anfragen. Seit 2.5.0 kann ein Lager statt einer Person auch einer
+**Organisation** gehören – gemeinsamer Bestand mehrerer Personen mit vier
+Stufen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
 Benutzer).
 
 ## Tech-Stack
@@ -24,7 +26,8 @@ Benutzer).
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, Lager, ContainerTypes, StorageBoxes,
-                Import, Friends, FriendInventory, Settings, AdminPresets,
+                Import, Friends, FriendInventory, Organizations,
+                OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminSystem, Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
@@ -33,7 +36,10 @@ src/            React-Frontend
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
   hooks/        useAuth, use-mobile, useReleaseNotes
-  lib/          formatContext.ts (useFormat), format.ts (Füllstandsfarben),
+  lib/          activeScope.ts (aktiver Bereich: privat oder Organisation),
+                activeLager.ts (gewähltes Lager, je Bereich getrennt),
+                organizationRole.ts (Stufen-Beschriftungen),
+                formatContext.ts (useFormat), format.ts (Füllstandsfarben),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
@@ -45,7 +51,9 @@ api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
-                friend, preset, admin (admin: preset, proposal, system)
+                friend, organization, preset, admin (admin: preset, proposal, system)
+  scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
+                eine `organizationId` aus einer Eingabe auflöst und übersetzt
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
@@ -54,12 +62,16 @@ api/            Hono/tRPC-Backend
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
-                presets.ts (Preset-Katalog), presetSeed.ts (Startkatalog),
+                organizations.ts (Mitglieder, Einladungen, Löschkaskade),
+                patch.ts (leerer Änderungssatz), presets.ts (Preset-Katalog),
+                presetSeed.ts (Startkatalog),
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
                 types.ts, import.ts, friends.ts (Freigabestufen, Freundescode),
+                codes.ts (Alphabet und Normalform beider Codes),
+                organizations.ts (Stufen, Beitrittscode, Obergrenzen),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
@@ -107,16 +119,20 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   Eingabevalidierung mit zod; Transformer ist `superjson` (Client und Server).
   Geschützte Prozeduren mit `authedQuery` bzw. `adminQuery` (trotz des Namens
   sind beide generische Prozeduren für Query **und** Mutation).
-- **Mandantenfähigkeit:** Alle Fachdaten (Gebindearten, Dryboxen, Materialien,
-  Wägungen) sind über `userId` einem Benutzer zugeordnet. Jede Abfrage muss
-  `ctx.user.id` berücksichtigen (siehe Muster in `api/materialRouter.ts` mit
-  `validateForeignKeys` und den `*BelongsToUser`-Hilfsfunktionen in
-  `api/queries/filament.ts`).
+- **Mandantenfähigkeit:** Seit 2.5.0 gehört jede Fachzeile (`lager`,
+  `materials`, `container_types`, `storage_boxes`) **entweder** einer Person
+  (`userId`) **oder** einer Organisation (`organizationId`) – erzwungen durch
+  `CHECK (num_nonnulls("userId","organizationId") = 1)`. Keine Abfrage nimmt
+  eine `organizationId` aus der Eingabe an; aufgelöst wird sie an genau einer
+  Stelle (`resolveScope` in `api/scope.ts`), übersetzt an genau einer weiteren
+  (`scopeWhere`). Jede Abfragefunktion nimmt einen `Scope` dort, wo bis 2.4.1
+  die `userId` stand – siehe den Abschnitt „Organisationen“ unten.
   **Zwei Ausnahmen:** die `preset_*`-Tabellen sind ein globaler, von
   Administratoren gepflegter Katalog und haben bewusst keine `userId`. Der
   Benutzerbezug steckt allein in `hidden_container_presets` (Ausblenden) und
-  `preset_proposals` (Einreicher). Die zweite sind die Freundes-Lesepfade –
-  siehe den eigenen Abschnitt unten.
+  `preset_proposals` (Einreicher); beide bleiben persönlich, auch im
+  Org-Kontext. Die zweite sind die Freundes-Lesepfade – siehe den eigenen
+  Abschnitt unten.
 - **Auth-Fluss:** `createContext` ruft `authenticateRequest` auf; nicht
   angemeldete Requests bekommen `user: undefined` statt eines Fehlers –
   die Prozedur-Middleware entscheidet. Session = JWT (HS256, 1 Jahr) im
@@ -193,6 +209,11 @@ müssen alle drei mit:
 | `api/postgres.integration.test.ts` (Tabellen- und Enum-Listen) | roter Test                                     |
 | `api/account.integration.test.ts` (DSGVO-Wächter, zwei Listen) | roter Test                                     |
 | `api/queries/systemStatus.ts` → `COUNTED_TABLES`               | **500 auf `/verwaltung/system`, zur Laufzeit** |
+
+Seit 2.5.0 stehen `organizations`, `organization_members` und
+`organization_invitations` in allen dreien. Der DSGVO-Wächter findet dabei
+`organization_members.userId` sowie `invitedUserId` und `invitedByUserId`;
+`organizations` selbst hat bewusst **keine** Benutzerspalte.
 
 `COUNTED_TABLES` ist der gefährliche Fall: Die Namen gehen über
 `sql.identifier()` ins SQL, `tsc` sieht dort nichts. Zwei Fehlerrichtungen, beide
@@ -301,6 +322,112 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   Telegram lässt einen Bot nur schreiben, wenn der Empfänger den Chat einmal
   geöffnet hat; wer nur das Login-Widget benutzt hat, ist unerreichbar. Der
   Vorgang liegt trotzdem in der App, und die Oberfläche sagt das (`notified`).
+
+## Organisationen
+
+Seit 2.5.0. Gemeinsamer Bestand mehrerer Personen – Firmen, 3D-Druck-Hubs von
+Hochschulen, Bastelwerkstätten. Die zweite Stelle nach den Freundes-Lesepfaden,
+an der die Mandantengrenze absichtlich überschritten wird, und die
+weitreichendere: Ein Mitglied sieht nicht eine gefilterte Projektion, sondern
+den Bestand selbst, und je nach Stufe darf es ihn ändern.
+
+- **Eigentum ist ein Entweder-oder.** `userId` **oder** `organizationId`, nie
+  beides und nie keines (`CHECK num_nonnulls(…) = 1`). Bei einer Org-Zeile ist
+  `userId` **NULL** – das ist die tragende Entscheidung: Jede Abfrage, die noch
+  auf `eq(tabelle.userId, ctx.user.id)` filtert, schließt Org-Daten damit
+  automatisch aus. Eine vergessene Bedingung fällt **zu**, nicht auf. Stünde
+  dort der Ersteller, lieferte jede noch nicht angepasste Abfrage still
+  Org-Daten in die private Ansicht, und ein ausgetretenes Mitglied behielte
+  Zugriff auf alles, was es selbst angelegt hat. Aus demselben Grund bleibt die
+  Löschkaskade in `deleteUserAccount` unverändert richtig.
+- **Kein `createdByUserId` auf Org-Zeilen.** Wer was eingebucht hat, wäre ein
+  Nutzungsprotokoll – dieselbe Grenze, die `contracts/audit.ts` schon zieht. Der
+  Verzicht hält die Org-Daten frei von Personenbezug: Beim Kontolöschen ist
+  nichts zu anonymisieren, und der Datenexport muss keinen fremden Bestand
+  mitliefern. Auch `organizations` selbst hat keine `ownerUserId` – wer
+  verwaltet, steht in der Mitgliedschaft, und eine zweite Spalte wäre eine
+  zweite Wahrheit.
+- **Genau eine Stelle entscheidet.** `resolveScope(viewerId, organizationId,
+required)` in `api/scope.ts` löst die Behauptung aus der Eingabe gegen die
+  Mitgliedschaft auf und prüft die Stufe. Ein `Scope` entsteht **nur** dort.
+  Jede Abfragefunktion nimmt ihn als ersten Parameter, an der Stelle, an der bis
+  2.4.1 die `userId` stand; wer die Auflösung vergisst, bekommt einen
+  Compile-Fehler. Übersetzt wird er an genau einer weiteren Stelle
+  (`scopeWhere`). Was der Typ **nicht** fängt, ist eine zu niedrig angesetzte
+  Stufe – dafür ist die Matrix in `api/organizations.integration.test.ts` da,
+  positiv **und** negativ.
+- **Nicht-Mitglied → `NOT_FOUND`, zu niedrige Stufe → `FORBIDDEN`.** Die
+  Existenz einer fremden Organisation geht niemanden an; wer Mitglied ist, kennt
+  sie ohnehin, und „nicht gefunden“ wäre dort eine Lüge, die beim Suchen des
+  Fehlers kostet.
+
+Die vier Stufen (`contracts/organizations.ts`, `roleAllows` nach dem Vorbild von
+`visibilityAllows`):
+
+| Vorgang                                                                                             | Stufe     |
+| --------------------------------------------------------------------------------------------------- | --------- |
+| Bestand, Lager, Gebindearten, Dryboxen ansehen; suchen                                              | `viewer`  |
+| Wägung erfassen (**abbuchen**); die eigene gerade eben korrigieren                                  | `weigher` |
+| Material anlegen/ändern/löschen, Import, Gebindearten und Dryboxen pflegen; **jede** Wägung löschen | `editor`  |
+| Lager anlegen/ändern/löschen, Mitglieder und Stufen, Beitrittscode, Org selbst                      | `admin`   |
+
+Ein Lager ist Struktur und sein Löschen wirkt auf alle – deshalb `admin`, obwohl
+das Material darin schon `editor` darf.
+
+**`weigher` darf korrigieren, nicht aufräumen.** Eine Wägung löschen darf diese
+Stufe nur, wenn es die **zuletzt erfasste** des Materials ist und ihr
+`createdAt` weniger als `WEIGHING_CORRECTION_MINUTES` (15) zurückliegt.
+Andernfalls braucht es `editor`. Der Grund: `weigher` ist die Stufe, die man
+freigebig vergibt – ohne diese Grenze könnte sie die gesamte Wägungsgeschichte
+der Organisation abräumen, unwiderruflich und ohne Spur, weil Wiegen bewusst
+nicht protokolliert wird. Die Regel steht als `mayDeleteWeighing` in
+`contracts/organizations.ts` und wird von **beiden** Seiten aufgerufen, vom
+Riegel in `material.deleteWeighing` und von der Sichtbarkeit des Knopfes in
+`MaterialDetail.tsx`; zwei Fassungen liefen auseinander. Verglichen wird
+`createdAt` und nicht `weighedAt` – letzteres ist eine Eingabe und ließe sich
+auf „jetzt“ setzen. „Zuletzt erfasst“ heißt höchste `id`, nicht jüngstes
+`weighedAt`.
+
+**`admin` heißt zweierlei, und die beiden haben nichts miteinander zu tun.**
+`users.role = "admin"` ist der Betreiber der Instanz (Preset-Katalog,
+`/verwaltung/system`, `adminQuery`) und gewährt **keinen** Zugriff auf den
+Bestand irgendeiner Organisation. Wer eine Organisation verwaltet, steht
+ausschließlich in `organization_members.role`.
+
+Weiteres, das beim Umbau leicht kippt:
+
+- **Es bleibt immer mindestens ein Administrator.** `setMemberRole`,
+  `removeMember` und `leave` verweigern den Schritt – geprüft **in** der
+  Transaktion und mit `FOR UPDATE`, sonst kämen zwei gleichzeitig
+  Zurücktretende beide durch. Einzige Ausnahme ist die Kontolöschung nach
+  Art. 17 DSGVO (`handleAdminAccountDeletion`): Sie befördert das am längsten
+  dabei befindliche Mitglied oder löscht die Organisation samt Bestand, wenn es
+  keines mehr gibt.
+- **Eine Einladung gilt nur, solange ihr Urheber verwaltet.** Sonst überlebte
+  die Vollmacht ihren Träger. Beantworten und Aufnehmen laufen in **einer**
+  Transaktion; scheitert das Aufnehmen, bleibt die Einladung offen, statt
+  verbraucht und wegen des partiellen Unique-Index auf `pending` nicht einmal
+  neu ausstellbar zu sein.
+- **Ein Org-Lager lässt sich nicht an Freunde freigeben.** Semantisch dürfte ein
+  einzelner Administrator nicht den Bestand aller nach außen öffnen; technisch
+  hängt die ganze Freigabe an `lager.userId`. Der Riegel steht trotzdem
+  ausdrücklich in `friendRouter.setLagerVisibility` – „fällt von selbst zu“ ist
+  kein Riegel. Die erklärende Meldung bekommt nur, wer Mitglied der besitzenden
+  Organisation ist; sonst wäre sie ein Orakel über fremde Lager-IDs.
+- **`hidden_container_presets` und `preset_proposals` bleiben persönlich.**
+  Beides betrifft den globalen Katalog, nicht den Bestand – ein Eintrag, den ein
+  Kollege ausblendet, soll nicht bei allen verschwinden. `preset.copyToOwn` legt
+  dagegen im **aktiven** Bereich an: Die Kopie ist eine `container_types`-Zeile.
+- **Die Obergrenzen garantiert die Datenbank nicht** (`MAX_LAGER_PER_ORGANIZATION`
+  10, `MAX_ORGANIZATIONS_PER_USER` 3, `MAX_MEMBERS_PER_ORGANIZATION` 100) –
+  derselbe Vorbehalt wie bei `MAX_LAGER_PER_USER`.
+- **Im Client** liegt der aktive Bereich in `src/lib/activeScope.ts`
+  (`useSyncExternalStore` über `localStorage`, kein Context – die Seiten rendern
+  `AuthLayout` selbst und liegen im Baum darüber). `organizationId` ist Teil
+  jedes Query-Keys; ein Wechsel lädt alles Betroffene nach, ganz ohne
+  `invalidate`. Genau dafür ist das Feld serverseitig **Pflicht** und nicht
+  optional. `useScopeRole` liefert während des Ladens `viewer` – ein Knopf, der
+  kurz fehlt, ist besser als einer, der kurz da ist und `FORBIDDEN` liefert.
 
 ## Preset-Katalog
 
@@ -568,8 +695,8 @@ Datenbank.
 ### Integrationstests (`npm run test:integration`)
 
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
-  `api/friends.integration.test.ts` und `api/lager.integration.test.ts`,
-  konfiguriert in
+  `api/friends.integration.test.ts`, `api/lager.integration.test.ts` und
+  `api/organizations.integration.test.ts`, konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in

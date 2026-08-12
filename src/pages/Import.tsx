@@ -38,6 +38,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { importPayloadSchema } from "@contracts/import";
+import { roleAllows } from "@contracts/organizations";
 import { useActiveLagerId } from "@/lib/activeLager";
 import { buildImportPrompt } from "@/lib/importPrompt";
 import { useFormat } from "@/lib/formatContext";
@@ -45,6 +46,7 @@ import { useI18n } from "@/lib/i18nContext";
 import type { Messages } from "@/messages/de";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
+import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 
 /** Editierbare Tabellenzeile: alle Werte als Text, Validierung live. */
 type ImportZeile = {
@@ -93,6 +95,8 @@ export default function Import() {
   const { t, language } = useI18n();
   const dateiInputRef = useRef<HTMLInputElement>(null);
   const importPrompt = buildImportPrompt(currency, language);
+  const scope = useActiveScope();
+  const role = useScopeRole();
 
   const [jsonText, setJsonText] = useState("");
   const [pruefFehler, setPruefFehler] = useState<string | null>(null);
@@ -108,10 +112,21 @@ export default function Import() {
   const [zielLager, setZielLager] = useState<string>("");
   const [promptSichtbar, setPromptSichtbar] = useState(false);
 
-  const { data: lagerList } = trpc.lager.list.useQuery();
+  const { data: lagerList } = trpc.lager.list.useQuery(scope);
   const aktivesLager = useActiveLagerId(lagerList);
-  const gewaehltesLager =
-    zielLager !== "" ? Number(zielLager) : (aktivesLager ?? null);
+  /*
+    Abgeglichen gegen die geladene Liste, nicht bloß gelesen – dieselbe
+    Versöhnung, die `useActiveLagerId` für das aktive Lager macht: Wer den
+    Bereich wechselt, während die Seite offen ist, hätte hier sonst weiter das
+    Lager der anderen Seite stehen. Der Import liefe dann in einen Fehler aus
+    `validateForeignKeys`, und die Auswahl zeigte einen Namen, den es in dieser
+    Liste gar nicht gibt.
+  */
+  const gewaehltAusListe =
+    zielLager !== "" && (lagerList ?? []).some(l => l.id === Number(zielLager));
+  const gewaehltesLager = gewaehltAusListe
+    ? Number(zielLager)
+    : (aktivesLager ?? null);
   const importMutation = trpc.material.importMany.useMutation({
     onSuccess: async data => {
       toast.success(`${data.created} Materialien importiert`);
@@ -210,6 +225,7 @@ export default function Import() {
       return;
     }
     importMutation.mutate({
+      ...scope,
       // Alle Positionen landen im gewählten Lager – ein Modell kann es nicht
       // kennen, deshalb kommt es aus der Oberfläche.
       lagerId: gewaehltesLager,
@@ -230,40 +246,53 @@ export default function Import() {
       <div className="flex max-w-5xl flex-col gap-4 sm:gap-6">
         <PageHeader title={t.import.title} description={t.import.description} />
 
-        {/* Schritt 1: Prompt kopieren */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t.import.step1}</CardTitle>
-            <CardDescription>{t.import.step1Description}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={promptKopieren}>
-                <ClipboardCopy className="mr-2 h-4 w-4" />
-                {t.import.copyPrompt}
-              </Button>
-              {/* Der Prompt ist lang – auf dem Telefon bleibt er eingeklappt,
+        {/*
+          Der Import legt Material an, ist also `editor`. Statt jeden Schritt
+          einzeln auszublenden, endet die Seite hier – die drei Schritte
+          zusammen ergeben ohne den letzten keinen Sinn.
+        */}
+        {!roleAllows(role, "editor") ? (
+          <Card>
+            <CardContent className="py-10 text-center text-sm text-muted-foreground">
+              {t.organizations.needEditor}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Schritt 1: Prompt kopieren */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{t.import.step1}</CardTitle>
+                <CardDescription>{t.import.step1Description}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={promptKopieren}>
+                    <ClipboardCopy className="mr-2 h-4 w-4" />
+                    {t.import.copyPrompt}
+                  </Button>
+                  {/* Der Prompt ist lang – auf dem Telefon bleibt er eingeklappt,
                   bis ihn jemand wirklich lesen will. */}
-              <Button
-                variant="outline"
-                onClick={() => setPromptSichtbar(v => !v)}
-                aria-expanded={promptSichtbar}
-              >
-                {promptSichtbar ? (
-                  <ChevronUp className="mr-2 h-4 w-4" />
-                ) : (
-                  <ChevronDown className="mr-2 h-4 w-4" />
+                  <Button
+                    variant="outline"
+                    onClick={() => setPromptSichtbar(v => !v)}
+                    aria-expanded={promptSichtbar}
+                  >
+                    {promptSichtbar ? (
+                      <ChevronUp className="mr-2 h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="mr-2 h-4 w-4" />
+                    )}
+                    {promptSichtbar ? t.import.hidePrompt : t.import.showPrompt}
+                  </Button>
+                </div>
+                {promptSichtbar && (
+                  <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-xs sm:text-sm">
+                    {importPrompt}
+                  </pre>
                 )}
-                {promptSichtbar ? t.import.hidePrompt : t.import.showPrompt}
-              </Button>
-            </div>
-            {promptSichtbar && (
-              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 text-xs sm:text-sm">
-                {importPrompt}
-              </pre>
-            )}
 
-            {/*
+                {/*
               Der Prompt lädt dazu ein, eine Rechnung in ein fremdes
               Sprachmodell zu geben. filahub überträgt dabei selbst nichts –
               aber Rechnungen tragen Namen, Anschrift und Zahlungsdaten, und
@@ -271,354 +300,133 @@ export default function Import() {
               Der Hinweis steht bewusst hier und nicht nur in der
               Datenschutzerklärung: gelesen wird er nur an dieser Stelle.
             */}
-            <p className="flex gap-2 text-xs text-muted-foreground">
-              <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{t.import.privacyWarning}</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        {/* Schritt 2: JSON einfügen oder hochladen */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{t.import.step2}</CardTitle>
-            <CardDescription>{t.import.step2Description}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <Textarea
-              value={jsonText}
-              onChange={e => {
-                setJsonText(e.target.value);
-                setPruefFehler(null);
-              }}
-              placeholder='{ "bestelldatum": "2026-07-20", "positionen": [ … ] }'
-              className="min-h-40 font-mono text-sm"
-              spellCheck={false}
-            />
-            {pruefFehler && (
-              <p className="whitespace-pre-wrap text-sm text-destructive">
-                {pruefFehler}
-              </p>
-            )}
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={pruefen} disabled={!jsonText.trim()}>
-                {t.import.check}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => dateiInputRef.current?.click()}
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                {t.import.uploadFile}
-              </Button>
-              <input
-                ref={dateiInputRef}
-                type="file"
-                accept=".json,.txt"
-                className="hidden"
-                onChange={dateiLesen}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Schritt 3: Übersicht bearbeiten und importieren */}
-        {zeilen != null && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">{t.import.step3}</CardTitle>
-              <CardDescription>{t.import.step3Description}</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex min-w-0 max-w-72 flex-col gap-1.5">
-                <Label htmlFor="ziel-lager">{t.import.targetLagerLabel}</Label>
-                <Select
-                  value={gewaehltesLager != null ? String(gewaehltesLager) : ""}
-                  onValueChange={setZielLager}
-                >
-                  <SelectTrigger id="ziel-lager">
-                    <SelectValue placeholder={t.import.targetLagerLabel} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(lagerList ?? []).map(l => (
-                      <SelectItem key={l.id} value={String(l.id)}>
-                        {l.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  {t.import.targetLagerHint}
+                <p className="flex gap-2 text-xs text-muted-foreground">
+                  <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{t.import.privacyWarning}</span>
                 </p>
-              </div>
+              </CardContent>
+            </Card>
 
-              <div className="flex min-w-0 max-w-56 flex-col gap-1.5">
-                <Label htmlFor="kaufdatum">{t.import.purchaseDateLabel}</Label>
-                <Input
-                  id="kaufdatum"
-                  type="date"
-                  value={kaufdatum}
-                  onChange={e => setKaufdatum(e.target.value)}
-                  className={cn(kaufdatumUngueltig && "border-destructive")}
+            {/* Schritt 2: JSON einfügen oder hochladen */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">{t.import.step2}</CardTitle>
+                <CardDescription>{t.import.step2Description}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <Textarea
+                  value={jsonText}
+                  onChange={e => {
+                    setJsonText(e.target.value);
+                    setPruefFehler(null);
+                  }}
+                  placeholder='{ "bestelldatum": "2026-07-20", "positionen": [ … ] }'
+                  className="min-h-40 font-mono text-sm"
+                  spellCheck={false}
                 />
-                {kaufdatumUngueltig && (
-                  <p className="text-sm text-destructive">
-                    Datum im Format JJJJ-MM-TT
+                {pruefFehler && (
+                  <p className="whitespace-pre-wrap text-sm text-destructive">
+                    {pruefFehler}
                   </p>
                 )}
-              </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={pruefen} disabled={!jsonText.trim()}>
+                    {t.import.check}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => dateiInputRef.current?.click()}
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    {t.import.uploadFile}
+                  </Button>
+                  <input
+                    ref={dateiInputRef}
+                    type="file"
+                    accept=".json,.txt"
+                    className="hidden"
+                    onChange={dateiLesen}
+                  />
+                </div>
+              </CardContent>
+            </Card>
 
-              {zeilen.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  {t.import.noPositions}
-                </p>
-              ) : (
-                <>
-                  {/* Telefon: je Position eine Karte mit beschrifteten Feldern –
-                      eine sechsspaltige Eingabetabelle ist dort unbedienbar. */}
-                  <div className="flex flex-col gap-3 lg:hidden">
-                    {zeilen.map((zeile, index) => {
-                      const fehler = fehlerProZeile[index];
-                      return (
-                        <div
-                          key={index}
-                          className={cn(
-                            "rounded-xl border p-3",
-                            fehler.length > 0 &&
-                              "border-destructive/50 bg-destructive/5"
-                          )}
-                        >
-                          <div className="mb-3 flex items-center justify-between">
-                            <span className="text-sm font-medium">
-                              {t.import.position({ index: index + 1 })}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => zeileLoeschen(index)}
-                              aria-label={t.import.deletePosition({
-                                index: index + 1,
-                              })}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="col-span-2 grid gap-1.5">
-                              <Label
-                                htmlFor={`p-typ-${index}`}
-                                className="text-xs"
-                              >
-                                {t.import.typeLabel}
-                              </Label>
-                              <Input
-                                id={`p-typ-${index}`}
-                                value={zeile.typ}
-                                onChange={e =>
-                                  zeileAendern(index, "typ", e.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-1.5">
-                              <Label
-                                htmlFor={`p-hersteller-${index}`}
-                                className="text-xs"
-                              >
-                                {t.common.manufacturer}
-                              </Label>
-                              <Input
-                                id={`p-hersteller-${index}`}
-                                value={zeile.hersteller}
-                                onChange={e =>
-                                  zeileAendern(
-                                    index,
-                                    "hersteller",
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-1.5">
-                              <Label
-                                htmlFor={`p-farbe-${index}`}
-                                className="text-xs"
-                              >
-                                {t.common.color}
-                              </Label>
-                              <Input
-                                id={`p-farbe-${index}`}
-                                value={zeile.farbe}
-                                onChange={e =>
-                                  zeileAendern(index, "farbe", e.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-1.5">
-                              <Label
-                                htmlFor={`p-gewicht-${index}`}
-                                className="text-xs"
-                              >
-                                {t.import.nominalLabel}
-                              </Label>
-                              <Input
-                                id={`p-gewicht-${index}`}
-                                value={zeile.nenngewicht}
-                                inputMode="numeric"
-                                onChange={e =>
-                                  zeileAendern(
-                                    index,
-                                    "nenngewicht",
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-1.5">
-                              <Label
-                                htmlFor={`p-preis-${index}`}
-                                className="text-xs"
-                              >
-                                {t.import.priceLabel({
-                                  symbol: currencySymbol,
-                                })}
-                              </Label>
-                              <Input
-                                id={`p-preis-${index}`}
-                                value={zeile.preis}
-                                inputMode="decimal"
-                                placeholder={t.import.pricePlaceholder}
-                                onChange={e =>
-                                  zeileAendern(index, "preis", e.target.value)
-                                }
-                              />
-                            </div>
-                            <div className="grid gap-1.5">
-                              <Label
-                                htmlFor={`p-anzahl-${index}`}
-                                className="text-xs"
-                              >
-                                {t.import.countLabel}
-                              </Label>
-                              <Input
-                                id={`p-anzahl-${index}`}
-                                value={zeile.anzahl}
-                                inputMode="numeric"
-                                onChange={e =>
-                                  zeileAendern(index, "anzahl", e.target.value)
-                                }
-                              />
-                            </div>
-                          </div>
-                          {fehler.length > 0 && (
-                            <p className="mt-2 text-sm text-destructive">
-                              {fehler.join(", ")}
-                            </p>
-                          )}
-                        </div>
-                      );
-                    })}
+            {/* Schritt 3: Übersicht bearbeiten und importieren */}
+            {zeilen != null && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">{t.import.step3}</CardTitle>
+                  <CardDescription>{t.import.step3Description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4">
+                  <div className="flex min-w-0 max-w-72 flex-col gap-1.5">
+                    <Label htmlFor="ziel-lager">
+                      {t.import.targetLagerLabel}
+                    </Label>
+                    <Select
+                      value={
+                        gewaehltesLager != null ? String(gewaehltesLager) : ""
+                      }
+                      onValueChange={setZielLager}
+                    >
+                      <SelectTrigger id="ziel-lager">
+                        <SelectValue placeholder={t.import.targetLagerLabel} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(lagerList ?? []).map(l => (
+                          <SelectItem key={l.id} value={String(l.id)}>
+                            {l.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {t.import.targetLagerHint}
+                    </p>
                   </div>
 
-                  <div className="hidden lg:block">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>{t.common.manufacturer}</TableHead>
-                          <TableHead>{t.import.typeLabel}</TableHead>
-                          <TableHead>{t.common.color}</TableHead>
-                          <TableHead className="w-28">
-                            {t.import.nominalLabel}
-                          </TableHead>
-                          <TableHead className="w-28">
-                            {t.import.priceLabel({ symbol: currencySymbol })}
-                          </TableHead>
-                          <TableHead className="w-20">
-                            {t.import.countLabel}
-                          </TableHead>
-                          <TableHead className="w-12" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
+                  <div className="flex min-w-0 max-w-56 flex-col gap-1.5">
+                    <Label htmlFor="kaufdatum">
+                      {t.import.purchaseDateLabel}
+                    </Label>
+                    <Input
+                      id="kaufdatum"
+                      type="date"
+                      value={kaufdatum}
+                      onChange={e => setKaufdatum(e.target.value)}
+                      className={cn(kaufdatumUngueltig && "border-destructive")}
+                    />
+                    {kaufdatumUngueltig && (
+                      <p className="text-sm text-destructive">
+                        Datum im Format JJJJ-MM-TT
+                      </p>
+                    )}
+                  </div>
+
+                  {zeilen.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {t.import.noPositions}
+                    </p>
+                  ) : (
+                    <>
+                      {/* Telefon: je Position eine Karte mit beschrifteten Feldern –
+                      eine sechsspaltige Eingabetabelle ist dort unbedienbar. */}
+                      <div className="flex flex-col gap-3 lg:hidden">
                         {zeilen.map((zeile, index) => {
                           const fehler = fehlerProZeile[index];
                           return (
-                            <TableRow
+                            <div
                               key={index}
                               className={cn(
-                                fehler.length > 0 && "bg-destructive/10"
+                                "rounded-xl border p-3",
+                                fehler.length > 0 &&
+                                  "border-destructive/50 bg-destructive/5"
                               )}
                             >
-                              <TableCell>
-                                <Input
-                                  value={zeile.hersteller}
-                                  aria-label={`Hersteller Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(
-                                      index,
-                                      "hersteller",
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  value={zeile.typ}
-                                  aria-label={`Typ Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(index, "typ", e.target.value)
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  value={zeile.farbe}
-                                  aria-label={`Farbe Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(index, "farbe", e.target.value)
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  value={zeile.nenngewicht}
-                                  inputMode="numeric"
-                                  aria-label={`Nenngewicht Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(
-                                      index,
-                                      "nenngewicht",
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  value={zeile.preis}
-                                  inputMode="decimal"
-                                  placeholder={t.import.pricePlaceholder}
-                                  aria-label={`Preis Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(index, "preis", e.target.value)
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  value={zeile.anzahl}
-                                  inputMode="numeric"
-                                  aria-label={`Anzahl Position ${index + 1}`}
-                                  onChange={e =>
-                                    zeileAendern(
-                                      index,
-                                      "anzahl",
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
+                              <div className="mb-3 flex items-center justify-between">
+                                <span className="text-sm font-medium">
+                                  {t.import.position({ index: index + 1 })}
+                                </span>
                                 <Button
                                   variant="ghost"
                                   size="icon"
@@ -629,49 +437,304 @@ export default function Import() {
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </Button>
-                              </TableCell>
-                            </TableRow>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div className="col-span-2 grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-typ-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.import.typeLabel}
+                                  </Label>
+                                  <Input
+                                    id={`p-typ-${index}`}
+                                    value={zeile.typ}
+                                    onChange={e =>
+                                      zeileAendern(index, "typ", e.target.value)
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-hersteller-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.common.manufacturer}
+                                  </Label>
+                                  <Input
+                                    id={`p-hersteller-${index}`}
+                                    value={zeile.hersteller}
+                                    onChange={e =>
+                                      zeileAendern(
+                                        index,
+                                        "hersteller",
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-farbe-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.common.color}
+                                  </Label>
+                                  <Input
+                                    id={`p-farbe-${index}`}
+                                    value={zeile.farbe}
+                                    onChange={e =>
+                                      zeileAendern(
+                                        index,
+                                        "farbe",
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-gewicht-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.import.nominalLabel}
+                                  </Label>
+                                  <Input
+                                    id={`p-gewicht-${index}`}
+                                    value={zeile.nenngewicht}
+                                    inputMode="numeric"
+                                    onChange={e =>
+                                      zeileAendern(
+                                        index,
+                                        "nenngewicht",
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-preis-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.import.priceLabel({
+                                      symbol: currencySymbol,
+                                    })}
+                                  </Label>
+                                  <Input
+                                    id={`p-preis-${index}`}
+                                    value={zeile.preis}
+                                    inputMode="decimal"
+                                    placeholder={t.import.pricePlaceholder}
+                                    onChange={e =>
+                                      zeileAendern(
+                                        index,
+                                        "preis",
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                                <div className="grid gap-1.5">
+                                  <Label
+                                    htmlFor={`p-anzahl-${index}`}
+                                    className="text-xs"
+                                  >
+                                    {t.import.countLabel}
+                                  </Label>
+                                  <Input
+                                    id={`p-anzahl-${index}`}
+                                    value={zeile.anzahl}
+                                    inputMode="numeric"
+                                    onChange={e =>
+                                      zeileAendern(
+                                        index,
+                                        "anzahl",
+                                        e.target.value
+                                      )
+                                    }
+                                  />
+                                </div>
+                              </div>
+                              {fehler.length > 0 && (
+                                <p className="mt-2 text-sm text-destructive">
+                                  {fehler.join(", ")}
+                                </p>
+                              )}
+                            </div>
                           );
                         })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                </>
-              )}
+                      </div>
 
-              {hatFehler && (
-                <div className="hidden lg:block">
-                  {zeilen.map((_, index) =>
-                    fehlerProZeile[index].length > 0 ? (
-                      <p key={index} className="text-sm text-destructive">
-                        {t.import.positionError({
-                          index: index + 1,
-                          errors: fehlerProZeile[index].join(", "),
-                        })}
-                      </p>
-                    ) : null
+                      <div className="hidden lg:block">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>{t.common.manufacturer}</TableHead>
+                              <TableHead>{t.import.typeLabel}</TableHead>
+                              <TableHead>{t.common.color}</TableHead>
+                              <TableHead className="w-28">
+                                {t.import.nominalLabel}
+                              </TableHead>
+                              <TableHead className="w-28">
+                                {t.import.priceLabel({
+                                  symbol: currencySymbol,
+                                })}
+                              </TableHead>
+                              <TableHead className="w-20">
+                                {t.import.countLabel}
+                              </TableHead>
+                              <TableHead className="w-12" />
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {zeilen.map((zeile, index) => {
+                              const fehler = fehlerProZeile[index];
+                              return (
+                                <TableRow
+                                  key={index}
+                                  className={cn(
+                                    fehler.length > 0 && "bg-destructive/10"
+                                  )}
+                                >
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.hersteller}
+                                      aria-label={`Hersteller Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "hersteller",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.typ}
+                                      aria-label={`Typ Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "typ",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.farbe}
+                                      aria-label={`Farbe Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "farbe",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.nenngewicht}
+                                      inputMode="numeric"
+                                      aria-label={`Nenngewicht Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "nenngewicht",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.preis}
+                                      inputMode="decimal"
+                                      placeholder={t.import.pricePlaceholder}
+                                      aria-label={`Preis Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "preis",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Input
+                                      value={zeile.anzahl}
+                                      inputMode="numeric"
+                                      aria-label={`Anzahl Position ${index + 1}`}
+                                      onChange={e =>
+                                        zeileAendern(
+                                          index,
+                                          "anzahl",
+                                          e.target.value
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  <TableCell>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => zeileLoeschen(index)}
+                                      aria-label={t.import.deletePosition({
+                                        index: index + 1,
+                                      })}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </>
                   )}
-                </div>
-              )}
 
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                <Button
-                  onClick={importieren}
-                  disabled={!importierbar}
-                  className="w-full sm:w-auto"
-                >
-                  {importMutation.isPending
-                    ? t.import.importing
-                    : t.import.importCount({ count: gesamtAnzahl })}
-                </Button>
-                {hatFehler && (
-                  <p className="text-sm text-destructive">
-                    {t.import.fixErrors}
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  {hatFehler && (
+                    <div className="hidden lg:block">
+                      {zeilen.map((_, index) =>
+                        fehlerProZeile[index].length > 0 ? (
+                          <p key={index} className="text-sm text-destructive">
+                            {t.import.positionError({
+                              index: index + 1,
+                              errors: fehlerProZeile[index].join(", "),
+                            })}
+                          </p>
+                        ) : null
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                    <Button
+                      onClick={importieren}
+                      disabled={!importierbar}
+                      className="w-full sm:w-auto"
+                    >
+                      {importMutation.isPending
+                        ? t.import.importing
+                        : t.import.importCount({ count: gesamtAnzahl })}
+                    </Button>
+                    {hatFehler && (
+                      <p className="text-sm text-destructive">
+                        {t.import.fixErrors}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </>
         )}
       </div>
     </AuthLayout>

@@ -1,62 +1,97 @@
 import { and, count, eq } from "drizzle-orm";
 import type { MaterialKind } from "@contracts/materials";
 import { lager, lagerShares, materials } from "@db/schema";
+import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
+import { hasChanges } from "./patch";
 
 /**
  * Lager – die Ebene über den Materialien.
  *
- * Muster wie `api/queries/filament.ts`: Der Besitzer steht in der
+ * Muster wie `api/queries/filament.ts`: Der Eigentümer steht in der
  * `where`-Klausel jeder Abfrage, es gibt keinen globalen Scope und keine
- * Fremdschlüssel. Ein Lager gehört immer genau einem Benutzer – auch seit es
- * (2.4.0) an Freunde freigegeben werden kann. Die Freigaben selbst liegen in
- * `api/queries/friends.ts`; hier steht nur, was beim **Löschen** mit ihnen
- * geschieht.
+ * Fremdschlüssel.
+ *
+ * Seit 2.5.0 ist der Eigentümer **entweder** ein Mensch **oder** eine
+ * Organisation, und jede Funktion nimmt dafür einen `Scope` an der Stelle, an
+ * der bis 2.4.1 die `userId` stand. Übersetzt wird er an genau einer Stelle
+ * (`scopeWhere` in `api/scope.ts`); wer ihn hat, hat die Mitgliedschaft und die
+ * Stufe bereits geprüft. Freigaben an Freunde gibt es weiterhin nur für
+ * persönliche Lager – sie liegen in `api/queries/friends.ts`; hier steht nur,
+ * was beim **Löschen** mit ihnen geschieht.
  */
 
-export function findLagerByUser(userId: number) {
+export function findLagerInScope(scope: Scope) {
   return getDb().query.lager.findMany({
-    where: eq(lager.userId, userId),
+    where: scopeWhere(lager, scope),
     orderBy: (t, { asc }) => [asc(t.name)],
   });
 }
 
-/** Ein Lager des Benutzers. `undefined`, wenn es ihm nicht gehört. */
-export function findLagerById(userId: number, id: number) {
+/** Ein Lager des Bereichs. `undefined`, wenn es nicht dazugehört. */
+export function findLagerInScopeById(scope: Scope, id: number) {
   return getDb().query.lager.findFirst({
-    where: and(eq(lager.id, id), eq(lager.userId, userId)),
+    where: and(eq(lager.id, id), scopeWhere(lager, scope)),
   });
 }
 
 /**
- * Fehler des Unique-Index über `(userId, name)`.
+ * Fehler der beiden Unique-Indizes über den Namen.
  *
  * Ohne diese Umwandlung reicht tRPC die rohe Postgres-Meldung durch – es gibt
  * keinen `errorFormatter` –, und die Lager-Seite zeigt sie wörtlich in einem
  * Toast: `duplicate key value violates unique constraint …`. Ein doppelter Name
  * ist ein gewöhnlicher Bedienfehler und gehört als Konflikt beantwortet.
+ *
+ * **Zwei Namen seit 2.5.0**, weil der frühere `unique(userId, name)` durch zwei
+ * partielle Indizes ersetzt ist (NULL-Werte sind in einem Unique-Index
+ * voneinander verschieden, siehe `db/migrations/0014_organizations.sql`). Wer
+ * hier nur den alten Namen prüft, bekommt im Org-Kontext wieder die rohe
+ * Postgres-Meldung im Toast.
  */
 export const LAGER_NAME_TAKEN = "LAGER_NAME_TAKEN";
 
+const LAGER_NAME_INDEXES = [
+  "lager_name_per_user_unique",
+  "lager_name_per_organization_unique",
+];
+
+/**
+ * Erkennt den Namenskonflikt am **Namen des verletzten Constraints**, nicht am
+ * Meldungstext.
+ *
+ * Drizzle verpackt den Postgres-Fehler: Die äußere `message` nennt nur die
+ * ausgeführte Anweisung, der Index steht am `cause`. Bis 2.4.1 fiel das nicht
+ * auf, weil nur ein Test darauf stand, der jede Art von Fehler akzeptierte –
+ * die Lager-Seite zeigte in Wahrheit die rohe Postgres-Meldung im Toast. Der
+ * Meldungstext bleibt als zweiter Weg stehen, falls eine spätere
+ * Drizzle-Fassung wieder durchreicht.
+ */
 function isDuplicateLagerName(error: unknown): boolean {
+  const constraint = (error as { cause?: { constraint?: string } })?.cause
+    ?.constraint;
+  if (constraint && LAGER_NAME_INDEXES.includes(constraint)) return true;
   return (
     error instanceof Error &&
-    error.message.includes("lager_name_per_user_unique")
+    LAGER_NAME_INDEXES.some(name => error.message.includes(name))
   );
 }
 
-export async function createLager(data: {
-  userId: number;
-  name: string;
-  materialKind: MaterialKind;
-  filamentDiameterUm?: number | null;
-  notes?: string | null;
-}) {
+export async function createLager(
+  scope: Scope,
+  data: {
+    name: string;
+    materialKind: MaterialKind;
+    filamentDiameterUm?: number | null;
+    notes?: string | null;
+  }
+) {
   let id: number;
   try {
     const [row] = await getDb()
       .insert(lager)
-      .values(data)
+      // Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe.
+      .values({ ...data, ...scopeOwner(scope) })
       .returning({ id: lager.id });
     id = row.id;
   } catch (error) {
@@ -64,13 +99,11 @@ export async function createLager(data: {
       throw new Error(LAGER_NAME_TAKEN, { cause: error });
     throw error;
   }
-  return getDb().query.lager.findFirst({
-    where: and(eq(lager.id, id), eq(lager.userId, data.userId)),
-  });
+  return findLagerInScopeById(scope, id);
 }
 
 export async function updateLager(
-  userId: number,
+  scope: Scope,
   id: number,
   data: Partial<{
     name: string;
@@ -80,24 +113,24 @@ export async function updateLager(
   }>
 ) {
   try {
-    await getDb()
-      .update(lager)
-      .set(data)
-      .where(and(eq(lager.id, id), eq(lager.userId, userId)));
+    if (hasChanges(data)) {
+      await getDb()
+        .update(lager)
+        .set(data)
+        .where(and(eq(lager.id, id), scopeWhere(lager, scope)));
+    }
   } catch (error) {
     if (isDuplicateLagerName(error))
       throw new Error(LAGER_NAME_TAKEN, { cause: error });
     throw error;
   }
   /*
-    Der Besitzerfilter gehört **auch** ans Rücklesen. Ohne ihn trifft das UPDATE
+    Der Bereichsfilter gehört **auch** ans Rücklesen. Ohne ihn trifft das UPDATE
     keine Zeile, das `findFirst` aber die fremde – und ein Aufrufer, der dem
     Rückgabewert vertraut statt vorab zu prüfen, gibt Name und Notizen eines
     fremden Lagers heraus. Freitext, der einen Ort verraten kann.
   */
-  return getDb().query.lager.findFirst({
-    where: and(eq(lager.id, id), eq(lager.userId, userId)),
-  });
+  return findLagerInScopeById(scope, id);
 }
 
 /**
@@ -112,6 +145,11 @@ export async function updateLager(
  * Erst die Freigaben, dann das Lager: dieselbe Reihenfolge wie beim Löschen
  * eines Kontos, und aus demselben Grund. Beides in einer Transaktion, damit es
  * keinen Zwischenzustand mit dem einen ohne das andere gibt.
+ *
+ * Bei einem Lager einer Organisation trifft der Freigabe-Schritt nie etwas – es
+ * lässt sich nicht freigeben. Der Fall wird trotzdem **nicht** verzweigt: Eine
+ * Kaskade, die je nach Bereich etwas anderes tut, ist die teurere Annahme als
+ * ein `DELETE`, das null Zeilen trifft.
  *
  * Der Rückgabewert trägt die betroffenen Empfänger zum Aufrufer, weil das
  * Protokoll sie braucht: Ein Eintrag „Lager gelöscht“ beantwortet nicht,
@@ -129,14 +167,14 @@ export async function updateLager(
  * eine Zahl heißt „so viele Materialien liegen noch darin“.
  */
 export async function deleteLager(
-  userId: number,
+  scope: Scope,
   id: number
 ): Promise<{ revoked: number[]; blockedBy: number | null }> {
   return getDb().transaction(async tx => {
     const own = await tx
       .select({ id: lager.id })
       .from(lager)
-      .where(and(eq(lager.id, id), eq(lager.userId, userId)))
+      .where(and(eq(lager.id, id), scopeWhere(lager, scope)))
       .limit(1)
       .for("update");
     if (own.length === 0) return { revoked: [], blockedBy: null };
@@ -158,44 +196,44 @@ export async function deleteLager(
 }
 
 /**
- * Wie viele Lager der Benutzer schon hat – Grundlage der Obergrenze.
+ * Wie viele Lager der Bereich schon hat – Grundlage der Obergrenze.
  *
  * `count()` und nicht das Laden aller Zeilen: Der Aufrufer braucht die Zahl,
- * nicht die Lager.
+ * nicht die Lager. Welche Grenze gilt, entscheidet der Aufrufer
+ * (`MAX_LAGER_PER_USER` bzw. `MAX_LAGER_PER_ORGANIZATION`).
  */
-export async function countLagerByUser(userId: number): Promise<number> {
+export async function countLagerInScope(scope: Scope): Promise<number> {
   const rows = await getDb()
     .select({ value: count() })
     .from(lager)
-    .where(eq(lager.userId, userId));
+    .where(scopeWhere(lager, scope));
   return Number(rows.at(0)?.value ?? 0);
 }
 
 /**
- * Wie viele Materialien in diesem Lager liegen – Grundlage der Löschsperre.
- *
- * Ohne Besitzerfilter: Der Aufrufer hat die Zugehörigkeit schon geprüft, und
- * gezählt werden muss **alles** darin, nicht nur die eigenen Zeilen (die es
- * mangels Freigabe heute ohnehin nur gibt).
- */
-/**
- * Belegung aller eigenen Lager auf einmal – für die Lager-Seite.
+ * Belegung aller Lager des Bereichs auf einmal – für die Lager-Seite.
  *
  * Eine Abfrage statt einer je Lager, und eine Zahl statt des Bestands: Die Seite
- * braucht `MAX_LAGER_PER_USER` Ganzzahlen, nicht jedes Material mit Gebinde,
- * Drybox, Preset-Pfad und Wägungsverlauf.
+ * braucht eine Handvoll Ganzzahlen, nicht jedes Material mit Gebinde, Drybox,
+ * Preset-Pfad und Wägungsverlauf.
  */
 export async function countMaterialsByLager(
-  userId: number
+  scope: Scope
 ): Promise<Map<number, number>> {
   const rows = await getDb()
     .select({ lagerId: materials.lagerId, value: count() })
     .from(materials)
-    .where(eq(materials.userId, userId))
+    .where(scopeWhere(materials, scope))
     .groupBy(materials.lagerId);
   return new Map(rows.map(r => [r.lagerId, Number(r.value)]));
 }
 
+/**
+ * Wie viele Materialien in diesem Lager liegen.
+ *
+ * Ohne Bereichsfilter: Der Aufrufer hat die Zugehörigkeit schon geprüft, und
+ * gezählt werden muss **alles** darin, nicht nur ein Teil.
+ */
 export async function countMaterialsInLager(id: number): Promise<number> {
   const rows = await getDb()
     .select({ value: count() })
@@ -205,15 +243,39 @@ export async function countMaterialsInLager(id: number): Promise<number> {
 }
 
 /**
- * Gehört dieses Lager dem Benutzer? Gleiche Bauform wie
- * `containerTypeBelongsToUser` und `storageBoxBelongsToUser` in
- * `api/queries/filament.ts`, damit `validateForeignKeys` einheitlich prüft.
+ * Gehört dieses Lager zum Bereich? Gleiche Bauform wie `containerTypeInScope`
+ * und `storageBoxInScope` in `api/queries/filament.ts`, damit
+ * `validateForeignKeys` einheitlich prüft.
  */
-export async function lagerBelongsToUser(userId: number, id: number) {
+export async function lagerInScope(scope: Scope, id: number) {
   const rows = await getDb()
     .select({ id: lager.id })
     .from(lager)
-    .where(and(eq(lager.id, id), eq(lager.userId, userId)))
+    .where(and(eq(lager.id, id), scopeWhere(lager, scope)))
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * Welcher Organisation gehört dieses Lager – oder `null`, wenn einer Person
+ * oder wenn es das Lager nicht gibt.
+ *
+ * Ohne Bereichsfilter, und das ist hier der Punkt: Gefragt wird nicht „darf ich
+ * darauf zugreifen“, sondern „was für ein Lager ist das“. Gebraucht wird es an
+ * genau einer Stelle – dem Riegel in `friendRouter.setLagerVisibility`, der
+ * eine verständliche Meldung geben soll statt „nicht gefunden“.
+ *
+ * **Geliefert wird die ID und kein `boolean`**, weil der Aufrufer sie braucht:
+ * Die verständliche Meldung darf nur bekommen, wer die Organisation ohnehin
+ * kennt. Ein bloßes Ja/Nein zwänge ihn, sie allen zu geben – und damit jedem
+ * zu verraten, welche Lager-IDs es gibt und welche davon einer Organisation
+ * gehören.
+ */
+export async function organizationOfLager(id: number): Promise<number | null> {
+  const rows = await getDb()
+    .select({ organizationId: lager.organizationId })
+    .from(lager)
+    .where(eq(lager.id, id))
+    .limit(1);
+  return rows.at(0)?.organizationId ?? null;
 }
