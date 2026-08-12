@@ -315,8 +315,10 @@ export default function MaterialDetail() {
                     <>
                       <Disc3 className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="wrap-break-word">
-                        {material.containerLabel} (
-                        {formatGrams(material.containerTareWeight)} Tara)
+                        {material.containerLabel}{" "}
+                        {t.materialDetail.tareSuffix({
+                          amount: formatGrams(material.containerTareWeight),
+                        })}
                       </span>
                       {material.containerPresetVariant && (
                         <Badge variant="secondary" className="font-normal">

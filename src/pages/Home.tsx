@@ -592,7 +592,7 @@ export default function Home() {
               <SheetTrigger asChild>
                 <Button variant="outline" className="h-10 md:hidden">
                   <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  Filter
+                  {t.home.filters}
                   {activeFilters.length > 0 && (
                     <Badge className="ml-2 h-5 min-w-5 justify-center px-1">
                       {activeFilters.length}
@@ -706,12 +706,12 @@ export default function Home() {
               {(materials ?? []).length === 0 ? (
                 roleAllows(role, "editor") && (
                   <Button onClick={() => openMaterialForm()}>
-                    <Plus className="mr-2 h-4 w-4" /> Erstes Material anlegen
+                    <Plus className="mr-2 h-4 w-4" /> {t.home.emptyAction}
                   </Button>
                 )
               ) : (
                 <Button variant="outline" onClick={resetFilters}>
-                  Filter zurücksetzen
+                  {t.home.resetFilters}
                 </Button>
               )}
             </CardContent>
@@ -721,7 +721,7 @@ export default function Home() {
             {/* Telefon: Karten statt einer neunspaltigen Tabelle */}
             <div className="flex flex-col gap-3 md:hidden">
               <p className="text-xs text-muted-foreground">
-                {sorted.length} von {stats.count} Materialien
+                {t.home.countOf({ shown: sorted.length, total: stats.count })}
               </p>
               {sorted.map(material => (
                 <MaterialCard

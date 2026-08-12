@@ -328,7 +328,7 @@ export function PresetCatalog() {
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      Änderung vorschlagen
+                                      {t.proposeChange.title}
                                     </TooltipContent>
                                   </Tooltip>
                                   <HideToggle
@@ -354,8 +354,7 @@ export function PresetCatalog() {
                                 colSpan={4}
                                 className="text-sm text-muted-foreground"
                               >
-                                Für diese Ausführung ist noch keine Größe
-                                hinterlegt.
+                                {t.presetCatalog.noVariants}
                               </TableCell>
                             </TableRow>
                           )}

@@ -18,6 +18,7 @@ export const en: Messages = {
     back: "Back",
     loading: "Loading …",
     search: "Search …",
+    ctrlKey: "Ctrl",
     actions: "Actions",
     name: "Name",
     notes: "Notes",
@@ -240,7 +241,7 @@ export const en: Messages = {
 
   home: {
     title: "Materials",
-    description: "Your 3D-printing filament inventory at a glance",
+    description: "Your 3D-printing material inventory at a glance",
     newMaterial: "New material",
     lookupPlaceholder: "Enter an identifier, e.g. F01",
     lookupAria: "Identifier for quick access",
@@ -259,9 +260,11 @@ export const en: Messages = {
     statInBoxHint: "materials in a drybox",
     searchAria: "Search materials",
     clearSearch: "Clear the search",
+    filters: "Filters",
     filterSheetTitle: "Filters and sorting",
     reset: "Reset",
     resetAll: "Reset all",
+    resetFilters: "Reset filters",
     showCount: (vars: { count: number }) => `Show ${vars.count}`,
     removeFilter: (vars: { label: string }) =>
       `Remove the “${vars.label}” filter`,
@@ -288,8 +291,11 @@ export const en: Messages = {
     emptyTitle: "No materials in the inventory yet",
     emptyFiltered: "Nothing matches the current filters",
     emptyHint:
-      "Add your first filament – with its container, weight and price.",
+      "Add your first material – with its container, weight and price.",
     emptyFilteredHint: "Adjust the search or the filters.",
+    emptyAction: "Add your first material",
+    countOf: (vars: { shown: number; total: number }) =>
+      `${vars.shown} of ${vars.total} materials`,
     colIdentifier: "Identifier",
     colMaterial: "Material",
     colType: "Type",
@@ -495,6 +501,7 @@ export const en: Messages = {
     adopt: "Copy into my container types",
     adopted: (vars: { name: string }) =>
       `“${vars.name}” copied into your own container types`,
+    noVariants: "No size added for this version yet.",
   },
 
   proposePreset: {
@@ -513,6 +520,7 @@ export const en: Messages = {
     containerMaterialLabel: "Container material",
     nominalLabel: "Nominal weight (g) *",
     materialTypeLabel: "Material type",
+    materialTypePlaceholder: "leave empty if the series covers every type",
     commentLabel: "Note",
     commentPlaceholder: "Where does the empty weight come from?",
     manufacturerRequired: "Please enter a manufacturer",
@@ -851,7 +859,7 @@ export const en: Messages = {
 
     myCodeTitle: "Your friend code",
     myCodeHint:
-      "Pass the code to someone you want to share filament with. Only those who know it can send you a request.",
+      "Pass the code to someone you want to share material with. Only those who know it can send you a request.",
     copyCode: "Copy code",
     codeCopied: "Friend code copied",
     rotateCode: "Generate a new code",
@@ -936,9 +944,9 @@ export const en: Messages = {
     roleViewerHint: "Look up and search the stock.",
     roleWeigherHint: "Additionally weigh, that is, draw material down.",
     roleEditorHint:
-      "Additionally create and change material, container types and dry boxes.",
+      "Additionally create and change material, container types and dryboxes.",
     roleAdminHint:
-      "Additionally create storages, manage members and assign roles.",
+      "Additionally create stores, manage members and assign roles.",
 
     emptyTitle: "No organization yet",
     emptyDescription:
@@ -1011,7 +1019,7 @@ export const en: Messages = {
     deleteOrganization: "Delete organization",
     deleteTitle: "Delete organization?",
     deleteDescription:
-      "This cannot be undone. It is only possible while no storage is attached any more.",
+      "This cannot be undone. It is only possible while no store is attached any more.",
 
     needEditor:
       "This needs at least the \u201cRecord\u201d level in this organization.",
@@ -1020,7 +1028,7 @@ export const en: Messages = {
 
   loan: {
     ask: "Ask",
-    askTitle: "Ask for filament",
+    askTitle: "Ask for material",
     askDescription: (vars: { material: string; name: string }) =>
       `${vars.name} will get a message that you would like to borrow “${vars.material}”.`,
     messageLabel: "Message (optional)",

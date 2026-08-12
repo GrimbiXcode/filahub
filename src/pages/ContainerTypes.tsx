@@ -341,7 +341,7 @@ export default function ContainerTypes() {
                                     variant="secondary"
                                     className="font-normal"
                                   >
-                                    aus Katalog
+                                    {t.containerTypes.fromCatalog}
                                   </Badge>
                                 )}
                               </div>
@@ -558,7 +558,7 @@ export default function ContainerTypes() {
                 onClick={() => setDialogOpen(false)}
                 disabled={saving}
               >
-                Abbrechen
+                {t.common.cancel}
               </Button>
               <Button type="submit" disabled={saving}>
                 {saving

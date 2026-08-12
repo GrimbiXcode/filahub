@@ -3,22 +3,29 @@
 
    Dark only, on purpose: the screenshots are dark and the page is meant to
    read as one surface with the app. The colour tokens below are the app's own
-   dark theme (src/index.css) converted from HSL to hex, and the three accent
-   values are the fill-level ramp from src/lib/format.ts — orange at 25 % and
-   under, yellow to 50 %, green above.
+   dark theme (src/index.css) converted from HSL to hex, and the four accent
+   values are the fill-level ramp from src/lib/format.ts — red at 10 % and
+   under, orange to 25 %, yellow to 50 %, green above.
+
+   The ramp values are Tailwind's palette, and Tailwind 4 restated it in OKLCH:
+   the hexes below are what the browser actually paints and what the
+   screenshots in assets/ show. They are not the Tailwind 3 values the app used
+   until it moved over. Re-measure them from a fresh screenshot rather than
+   copying them out of the docs.
 --------------------------------------------------------------------------- */
 
 :root {
   --ink: #09090b; /* --background   240 10% 3.9% */
   --panel: #121215; /* --card         240 8% 7.5%  */
-  --panel-2: #0e0e10; /* --sidebar-bg   240 8% 6%    */
+  --panel-2: #0e0e11; /* --sidebar-bg   240 8% 6%    */
   --rule: #313135; /* --border       240 4% 20%   */
   --text: #fafafa; /* --foreground   0 0% 98%     */
-  --dim: #a9a9b2; /* --muted-fg     240 5% 68%   */
+  --dim: #a9a9b1; /* --muted-fg     240 5% 68%   */
 
-  --low: #f97316; /* orange-500 */
-  --mid: #eab308; /* yellow-500 */
-  --full: #10b981; /* emerald-500 */
+  --crit: #fb2c36; /* red-500     */
+  --low: #ff6900; /* orange-500  */
+  --mid: #f0b100; /* yellow-500  */
+  --full: #00bc7d; /* emerald-500 */
 
   --mono:
     ui-monospace, "SF Mono", SFMono-Regular, "JetBrains Mono", "Cascadia Mono",
@@ -246,6 +253,9 @@ code {
   background: var(--dim);
   flex: none;
 }
+.dot-crit {
+  background: var(--crit);
+}
 .dot-low {
   background: var(--low);
 }
@@ -316,6 +326,78 @@ h2 {
   border-left: 2px solid var(--accent, var(--dim));
   border-radius: var(--radius);
   padding: 0.85rem 1.1rem;
+}
+
+/* Begriff und Erklärung – Materialarten, Gebindeformen, Freigabe- und
+   Mitgliedsstufen. Bewusst dieselbe Kiste wie .formula statt einer Tabelle:
+   die Seite kommt so mit einem einzigen Auszeichnungsmuster aus. */
+.band dl.spec {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.55rem 1.35rem;
+  margin: 0 0 1.4rem;
+  padding: 1.1rem 1.25rem;
+  background: var(--panel);
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--accent, var(--dim));
+  border-radius: var(--radius);
+  font-size: 0.97rem;
+}
+
+.band dl.spec dt {
+  font-family: var(--mono);
+  font-size: 0.84rem;
+  letter-spacing: 0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.band dl.spec dd {
+  margin: 0;
+  color: var(--dim);
+}
+
+/* Die Füllstandsskala als Legende – erklärt die Balkenfarben in den
+   Abbildungen und ist die einzige Stelle, an der alle vier Werte vorkommen. */
+.ramp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.4rem;
+  margin: 0 0 1.4rem;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.ramp li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--dim);
+}
+
+.ramp li::before {
+  content: "";
+  width: 1.4rem;
+  height: 0.3rem;
+  border-radius: 999px;
+  background: var(--c);
+  flex: none;
+}
+
+@media (max-width: 34rem) {
+  .band dl.spec {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+  .band dl.spec dd {
+    margin-bottom: 0.7rem;
+  }
+  .band dl.spec dd:last-child {
+    margin-bottom: 0;
+  }
 }
 
 /* --- hero --------------------------------------------------------------- */
