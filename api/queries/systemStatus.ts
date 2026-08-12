@@ -134,6 +134,11 @@ const COUNTED_TABLES = [
   "friendships",
   "lager_shares",
   "loan_requests",
+  // Seit 2.5.0. Der Bestand einer Organisation steckt in den Zeilen oben – hier
+  // stehen nur die Organisationen selbst und wer zu ihnen gehört.
+  "organizations",
+  "organization_members",
+  "organization_invitations",
   "audit_log",
 ] as const;
 

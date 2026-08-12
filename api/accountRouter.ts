@@ -63,6 +63,42 @@ export const accountRouter = createRouter({
       const result = await deleteUserAccount(ctx.user.id);
 
       /*
+        Was mit den Organisationen geschah, in denen dieses Konto der letzte
+        Administrator war – **nach** der Transaktion protokolliert, nicht darin:
+        Ein Eintrag, der bei einem Abbruch mit zurückgerollt wird, ist kein
+        Protokoll.
+
+        `actorUserId` bleibt leer. Das Konto gibt es nicht mehr, und die
+        Beförderung war keine Handlung einer Person, sondern die Folge der
+        Löschung – `reason` sagt das. Betroffen (`subjectUserId`) ist der neue
+        Administrator: Für ihn ändert sich ein Zugriffsrecht, ohne dass er
+        etwas getan hat.
+      */
+      for (const org of result.organizations) {
+        if (org.outcome === "promoted") {
+          recordAudit({
+            event: "organization.member_role_changed",
+            subjectUserId: org.newAdminUserId,
+            ip: ctx.clientIp,
+            detail: {
+              organizationId: org.organizationId,
+              role: "admin",
+              reason: "last_admin_deleted",
+            },
+          });
+        } else {
+          recordAudit({
+            event: "organization.deleted",
+            ip: ctx.clientIp,
+            detail: {
+              organizationId: org.organizationId,
+              reason: "last_admin_deleted",
+            },
+          });
+        }
+      }
+
+      /*
         Cookie sofort löschen: Das Konto ist weg, das Token zeigt ins Leere.
         Ohne das liefe der Client noch mit einer Session weiter, die bei jeder
         Abfrage in einen 401 läuft.

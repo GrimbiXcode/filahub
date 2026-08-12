@@ -1,4 +1,4 @@
-import { and, eq, inArray, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or } from "drizzle-orm";
 import {
   ACCOUNT_EXPORT_VERSION,
   type AccountExportSection,
@@ -6,6 +6,12 @@ import {
 import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
 import { getDb } from "./connection";
+import {
+  handleAdminAccountDeletion,
+  listInvitationsForUser,
+  listMemberships,
+  type AdminSuccession,
+} from "./organizations";
 
 /**
  * Betroffenenrechte: Auskunft, Datenübertragbarkeit und Löschung.
@@ -174,7 +180,19 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
         visibility: schema.lagerShares.visibility,
       })
       .from(schema.lagerShares)
-      .innerJoin(schema.lager, eq(schema.lager.id, schema.lagerShares.lagerId))
+      /*
+        Nur persönliche Lager: Freigaben gibt es für Lager einer Organisation
+        nicht (siehe `shareLevelFor` in `api/queries/friends.ts`). Die Bedingung
+        steht seit 2.5.0 ausdrücklich hier, statt sich darauf zu verlassen, dass
+        es keine solche Freigabezeile geben kann.
+      */
+      .innerJoin(
+        schema.lager,
+        and(
+          eq(schema.lager.id, schema.lagerShares.lagerId),
+          isNotNull(schema.lager.userId)
+        )
+      )
       .where(eq(schema.lagerShares.sharedWithUserId, userId)),
   ]);
   const shareRecipientNames = await loadCounterpartNames(
@@ -182,6 +200,8 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   );
   const receivedByOwner = new Map<number, FriendVisibility>();
   for (const row of receivedRows) {
+    // Die Verengung holt nur nach, was der Join oben schon sagt.
+    if (row.ownerId == null) continue;
     const current = receivedByOwner.get(row.ownerId);
     if (current == null || visibilityAllows(row.visibility, current))
       receivedByOwner.set(row.ownerId, row.visibility);
@@ -215,6 +235,21 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     .where(eq(schema.auditLog.actorUserId, userId))
     .orderBy(schema.auditLog.at);
 
+  /*
+    Mitgliedschaften und Einladungen. Was hier **nicht** steht, ist der Bestand
+    der Organisationen: Er ist nicht die Auskunft dieser Person, sondern das
+    Material einer anderen Stelle – sie hat Zugriff darauf, aber er gehört ihr
+    nicht. Die Begründung steht ausführlich bei `ACCOUNT_EXPORT_SECTIONS`.
+
+    Die Abschnitte oben (`lager`, `materials`, …) enthalten aus demselben Grund
+    nur die persönlichen Zeilen. Sie filtern auf `userId`, und der ist bei
+    Zeilen einer Organisation NULL – dafür muss hier nichts ergänzt werden.
+  */
+  const [organizationMemberships, organizationInvitations] = await Promise.all([
+    listMemberships(userId),
+    listInvitationsForUser(userId),
+  ]);
+
   return {
     formatVersion: ACCOUNT_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
@@ -230,6 +265,8 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     friendships,
     lagerShares,
     loanRequests,
+    organizationMemberships,
+    organizationInvitations,
     auditLog,
   };
 }
@@ -250,6 +287,12 @@ async function loadCounterpartNames(
 export type AccountDeletionResult = {
   /** Angenommene Vorschläge, die anonymisiert statt gelöscht wurden. */
   anonymizedProposals: number;
+  /**
+   * Organisationen, in denen das Konto letzter Administrator war, und was mit
+   * ihnen geschehen ist. Der Aufrufer protokolliert es und benachrichtigt die
+   * Betroffenen – in der Transaktion selbst wäre beides zurückgerollt worden.
+   */
+  organizations: AdminSuccession[];
 };
 
 /**
@@ -282,6 +325,23 @@ export async function deleteUserAccount(
     if (!user) {
       throw new Error(`Benutzer ${userId} existiert nicht`);
     }
+
+    /*
+      0. Organisationen zuerst, **vor** allem anderen.
+
+      Ist das Konto irgendwo letzter Administrator, entscheidet sich hier, ob
+      die Organisation einen Nachfolger bekommt oder mitsamt Bestand
+      verschwindet – und im zweiten Fall löscht `deleteOrganizationCascade`
+      Material, Lager, Gebindearten und Dryboxen, die dieses Konto nichts
+      angehen. Das muss geschehen sein, bevor die Schritte unten anfangen, den
+      **persönlichen** Bestand abzuräumen: Sonst hinge die Reihenfolge zweier
+      Kaskaden voneinander ab, und welche zuerst kommt, entschiede der Zufall
+      der Codereihenfolge.
+
+      Die Mitgliedschaften selbst gehen erst danach (Schritt 10b) – vorher
+      werden sie noch gelesen.
+    */
+    const organizations = await handleAdminAccountDeletion(tx, userId);
 
     // 1. Verweise auf eigene Rollentypen lösen, bevor diese gelöscht werden
     await tx
@@ -420,6 +480,30 @@ export async function deleteUserAccount(
       );
 
     /*
+      10b. Mitgliedschaften und Einladungen, letztere in **beiden** Richtungen.
+
+      Erst jetzt: Schritt 0 hat sie noch gelesen, um den Nachfolger zu finden.
+      Die Organisationen selbst bleiben stehen – sie gehören diesem Konto nicht,
+      und die, die niemanden mehr hatten, sind in Schritt 0 schon verschwunden.
+
+      Wie bei den Freundschaften bleibt nichts als Nachweis stehen: Es gibt
+      keinen Moderationszweck, der das trüge. Beim Einladenden verschwindet
+      damit auch seine Seite des Vorgangs – die Zeile ist gemeinsames Datum
+      beider Personen.
+    */
+    await tx
+      .delete(schema.organizationInvitations)
+      .where(
+        or(
+          eq(schema.organizationInvitations.invitedUserId, userId),
+          eq(schema.organizationInvitations.invitedByUserId, userId)
+        )
+      );
+    await tx
+      .delete(schema.organizationMembers)
+      .where(eq(schema.organizationMembers.userId, userId));
+
+    /*
       11. Sicherheitsprotokoll anonymisieren, nicht löschen.
 
       Würden die Einträge mitgelöscht, wäre die Vorfallaufklärung mit einem
@@ -444,6 +528,6 @@ export async function deleteUserAccount(
     // 12. Zuletzt das Konto selbst
     await tx.delete(schema.users).where(eq(schema.users.id, userId));
 
-    return { anonymizedProposals: anonymized.length };
+    return { anonymizedProposals: anonymized.length, organizations };
   });
 }

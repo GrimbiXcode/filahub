@@ -72,6 +72,9 @@ describe("Migrationen", () => {
       "friendships",
       "lager_shares",
       "loan_requests",
+      "organizations",
+      "organization_members",
+      "organization_invitations",
     ]) {
       expect(names).toContain(table);
     }
@@ -114,9 +117,75 @@ describe("Migrationen", () => {
       "loan_request_status",
       "material_kind",
       "container_form",
+      "organization_role",
+      "organization_invitation_status",
     ]) {
       expect(names).toContain(type);
     }
+  });
+
+  /**
+   * Der XOR-Check auf den vier Fachtabellen.
+   *
+   * Er ist die einzige Zusicherung des Organisationen-Entwurfs, die **die
+   * Datenbank** gibt und nicht der Code – und die einzige, die der Compiler
+   * nicht sieht. Beide Fehlrichtungen werden geprüft: keiner der beiden
+   * Eigentümer gesetzt, und beide zugleich. Ohne die zweite Richtung könnte
+   * eine Zeile einer Person **und** einer Organisation gehören, und welche
+   * Abfrage sie findet, entschiede der Zufall des Filters.
+   */
+  it("lässt genau einen Eigentümer je Fachzeile zu", async () => {
+    const owner = await upsertUser({ unionId: "xor-probe", name: "Probe" });
+    const [org] = await db()
+      .insert(schema.organizations)
+      .values({ name: "XOR-Probe" })
+      .returning();
+
+    const base = { name: "Probe", materialKind: "filament" as const };
+
+    /*
+      Geprüft wird der **Name des verletzten Constraints**, nicht der
+      Meldungstext. Drizzle verpackt den Postgres-Fehler, und seine äußere
+      Meldung nennt nur die Anweisung – ein `toThrow(/…/)` darauf wäre schon
+      grün, wenn das Insert aus irgendeinem anderen Grund scheitert. Der Name
+      steht am `cause`.
+    */
+    const violated = async (
+      run: Promise<unknown>
+    ): Promise<string | undefined> => {
+      try {
+        await run;
+      } catch (error) {
+        return (error as { cause?: { constraint?: string } })?.cause
+          ?.constraint;
+      }
+      throw new Error("Die Anweisung ist unerwartet durchgegangen");
+    };
+
+    expect(
+      await violated(
+        db()
+          .insert(schema.lager)
+          .values({ ...base })
+      )
+    ).toBe("lager_owner_xor");
+
+    expect(
+      await violated(
+        db()
+          .insert(schema.lager)
+          .values({ ...base, userId: owner.id, organizationId: org.id })
+      )
+    ).toBe("lager_owner_xor");
+
+    // Die erlaubten Fälle gehen durch – sonst prüfte der Test nur, dass alles
+    // scheitert.
+    await db()
+      .insert(schema.lager)
+      .values({ ...base, name: "Privat", userId: owner.id });
+    await db()
+      .insert(schema.lager)
+      .values({ ...base, name: "Gemeinsam", organizationId: org.id });
   });
 
   /**

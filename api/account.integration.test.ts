@@ -152,12 +152,22 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "lager_shares",
       "loan_requests",
       "materials",
+      /*
+        Seit 2.5.0. `organizations` selbst steht bewusst **nicht** dabei: Die
+        Tabelle hat keine Personenspalte, weil dort kein Eigentümer vermerkt
+        ist – wer verwaltet, steht in `organization_members.role`.
+        `organization_invitations` kommt über gleich zwei Spalten herein
+        (`invitedUserId`, `invitedByUserId`); genau dafür ist das Prädikat
+        aufgeweitet.
+      */
+      "organization_invitations",
+      "organization_members",
       "preset_proposals",
       "storage_boxes",
     ]);
 
     /*
-      Diese zehn plus drei, die den Personenbezug über eine andere Spalte
+      Diese zwölf plus drei, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` (über das Material) und
       `loginCodes` (Telegram-ID). Ändert sich die linke Seite, muss die rechte
       nachziehen.
@@ -178,6 +188,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "loanRequests",
         "loginCodes",
         "materials",
+        "organizationMemberships",
+        "organizationInvitations",
         "presetProposals",
         "profile",
         "containerTypes",
@@ -431,3 +443,207 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
     expect(open).toHaveLength(0);
   });
 });
+
+/**
+ * Der Sonderfall, den Art. 17 DSGVO erzwingt.
+ *
+ * Überall sonst verweigert die Anwendung den Schritt, der den letzten
+ * Administrator einer Organisation entfernt. Ein Löschverlangen darf daran
+ * nicht scheitern – also wird entschieden statt abgelehnt. Beide Ausgänge
+ * stehen hier, und beide gehen still schief: Ohne den ersten bliebe eine
+ * Organisation ohne jeden Verwalter zurück, ohne den zweiten Daten ohne jeden
+ * Zugang.
+ */
+describe("Kontolöschung und Organisationen", () => {
+  /** Legt eine Organisation mit den angegebenen Mitgliedern an. */
+  async function makeOrganization(
+    name: string,
+    members: { userId: number; role: "admin" | "editor" }[]
+  ) {
+    const [org] = await db()
+      .insert(schema.organizations)
+      .values({ name })
+      .returning();
+    for (const member of members) {
+      await db()
+        .insert(schema.organizationMembers)
+        .values({ organizationId: org.id, ...member });
+    }
+    return org;
+  }
+
+  it("befördert das älteste verbliebene Mitglied zum Administrator", async () => {
+    const org = await makeOrganization("Werkstatt", [
+      { userId: owner.id, role: "admin" },
+      { userId: stranger.id, role: "editor" },
+    ]);
+
+    const result = await deleteUserAccount(owner.id);
+
+    expect(result.organizations).toEqual([
+      {
+        organizationId: org.id,
+        outcome: "promoted",
+        newAdminUserId: stranger.id,
+      },
+    ]);
+    const members = await db().query.organizationMembers.findMany({
+      where: eq(schema.organizationMembers.organizationId, org.id),
+    });
+    expect(members).toHaveLength(1);
+    expect(members[0].userId).toBe(stranger.id);
+    expect(members[0].role).toBe("admin");
+  });
+
+  it("löscht die Organisation samt Bestand, wenn niemand übrig bleibt", async () => {
+    const org = await makeOrganization("Alleingang", [
+      { userId: owner.id, role: "admin" },
+    ]);
+    const [orgLager] = await db()
+      .insert(schema.lager)
+      .values({
+        organizationId: org.id,
+        name: "Gemeinsam",
+        materialKind: "filament",
+        filamentDiameterUm: 1750,
+      })
+      .returning();
+    const [orgMaterial] = await db()
+      .insert(schema.materials)
+      .values({
+        organizationId: org.id,
+        lagerId: orgLager.id,
+        name: "Org-PLA",
+        materialType: "PLA",
+        nominalWeight: 1000,
+      })
+      .returning();
+    await db()
+      .insert(schema.weighings)
+      .values({ materialId: orgMaterial.id, grossWeight: 1200 });
+
+    const result = await deleteUserAccount(owner.id);
+
+    expect(result.organizations).toEqual([
+      { organizationId: org.id, outcome: "deleted" },
+    ]);
+    // Nichts darf zurückbleiben – es gäbe keinen Weg mehr, es zu erreichen.
+    expect(
+      await db().query.organizations.findMany({
+        where: eq(schema.organizations.id, org.id),
+      })
+    ).toHaveLength(0);
+    expect(await orgRows("lager", org.id)).toBe(0);
+    expect(await orgRows("materials", org.id)).toBe(0);
+    expect(
+      await db().query.weighings.findMany({
+        where: eq(schema.weighings.materialId, orgMaterial.id),
+      })
+    ).toHaveLength(0);
+  });
+
+  /**
+   * Die tragende Eigenschaft des ganzen Entwurfs: Der persönliche Löschlauf
+   * filtert auf `userId`, und der ist bei Zeilen einer Organisation NULL – er
+   * trifft sie also nicht. Ginge das schief, risse eine Kontolöschung den
+   * Bestand einer Firma mit, an dem das Konto nur mitgearbeitet hat.
+   */
+  it("lässt den Bestand einer Organisation stehen, die weiterlebt", async () => {
+    const org = await makeOrganization("Hochschul-Hub", [
+      { userId: owner.id, role: "admin" },
+      { userId: stranger.id, role: "editor" },
+    ]);
+    const [orgLager] = await db()
+      .insert(schema.lager)
+      .values({
+        organizationId: org.id,
+        name: "Hub-Lager",
+        materialKind: "resin",
+      })
+      .returning();
+    await db().insert(schema.materials).values({
+      organizationId: org.id,
+      lagerId: orgLager.id,
+      name: "Org-Harz",
+      materialType: "Standard",
+      nominalWeight: 1000,
+    });
+    await db()
+      .insert(schema.containerTypes)
+      .values({ organizationId: org.id, name: "Org-Flasche", tareWeight: 90 });
+    await db()
+      .insert(schema.storageBoxes)
+      .values({ organizationId: org.id, name: "Org-Box", tareWeight: 400 });
+
+    await deleteUserAccount(owner.id);
+
+    expect(await orgRows("lager", org.id)).toBe(1);
+    expect(await orgRows("materials", org.id)).toBe(1);
+    expect(await orgRows("container_types", org.id)).toBe(1);
+    expect(await orgRows("storage_boxes", org.id)).toBe(1);
+  });
+
+  it("rührt Organisationen nicht an, in denen noch ein Administrator ist", async () => {
+    const org = await makeOrganization("Zwei Verwalter", [
+      { userId: owner.id, role: "admin" },
+      { userId: stranger.id, role: "admin" },
+    ]);
+
+    const result = await deleteUserAccount(owner.id);
+
+    // Kein Eintrag: Es war nichts zu entscheiden, nur die Mitgliedschaft geht.
+    expect(result.organizations).toEqual([]);
+    const members = await db().query.organizationMembers.findMany({
+      where: eq(schema.organizationMembers.organizationId, org.id),
+    });
+    expect(members.map(m => m.userId)).toEqual([stranger.id]);
+  });
+
+  it("entfernt Einladungen in beide Richtungen", async () => {
+    const org = await makeOrganization("Einladungen", [
+      { userId: stranger.id, role: "admin" },
+      { userId: owner.id, role: "admin" },
+    ]);
+    // Eine bekommene und eine selbst ausgesprochene.
+    await db().insert(schema.organizationInvitations).values({
+      organizationId: org.id,
+      invitedUserId: owner.id,
+      invitedByUserId: stranger.id,
+      role: "editor",
+      status: "declined",
+    });
+    await db().insert(schema.organizationInvitations).values({
+      organizationId: org.id,
+      invitedUserId: stranger.id,
+      invitedByUserId: owner.id,
+      role: "viewer",
+      status: "declined",
+    });
+
+    await deleteUserAccount(owner.id);
+
+    const left = await db().query.organizationInvitations.findMany({
+      where: eq(schema.organizationInvitations.organizationId, org.id),
+    });
+    expect(left).toHaveLength(0);
+  });
+});
+
+/**
+ * Zeilen einer Fachtabelle, die einer bestimmten Organisation gehören.
+ *
+ * Über rohes SQL statt über `db().query.…`, weil sonst je Tabelle ein eigener
+ * Aufruf mit eigenem Spaltenbezug nötig wäre – vier fast gleiche Blöcke, die
+ * nur die Aussage verdecken. Der Tabellenname ist hier kein Freitext, sondern
+ * steht wörtlich im Test.
+ */
+async function orgRows(
+  table: "lager" | "materials" | "container_types" | "storage_boxes",
+  organizationId: number
+): Promise<number> {
+  const result = await db().execute<{ n: number }>(
+    sql`SELECT count(*)::int AS n FROM ${sql.identifier(table)}
+        WHERE "organizationId" = ${organizationId}`
+  );
+  return result.rows[0].n;
+}
