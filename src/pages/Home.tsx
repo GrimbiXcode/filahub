@@ -7,6 +7,7 @@ import {
   Boxes,
   ChevronDown,
   ChevronUp,
+  Columns3,
   Package,
   Plus,
   Scale,
@@ -18,6 +19,10 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import {
+  TOGGLEABLE_MATERIAL_COLUMNS,
+  type MaterialColumn,
+} from "@contracts/materialColumns";
 import { roleAllows } from "@contracts/organizations";
 import AuthLayout from "@/components/AuthLayout";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
@@ -27,6 +32,15 @@ import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -58,6 +72,10 @@ import { useActiveLagerId } from "@/lib/activeLager";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
+import {
+  MATERIAL_COLUMN_LABELS,
+  useHiddenMaterialColumns,
+} from "@/lib/materialColumns";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
@@ -108,6 +126,7 @@ function compareBy(
 
 export default function Home() {
   const navigate = useNavigate();
+  const utils = trpc.useUtils();
   const scope = useActiveScope();
   const role = useScopeRole();
   const { data: lagerList, isPending: lagerPending } =
@@ -166,6 +185,47 @@ export default function Home() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("identifier");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  /*
+    Spaltenauswahl. Sie blendet **zusätzlich** aus: Was hier an bleibt, kann
+    weiterhin an einer Breakpoint-Klasse hängen und auf schmalen Fenstern von
+    selbst verschwinden. Wer nichts einstellt, sieht deshalb genau das, was er
+    vorher sah.
+  */
+  const hiddenColumns = useHiddenMaterialColumns();
+  const showsColumn = (column: MaterialColumn) =>
+    !hiddenColumns.includes(column);
+
+  const updateSettings = trpc.auth.updateSettings.useMutation({
+    /*
+      Optimistisch, anders als in den Einstellungen: Dort sitzt die Änderung in
+      einem `Select`, da fällt eine Roundtrip-Verzögerung nicht auf. Ein Haken,
+      der erst nach der Antwort des Servers umspringt, fühlt sich kaputt an –
+      und wer drei Spalten hintereinander umstellt, klickt schneller als das
+      Netz.
+    */
+    onMutate: async ({ hiddenMaterialColumns }) => {
+      if (hiddenMaterialColumns === undefined) return;
+      await utils.auth.me.cancel();
+      const previous = utils.auth.me.getData();
+      utils.auth.me.setData(undefined, old =>
+        old ? { ...old, hiddenMaterialColumns } : old
+      );
+      return { previous };
+    },
+    onError: (e, _input, context) => {
+      if (context?.previous) utils.auth.me.setData(undefined, context.previous);
+      toast.error(e.message);
+    },
+    onSettled: () => utils.auth.me.invalidate(),
+  });
+
+  const setColumnVisible = (column: MaterialColumn, visible: boolean) => {
+    const next = visible
+      ? hiddenColumns.filter(c => c !== column)
+      : [...hiddenColumns, column];
+    updateSettings.mutate({ hiddenMaterialColumns: next });
+  };
 
   const materialTypes = useMemo(
     () => [...new Set((materials ?? []).map(m => m.materialType))].sort(),
@@ -586,6 +646,50 @@ export default function Home() {
                 </button>
               )}
             </div>
+            {/* Erst ab dem Tablet: Darunter gibt es die Tabelle gar nicht,
+                sondern die Kartenliste – dort wäre eine Spaltenauswahl eine
+                Einstellung für etwas, das man nicht sieht. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="hidden h-10 md:flex">
+                  <Columns3 className="mr-2 h-4 w-4" />
+                  {t.home.columns}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuLabel>{t.home.columnsTitle}</DropdownMenuLabel>
+                {/* Anders als das Farbschema hängt die Auswahl am Konto – das
+                    sagen wir, statt es die Leute auf dem zweiten Gerät
+                    herausfinden zu lassen. */}
+                <p className="px-2 pb-1 text-xs text-muted-foreground">
+                  {t.home.columnsHint}
+                </p>
+                <DropdownMenuSeparator />
+                {TOGGLEABLE_MATERIAL_COLUMNS.map(column => (
+                  <DropdownMenuCheckboxItem
+                    key={column}
+                    checked={showsColumn(column)}
+                    /* Ohne das schließt Radix das Menü nach jedem Haken – wer
+                       drei Spalten umstellt, müsste es dreimal öffnen. */
+                    onSelect={e => e.preventDefault()}
+                    onCheckedChange={checked =>
+                      setColumnVisible(column, checked)
+                    }
+                  >
+                    {t.home[MATERIAL_COLUMN_LABELS[column]]}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={hiddenColumns.length === 0}
+                  onSelect={() =>
+                    updateSettings.mutate({ hiddenMaterialColumns: [] })
+                  }
+                >
+                  {t.home.columnsReset}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             {/* Auf dem Telefon liegen die Filter in einer Schublade, sonst
                 bräuchte man vier Bildschirmhöhen bis zur Liste. */}
             <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
@@ -743,13 +847,15 @@ export default function Home() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <SortableHead
-                        label={t.home.colIdentifier}
-                        sortKey="identifier"
-                        activeKey={sortKey}
-                        dir={sortDir}
-                        onSort={toggleSort}
-                      />
+                      {showsColumn("identifier") && (
+                        <SortableHead
+                          label={t.home.colIdentifier}
+                          sortKey="identifier"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={toggleSort}
+                        />
+                      )}
                       <SortableHead
                         label={t.home.colMaterial}
                         sortKey="name"
@@ -757,37 +863,49 @@ export default function Home() {
                         dir={sortDir}
                         onSort={toggleSort}
                       />
-                      <TableHead>{t.home.colType}</TableHead>
+                      {showsColumn("type") && (
+                        <TableHead>{t.home.colType}</TableHead>
+                      )}
                       {/* Spalten fallen zuerst weg, die anderswo ohnehin
                           stehen – sonst rutscht die Aktionsspalte aus dem
                           Blick und „Wiegen“ ist nur noch scrollbar. */}
-                      <TableHead className="hidden xl:table-cell">
-                        {t.common.manufacturer}
-                      </TableHead>
-                      <SortableHead
-                        label={t.home.colRemaining}
-                        sortKey="percent"
-                        activeKey={sortKey}
-                        dir={sortDir}
-                        onSort={toggleSort}
-                        className="min-w-[180px]"
-                      />
-                      <TableHead className="hidden 2xl:table-cell">
-                        {t.home.colContainerBox}
-                      </TableHead>
-                      <TableHead className="hidden lg:table-cell">
-                        {t.common.price}
-                      </TableHead>
-                      <SortableHead
-                        label={t.home.colPurchase}
-                        sortKey="purchase"
-                        activeKey={sortKey}
-                        dir={sortDir}
-                        onSort={toggleSort}
-                        className="hidden lg:table-cell"
-                      />
+                      {showsColumn("manufacturer") && (
+                        <TableHead className="hidden xl:table-cell">
+                          {t.home.colManufacturer}
+                        </TableHead>
+                      )}
+                      {showsColumn("remaining") && (
+                        <SortableHead
+                          label={t.home.colRemaining}
+                          sortKey="percent"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={toggleSort}
+                          className="min-w-[180px]"
+                        />
+                      )}
+                      {showsColumn("containerBox") && (
+                        <TableHead className="hidden 2xl:table-cell">
+                          {t.home.colContainerBox}
+                        </TableHead>
+                      )}
+                      {showsColumn("price") && (
+                        <TableHead className="hidden lg:table-cell">
+                          {t.home.colPrice}
+                        </TableHead>
+                      )}
+                      {showsColumn("purchase") && (
+                        <SortableHead
+                          label={t.home.colPurchase}
+                          sortKey="purchase"
+                          activeKey={sortKey}
+                          dir={sortDir}
+                          onSort={toggleSort}
+                          className="hidden lg:table-cell"
+                        />
+                      )}
                       <TableHead className="text-right">
-                        {t.common.actions}
+                        {t.home.colActions}
                       </TableHead>
                     </TableRow>
                   </TableHeader>
@@ -798,15 +916,17 @@ export default function Home() {
                         className="cursor-pointer"
                         onClick={() => navigate(`/material/${m.id}`)}
                       >
-                        <TableCell>
-                          {m.identifier ? (
-                            <Badge variant="outline" className="font-mono">
-                              {m.identifier}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground">–</span>
-                          )}
-                        </TableCell>
+                        {showsColumn("identifier") && (
+                          <TableCell>
+                            {m.identifier ? (
+                              <Badge variant="outline" className="font-mono">
+                                {m.identifier}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">–</span>
+                            )}
+                          </TableCell>
+                        )}
                         <TableCell className="max-w-[260px]">
                           <div className="truncate font-medium">{m.name}</div>
                           {m.color && (
@@ -815,57 +935,71 @@ export default function Home() {
                             </div>
                           )}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{m.materialType}</Badge>
-                        </TableCell>
-                        <TableCell className="hidden xl:table-cell">
-                          {m.manufacturer ?? "–"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
-                              <div
-                                className={`h-full ${fillLevelColor(m.remainingPercent)}`}
-                                style={{ width: `${m.remainingPercent ?? 0}%` }}
-                              />
+                        {showsColumn("type") && (
+                          <TableCell>
+                            <Badge variant="secondary">{m.materialType}</Badge>
+                          </TableCell>
+                        )}
+                        {showsColumn("manufacturer") && (
+                          <TableCell className="hidden xl:table-cell">
+                            {m.manufacturer ?? "–"}
+                          </TableCell>
+                        )}
+                        {showsColumn("remaining") && (
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
+                                <div
+                                  className={`h-full ${fillLevelColor(m.remainingPercent)}`}
+                                  style={{
+                                    width: `${m.remainingPercent ?? 0}%`,
+                                  }}
+                                />
+                              </div>
+                              <span
+                                className={`whitespace-nowrap text-sm font-medium ${fillLevelTextColor(m.remainingPercent)}`}
+                              >
+                                {formatGrams(m.remainingWeight)}
+                                {m.remainingPercent != null && (
+                                  <span className="font-normal text-muted-foreground">
+                                    {" "}
+                                    ({formatPercent(m.remainingPercent)})
+                                  </span>
+                                )}
+                                {/* Meter beim Filament, Liter beim Harz */}
+                                {m.secondary && (
+                                  <span className="font-normal text-muted-foreground">
+                                    {" · "}
+                                    {t.lager.approx({
+                                      value: formatSecondary(m.secondary),
+                                    })}
+                                  </span>
+                                )}
+                              </span>
                             </div>
-                            <span
-                              className={`whitespace-nowrap text-sm font-medium ${fillLevelTextColor(m.remainingPercent)}`}
-                            >
-                              {formatGrams(m.remainingWeight)}
-                              {m.remainingPercent != null && (
-                                <span className="font-normal text-muted-foreground">
-                                  {" "}
-                                  ({formatPercent(m.remainingPercent)})
-                                </span>
-                              )}
-                              {/* Meter beim Filament, Liter beim Harz */}
-                              {m.secondary && (
-                                <span className="font-normal text-muted-foreground">
-                                  {" · "}
-                                  {t.lager.approx({
-                                    value: formatSecondary(m.secondary),
-                                  })}
-                                </span>
-                              )}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
-                          <div>{m.containerLabel ?? "–"}</div>
-                          {m.storageBox && (
-                            <div className="flex items-center gap-1 text-xs">
-                              <Archive className="h-3 w-3" />{" "}
-                              {m.storageBox.name}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {formatMoney(m.priceCents)}
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          {formatDate(m.purchaseDate)}
-                        </TableCell>
+                          </TableCell>
+                        )}
+                        {showsColumn("containerBox") && (
+                          <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
+                            <div>{m.containerLabel ?? "–"}</div>
+                            {m.storageBox && (
+                              <div className="flex items-center gap-1 text-xs">
+                                <Archive className="h-3 w-3" />{" "}
+                                {m.storageBox.name}
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+                        {showsColumn("price") && (
+                          <TableCell className="hidden lg:table-cell">
+                            {formatMoney(m.priceCents)}
+                          </TableCell>
+                        )}
+                        {showsColumn("purchase") && (
+                          <TableCell className="hidden lg:table-cell">
+                            {formatDate(m.purchaseDate)}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right">
                           <div
                             className="flex justify-end gap-1"

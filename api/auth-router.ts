@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { languageSchema } from "@contracts/i18n";
 import { currencySchema, localeSchema } from "@contracts/locale";
+import { hiddenMaterialColumnsSchema } from "@contracts/materialColumns";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { clearSessionCookie, sessionCookie } from "./lib/cookies";
 import { env } from "./lib/env";
@@ -73,6 +74,7 @@ export const authRouter = createRouter({
         currency: currencySchema.optional(),
         locale: localeSchema.optional(),
         language: languageSchema.optional(),
+        hiddenMaterialColumns: hiddenMaterialColumnsSchema.optional(),
       })
     )
     .mutation(async ({ ctx, input }) => {
