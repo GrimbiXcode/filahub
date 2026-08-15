@@ -541,6 +541,9 @@ export const en: Messages = {
   containerPicker: {
     choose: "Pick a container",
     searchPlaceholder: "Search manufacturer, series or weight …",
+    searchAllPlaceholder: "Type to search the whole catalogue …",
+    manufacturerHint: (vars: { manufacturer: string }) =>
+      `Showing containers from “${vars.manufacturer}”. Type to search the whole catalogue.`,
     empty: "No matching container found.",
     none: "None / unknown",
     ownTypes: "My container types",

@@ -554,6 +554,9 @@ export const de = {
   containerPicker: {
     choose: "Gebinde wählen",
     searchPlaceholder: "Hersteller, Serie oder Gewicht suchen …",
+    searchAllPlaceholder: "Tippen, um im ganzen Katalog zu suchen …",
+    manufacturerHint: (vars: { manufacturer: string }) =>
+      `Gezeigt werden Gebinde von „${vars.manufacturer}“. Tippe, um im ganzen Katalog zu suchen.`,
     empty: "Kein passendes Gebinde gefunden.",
     none: "Keine / unbekannt",
     ownTypes: "Eigene Gebindearten",

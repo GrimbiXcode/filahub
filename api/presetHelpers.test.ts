@@ -8,6 +8,7 @@ import {
   hiddenKey,
   isCurrentVersion,
   isPresetHidden,
+  manufacturerMatches,
   materialTypeMatches,
   normalizeMaterialType,
   resolveContainerTare,
@@ -64,6 +65,40 @@ describe("materialTypeMatches", () => {
   it("passt bei fehlender Materialart nur ohne Schlagwörter", () => {
     expect(materialTypeMatches(["PLA"], "")).toBe(false);
     expect(materialTypeMatches(["PLA"], undefined)).toBe(false);
+  });
+});
+
+describe("manufacturerMatches", () => {
+  it("ignoriert Schreibweise, Leer- und Sonderzeichen", () => {
+    expect(manufacturerMatches("Polymaker", "polymaker")).toBe(true);
+    expect(manufacturerMatches("Bambu Lab", "bambulab")).toBe(true);
+    expect(manufacturerMatches("eSUN", " e-sun ")).toBe(true);
+    expect(manufacturerMatches("Fil-A-Gehr", "Filagehr")).toBe(true);
+  });
+
+  it("nimmt einen Namen als Anfang des anderen an", () => {
+    expect(manufacturerMatches("Polymaker Inc.", "Polymaker")).toBe(true);
+    expect(manufacturerMatches("Bambu", "Bambu Lab")).toBe(true);
+  });
+
+  it("trennt verschiedene Hersteller", () => {
+    expect(manufacturerMatches("Polymaker", "Prusament")).toBe(false);
+    // Kein Treffer nur, weil der eine irgendwo im anderen steckt
+    expect(manufacturerMatches("Sun", "eSUN")).toBe(false);
+  });
+
+  it("hält Kürzel unter drei Zeichen auseinander", () => {
+    expect(manufacturerMatches("3D", "3DJake")).toBe(false);
+    // Genau gleich bleibt auch kurz ein Treffer
+    expect(manufacturerMatches("3D", "3d")).toBe(true);
+  });
+
+  it("passt ohne Namen zu nichts", () => {
+    expect(manufacturerMatches("", "Polymaker")).toBe(false);
+    expect(manufacturerMatches(null, null)).toBe(false);
+    expect(manufacturerMatches("Polymaker", undefined)).toBe(false);
+    // Auch ein Name ganz ohne Buchstaben und Ziffern ist keiner
+    expect(manufacturerMatches("–", "–")).toBe(false);
   });
 });
 
