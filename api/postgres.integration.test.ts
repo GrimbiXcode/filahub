@@ -71,6 +71,8 @@ describe("Migrationen", () => {
       "weighings",
       "container_types",
       "storage_boxes",
+      "custom_colors",
+      "custom_textures",
       "login_codes",
       "preset_manufacturers",
       "preset_container_series",
@@ -127,6 +129,7 @@ describe("Migrationen", () => {
       "loan_request_status",
       "material_kind",
       "container_form",
+      "texture_kind",
       "organization_role",
       "organization_invitation_status",
     ]) {

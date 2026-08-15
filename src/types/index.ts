@@ -7,6 +7,11 @@ export type MaterialOverview = RouterOutputs["material"]["list"][number];
 export type MaterialDetail = RouterOutputs["material"]["byId"];
 export type ContainerTypeItem = RouterOutputs["containerType"]["list"][number];
 export type StorageBoxItem = RouterOutputs["storageBox"]["list"][number];
+/** Eigene Farben und Oberflächen – die Darstellung, nicht der Bestand */
+export type CustomColorItem =
+  RouterOutputs["appearance"]["list"]["colors"][number];
+export type CustomTextureItem =
+  RouterOutputs["appearance"]["list"]["textures"][number];
 /** Lager – die Ebene über den Materialien */
 export type LagerItem = RouterOutputs["lager"]["list"][number];
 

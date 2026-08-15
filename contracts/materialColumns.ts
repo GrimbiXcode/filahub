@@ -16,6 +16,11 @@ import { z } from "zod";
 /** Kennungen in der Reihenfolge, in der die Spalten in der Tabelle stehen */
 export const MATERIAL_COLUMNS = [
   "identifier",
+  /*
+    Farbe und Oberfläche als ein Feld. Ganz vorn, weil sie eine Bildspalte ist:
+    Sie wird überflogen und nicht gelesen, und dafür muss sie am Rand stehen.
+  */
+  "appearance",
   "name",
   "type",
   "manufacturer",

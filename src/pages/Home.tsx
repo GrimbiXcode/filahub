@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
@@ -80,6 +80,8 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -195,6 +197,18 @@ export default function Home() {
   const hiddenColumns = useHiddenMaterialColumns();
   const showsColumn = (column: MaterialColumn) =>
     !hiddenColumns.includes(column);
+
+  /*
+    Der Katalog wird **einmal** für die Seite geholt und hier aufgelöst, nicht
+    je Zeile: Er ist für alle Zeilen derselbe, und ein Hook je Material wären
+    fünfzig Abonnements auf dieselbe Abfrage.
+  */
+  const resolveAppearance = useAppearanceResolver();
+  const swatchLabel = useSwatchLabel();
+  const swatchFor = (m: MaterialOverview) => {
+    const { hex, kind } = resolveAppearance(m.color, m.texture);
+    return { hex, kind, label: swatchLabel(m.color, m.texture, hex) };
+  };
 
   const updateSettings = trpc.auth.updateSettings.useMutation({
     /*
@@ -831,6 +845,7 @@ export default function Home() {
                 <MaterialCard
                   key={material.id}
                   material={material}
+                  swatch={swatchFor(material)}
                   onOpen={() => navigate(`/material/${material.id}`)}
                   onWeigh={
                     roleAllows(role, "weigher")
@@ -855,6 +870,11 @@ export default function Home() {
                           dir={sortDir}
                           onSort={toggleSort}
                         />
+                      )}
+                      {showsColumn("appearance") && (
+                        <TableHead className="w-10">
+                          {t.home.colAppearance}
+                        </TableHead>
                       )}
                       <SortableHead
                         label={t.home.colMaterial}
@@ -925,6 +945,11 @@ export default function Home() {
                             ) : (
                               <span className="text-muted-foreground">–</span>
                             )}
+                          </TableCell>
+                        )}
+                        {showsColumn("appearance") && (
+                          <TableCell>
+                            <AppearanceSwatch {...swatchFor(m)} />
                           </TableCell>
                         )}
                         <TableCell className="max-w-[260px]">
@@ -1206,10 +1231,13 @@ function SortableHead({
 
 function MaterialCard({
   material,
+  swatch,
   onOpen,
   onWeigh,
 }: {
   material: MaterialOverview;
+  /** Fertig aufgelöst – der Katalog wird einmal je Seite geholt, nicht je Karte */
+  swatch: ComponentProps<typeof AppearanceSwatch>;
   onOpen: () => void;
   /** Fehlt unterhalb der Stufe `weigher` – dann entfällt der Knopf. */
   onWeigh?: () => void;
@@ -1225,20 +1253,23 @@ function MaterialCard({
         className="w-full rounded-t-xl p-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              {material.identifier && (
-                <Badge variant="outline" className="font-mono text-xs">
-                  {material.identifier}
-                </Badge>
-              )}
-              <span className="truncate font-medium">{material.name}</span>
+          <div className="flex min-w-0 items-start gap-2">
+            <AppearanceSwatch {...swatch} className="mt-0.5" />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {material.identifier && (
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {material.identifier}
+                  </Badge>
+                )}
+                <span className="truncate font-medium">{material.name}</span>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {[material.materialType, material.manufacturer, material.color]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
             </div>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {[material.materialType, material.manufacturer, material.color]
-                .filter(Boolean)
-                .join(" · ")}
-            </p>
           </div>
           <span
             className={`shrink-0 text-sm font-semibold tabular-nums ${fillLevelTextColor(material.remainingPercent)}`}

@@ -11,6 +11,7 @@ import {
   Monitor,
   Moon,
   Package,
+  Palette,
   Plus,
   Scale,
   Settings as SettingsIcon,
@@ -35,6 +36,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
+  APPEARANCE_PATH,
   CONTAINER_TYPES_PATH,
   DRYBOXES_PATH,
   FRIENDS_PATH,
@@ -130,6 +132,7 @@ const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: Boxes, label: "lager", path: LAGER_PATH },
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
   { icon: Archive, label: "storageBoxes", path: DRYBOXES_PATH },
+  { icon: Palette, label: "appearance", path: APPEARANCE_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
   { icon: Building2, label: "organizations", path: ORGANIZATIONS_PATH },
   { icon: FileUp, label: "import", path: "/import" },

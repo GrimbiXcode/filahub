@@ -34,6 +34,8 @@ import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
 
 export default function MaterialDetail() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +59,15 @@ export default function MaterialDetail() {
     { ...scope, id: materialId },
     { enabled: Number.isFinite(materialId) }
   );
+
+  const resolveAppearance = useAppearanceResolver();
+  const swatchLabel = useSwatchLabel();
+  const resolved = resolveAppearance(material?.color, material?.texture);
+  const swatch = {
+    ...resolved,
+    label: swatchLabel(material?.color, material?.texture, resolved.hex),
+    size: "md" as const,
+  };
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingWeighing, setDeletingWeighing] = useState<number | null>(null);
@@ -300,7 +311,16 @@ export default function MaterialDetail() {
                 </dt>
                 <dd>{material.manufacturer ?? "–"}</dd>
                 <dt className="text-muted-foreground">{t.common.color}</dt>
-                <dd>{material.color ?? "–"}</dd>
+                <dd className="flex items-center gap-2">
+                  <AppearanceSwatch {...swatch} />
+                  <span>{material.color ?? "–"}</span>
+                </dd>
+                {/* Die Oberfläche stand hier bis 2.7.0 gar nicht – sie gehört
+                    zur Identität wie die Farbe. */}
+                <dt className="text-muted-foreground">
+                  {t.materialDetail.texture}
+                </dt>
+                <dd>{material.texture ?? "–"}</dd>
                 <dt className="text-muted-foreground">{t.common.price}</dt>
                 <dd>{formatMoney(material.priceCents)}</dd>
                 <dt className="text-muted-foreground">
