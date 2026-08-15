@@ -50,3 +50,17 @@ swatch falls back to the hatched square.
 
 In an organisation the colours belong to the organisation, so everyone sees the
 same stock the same way.
+
+## A form that stays in its columns
+
+A long entry used to push the material form out of shape. The name of a
+container, or the button offering to store a colour, reached into the field
+beside it and covered its label; on a phone the whole form slid sideways and the
+right-hand end of every field was out of reach. Fields now keep to their column
+and shorten what does not fit into it.
+
+The suggestion lists in the form — material type, manufacturer, colour, finish —
+are no longer cut off at the lower edge of the form; they stay whole and move out
+of the way when there is no room below the field. And every drop-down is now as
+wide as the field it belongs to, here and on the other pages, so a form reads as
+one column of equal fields again.

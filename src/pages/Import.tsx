@@ -369,7 +369,7 @@ export default function Import() {
                       }
                       onValueChange={setZielLager}
                     >
-                      <SelectTrigger id="ziel-lager">
+                      <SelectTrigger id="ziel-lager" className="w-full min-w-0">
                         <SelectValue placeholder={t.import.targetLagerLabel} />
                       </SelectTrigger>
                       <SelectContent>

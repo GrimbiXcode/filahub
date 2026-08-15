@@ -395,7 +395,10 @@ export default function OrganizationDetail() {
                           setInviteRole(v as OrganizationRole)
                         }
                       >
-                        <SelectTrigger id="invite-role" className="h-9">
+                        <SelectTrigger
+                          id="invite-role"
+                          className="h-9 w-full min-w-0"
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -470,7 +473,10 @@ export default function OrganizationDetail() {
                       })
                     }
                   >
-                    <SelectTrigger id="join-role" className="h-9">
+                    <SelectTrigger
+                      id="join-role"
+                      className="h-9 w-full min-w-0"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

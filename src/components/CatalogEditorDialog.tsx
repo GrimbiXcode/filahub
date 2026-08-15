@@ -447,7 +447,7 @@ export function CatalogEditorDialog({
               <div className="grid gap-2">
                 <Label>{t.catalogEditor.formLabel}</Label>
                 <Select value={form} onValueChange={setForm}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -468,7 +468,7 @@ export function CatalogEditorDialog({
                   value={containerMaterial}
                   onValueChange={setContainerMaterial}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

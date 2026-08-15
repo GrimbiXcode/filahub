@@ -436,7 +436,7 @@ export default function Home() {
       <div className="grid gap-2">
         <Label htmlFor="f-type">{t.home.materialType}</Label>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger id="f-type">
+          <SelectTrigger id="f-type" className="w-full min-w-0">
             <SelectValue placeholder={t.home.materialType} />
           </SelectTrigger>
           <SelectContent>
@@ -457,7 +457,7 @@ export default function Home() {
         <div className="grid gap-2">
           <Label htmlFor="f-texture">{t.home.texture}</Label>
           <Select value={textureFilter} onValueChange={setTextureFilter}>
-            <SelectTrigger id="f-texture">
+            <SelectTrigger id="f-texture" className="w-full min-w-0">
               <SelectValue placeholder={t.home.texture} />
             </SelectTrigger>
             <SelectContent>
@@ -477,7 +477,7 @@ export default function Home() {
           value={manufacturerFilter}
           onValueChange={setManufacturerFilter}
         >
-          <SelectTrigger id="f-manufacturer">
+          <SelectTrigger id="f-manufacturer" className="w-full min-w-0">
             <SelectValue placeholder={t.common.manufacturer} />
           </SelectTrigger>
           <SelectContent>
@@ -493,7 +493,7 @@ export default function Home() {
       <div className="grid gap-2">
         <Label htmlFor="f-box">{t.home.storageBox}</Label>
         <Select value={boxFilter} onValueChange={setBoxFilter}>
-          <SelectTrigger id="f-box">
+          <SelectTrigger id="f-box" className="w-full min-w-0">
             <SelectValue placeholder={t.home.storageBox} />
           </SelectTrigger>
           <SelectContent>
@@ -514,7 +514,7 @@ export default function Home() {
             value={sortKey}
             onValueChange={value => setSortKey(value as SortKey)}
           >
-            <SelectTrigger id="f-sort" className="flex-1">
+            <SelectTrigger id="f-sort" className="min-w-0 flex-1">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
