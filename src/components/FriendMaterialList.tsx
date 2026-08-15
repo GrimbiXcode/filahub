@@ -86,31 +86,44 @@ export function FriendMaterialList({
           <Card key={material.id}>
             <CardContent className="flex flex-col gap-2 p-4">
               <div className="flex items-start justify-between gap-2">
-                <AppearanceSwatch
-                  hex={material.colorHex}
-                  kind={material.textureKind}
-                  label={swatchLabel(
-                    material.color,
-                    material.texture,
-                    material.colorHex
-                  )}
-                  className="mt-0.5"
-                />
-                <div className="flex min-w-0 flex-col">
-                  <span className="truncate font-medium">{material.name}</span>
-                  <span className="truncate text-xs text-muted-foreground">
-                    {material.materialType}
-                    {/* Die Oberfläche gehört zur Identität wie die Farbe –
-                        „PETG matt“ ist etwas anderes als „PETG glänzend“. */}
-                    {material.texture ? ` ${material.texture}` : ""}
-                    {material.manufacturer ? ` · ${material.manufacturer}` : ""}
-                    {material.color ? ` · ${material.color}` : ""}
-                  </span>
-                  {showOwner && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {t.friends.ownerLabel({ name: material.ownerName })}
+                {/*
+                  Feld und Text stehen **zusammen** in einer eigenen Gruppe: Die
+                  Zeile verteilt ihren Freiraum über `justify-between`, und als
+                  drei gleichrangige Kinder wanderte das Feld an den linken Rand,
+                  während der Name, den es beschriftet, in die Mitte rutschte.
+                  Dieselbe Verschachtelung wie in `MaterialCard` (`Home.tsx`).
+                */}
+                <div className="flex min-w-0 items-start gap-2">
+                  <AppearanceSwatch
+                    hex={material.colorHex}
+                    kind={material.textureKind}
+                    label={swatchLabel(
+                      material.color,
+                      material.texture,
+                      material.colorHex
+                    )}
+                    className="mt-0.5"
+                  />
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate font-medium">
+                      {material.name}
                     </span>
-                  )}
+                    <span className="truncate text-xs text-muted-foreground">
+                      {material.materialType}
+                      {/* Die Oberfläche gehört zur Identität wie die Farbe –
+                          „PETG matt“ ist etwas anderes als „PETG glänzend“. */}
+                      {material.texture ? ` ${material.texture}` : ""}
+                      {material.manufacturer
+                        ? ` · ${material.manufacturer}`
+                        : ""}
+                      {material.color ? ` · ${material.color}` : ""}
+                    </span>
+                    {showOwner && (
+                      <span className="truncate text-xs text-muted-foreground">
+                        {t.friends.ownerLabel({ name: material.ownerName })}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {material.identifier && (
                   <Badge

@@ -109,6 +109,27 @@ describe("Eigene Farben", () => {
     ).rejects.toThrow(/bereits hinterlegt/);
   });
 
+  /**
+   * Ein Name, dessen **Vergleichsform** die Spalte sprengt, muss an der
+   * Eingabeprüfung scheitern – nicht an Postgres.
+   *
+   * Fünfundzwanzigmal „Weiß" sind hundert Zeichen und damit erlaubt; der
+   * Schlüssel daraus hat hundertfünfundzwanzig. Vor der Prüfung lief das in
+   * einen `22001`, den `asConflict` nicht kennt, also ging der Rohfehler samt
+   * SQL-Text **und Parametern** hinaus. Der Test prüft deshalb nicht nur, dass
+   * es scheitert, sondern **woran**.
+   */
+  it("lässt keinen Namen durch, dessen Vergleichsform zu lang wird", async () => {
+    const name = "Weiß".repeat(25);
+    const call = callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name,
+      hex: "#ffffff",
+    });
+    await expect(call).rejects.toThrow();
+    await expect(call).rejects.not.toThrow(/insert into|params:/);
+  });
+
   it("hält die Bestände zweier Menschen auseinander", async () => {
     await callerFor(anna).appearance.createColor({
       ...PERSONAL,

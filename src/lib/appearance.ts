@@ -20,20 +20,30 @@ import { useT } from "@/lib/i18nContext";
  * Die Ausnahme ist der Bestand eines Freundes: Dort löst der Server auf, weil
  * der Katalog des Betrachters die Farben des Freundes gar nicht kennt (siehe
  * `toFriendMaterial` in `api/queries/friends.ts`).
+ *
+ * **`isPending` gehört zur Auskunft.** Solange die Abfrage läuft, ist der
+ * Katalog leer – und ein leerer Katalog sieht wie „nichts hinterlegt" aus,
+ * obwohl er „weiß ich noch nicht" heißt. Wo aus dieser Antwort eine Handlung
+ * folgt, muss der Unterschied sichtbar sein; deshalb kommt er hier mit heraus
+ * und nicht als stiller Sonderfall beim Aufrufer.
  */
-export function useAppearanceCatalog(): AppearanceCatalog {
+export function useAppearanceCatalog(): {
+  catalog: AppearanceCatalog;
+  isPending: boolean;
+} {
   const scope = useActiveScope();
-  const { data } = trpc.appearance.list.useQuery(scope, {
+  const { data, isPending } = trpc.appearance.list.useQuery(scope, {
     staleTime: 1000 * 60 * 5,
   });
 
-  return useMemo(
+  const catalog = useMemo(
     () => ({
       colors: new Map((data?.colors ?? []).map(c => [c.nameKey, c.hex])),
       textures: new Map((data?.textures ?? []).map(t => [t.nameKey, t.kind])),
     }),
     [data]
   );
+  return { catalog, isPending };
 }
 
 /**
@@ -44,7 +54,7 @@ export function useAppearanceResolver(): (
   color: string | null | undefined,
   texture: string | null | undefined
 ) => ResolvedAppearance {
-  const catalog = useAppearanceCatalog();
+  const { catalog } = useAppearanceCatalog();
   return useMemo(
     () => (color, texture) => resolveAppearance(color, texture, catalog),
     [catalog]

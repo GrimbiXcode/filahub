@@ -129,6 +129,7 @@ describe("Migrationen", () => {
       "loan_request_status",
       "material_kind",
       "container_form",
+      "texture_kind",
       "organization_role",
       "organization_invitation_status",
     ]) {

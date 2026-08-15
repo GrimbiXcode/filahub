@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { COMMON_TEXTURES } from "@contracts/materials";
 import {
+  APPEARANCE_NAME_MAX,
   BUILTIN_COLORS,
   BUILTIN_TEXTURES,
+  appearanceNameSchema,
   INK_DARK,
   INK_LIGHT,
   contrastRatio,
@@ -78,6 +80,38 @@ describe("normalizeHex", () => {
     expect(normalizeHex("rot")).toBeNull();
     expect(normalizeHex("#12345")).toBeNull();
     expect(normalizeHex("")).toBeNull();
+  });
+});
+
+describe("appearanceNameSchema", () => {
+  it("nimmt einen gewöhnlichen Namen an und trimmt ihn", () => {
+    expect(appearanceNameSchema.parse("  Signalrot  ")).toBe("Signalrot");
+  });
+
+  it("verlangt einen Namen", () => {
+    expect(() => appearanceNameSchema.parse("   ")).toThrow();
+  });
+
+  /*
+    Der Grund für die zweite Längenprüfung: `normalizeAppearanceName` macht aus
+    „ß" ein „ss", der Schlüssel wird also länger als der Name. Fünfundzwanzigmal
+    „Weiß" sind hundert erlaubte Zeichen und ergaben einen Schlüssel aus
+    hundertfünfundzwanzig – zu lang für `varchar(100)`. Das lief in einen
+    `22001` von Postgres, den `asConflict` nicht kennt und deshalb roh
+    weiterreichte: SQL-Text samt Parametern bis in den Browser.
+  */
+  it("weist einen Namen ab, dessen Vergleichsform zu lang wird", () => {
+    const name = "Weiß".repeat(25);
+    expect(name.length).toBe(APPEARANCE_NAME_MAX);
+    expect(normalizeAppearanceName(name).length).toBeGreaterThan(
+      APPEARANCE_NAME_MAX
+    );
+    expect(() => appearanceNameSchema.parse(name)).toThrow();
+  });
+
+  it("lässt einen langen Namen ohne „ß“ zu", () => {
+    const name = "a".repeat(APPEARANCE_NAME_MAX);
+    expect(appearanceNameSchema.parse(name)).toBe(name);
   });
 });
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { COMMON_TEXTURES, resolveDensity } from "@contracts/materials";
+import { resolveAppearance } from "@contracts/appearance";
 import {
   decodeContainerRef,
   encodeContainerRef,
@@ -35,7 +36,7 @@ import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 import { useActiveScope } from "@/lib/activeScope";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
-import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
+import { useAppearanceCatalog, useSwatchLabel } from "@/lib/appearance";
 
 type Props = {
   open: boolean;
@@ -194,14 +195,21 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
 
-  const resolveAppearance = useAppearanceResolver();
+  const { catalog, isPending: catalogPending } = useAppearanceCatalog();
   const swatchLabel = useSwatchLabel();
-  const appearance = resolveAppearance(color, texture);
+  const appearance = resolveAppearance(color, texture, catalog);
   /*
     Nur wenn ein Name dasteht und dazu kein Farbcode gefunden wurde. Ein leeres
     Feld ist keine Lücke, sondern eine Angabe, die niemand gemacht hat.
+
+    **Und erst, wenn der Katalog da ist.** Solange er lädt, ist er leer, und
+    jede Farbe sähe unbekannt aus – der Knopf „hinterlegen" stünde dann auch
+    unter einer längst hinterlegten Farbe, und ein Klick in diesem Moment liefe
+    in den Unique-Index und käme als Fehlermeldung zurück. Das Feld daneben darf
+    solange das Rückfallmuster zeigen; es fordert zu nichts auf.
   */
-  const needsColorCode = color.trim().length > 0 && appearance.hex == null;
+  const needsColorCode =
+    !catalogPending && color.trim().length > 0 && appearance.hex == null;
 
   const addColor = trpc.appearance.createColor.useMutation({
     onSuccess: () => {

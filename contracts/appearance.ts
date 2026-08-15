@@ -375,8 +375,27 @@ export function counterInk(ink: OverlayInk): OverlayInk {
 /** Obergrenze passend zu `varchar(100)` in `db/schema.ts` */
 export const APPEARANCE_NAME_MAX = 100;
 
+/**
+ * Name einer eigenen Farbe oder Oberfläche.
+ *
+ * **Begrenzt wird die Vergleichsform mit, nicht nur der eingetippte Name.** Die
+ * Spalten `name` und `nameKey` sind beide `varchar(100)`, aber
+ * `normalizeAppearanceName` macht aus jedem „ß" ein „ss" – der Schlüssel kann
+ * also länger werden als der Name. „Weiß" fünfundzwanzigmal sind hundert
+ * erlaubte Zeichen und ergeben einen Schlüssel aus hundertfünfundzwanzig.
+ *
+ * Ohne die zweite Prüfung liefe das in einen `22001` von Postgres, und der ist
+ * hier kein erwarteter Fehler: `asConflict` (`api/appearanceRouter.ts`) kennt
+ * nur `23505` und reichte alles andere roh weiter – samt SQL-Text und
+ * Parametern. Genau der Weg, den die Fassung davor für doppelte Namen
+ * geschlossen hat.
+ */
 export const appearanceNameSchema = z
   .string()
   .trim()
   .min(1, "Name ist erforderlich")
-  .max(APPEARANCE_NAME_MAX, "Name ist zu lang");
+  .max(APPEARANCE_NAME_MAX, "Name ist zu lang")
+  .refine(
+    value => normalizeAppearanceName(value).length <= APPEARANCE_NAME_MAX,
+    "Name ist zu lang"
+  );
