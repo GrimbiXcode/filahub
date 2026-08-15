@@ -91,3 +91,17 @@ saves the form, so a value you typed yourself is never more than one key away.
 Tabbing through the form no longer opens a list in front of the fields below —
 the lists wait until you click them or press arrow down. And a screen reader now
 reads out which suggestion is highlighted while you stay in the field.
+
+## The container list starts with your manufacturer
+
+Picking a container used to mean scrolling past the whole catalogue, no matter
+which manufacturer you had just entered on the material. The list now opens on
+the containers of that manufacturer — your own container types and the catalogue
+entries alike.
+
+Everything else is one keystroke away: type in the search field and the whole
+catalogue is back, as a line under the list points out. So a spool from another
+maker, or one you keep under a name of your own, is still yours to pick. The
+container already chosen stays in the list either way, and a manufacturer with no
+containers to show narrows nothing — the list then reads as long as it always
+did.

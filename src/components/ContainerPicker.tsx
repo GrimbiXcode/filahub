@@ -6,6 +6,7 @@ import {
   encodeContainerRef,
   containerFits,
   formatNominalWeight,
+  manufacturerMatches,
 } from "@contracts/presets";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,11 @@ type Props = {
   /** Aktuell im Formular gewählte Materialart – nur zur Gruppierung */
   materialType?: string;
   /**
+   * Hersteller aus dem Formular. Anders als Materialart und Form grenzt er die
+   * Liste tatsächlich ein – siehe die Begründung am Kopf der Komponente.
+   */
+  manufacturer?: string;
+  /**
    * Materialart des gewählten Lagers – auch nur zur Gruppierung. Ein Harzlager
    * reiht Flaschen und Kartuschen nach oben.
    */
@@ -53,12 +59,26 @@ type Props = {
  * Auswahl des Gebindes: eigene Gebindearten und Presets aus dem
  * Katalog in einer Liste.
  *
- * **Gruppiert, filtert nicht** – weder nach Materialart noch nach Gebindeform.
- * Die Materialart ist im Bestand Freitext („PLA“, „PLA+“, „PLA Silk“), und die
- * Form eines Gebindes ist eine Angabe des Benutzers. Wer beides hart filtert,
- * lässt genau das Gebinde verschwinden, das jemand bewusst so angelegt hat, und
- * gibt ihm keine Möglichkeit, es zu wählen. Passendes steht oben, alles andere
+ * **Nach Materialart und Gebindeform wird gruppiert, nicht gefiltert.** Die
+ * Materialart ist im Bestand Freitext („PLA“, „PLA+“, „PLA Silk“), und die Form
+ * eines Gebindes ist eine Angabe des Benutzers. Wer beides hart filtert, lässt
+ * genau das Gebinde verschwinden, das jemand bewusst so angelegt hat, und gibt
+ * ihm keine Möglichkeit, es zu wählen. Passendes steht oben, alles andere
  * darunter.
+ *
+ * **Der Hersteller grenzt dagegen ein** – aber nur die Vorauswahl. Wer beim
+ * Material „Polymaker“ einträgt, sucht ein Polymaker-Gebinde; ihm dreihundert
+ * fremde Katalogeinträge vorzulegen, ist keine Hilfe. Der Unterschied zu Form
+ * und Materialart: Der Hersteller steht an beiden Seiten als eigener Wert, der
+ * Abgleich ist also eine Aussage über die Daten und keine Vermutung.
+ *
+ * Damit die Eingrenzung nichts unerreichbar macht, gilt sie nur, solange das
+ * Suchfeld leer ist. Sobald jemand tippt, steht wieder der ganze Katalog zur
+ * Auswahl – die Suche ist die Tür nach draußen, und ein Hinweis unter der Liste
+ * sagt das auch. Zwei weitere Ausnahmen: Ohne einen einzigen Treffer wird gar
+ * nicht eingegrenzt (eine fast leere Liste ist schlechter als eine lange), und
+ * das bereits gewählte Gebinde bleibt immer sichtbar, sonst verschwände beim
+ * Ändern des Herstellers der eigene Haken aus der Liste.
  */
 export function ContainerPicker({
   value,
@@ -66,24 +86,44 @@ export function ContainerPicker({
   ownContainerTypes,
   presets,
   materialType,
+  manufacturer,
   materialKind,
   nominalWeight,
   disabled,
 }: Props) {
   const [open, setOpen] = useState(false);
+  /*
+    Die Suche wird mitgelesen, nicht gesteuert: cmdk filtert weiterhin selbst,
+    hier zählt nur, *ob* etwas darin steht – das schaltet die Eingrenzung nach
+    Hersteller ab.
+  */
+  const [search, setSearch] = useState("");
   const { formatGrams } = useFormat();
   const t = useT();
 
+  /*
+    Schließen heißt immer auch: Suche vergessen. Der Suchtext lebt hier draußen
+    weiter, während das Popover seinen Inhalt abbaut – bliebe er stehen, zeigte
+    die Liste beim nächsten Öffnen noch die Treffer von vorhin, und die
+    Eingrenzung auf den Hersteller wäre wegen einer Suche aus, die niemand mehr
+    sieht. Deshalb geht jedes Schließen über diese Stelle.
+  */
+  const close = () => {
+    setOpen(false);
+    setSearch("");
+  };
+
+  const selectedRef = useMemo(() => decodeContainerRef(value), [value]);
+
   const selected = useMemo(() => {
-    const ref = decodeContainerRef(value);
-    if (!ref) return null;
-    if (ref.kind === "own") {
-      const own = ownContainerTypes.find(s => s.id === ref.id);
+    if (!selectedRef) return null;
+    if (selectedRef.kind === "own") {
+      const own = ownContainerTypes.find(s => s.id === selectedRef.id);
       return own
         ? { label: own.name, tareWeight: own.tareWeight, preset: false }
         : null;
     }
-    const preset = presets.find(p => p.id === ref.id);
+    const preset = presets.find(p => p.id === selectedRef.id);
     return preset
       ? {
           label: preset.displayName,
@@ -91,7 +131,7 @@ export function ContainerPicker({
           preset: true,
         }
       : null;
-  }, [value, ownContainerTypes, presets]);
+  }, [selectedRef, ownContainerTypes, presets]);
 
   /**
    * Passende Presets zuerst, danach der Rest – beides bleibt sichtbar.
@@ -139,13 +179,56 @@ export function ContainerPicker({
     [ownContainerTypes, materialKind]
   );
 
+  /**
+   * Die Gebinde des eingetragenen Herstellers – oder `null`, wenn nicht
+   * eingegrenzt wird: kein Hersteller im Formular oder kein einziger Treffer.
+   */
+  const fromManufacturer = useMemo(() => {
+    if (!manufacturer?.trim()) return null;
+    const own = new Set(
+      ownContainerTypes
+        .filter(o => manufacturerMatches(o.manufacturer, manufacturer))
+        .map(o => o.id)
+    );
+    const preset = new Set(
+      presets
+        .filter(p => manufacturerMatches(p.manufacturer, manufacturer))
+        .map(p => p.id)
+    );
+    if (own.size === 0 && preset.size === 0) return null;
+    return { own, preset };
+  }, [manufacturer, ownContainerTypes, presets]);
+
+  /* Getippt wird gesucht, und wer sucht, sucht im ganzen Katalog. */
+  const narrowing = search.trim() === "" ? fromManufacturer : null;
+
+  const visibleOwn = useMemo(
+    () =>
+      narrowing
+        ? ownSorted.filter(
+            o =>
+              narrowing.own.has(o.id) ||
+              (selectedRef?.kind === "own" && selectedRef.id === o.id)
+          )
+        : ownSorted,
+    [narrowing, ownSorted, selectedRef]
+  );
+
+  const [visibleMatching, visibleOthers] = useMemo(() => {
+    if (!narrowing) return [matching, others];
+    const keep = (p: PresetOption) =>
+      narrowing.preset.has(p.id) ||
+      (selectedRef?.kind === "preset" && selectedRef.id === p.id);
+    return [matching.filter(keep), others.filter(keep)];
+  }, [narrowing, matching, others, selectedRef]);
+
   const renderPreset = (preset: PresetOption) => (
     <CommandItem
       key={`preset-${preset.id}`}
       value={`${preset.displayName} ${preset.manufacturer} ${preset.series} ${formatNominalWeight(preset.nominalWeight)}`}
       onSelect={() => {
         onChange(encodeContainerRef("preset", preset.id));
-        setOpen(false);
+        close();
       }}
     >
       <Check
@@ -168,7 +251,10 @@ export function ContainerPicker({
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={next => (next ? setOpen(true) : close())}
+    >
       <PopoverTrigger asChild>
         <Button
           type="button"
@@ -207,7 +293,15 @@ export function ContainerPicker({
         align="start"
       >
         <Command>
-          <CommandInput placeholder={t.containerPicker.searchPlaceholder} />
+          <CommandInput
+            value={search}
+            onValueChange={setSearch}
+            placeholder={
+              narrowing
+                ? t.containerPicker.searchAllPlaceholder
+                : t.containerPicker.searchPlaceholder
+            }
+          />
           <CommandList>
             <CommandEmpty>{t.containerPicker.empty}</CommandEmpty>
             <CommandGroup>
@@ -215,7 +309,7 @@ export function ContainerPicker({
                 value="keine unbekannt"
                 onSelect={() => {
                   onChange(NO_CONTAINER);
-                  setOpen(false);
+                  close();
                 }}
               >
                 <Check
@@ -228,15 +322,15 @@ export function ContainerPicker({
               </CommandItem>
             </CommandGroup>
 
-            {ownSorted.length > 0 && (
+            {visibleOwn.length > 0 && (
               <CommandGroup heading={t.containerPicker.ownTypes}>
-                {ownSorted.map(own => (
+                {visibleOwn.map(own => (
                   <CommandItem
                     key={`own-${own.id}`}
                     value={`${own.name} ${own.manufacturer ?? ""}`}
                     onSelect={() => {
                       onChange(encodeContainerRef("own", own.id));
-                      setOpen(false);
+                      close();
                     }}
                   >
                     <Check
@@ -261,7 +355,7 @@ export function ContainerPicker({
               </CommandGroup>
             )}
 
-            {matching.length > 0 && (
+            {visibleMatching.length > 0 && (
               <CommandGroup
                 heading={t.preset.formFits({
                   /*
@@ -276,19 +370,19 @@ export function ContainerPicker({
                       : "",
                 })}
               >
-                {matching.map(renderPreset)}
+                {visibleMatching.map(renderPreset)}
               </CommandGroup>
             )}
 
-            {others.length > 0 && (
+            {visibleOthers.length > 0 && (
               <CommandGroup
                 heading={
-                  matching.length > 0
+                  visibleMatching.length > 0
                     ? t.containerPicker.catalogMore
                     : t.containerPicker.catalog
                 }
               >
-                {others.map(renderPreset)}
+                {visibleOthers.map(renderPreset)}
               </CommandGroup>
             )}
 
@@ -298,6 +392,21 @@ export function ContainerPicker({
               </div>
             )}
           </CommandList>
+
+          {/*
+            Außerhalb der `CommandList` und damit außerhalb ihres Scrollbereichs:
+            Der Hinweis ist für den, der sein Gebinde nicht findet, und der wird
+            nicht ans Ende einer langen Liste scrollen, um zu erfahren, dass es
+            weiter unten nichts mehr gibt. Unter der Liste statt darüber, weil die
+            Eingrenzung der Normalfall ist und keine Überschrift braucht.
+          */}
+          {narrowing && (
+            <div className="border-t px-3 py-2 text-xs text-muted-foreground">
+              {t.containerPicker.manufacturerHint({
+                manufacturer: manufacturer?.trim() ?? "",
+              })}
+            </div>
+          )}
         </Command>
       </PopoverContent>
     </Popover>
