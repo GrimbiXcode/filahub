@@ -84,6 +84,31 @@ describe("Eigene Farben", () => {
     ).rejects.toThrow(/bereits hinterlegt/);
   });
 
+  /*
+    Der zweite Weg in denselben Index: umbenennen statt anlegen. Eigene
+    Fehlerbehandlung im Router, deshalb ein eigener Test – die erste Fassung
+    unterschied sich zwischen beiden Pfaden.
+  */
+  it("lässt auch beim Umbenennen keinen doppelten Namen zu", async () => {
+    await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Grün",
+      hex: "#00ff00",
+    });
+    const blau = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Blau",
+      hex: "#0000ff",
+    });
+    await expect(
+      callerFor(anna).appearance.updateColor({
+        ...PERSONAL,
+        id: blau!.id,
+        name: "grun",
+      })
+    ).rejects.toThrow(/bereits hinterlegt/);
+  });
+
   it("hält die Bestände zweier Menschen auseinander", async () => {
     await callerFor(anna).appearance.createColor({
       ...PERSONAL,

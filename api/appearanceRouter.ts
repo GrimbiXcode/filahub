@@ -66,10 +66,26 @@ const idInput = z.object({
  * Ein doppelter Name ist der einzige erwartbare Datenbankfehler hier – der
  * partielle Unique-Index je Bereich schlägt zu. Als `CONFLICT` und mit Klartext
  * statt als `INTERNAL_SERVER_ERROR` mit Postgres-Kauderwelsch.
+ *
+ * **Der Fehlercode steht nicht oben, sondern in der Ursachenkette.** Drizzle
+ * verpackt den Fehler des Treibers in einen eigenen; `error.code` ist deshalb
+ * `undefined`, und die erste Fassung dieser Funktion warf still den Rohfehler
+ * weiter – samt SQL-Text **und Parametern** bis in den Browser. Aufgefallen ist
+ * das erst im Integrationstest, weil ohne Datenbank kein Unique-Index zuschlägt.
+ * Dieselbe Kette liest `api/test/integration-db.ts` für den Verklemmungs-Code.
  */
+function pgErrorCode(error: unknown): string | undefined {
+  for (let current = error, depth = 0; current != null && depth < 5; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string") return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
 function asConflict(error: unknown, message: string): never {
-  const code = (error as { code?: string } | null)?.code;
-  if (code === "23505") throw new TRPCError({ code: "CONFLICT", message });
+  if (pgErrorCode(error) === "23505")
+    throw new TRPCError({ code: "CONFLICT", message });
   throw error;
 }
 
