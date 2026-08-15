@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
+import { DateInput } from "@/components/DateInput";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -389,11 +390,10 @@ export default function Import() {
                     <Label htmlFor="kaufdatum">
                       {t.import.purchaseDateLabel}
                     </Label>
-                    <Input
+                    <DateInput
                       id="kaufdatum"
-                      type="date"
                       value={kaufdatum}
-                      onChange={e => setKaufdatum(e.target.value)}
+                      onChange={setKaufdatum}
                       className={cn(kaufdatumUngueltig && "border-destructive")}
                     />
                     {kaufdatumUngueltig && (

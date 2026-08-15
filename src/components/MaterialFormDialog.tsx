@@ -8,6 +8,7 @@ import {
   formatNominalWeight,
 } from "@contracts/presets";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
+import { DateInput } from "@/components/DateInput";
 import { NO_CONTAINER, ContainerPicker } from "@/components/ContainerPicker";
 import { Button } from "@/components/ui/button";
 import {
@@ -576,11 +577,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             </div>
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="m-date">{t.materialForm.purchaseDate}</Label>
-              <Input
+              <DateInput
                 id="m-date"
-                type="date"
                 value={purchaseDate}
-                onChange={e => setPurchaseDate(e.target.value)}
+                onChange={setPurchaseDate}
               />
             </div>
             <div className="grid gap-2">
