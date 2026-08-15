@@ -52,6 +52,8 @@ export const de = {
     nameRequired: "Bitte einen Namen angeben",
     invalidTare: "Bitte ein gültiges Leergewicht in Gramm angeben",
     nameRequiredLabel: "Name *",
+    dateNotRecognized: (vars: { value: string }) =>
+      `„${vars.value}“ ließ sich nicht als Datum lesen`,
   },
 
   nav: {

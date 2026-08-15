@@ -43,6 +43,8 @@ export const en: Messages = {
     nameRequired: "Please enter a name",
     invalidTare: "Please enter a valid empty weight in grams",
     nameRequiredLabel: "Name *",
+    dateNotRecognized: (vars: { value: string }) =>
+      `Could not read “${vars.value}” as a date`,
   },
 
   nav: {

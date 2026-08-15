@@ -50,3 +50,44 @@ swatch falls back to the hatched square.
 
 In an organisation the colours belong to the organisation, so everyone sees the
 same stock the same way.
+
+## A form that stays in its columns
+
+A long entry used to push the material form out of shape. The name of a
+container, or the button offering to store a colour, reached into the field
+beside it and covered its label; on a phone the whole form slid sideways and the
+right-hand end of every field was out of reach. Fields now keep to their column
+and shorten what does not fit into it.
+
+The suggestion lists in the form — material type, manufacturer, colour, finish —
+are no longer cut off at the lower edge of the form; they stay whole and move out
+of the way when there is no room below the field. And every drop-down is now as
+wide as the field it belongs to, here and on the other pages, so a form reads as
+one column of equal fields again.
+
+## Paste a date
+
+A date field is three small boxes to the browser, and it used to drop pasted
+text without a word: copying "12.08.2026" out of the order confirmation and
+pasting it did nothing at all. It works now — in the material form, in the
+import and in the catalogue.
+
+Written the way your region writes it ("12.08.2026", "08/12/2026"), the way a
+spreadsheet writes it ("2026-08-12", with a time after it or not), with a
+two-digit year ("1.9.26"), or sitting in a sentence ("ordered on 03.11.2025") —
+all of it lands in the field. Which of two numbers is the day is read the way
+your region reads it, except when one of them is larger than twelve: that one
+can only be the day. What cannot be read as a date says so instead of vanishing
+quietly.
+
+## The form without a mouse
+
+The suggestion lists take arrow keys now: **arrow down** opens the list and
+steps into it, **arrow up and down** move through it, **Enter** takes the
+highlighted suggestion, **Esc** closes the list and leaves the form open, and
+**Tab** moves on to the next field. Enter without a highlighted suggestion still
+saves the form, so a value you typed yourself is never more than one key away.
+
+Tabbing through the form no longer opens a list in front of the fields below —
+the lists wait until you click them or press arrow down. And a screen reader now
+reads out which suggestion is highlighted while you stay in the field.

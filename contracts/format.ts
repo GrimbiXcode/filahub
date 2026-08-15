@@ -248,3 +248,92 @@ export function centsToInputString(
   if (cents == null || !Number.isFinite(cents)) return "";
   return (cents / 100).toFixed(2).replace(".", decimalSeparator(locale));
 }
+
+/** Reihenfolge von Tag, Monat und Jahr in der Locale */
+function dateFieldOrder(locale: string): ("day" | "month" | "year")[] {
+  const parts = dateFormat(locale, {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    // Ohne Zeitzone hängt die Reihenfolge sonst am Ort des Servers; für die
+    // Frage „Tag oder Monat zuerst" ist das Datum selbst ohnehin egal.
+    timeZone: "UTC",
+  }).formatToParts(new Date(Date.UTC(2001, 1, 3)));
+  const order = parts
+    .map(part => part.type)
+    .filter(
+      (type): type is "day" | "month" | "year" =>
+        type === "day" || type === "month" || type === "year"
+    );
+  return order.length === 3 ? order : ["day", "month", "year"];
+}
+
+/** Zweistellige Jahre gehören in dieses Jahrhundert: „26" → 2026 */
+function expandYear(year: number): number {
+  return year < 100 ? 2000 + year : year;
+}
+
+/** Baut `YYYY-MM-DD`, wenn es den Tag wirklich gibt – sonst null */
+function isoDate(year: number, month: number, day: number): string | null {
+  if (year < 1900 || year > 2999) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  )
+    return null; // z. B. der 31. Februar
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${year}-${pad(month)}-${pad(day)}`;
+}
+
+/**
+ * Datumseingabe nach `YYYY-MM-DD` – die Form, die ein `<input type="date">`
+ * als Wert erwartet. `null`, wenn daraus kein Datum wird.
+ *
+ * Gedacht für das, was Menschen in ein Datumsfeld **einfügen**: die Zeile aus
+ * der Bestellbestätigung, eine Zelle aus der Tabellenkalkulation, das Datum,
+ * das filahub selbst anzeigt. Der Browser wirft eingefügten Text im
+ * Datumsfeld kommentarlos weg – erst diese Umwandlung macht das Einfügen
+ * überhaupt möglich.
+ *
+ * Angenommen werden:
+ * - die ISO-Form mit und ohne Uhrzeit (`2026-08-12`, `2026-08-12T10:30:00Z`),
+ * - drei Zahlen in beliebiger Trennung (`12.08.2026`, `12/8/26`, `12 08 2026`),
+ *   auch mitten im Satz („bestellt am 12.08.2026"),
+ * - zweistellige Jahre.
+ *
+ * Ob „08/12" der 8. Dezember oder der 12. August ist, entscheidet die Locale
+ * des Benutzers – mit einer Ausnahme: Eine Zahl über zwölf kann kein Monat
+ * sein, dann steht sie für den Tag, egal was die Locale sagt.
+ */
+export function parseDateInput(raw: string, locale: string): string | null {
+  const value = raw.trim();
+  if (!value) return null;
+
+  // Zuerst die Maschinenform – sie ist eindeutig und braucht keine Locale.
+  const iso = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ].*)?$/.exec(value);
+  if (iso) return isoDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
+
+  const tokens = value.match(/\d+/g)?.slice(0, 3);
+  if (!tokens || tokens.length < 3) return null;
+  if (tokens.some(token => token.length > 4)) return null;
+
+  const order = dateFieldOrder(locale);
+  // Vier Ziffern sind das Jahr; sonst steht es dort, wo die Locale es erwartet.
+  const fourDigits = tokens.findIndex(token => token.length === 4);
+  const yearAt = fourDigits >= 0 ? fourDigits : order.indexOf("year");
+  if (tokens[yearAt].length === 3) return null;
+  const year = expandYear(Number(tokens[yearAt]));
+
+  const rest = tokens.filter((_, index) => index !== yearAt).map(Number);
+  // Steht das Jahr vorn, ist die Schreibweise absteigend (2026-08-12);
+  // sonst gibt die Locale die Reihenfolge von Tag und Monat vor.
+  const dayFirst =
+    yearAt === 0 ? false : order.indexOf("day") < order.indexOf("month");
+  let [day, month] = dayFirst ? rest : [rest[1], rest[0]];
+  if (month > 12 && day <= 12) [day, month] = [month, day];
+
+  return isoDate(year, month, day);
+}

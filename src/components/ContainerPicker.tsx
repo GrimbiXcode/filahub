@@ -176,9 +176,15 @@ export function ContainerPicker({
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
-          className="w-full justify-between font-normal"
+          /*
+            `min-w-0`, damit der Knopf nicht mindestens so breit wird wie der
+            Name des gewählten Gebindes: In einem Rasterfeld schob er sich
+            sonst über die Nachbarspalte. So bleibt er bei der Breite seines
+            Felds und der Name kürzt sich mit `truncate`.
+          */
+          className="w-full min-w-0 justify-between font-normal"
         >
-          <span className="flex min-w-0 items-center gap-2">
+          <span className="flex min-w-0 flex-1 items-center gap-2">
             {selected ? (
               <>
                 <Disc3 className="h-4 w-4 shrink-0 text-muted-foreground" />

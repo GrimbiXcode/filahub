@@ -8,6 +8,7 @@ import {
   formatNominalWeight,
 } from "@contracts/presets";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
+import { DateInput } from "@/components/DateInput";
 import { NO_CONTAINER, ContainerPicker } from "@/components/ContainerPicker";
 import { Button } from "@/components/ui/button";
 import {
@@ -383,7 +384,23 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
+          {/*
+            `items-start`: Ohne das zieht jede Zelle sich auf die Höhe der
+            höchsten ihrer Zeile, und weil die Zellen selbst Raster sind,
+            verteilen sich Beschriftung und Feld darin auf die gewonnene Höhe.
+            Neben einem hohen Feld – Farbe mit dem Hinweiskasten – rutschte das
+            Feld daneben dadurch nach unten und stand nicht mehr auf einer
+            Linie mit seiner Beschriftung.
+
+            `[&>*]:min-w-0` gilt jeder Zelle: Rasterfelder sind von Haus aus
+            `min-width: auto` und damit mindestens so breit wie ihr breitester
+            unumbrechbarer Inhalt. Ein Knopf mit langer Beschriftung – das
+            gewählte Gebinde, „… hinterlegen“ – schob die Zelle so über ihre
+            Spalte hinaus und legte sich über die Nachbarspalte; auf dem Telefon
+            lief das ganze Formular seitlich aus dem Bild. Mit `min-w-0` bleibt
+            die Zelle bei ihrer Spaltenbreite, und der Inhalt darin kürzt sich.
+          */}
+          <div className="grid items-start gap-4 overflow-y-auto p-4 [&>*]:min-w-0 sm:grid-cols-2 sm:p-6">
             {/*
               Das Lager zuerst und über die ganze Breite: Es bestimmt Materialart
               und – beim Filament – die Stärke, aus denen die Zweitanzeige
@@ -392,7 +409,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="m-lager">{t.materialForm.lagerLabel}</Label>
               <Select value={effectiveLagerId} onValueChange={setLagerId}>
-                <SelectTrigger id="m-lager">
+                {/* Über die ganze Feldbreite wie die Eingabefelder daneben:
+                    Die Vorgabe von shadcn ist `w-fit`, die Auswahl fiele je
+                    nach Lagername mal schmal, mal breit aus – und mit `min-w-0`
+                    wird sie auch bei einem langen Namen nicht breiter als ihr
+                    Feld, sondern kürzt ihn. */}
+                <SelectTrigger id="m-lager" className="w-full min-w-0">
                   <SelectValue placeholder={t.lager.switchLabel} />
                 </SelectTrigger>
                 <SelectContent>
@@ -440,7 +462,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="m-color">{t.common.color}</Label>
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <div className="min-w-0 flex-1">
                   <AutocompleteInput
                     id="m-color"
@@ -464,32 +486,46 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 Dialog über dem ersten.
               */}
               {needsColorCode && (
-                <div className="flex items-center gap-2 rounded-md border border-dashed p-2">
-                  <Input
-                    type="color"
-                    aria-label={t.appearance.hexLabel}
-                    value={newHex}
-                    onChange={e => setNewHex(e.target.value)}
-                    className="h-9 w-12 shrink-0 p-1"
-                  />
-                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                /*
+                  Hinweis über die Breite, Farbwähler und Knopf darunter: In
+                  einer Zeile nebeneinander braucht das mehr Platz, als eine
+                  Spalte des Formulars hat – der Kasten schob sich dann über
+                  das Feld daneben. Gestapelt passt es in jede Spaltenbreite,
+                  und der Hinweistext darf umbrechen statt abgeschnitten zu
+                  werden.
+                */
+                <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
+                  <span className="text-xs text-muted-foreground">
                     {t.appearance.unknownColor}
                   </span>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={addColor.isPending}
-                    onClick={() =>
-                      addColor.mutate({
-                        ...scope,
-                        name: color.trim(),
-                        hex: newHex,
-                      })
-                    }
-                  >
-                    {t.appearance.addColorFor({ name: color.trim() })}
-                  </Button>
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
+                    <Input
+                      type="color"
+                      aria-label={t.appearance.hexLabel}
+                      value={newHex}
+                      onChange={e => setNewHex(e.target.value)}
+                      className="h-9 w-12 shrink-0 p-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="max-w-full"
+                      disabled={addColor.isPending}
+                      onClick={() =>
+                        addColor.mutate({
+                          ...scope,
+                          name: color.trim(),
+                          hex: newHex,
+                        })
+                      }
+                    >
+                      {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
+                      <span className="truncate">
+                        {t.appearance.addColorFor({ name: color.trim() })}
+                      </span>
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -541,11 +577,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             </div>
             <div className="grid min-w-0 gap-2">
               <Label htmlFor="m-date">{t.materialForm.purchaseDate}</Label>
-              <Input
+              <DateInput
                 id="m-date"
-                type="date"
                 value={purchaseDate}
-                onChange={e => setPurchaseDate(e.target.value)}
+                onChange={setPurchaseDate}
               />
             </div>
             <div className="grid gap-2">
@@ -621,7 +656,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             <div className="grid gap-2">
               <Label>{t.materialForm.storageBox}</Label>
               <Select value={storageBoxId} onValueChange={setStorageBoxId}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue placeholder={t.materialForm.chooseBox} />
                 </SelectTrigger>
                 <SelectContent>

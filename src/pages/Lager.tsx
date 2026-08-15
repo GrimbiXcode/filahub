@@ -338,7 +338,7 @@ export default function LagerPage() {
                   value={kind}
                   onValueChange={value => setKind(value as MaterialKind)}
                 >
-                  <SelectTrigger id="lager-kind">
+                  <SelectTrigger id="lager-kind" className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -366,7 +366,10 @@ export default function LagerPage() {
                       setDiameter(Number(value) as FilamentDiameterUm)
                     }
                   >
-                    <SelectTrigger id="lager-diameter">
+                    <SelectTrigger
+                      id="lager-diameter"
+                      className="w-full min-w-0"
+                    >
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
