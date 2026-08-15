@@ -66,6 +66,8 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   const [
     containerTypes,
     storageBoxes,
+    customColors,
+    customTextures,
     hiddenContainerPresets,
     presetProposals,
   ] = await Promise.all([
@@ -74,6 +76,12 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     }),
     db.query.storageBoxes.findMany({
       where: eq(schema.storageBoxes.userId, userId),
+    }),
+    db.query.customColors.findMany({
+      where: eq(schema.customColors.userId, userId),
+    }),
+    db.query.customTextures.findMany({
+      where: eq(schema.customTextures.userId, userId),
     }),
     db.query.hiddenContainerPresets.findMany({
       where: eq(schema.hiddenContainerPresets.userId, userId),
@@ -259,6 +267,8 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     weighings,
     containerTypes,
     storageBoxes,
+    customColors,
+    customTextures,
     hiddenContainerPresets,
     presetProposals,
     loginCodes,
@@ -415,6 +425,17 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.storageBoxes)
       .where(eq(schema.storageBoxes.userId, userId));
+    /*
+      Eigene Farben und Oberflächen hängen an nichts – sie verweisen auf kein
+      Material, und kein Material verweist auf sie. Die Reihenfolge ist hier
+      also gleichgültig, anders als bei Lager und Materialien darüber.
+    */
+    await tx
+      .delete(schema.customColors)
+      .where(eq(schema.customColors.userId, userId));
+    await tx
+      .delete(schema.customTextures)
+      .where(eq(schema.customTextures.userId, userId));
 
     /*
       7. Offene, abgelehnte und zurückgezogene Vorschläge verschwinden ganz –

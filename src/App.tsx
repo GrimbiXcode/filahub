@@ -1,6 +1,7 @@
 import { Navigate, Routes, Route } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
+  APPEARANCE_PATH,
   CONTAINER_TYPES_PATH,
   DRYBOXES_PATH,
   LAGER_PATH,
@@ -14,6 +15,7 @@ import {
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
+import Appearance from "./pages/Appearance";
 import AdminProposals from "./pages/AdminProposals";
 import AdminSystem from "./pages/AdminSystem";
 import FriendInventory from "./pages/FriendInventory";
@@ -43,6 +45,7 @@ export default function App() {
         <Route path="/material/:id" element={<MaterialDetail />} />
         <Route path={CONTAINER_TYPES_PATH} element={<ContainerTypes />} />
         <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />
+        <Route path={APPEARANCE_PATH} element={<Appearance />} />
         {/* Alte Pfade aus 2.1.0 bzw. 2.2.0 – gesetzte Lesezeichen sollen nicht
             brechen. */}
         <Route

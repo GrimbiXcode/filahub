@@ -15,6 +15,7 @@ import type { TextKey } from "@/lib/i18nContext";
  */
 export const MATERIAL_COLUMN_LABELS: Record<MaterialColumn, TextKey<"home">> = {
   identifier: "colIdentifier",
+  appearance: "colAppearance",
   name: "colMaterial",
   type: "colType",
   manufacturer: "colManufacturer",

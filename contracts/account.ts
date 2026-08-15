@@ -57,6 +57,9 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "weighings",
   "containerTypes",
   "storageBoxes",
+  /* Eigene Farben und Oberflächen – seine Zuordnung, also seine Angabe. */
+  "customColors",
+  "customTextures",
   "hiddenContainerPresets",
   "presetProposals",
   "loginCodes",

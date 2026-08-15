@@ -26,6 +26,7 @@ Benutzer).
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail, Lager, ContainerTypes, StorageBoxes,
+                Appearance (eigene Farben und Oberflächen),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminSystem, Login, NotFound
@@ -40,6 +41,7 @@ src/            React-Frontend
                 activeLager.ts (gewähltes Lager, je Bereich getrennt),
                 organizationRole.ts (Stufen-Beschriftungen),
                 formatContext.ts (useFormat), format.ts (Füllstandsfarben),
+                appearance.ts (Katalog-Hook, Auflösung und Feld-Beschriftung),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
@@ -51,7 +53,8 @@ api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
-                friend, organization, preset, admin (admin: preset, proposal, system)
+                appearance, friend, organization, preset, admin
+                (admin: preset, proposal, system)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
   middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
@@ -63,6 +66,7 @@ api/            Hono/tRPC-Backend
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
+                appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
                 patch.ts (leerer Änderungssatz), presets.ts (Preset-Katalog),
                 presetSeed.ts (Startkatalog),
                 systemStatus.ts (Zustand für /verwaltung/system)
@@ -73,6 +77,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 codes.ts (Alphabet und Normalform beider Codes),
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
+                appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -198,6 +203,42 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
+
+## Farbe und Oberfläche als Darstellung
+
+Seit 2.7.0 zeigt die Übersicht Farbe und Oberfläche nicht nur als Text, sondern
+als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
+(`src/components/AppearanceSwatch.tsx`, Spalte `appearance`).
+
+- **`materials.color` und `materials.texture` bleiben Freitext.** Es gibt keinen
+  Fremdschlüssel auf einen Katalog; die Auflösung Name → Farbcode passiert beim
+  Anzeigen über die Vergleichsform (`normalizeAppearanceName`). Der Preis: Ein
+  umbenannter Katalogeintrag zieht nichts nach. Der Gewinn: Ein gelöschter
+  Eintrag beschädigt kein Material, und Farbnamen bleiben frei eintippbar.
+- **Zwei Quellen, eine Rangfolge.** Der mitgelieferte Katalog steht im Code
+  (`BUILTIN_COLORS`, `BUILTIN_TEXTURES` in `contracts/appearance.ts`) – für alle
+  gleich, versionierbar, ohne Migration. Eigene Einträge liegen in
+  `custom_colors` / `custom_textures` (Benutzer **oder** Organisation, `ownerXor`
+  wie die Gebindearten) und **schlagen** den Katalog.
+- **Der Name ist offen, die Zeichnung nicht.** `custom_textures.kind` ist eine
+  Aufzählung (`TEXTURE_KINDS`). Eine eigene Oberfläche ordnet ihren Namen einer
+  mitgelieferten Musterart zu; alles andere hieße, Zeichenanweisungen aus der
+  Datenbank zu laden.
+- **`COMMON_TEXTURES` und `BUILTIN_TEXTURES` dürfen nicht auseinanderlaufen** –
+  sonst schlägt ausgerechnet der Wert fehl, den das Formular selbst
+  vorgeschlagen hat. `api/appearance.test.ts` nagelt das fest.
+- **Das Muster hat keine feste Farbe.** `overlayInk` nimmt die kontrastreichere
+  von Schwarz und Weiß zur Grundfarbe; damit bleiben rechnerisch immer
+  mindestens 4,5:1, und es gibt keine Grundfarbe, auf der die Zeichnung
+  verschwindet (weißer Glanzstrich auf weißem Filament). Abgesichert über ein
+  Raster durch den ganzen Farbraum, ebenfalls in `api/appearance.test.ts`.
+- **Ohne Farbcode wird nicht geraten**, sondern ein schraffiertes Feld gezeigt.
+  Ein aus dem Namen gehashter Ton machte aus „Feuerrot“ irgendwann Grün.
+- **Bei Freunden löst der Server auf** (`toFriendMaterial`), weil der Katalog des
+  Betrachters die Farben des Freundes nicht kennt. `FriendMaterial` trägt dafür
+  `colorHex` und `textureKind`; die festgenagelte Schlüsselmenge in
+  `api/friendVisibility.test.ts` wurde dafür bewusst erweitert. Überall sonst
+  löst der Browser auf – ein Katalogaufruf je Seite, nicht zwei Felder je Zeile.
 
 ## Namenslisten, die kein Compiler prüft
 

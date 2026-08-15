@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { TEXTURE_KINDS } from "@contracts/appearance";
 import {
   FRIEND_VISIBILITIES,
   FRIENDSHIP_STATUSES,
@@ -327,6 +328,103 @@ export const storageBoxes = pgTable(
 
 export type StorageBox = typeof storageBoxes.$inferSelect;
 export type InsertStorageBox = typeof storageBoxes.$inferInsert;
+
+export const textureKindEnum = pgEnum("texture_kind", TEXTURE_KINDS);
+
+/**
+ * Eigene Farbe: ein Name aus dem eigenen Bestand und der Farbcode dazu.
+ *
+ * **Keine Beziehung zu `materials`.** Das Material trägt seinen Farbnamen
+ * weiterhin als Freitext; hier steht nur, wie dieser Name aussieht. Die beiden
+ * finden über die Vergleichsform zusammen (`normalizeAppearanceName`), nicht
+ * über einen Fremdschlüssel. Der Preis dafür ist, dass ein umbenannter Eintrag
+ * nichts nachzieht – der Gewinn ist, dass ein gelöschter Eintrag kein Material
+ * beschädigt und dass Farbnamen weiter frei eintippbar bleiben, auch wenn sie
+ * niemand hinterlegt hat.
+ *
+ * Der mitgelieferte Katalog steht dagegen im Code (`contracts/appearance.ts`)
+ * und nicht hier: Er ist für alle gleich, versionierbar und braucht keine
+ * Migration, wenn eine Farbe dazukommt.
+ */
+export const customColors = pgTable(
+  "custom_colors",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Eigentümer bzw. Organisation – genau eines von beiden, siehe `ownerXor` */
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    /** Name, wie ihn der Benutzer schreibt – so steht er in der Verwaltung */
+    name: varchar("name", { length: 100 }).notNull(),
+    /**
+     * Vergleichsform aus `normalizeAppearanceName` (`contracts/appearance.ts`).
+     *
+     * Sie trägt die Eindeutigkeit und den Abgleich mit `materials.color`.
+     * Gespeichert und nicht bei jeder Abfrage gerechnet, weil sonst weder ein
+     * Unique-Index noch ein Nachschlagen ohne Volltabellenlauf möglich wäre.
+     */
+    nameKey: varchar("nameKey", { length: 100 }).notNull(),
+    /** Farbcode als „#rrggbb“, klein geschrieben (`hexSchema`) */
+    hex: varchar("hex", { length: 7 }).notNull(),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    ownerXor("custom_colors_owner_xor"),
+    /*
+      Zwei **partielle** Indizes statt eines `unique(userId, nameKey)` – wie bei
+      den Lagernamen: In Postgres sind NULL-Werte in einem Unique-Index
+      voneinander verschieden, der einfache Schlüssel ließe also beliebig viele
+      gleichnamige Einträge einer Organisation zu.
+    */
+    uniqueIndex("custom_colors_name_per_user_unique")
+      .on(t.userId, t.nameKey)
+      .where(sql`"organizationId" IS NULL`),
+    uniqueIndex("custom_colors_name_per_organization_unique")
+      .on(t.organizationId, t.nameKey)
+      .where(sql`"organizationId" IS NOT NULL`),
+    index("custom_colors_user_idx").on(t.userId),
+    index("custom_colors_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type CustomColor = typeof customColors.$inferSelect;
+export type InsertCustomColor = typeof customColors.$inferInsert;
+
+/**
+ * Eigene Oberfläche: ein Name aus dem eigenen Bestand und das Muster dazu.
+ *
+ * `kind` ist eine Aufzählung und kein Freitext, obwohl `materials.texture`
+ * Freitext ist. Das ist die Trennlinie zwischen Name und Zeichnung: „Sparkle“
+ * muss eintragbar bleiben, aber gezeichnet wird eines der Muster, die der Code
+ * kennt (`TEXTURE_KINDS`). Ein offener Wert hieße, Zeichenanweisungen aus der
+ * Datenbank zu laden.
+ */
+export const customTextures = pgTable(
+  "custom_textures",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    /** Vergleichsform, siehe `customColors.nameKey` */
+    nameKey: varchar("nameKey", { length: 100 }).notNull(),
+    kind: textureKindEnum("kind").notNull(),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    ownerXor("custom_textures_owner_xor"),
+    uniqueIndex("custom_textures_name_per_user_unique")
+      .on(t.userId, t.nameKey)
+      .where(sql`"organizationId" IS NULL`),
+    uniqueIndex("custom_textures_name_per_organization_unique")
+      .on(t.organizationId, t.nameKey)
+      .where(sql`"organizationId" IS NOT NULL`),
+    index("custom_textures_user_idx").on(t.userId),
+    index("custom_textures_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type CustomTexture = typeof customTextures.$inferSelect;
+export type InsertCustomTexture = typeof customTextures.$inferInsert;
 
 /** 3D-Druckmaterial (Gebinde in einem Lager) */
 export const materials = pgTable(

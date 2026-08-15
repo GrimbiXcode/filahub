@@ -1,5 +1,6 @@
 import { accountRouter } from "./accountRouter";
 import { adminRouter } from "./adminRouter";
+import { appearanceRouter } from "./appearanceRouter";
 import { authRouter } from "./auth-router";
 import { friendRouter } from "./friendRouter";
 import { lagerRouter } from "./lagerRouter";
@@ -19,6 +20,7 @@ export const appRouter = createRouter({
   containerType: containerTypeRouter,
   storageBox: storageBoxRouter,
   material: materialRouter,
+  appearance: appearanceRouter,
   friend: friendRouter,
   organization: organizationRouter,
   preset: presetRouter,

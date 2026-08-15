@@ -796,6 +796,9 @@ describe("Was ein Freund zu sehen bekommt", () => {
       // Und positiv: genau diese Schlüssel, nicht mehr.
       expect(Object.keys(material).sort()).toEqual([
         "color",
+        // Seit 2.7.0: die Darstellung zu `color`/`texture`, siehe
+        // `api/friendVisibility.test.ts`.
+        "colorHex",
         "id",
         "identifier",
         "manufacturer",
@@ -808,8 +811,45 @@ describe("Was ein Freund zu sehen bekommt", () => {
         "remainingWeight",
         "secondary",
         "texture",
+        "textureKind",
       ]);
     }
+  });
+
+  /**
+   * Aufgelöst wird mit dem Katalog des **Besitzers**, nicht dem des
+   * Betrachters. Der Unterschied ist keine Feinheit: Beide führen hier
+   * denselben Namen mit verschiedenen Codes, und mit dem falschen Katalog
+   * bekäme Bea eine Auskunft über Alex' Bestand, die aus ihrem eigenen stammt.
+   */
+  it("färbt fremdes Material mit dem Katalog seines Besitzers", async () => {
+    await befriend({ main: "full" });
+    await db()
+      .update(schema.materials)
+      .set({ color: "Signalrot" })
+      .where(eq(schema.materials.id, alexMaterialId));
+    await db()
+      .insert(schema.customColors)
+      .values([
+        {
+          userId: alex.id,
+          name: "Signalrot",
+          nameKey: "signalrot",
+          hex: "#ff0000",
+        },
+        {
+          userId: bea.id,
+          name: "Signalrot",
+          nameKey: "signalrot",
+          hex: "#0000ff",
+        },
+      ]);
+
+    const hits = await callerFor(bea).friend.searchMaterials({
+      query: "Signalrot",
+    });
+    expect(hits.map(h => h.id)).toEqual([alexMaterialId]);
+    expect(hits[0].colorHex).toBe("#ff0000");
   });
 
   /**

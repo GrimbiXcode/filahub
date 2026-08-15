@@ -133,11 +133,19 @@ describe("toFriendMaterial", () => {
    * bleibt flach, also braucht der Empfänger die Lager-Kennung nicht. Musste
    * dieser Test für eine Freigabe-Änderung angefasst werden, ist etwas an der
    * Projektion passiert, das dort nicht passieren sollte.
+   *
+   * **In 2.7.0 sind zwei Felder dazugekommen**, `colorHex` und `textureKind`.
+   * Das war eine Entscheidung und kein Durchrutscher: Sie tragen keine neue
+   * Auskunft, sondern die Darstellung von `color` und `texture`, die schon
+   * hinausgehen. Aufgelöst wird dafür mit dem Katalog des **Besitzers** – mit
+   * dem des Betrachters bekäme „Signalrot“ die Farbe, die *er* darunter
+   * versteht.
    */
   it("gibt genau die erlaubten Felder heraus", () => {
     const result = toFriendMaterial(materialRow(), "Alex");
     expect(Object.keys(result).sort()).toEqual([
       "color",
+      "colorHex",
       "id",
       "identifier",
       "manufacturer",
@@ -150,7 +158,34 @@ describe("toFriendMaterial", () => {
       "remainingWeight",
       "secondary",
       "texture",
+      "textureKind",
     ]);
+  });
+
+  /*
+    Aufgelöst wird mit dem Katalog des Besitzers, und ohne Katalog bleibt es
+    beim mitgelieferten. Unbekannte Farbe heißt `null` – geraten wird nichts,
+    sonst zeigte die Liste eines Freundes eine Farbe, die niemand hinterlegt
+    hat.
+  */
+  it("löst Farbe und Oberfläche mit dem Katalog des Besitzers auf", () => {
+    const eigene = toFriendMaterial(
+      materialRow({ color: "Signalrot", texture: "Sparkle" }),
+      "Alex",
+      {
+        colors: new Map([["signalrot", "#ff0000"]]),
+        textures: new Map([["sparkle", "metallic"]]),
+      }
+    );
+    expect(eigene.colorHex).toBe("#ff0000");
+    expect(eigene.textureKind).toBe("metallic");
+
+    const ohne = toFriendMaterial(
+      materialRow({ color: "Signalrot", texture: "Sparkle" }),
+      "Alex"
+    );
+    expect(ohne.colorHex).toBeNull();
+    expect(ohne.textureKind).toBe("plain");
   });
 
   /*

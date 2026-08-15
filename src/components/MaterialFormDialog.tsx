@@ -34,6 +34,8 @@ import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
 import { useActiveScope } from "@/lib/activeScope";
+import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
 
 type Props = {
   open: boolean;
@@ -82,6 +84,8 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const [manufacturer, setManufacturer] = useState("");
   const [color, setColor] = useState("");
   const [texture, setTexture] = useState("");
+  /** Vorbelegung des Farbwählers, wenn eine Farbe noch nicht hinterlegt ist */
+  const [newHex, setNewHex] = useState("#3b82f6");
   const [lagerId, setLagerId] = useState<string>("");
   const [density, setDensity] = useState("");
   const [price, setPrice] = useState("");
@@ -189,6 +193,23 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     (allMaterials ?? []).forEach(m => m.texture && set.add(m.texture));
     return [...set].sort((a, b) => a.localeCompare(b));
   }, [allMaterials]);
+
+  const resolveAppearance = useAppearanceResolver();
+  const swatchLabel = useSwatchLabel();
+  const appearance = resolveAppearance(color, texture);
+  /*
+    Nur wenn ein Name dasteht und dazu kein Farbcode gefunden wurde. Ein leeres
+    Feld ist keine Lücke, sondern eine Angabe, die niemand gemacht hat.
+  */
+  const needsColorCode = color.trim().length > 0 && appearance.hex == null;
+
+  const addColor = trpc.appearance.createColor.useMutation({
+    onSuccess: () => {
+      toast.success(t.appearance.colorCreated);
+      utils.appearance.list.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
 
   /*
     Das wirksame Lager: was im Feld steht, sonst das aktive. Abgeleitet und nicht
@@ -411,13 +432,58 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="m-color">{t.common.color}</Label>
-              <AutocompleteInput
-                id="m-color"
-                value={color}
-                onChange={setColor}
-                suggestions={colorSuggestions}
-                placeholder="z. B. Schwarz"
-              />
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <AutocompleteInput
+                    id="m-color"
+                    value={color}
+                    onChange={setColor}
+                    suggestions={colorSuggestions}
+                    placeholder="z. B. Schwarz"
+                  />
+                </div>
+                <AppearanceSwatch
+                  hex={appearance.hex}
+                  kind={appearance.kind}
+                  label={swatchLabel(color, texture, appearance.hex)}
+                  size="md"
+                />
+              </div>
+              {/*
+                Der Weg von „kenne ich nicht“ zu „hinterlegt“ – ohne den findet
+                die Verwaltungsseite niemand, und der Umweg über das Menü
+                verlöre den Formularstand. Deshalb hier und nicht als zweiter
+                Dialog über dem ersten.
+              */}
+              {needsColorCode && (
+                <div className="flex items-center gap-2 rounded-md border border-dashed p-2">
+                  <Input
+                    type="color"
+                    aria-label={t.appearance.hexLabel}
+                    value={newHex}
+                    onChange={e => setNewHex(e.target.value)}
+                    className="h-9 w-12 shrink-0 p-1"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {t.appearance.unknownColor}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={addColor.isPending}
+                    onClick={() =>
+                      addColor.mutate({
+                        ...scope,
+                        name: color.trim(),
+                        hex: newHex,
+                      })
+                    }
+                  >
+                    {t.appearance.addColorFor({ name: color.trim() })}
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="m-texture">{t.materialForm.textureLabel}</Label>

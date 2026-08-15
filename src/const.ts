@@ -45,6 +45,14 @@ export const LEGACY_DRYBOXES_PATH = "/lagerboxen";
 export const CONTAINER_TYPES_PATH = "/gebinde";
 export const LEGACY_CONTAINER_TYPES_PATH = "/rollentypen";
 
+/**
+ * Eigene Farben und Oberflächen – die Darstellung, nicht der Bestand.
+ *
+ * Deutscher Pfad wie die übrigen: `/optik` und nicht `/appearance`, weil die
+ * Adressen dieser App deutsch sind (`/gebinde`, `/dryboxen`, `/freunde`).
+ */
+export const APPEARANCE_PATH = "/optik";
+
 /** Lager eines Freundes – nur bei Sichtbarkeitsstufe `full` erreichbar. */
 export function friendInventoryPath(friendId: number): string {
   return `${FRIENDS_PATH}/${friendId}`;

@@ -71,6 +71,8 @@ describe("Migrationen", () => {
       "weighings",
       "container_types",
       "storage_boxes",
+      "custom_colors",
+      "custom_textures",
       "login_codes",
       "preset_manufacturers",
       "preset_container_series",

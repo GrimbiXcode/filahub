@@ -113,6 +113,9 @@ const COUNTED_TABLES = [
   "login_codes",
   "container_types",
   "storage_boxes",
+  // Seit 2.7.0: die eigenen Farben und Oberflächen der Darstellung.
+  "custom_colors",
+  "custom_textures",
   "preset_manufacturers",
   "preset_container_series",
   "preset_series_material_types",

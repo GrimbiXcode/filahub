@@ -11,6 +11,8 @@ import {
   lager,
   materials,
   containerTypes,
+  customColors,
+  customTextures,
   organizationInvitations,
   organizationMembers,
   organizations,
@@ -177,6 +179,18 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(storageBoxes)
     .where(eq(storageBoxes.organizationId, organizationId));
+  /*
+    Eigene Farben und Oberflächen der Organisation. Sie zählen bewusst **nicht**
+    zum „ist die Organisation leer?“ in `deleteOrganizationIfEmpty`: Sie sind
+    Darstellung und kein Bestand, und eine hinterlegte Farbe soll das Löschen
+    einer ansonsten leeren Organisation nicht blockieren.
+  */
+  await tx
+    .delete(customColors)
+    .where(eq(customColors.organizationId, organizationId));
+  await tx
+    .delete(customTextures)
+    .where(eq(customTextures.organizationId, organizationId));
 
   await tx
     .delete(organizationInvitations)

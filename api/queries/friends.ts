@@ -20,6 +20,12 @@ import {
   type FriendVisibility,
 } from "@contracts/friends";
 import {
+  EMPTY_APPEARANCE_CATALOG,
+  resolveAppearance,
+  type AppearanceCatalog,
+  type TextureKind,
+} from "@contracts/appearance";
+import {
   remainingAmount,
   type MaterialKind,
   type SecondaryAmount,
@@ -35,6 +41,7 @@ import {
   weighings,
   type Friendship,
 } from "@db/schema";
+import { findAppearanceCatalogsForUsers } from "./appearance";
 import { getDb } from "./connection";
 
 /**
@@ -300,6 +307,21 @@ export type FriendMaterial = {
   color: string | null;
   /** Oberfläche – Teil der Materialidentität wie die Farbe. */
   texture: string | null;
+  /**
+   * Farbcode und Muster, **hier schon aufgelöst**.
+   *
+   * Die übrigen Ansichten lösen im Browser auf, aus dem Katalog des
+   * angemeldeten Benutzers. Das geht hier nicht: Der Betrachter kennt die
+   * eigenen Farben seines Freundes nicht, und mit seinem eigenen Katalog
+   * aufgelöst bekäme „Signalrot“ die Farbe, die *er* darunter versteht – also
+   * eine falsche Auskunft über einen fremden Bestand.
+   *
+   * Dass der Farbcode mit hinausgeht, ist eine bewusste Erweiterung der
+   * Projektion: Wer den Farbnamen schon sehen darf, erfährt durch den Code
+   * nichts Neues.
+   */
+  colorHex: string | null;
+  textureKind: TextureKind;
   nominalWeight: number;
   remainingWeight: number;
   remainingPercent: number | null;
@@ -442,7 +464,9 @@ function ownedByPerson<T extends { userId: number | null }>(
  */
 export function toFriendMaterial(
   row: FriendMaterialRow,
-  ownerName: string
+  ownerName: string,
+  /** Die eigenen Farben und Oberflächen **des Besitzers**, nicht des Betrachters */
+  catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
 ): FriendMaterial {
   /*
     Dieselbe Rechnung wie für den Besitzer, aus derselben Funktion
@@ -463,6 +487,7 @@ export function toFriendMaterial(
     densityGramsPerLiter: row.densityGramsPerLiter,
     diameterUm: row.lager?.filamentDiameterUm,
   });
+  const appearance = resolveAppearance(row.color, row.texture, catalog);
   return {
     id: row.id,
     ownerId: row.userId,
@@ -473,6 +498,8 @@ export function toFriendMaterial(
     manufacturer: row.manufacturer,
     color: row.color,
     texture: row.texture,
+    colorHex: appearance.hex,
+    textureKind: appearance.kind,
     nominalWeight: row.nominalWeight,
     remainingWeight,
     remainingPercent,
@@ -542,9 +569,16 @@ export async function findFriendMaterialsForSearch(
     limit,
   });
 
+  const catalogs = await findAppearanceCatalogsForUsers([...names.keys()]);
   return rows
     .filter(ownedByPerson)
-    .map(row => toFriendMaterial(row, names.get(row.userId) ?? ""));
+    .map(row =>
+      toFriendMaterial(
+        row,
+        names.get(row.userId) ?? "",
+        catalogs.get(row.userId)
+      )
+    );
 }
 
 /**
@@ -582,11 +616,14 @@ export async function findFriendInventory(
     ),
     orderBy: [asc(materials.name), asc(materials.id)],
   });
+  const catalog = (await findAppearanceCatalogsForUsers([ownerId])).get(
+    ownerId
+  );
   return {
     ownerName,
     materials: rows
       .filter(ownedByPerson)
-      .map(row => toFriendMaterial(row, ownerName)),
+      .map(row => toFriendMaterial(row, ownerName, catalog)),
   };
 }
 
@@ -623,8 +660,15 @@ export async function findFriendMaterial(
   const visibility = await shareLevelFor(viewerId, row.lagerId);
   if (!visibilityAllows(visibility, "search")) return null;
 
-  const names = await loadDisplayNames([row.userId]);
-  return toFriendMaterial(row, names.get(row.userId) ?? "");
+  const [names, catalogs] = await Promise.all([
+    loadDisplayNames([row.userId]),
+    findAppearanceCatalogsForUsers([row.userId]),
+  ]);
+  return toFriendMaterial(
+    row,
+    names.get(row.userId) ?? "",
+    catalogs.get(row.userId)
+  );
 }
 
 /**

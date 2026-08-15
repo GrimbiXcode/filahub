@@ -146,6 +146,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     expect(withUserId).toEqual([
       "audit_log",
       "container_types",
+      "custom_colors",
+      "custom_textures",
       "friendships",
       "hidden_container_presets",
       "lager",
@@ -167,7 +169,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese zwölf plus drei, die den Personenbezug über eine andere Spalte
+      Diese vierzehn plus drei, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` (über das Material) und
       `loginCodes` (Telegram-ID). Ändert sich die linke Seite, muss die rechte
       nachziehen.
@@ -194,6 +196,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "profile",
         "containerTypes",
         "storageBoxes",
+        "customColors",
+        "customTextures",
         "weighings",
       ].sort()
     );
