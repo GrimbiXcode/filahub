@@ -1,6 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
+import {
+  type MaterialColumn,
+  normalizeHiddenColumns,
+} from "@contracts/materialColumns";
 import { compareVersions } from "@contracts/releaseNotes";
 import { getDb } from "./connection";
 import { env } from "../lib/env";
@@ -44,12 +48,29 @@ export async function markReleaseNotesSeen(userId: number, version: string) {
  */
 export async function updateUserSettings(
   userId: number,
-  patch: { currency?: string; locale?: string | null; language?: string | null }
+  patch: {
+    currency?: string;
+    locale?: string | null;
+    language?: string | null;
+    hiddenMaterialColumns?: MaterialColumn[] | null;
+  }
 ) {
   const values: Partial<InsertUser> = {};
   if (patch.currency !== undefined) values.currency = patch.currency;
   if (patch.locale !== undefined) values.locale = patch.locale;
   if (patch.language !== undefined) values.language = patch.language;
+  /*
+    Normalisiert vor dem Schreiben, damit gesperrte Spalten und Dubletten gar
+    nicht erst in der Datenbank landen: Das Schema lässt jede Kennung zu, die
+    es gibt – dass `name` und `actions` nicht abschaltbar sind, weiß erst
+    `normalizeHiddenColumns`. `null` bedeutet „zurück auf Standard“ und wird
+    dabei zur leeren Liste.
+  */
+  if (patch.hiddenMaterialColumns !== undefined) {
+    values.hiddenMaterialColumns = normalizeHiddenColumns(
+      patch.hiddenMaterialColumns
+    );
+  }
   if (Object.keys(values).length === 0) return;
 
   await getDb()

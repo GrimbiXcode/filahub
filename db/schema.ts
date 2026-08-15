@@ -4,6 +4,7 @@ import {
   FRIENDSHIP_STATUSES,
   LOAN_REQUEST_STATUSES,
 } from "@contracts/friends";
+import type { MaterialColumn } from "@contracts/materialColumns";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
 import {
   ORGANIZATION_INVITATION_STATUSES,
@@ -94,6 +95,23 @@ export const users = pgTable("users", {
    * NULL = noch keine gesehen → alle Neuerungen gelten als ungelesen.
    */
   lastSeenReleaseVersion: varchar("lastSeenReleaseVersion", { length: 32 }),
+  /**
+   * Spalten der Materialübersicht, die dieser Benutzer **nicht** sehen will
+   * (Kennungen aus `contracts/materialColumns.ts`). NULL = nichts ausgeblendet.
+   *
+   * Gespeichert werden die ausgeblendeten und nicht die sichtbaren Spalten,
+   * damit `NULL` und `[]` beide „alles wie ausgeliefert“ heißen – und damit
+   * eine später ergänzte Spalte für alle da ist, statt still zu fehlen, weil
+   * sie in keiner gespeicherten Auswahl steht.
+   *
+   * Bewusst am Konto und nicht im `localStorage` wie das Farbschema: Wer die
+   * Übersicht einmal eingerichtet hat, will sie am nächsten Gerät genauso
+   * vorfinden. Die Breitensteuerung der Tabelle bleibt davon unberührt – die
+   * Auswahl blendet zusätzlich aus, sie erzwingt nichts.
+   */
+  hiddenMaterialColumns: jsonb("hiddenMaterialColumns").$type<
+    MaterialColumn[]
+  >(),
   /**
    * Teilbarer Code, über den andere eine Freundschaftsanfrage stellen können
    * (Format `FH-XXXX-XXXX`, siehe contracts/friends.ts).
