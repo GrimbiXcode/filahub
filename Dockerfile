@@ -8,7 +8,7 @@
 # Sicherheitsaktualisierungen mehr von allein. Dependabot hält den Digest
 # nach (siehe .github/dependabot.yml, Ökosystem "docker") – bleiben diese
 # Aktualisierungen liegen, ist ein Pin schlechter als das bewegliche Tag.
-FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS build
+FROM node:26-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3 AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # ---- Runtime ----
-FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019
+FROM node:26-alpine@sha256:2d984a15c9b54fd0aeb608b8e0d0d83529eb34d2966db27a1fb4f1edc3d298a3
 LABEL org.opencontainers.image.title="filahub" \
       org.opencontainers.image.description="Inventory for 3D-printing filament with weigh-in based remaining quantity" \
       org.opencontainers.image.source="https://github.com/GrimbiXcode/filahub" \
