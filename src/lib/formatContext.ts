@@ -40,6 +40,11 @@ export type FormatHelpers = {
   formatDateTime: (value: string | Date | null | undefined) => string;
   /** Geld-Eingabe nach Cent, null bei leer/ungültig */
   parseMoney: (value: string) => number | null;
+  /**
+   * Datumseingabe nach `YYYY-MM-DD`, null wenn daraus kein Datum wird –
+   * für Text, der in ein Datumsfeld eingefügt wird.
+   */
+  parseDate: (value: string) => string | null;
   /** Cent-Betrag als Wert für ein Eingabefeld */
   centsToInput: (cents: number | null | undefined) => string;
 };

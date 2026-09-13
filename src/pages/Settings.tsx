@@ -151,7 +151,7 @@ export default function Settings() {
                   })
                 }
               >
-                <SelectTrigger id="s-language">
+                <SelectTrigger id="s-language" className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -198,7 +198,7 @@ export default function Settings() {
                   updateSettings.mutate({ currency: value as CurrencyCode })
                 }
               >
-                <SelectTrigger id="s-currency">
+                <SelectTrigger id="s-currency" className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -235,7 +235,7 @@ export default function Settings() {
                   })
                 }
               >
-                <SelectTrigger id="s-locale">
+                <SelectTrigger id="s-locale" className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
