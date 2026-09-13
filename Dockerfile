@@ -25,17 +25,20 @@ LABEL org.opencontainers.image.title="filahub" \
 # wget für den Healthcheck (busybox-wget reichte nicht überall, s. IPv6-Hinweis).
 #
 # `libcrypto3` und `libssl3` stehen daneben, obwohl sie im Basisabbild schon
-# liegen: `apk add` holt die neueste Fassung aus dem Alpine-Repository und hebt
-# damit die mitgelieferte an. Der Grund ist die Kehrseite des Digest-Pins oben –
-# ein festgenageltes Abbild altert, und openssl altert zurzeit schneller, als
-# node:26-alpine neu gebaut wird (CVE-2026-14456, HIGH, behoben in 3.5.8-r0,
-# im Abbild aber 3.5.7-r0). Ohne diese Zeile fällt der Trivy-Schritt in
-# „Docker Build Check" – und zwar zu Recht, die Lücke wäre im ausgelieferten
-# Abbild.
+# liegen, und `--upgrade` steht dabei, weil es ohne nicht wirkt: `apk add`
+# lässt ein bereits installiertes Paket in Ruhe, solange nichts es erzwingt –
+# der Lauf ohne den Schalter installierte nur wget und ließ openssl auf dem
+# alten Stand.
+#
+# Der Grund ist die Kehrseite des Digest-Pins oben: Ein festgenageltes Abbild
+# altert, und openssl altert zurzeit schneller, als node:26-alpine neu gebaut
+# wird (CVE-2026-14456, HIGH, behoben in 3.5.8-r0, im Abbild aber 3.5.7-r0).
+# Ohne diese Zeile fällt der Trivy-Schritt in „Docker Build Check" – und zwar
+# zu Recht, die Lücke wäre im ausgelieferten Abbild.
 #
 # Kann wieder weg, sobald ein node:26-alpine mit openssl ≥ 3.5.8-r0 erscheint;
 # dann ist die Zeile ein Nop, und Trivy sagt einem, wenn sie es nicht ist.
-RUN apk add --no-cache wget libcrypto3 libssl3
+RUN apk add --no-cache --upgrade wget libcrypto3 libssl3
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
