@@ -8,7 +8,7 @@
 # Sicherheitsaktualisierungen mehr von allein. Dependabot hält den Digest
 # nach (siehe .github/dependabot.yml, Ökosystem "docker") – bleiben diese
 # Aktualisierungen liegen, ist ein Pin schlechter als das bewegliche Tag.
-FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019 AS build
+FROM node:26-alpine@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868 AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm ci
@@ -16,14 +16,29 @@ COPY . .
 RUN npm run build
 
 # ---- Runtime ----
-FROM node:26-alpine@sha256:aadf416b2cdce311a8811ba3f0608a61b77dbf997500e2eafe781b51f6a0b019
+FROM node:26-alpine@sha256:ef24c5053d50fdc3e4e56eb4e7ddb7861874ab0fdc797046ba897581deb8e868
 LABEL org.opencontainers.image.title="filahub" \
       org.opencontainers.image.description="Inventory for 3D-printing filament with weigh-in based remaining quantity" \
       org.opencontainers.image.source="https://github.com/GrimbiXcode/filahub" \
       org.opencontainers.image.url="https://grimbixcode.github.io/filahub/" \
       org.opencontainers.image.licenses="AGPL-3.0-or-later"
-# wget für den Healthcheck (busybox-wget reichte nicht überall, s. IPv6-Hinweis)
-RUN apk add --no-cache wget
+# wget für den Healthcheck (busybox-wget reichte nicht überall, s. IPv6-Hinweis).
+#
+# `libcrypto3` und `libssl3` stehen daneben, obwohl sie im Basisabbild schon
+# liegen, und `--upgrade` steht dabei, weil es ohne nicht wirkt: `apk add`
+# lässt ein bereits installiertes Paket in Ruhe, solange nichts es erzwingt –
+# der Lauf ohne den Schalter installierte nur wget und ließ openssl auf dem
+# alten Stand.
+#
+# Der Grund ist die Kehrseite des Digest-Pins oben: Ein festgenageltes Abbild
+# altert, und openssl altert zurzeit schneller, als node:26-alpine neu gebaut
+# wird (CVE-2026-14456, HIGH, behoben in 3.5.8-r0, im Abbild aber 3.5.7-r0).
+# Ohne diese Zeile fällt der Trivy-Schritt in „Docker Build Check" – und zwar
+# zu Recht, die Lücke wäre im ausgelieferten Abbild.
+#
+# Kann wieder weg, sobald ein node:26-alpine mit openssl ≥ 3.5.8-r0 erscheint;
+# dann ist die Zeile ein Nop, und Trivy sagt einem, wenn sie es nicht ist.
+RUN apk add --no-cache --upgrade wget libcrypto3 libssl3
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json* ./
