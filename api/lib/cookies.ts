@@ -1,4 +1,4 @@
-import * as cookie from "cookie";
+import { stringifySetCookie } from "cookie";
 import type { CookieOptions } from "hono/utils/cookie";
 import { Session } from "@contracts/constants";
 
@@ -28,7 +28,9 @@ export function getSessionCookieOptions(headers: Headers): CookieOptions {
 
 function serialize(headers: Headers, token: string, maxAgeSeconds: number) {
   const opts = getSessionCookieOptions(headers);
-  return cookie.serialize(Session.cookieName, token, {
+  return stringifySetCookie({
+    name: Session.cookieName,
+    value: token,
     httpOnly: opts.httpOnly,
     path: opts.path,
     sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
