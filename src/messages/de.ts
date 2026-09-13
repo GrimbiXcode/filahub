@@ -103,6 +103,8 @@ export const de = {
     widgetNotice:
       "Der Telegram-Anmeldebutton wird von telegram.org geladen. Telegram erfährt dabei deine IP-Adresse und Angaben zu deinem Gerät – auch dann, wenn du dich am Ende nicht anmeldest. Telegram sitzt in den Vereinigten Arabischen Emiraten, für die kein Angemessenheitsbeschluss vorliegt.",
     widgetLoad: "Telegram-Anmeldung laden",
+    /* Nur für Screenreader: Beschriftung des Rahmens mit dem Telegram-Knopf. */
+    widgetTitle: "Telegram-Anmeldung",
     widgetAlternative:
       "Nicht nötig: Die Anmeldung per Code weiter unten kommt ohne Telegram-Skript aus.",
     orWithCode: "oder per Code",

@@ -1,3 +1,5 @@
+// Muss vor allem stehen, was zod-Schemata anlegt – Begründung in der Datei.
+import "@/lib/zodConfig";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";

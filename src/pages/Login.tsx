@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { MessageCircleCode, Send, ShieldQuestion, Wrench } from "lucide-react";
 import {
+  TELEGRAM_LOGIN_FRAME_MESSAGE,
+  TELEGRAM_LOGIN_FRAME_PATH,
+} from "@contracts/constants";
+import {
   LEGAL_DOCUMENTS,
   LEGAL_PATHS,
   TELEGRAM_WIDGET_CONSENT_KEY,
@@ -26,17 +30,49 @@ type TelegramWidgetUser = {
   hash: string;
 };
 
-declare global {
-  interface Window {
-    onTelegramAuth?: (user: TelegramWidgetUser) => void;
+/**
+ * Nachrichten des Rahmendokuments (`public/telegram-login.js`): entweder die
+ * Anmeldedaten oder die Höhe, die der Telegram-Knopf braucht.
+ */
+type WidgetFrameMessage =
+  { kind: "auth"; user: TelegramWidgetUser } | { kind: "size"; height: number };
+
+/**
+ * Liest eine `message`-Nutzlast, sofern sie vom eigenen Rahmen stammt und die
+ * erwartete Form hat – sonst `null`.
+ *
+ * Bewusst geprüft statt `event.data` geglaubt: In dem Ereignis landet alles,
+ * was irgendein Fenster hierher schickt. Die Anmeldedaten selbst prüft
+ * ohnehin der Server (`verifyTelegramWidgetData`); hier geht es darum, dass
+ * gar nicht erst Unsinn dorthin unterwegs ist.
+ */
+function widgetFrameMessage(data: unknown): WidgetFrameMessage | null {
+  if (typeof data !== "object" || data === null) return null;
+  const message = data as Record<string, unknown>;
+  if (message.source !== TELEGRAM_LOGIN_FRAME_MESSAGE) return null;
+  if (message.kind === "size" && typeof message.height === "number") {
+    return { kind: "size", height: message.height };
   }
+  if (message.kind === "auth" && typeof message.user === "object") {
+    return { kind: "auth", user: message.user as TelegramWidgetUser };
+  }
+  return null;
 }
+
+/**
+ * Höhe des Rahmens, bis das Widget geladen ist und seine echte meldet. Der
+ * große Telegram-Knopf ist 40 Pixel hoch; so springt beim Laden nichts.
+ */
+const WIDGET_FRAME_MIN_HEIGHT = 40;
 
 export default function Login() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const { data: loginInfo, isLoading } = trpc.auth.loginInfo.useQuery();
-  const widgetRef = useRef<HTMLDivElement>(null);
+  const widgetFrameRef = useRef<HTMLIFrameElement>(null);
+  const [widgetFrameHeight, setWidgetFrameHeight] = useState(
+    WIDGET_FRAME_MIN_HEIGHT
+  );
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const t = useT();
@@ -61,39 +97,42 @@ export default function Login() {
     onError: e => setError(e.message),
   });
 
+  const botUsername = loginInfo?.botUsername;
+
   /*
-    Offizielles Telegram Login Widget laden – erst nach ausdrücklicher
-    Einwilligung. Das Skript stammt von telegram.org; allein sein Abruf teilt
-    Telegram IP-Adresse und Gerätedaten mit, unabhängig davon, ob am Ende eine
-    Anmeldung zustande kommt. Die Anmeldung per Bot-Code kommt ohne jedes
+    Das offizielle Telegram Login Widget läuft in einem eigenen Dokument
+    (`public/telegram-login.html`) statt hier: Das Skript von telegram.org
+    braucht `eval`, und diese Seite bekommt es nicht – siehe api/app.ts. Der
+    Rahmen schickt die signierten Anmeldedaten per `postMessage` zurück.
+
+    Geladen wird er erst nach ausdrücklicher Einwilligung. Allein der Abruf
+    teilt Telegram IP-Adresse und Gerätedaten mit, unabhängig davon, ob am Ende
+    eine Anmeldung zustande kommt. Die Anmeldung per Bot-Code kommt ohne jedes
     Telegram-Asset aus und bleibt deshalb der einwilligungsfreie Standardweg.
   */
   useEffect(() => {
-    if (
-      !widgetConsent ||
-      !loginInfo?.botConfigured ||
-      !loginInfo.botUsername ||
-      !widgetRef.current
-    )
-      return;
-    window.onTelegramAuth = user => loginWithWidget.mutate(user);
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", loginInfo.botUsername);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-userpic", "true");
-    script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", "onTelegramAuth(user)");
-    widgetRef.current.innerHTML = "";
-    widgetRef.current.appendChild(script);
-    return () => {
-      window.onTelegramAuth = undefined;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [widgetConsent, loginInfo?.botConfigured, loginInfo?.botUsername]);
+    if (!widgetConsent) return;
 
-  const botUsername = loginInfo?.botUsername;
+    function onMessage(event: MessageEvent) {
+      // Herkunft und Absenderfenster zuerst, Inhalt danach.
+      if (event.origin !== window.location.origin) return;
+      if (event.source !== widgetFrameRef.current?.contentWindow) return;
+      const message = widgetFrameMessage(event.data);
+      if (!message) return;
+
+      if (message.kind === "size") {
+        setWidgetFrameHeight(
+          Math.max(WIDGET_FRAME_MIN_HEIGHT, Math.ceil(message.height))
+        );
+      } else {
+        loginWithWidget.mutate(message.user);
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [widgetConsent]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4 pb-16">
@@ -120,12 +159,7 @@ export default function Login() {
             <>
               <div className="space-y-3 text-center">
                 <p className="text-sm text-muted-foreground">{t.login.intro}</p>
-                {widgetConsent ? (
-                  <div
-                    ref={widgetRef}
-                    className="flex justify-center min-h-10"
-                  />
-                ) : (
+                {!widgetConsent ? (
                   <div className="space-y-2 rounded-md border border-dashed p-3 text-left">
                     <p className="text-xs text-muted-foreground">
                       {t.login.widgetNotice}
@@ -145,7 +179,15 @@ export default function Login() {
                       {t.login.widgetAlternative}
                     </p>
                   </div>
-                )}
+                ) : botUsername ? (
+                  <iframe
+                    ref={widgetFrameRef}
+                    title={t.login.widgetTitle}
+                    src={`${TELEGRAM_LOGIN_FRAME_PATH}?bot=${encodeURIComponent(botUsername)}`}
+                    className="w-full border-0"
+                    style={{ height: widgetFrameHeight }}
+                  />
+                ) : null}
               </div>
 
               <div className="flex items-center gap-3">

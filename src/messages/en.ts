@@ -94,6 +94,7 @@ export const en: Messages = {
     widgetNotice:
       "The Telegram sign-in button is loaded from telegram.org. Telegram learns your IP address and details about your device in the process – even if you never sign in. Telegram is based in the United Arab Emirates, for which no adequacy decision exists.",
     widgetLoad: "Load Telegram sign-in",
+    widgetTitle: "Telegram sign-in",
     widgetAlternative:
       "Not required: the code sign-in below works without any Telegram script.",
     orWithCode: "or use a code",

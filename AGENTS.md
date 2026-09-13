@@ -82,6 +82,10 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
                 releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik)
+public/         Unverändert ausgelieferte Dateien: Icons, manifest.webmanifest,
+                theme-init.js (Farbschema vor dem ersten Paint),
+                telegram-login.html + telegram-login.js (Rahmen für das
+                Telegram-Login-Widget – siehe „Content Security Policy“)
 ```
 
 ## Pfad-Aliase
@@ -808,6 +812,43 @@ TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
   ebenfalls.
 - PostgreSQL muss vom Container/Host aus erreichbar sein; Setup siehe
   `README.md` (Datenbank anlegen, `npm run db:push`).
+
+## Content Security Policy
+
+`api/app.ts` setzt die Schutzkopfzeilen für **jede** Antwort, also auch für die
+statischen Dateien und die SPA-Auslieferung. Geprüft wird das in
+`api/securityHeaders.test.ts` – wer eine Richtlinie lockert, merkt es dort.
+
+Es gibt zwei Richtlinien, ausgewählt nach Pfad:
+
+- **Die Anwendung** bekommt `script-src 'self'`. Kein fremdes Skript, kein
+  `eval`. Deshalb liegt auch das Theme-Skript als Datei in `public/` statt
+  inline in `index.html`.
+- **`public/telegram-login.html`** bekommt zusätzlich `'unsafe-eval'` und
+  `https://telegram.org`. `telegram-widget.js` setzt seinen `data-onauth`-
+  Rückruf mit `eval` zusammen; ohne die Ausnahme bricht die Anmeldung im
+  Browser mit einem `EvalError` ab. Statt die Tür für die ganze Anwendung zu
+  öffnen, läuft das Widget in diesem einen Dokument: Es trägt keinen
+  Anwendungscode und keine Benutzerdaten, `frame-ancestors 'self'` lässt nur
+  die eigene Anmeldeseite es einbetten, und es schickt die signierten
+  Anmeldedaten per `postMessage` an `src/pages/Login.tsx` zurück (Herkunft,
+  Absenderfenster und Form werden dort geprüft).
+
+Zwei Stolpersteine, die beide an dieser Anmeldung hängen:
+
+- `crossOriginOpenerPolicy` ist `same-origin-allow-popups`. Der
+  Telegram-Anmeldedialog geht in einem eigenen Fenster auf und antwortet über
+  `window.opener`; unter `same-origin` kappt der Browser genau das.
+- `src/lib/zodConfig.ts` schaltet zod im Browser auf `jitless` und wird in
+  `main.tsx` **als Erstes** importiert. zod 4 tastet beim Anlegen des ersten
+  Schemas mit `new Function` ab, ob der schnelle Pfad erlaubt ist – unter der
+  CSP meldet der Browser das als Verstoß, obwohl zod den Fehler abfängt. Ein
+  Aufruf im Rumpf von `main.tsx` käme zu spät, der läuft erst nach allen
+  Importen.
+
+In der Entwicklung (`npm run dev`) greift nichts davon: `vite.config.ts`
+schickt nur `/api/*` durch Hono, alles andere liefert Vite ohne Kopfzeilen aus.
+CSP-Fehler zeigen sich also erst im Produktionsbau.
 
 ## Sicherheit
 

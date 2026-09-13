@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Telegram-Anmeldung</title>
+    <!--
+      Rahmendokument für das offizielle Telegram Login Widget – eingebunden von
+      der Anmeldeseite (src/pages/Login.tsx), nie direkt aufgerufen. Die
+      Begründung steht in public/telegram-login.js.
+
+      Das Skript liegt wie public/theme-init.js als eigene Datei daneben, damit
+      die Richtlinie dieses Dokuments ohne `script-src 'unsafe-inline'`
+      auskommt.
+    -->
+    <script src="/telegram-login.js" defer></script>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        /* Der Rahmen soll im Kartenhintergrund der Anmeldeseite verschwinden. */
+        background: transparent;
+      }
+
+      body {
+        display: flex;
+        justify-content: center;
+      }
+    </style>
+  </head>
+  <body></body>
+</html>
