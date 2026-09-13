@@ -76,20 +76,26 @@ upstream. In place today:
 
 ### Open advisories
 
-Production dependencies are currently free of known advisories. The path
-traversal in `@hono/node-server` `serve-static` below 2.0.5 (GHSA-frvp-7c67-39w9,
-Windows only) was closed by moving to `@hono/node-server` 2.x — the public API
-is unchanged, the major bump is a rewrite for throughput.
+Production dependencies are currently free of known advisories. What was open
+here got closed by upgrades, not by exception:
 
-Two moderate advisories remain in **development** dependencies. Neither ships in
-the image, and both sit behind an upstream package with no fixed release:
+- The path traversal in `@hono/node-server` `serve-static` below 2.0.5
+  (GHSA-frvp-7c67-39w9, Windows only), by moving to `@hono/node-server` 2.x —
+  the public API is unchanged, the major bump is a rewrite for throughput. The
+  nested 1.x copy behind `@hono/vite-dev-server` has since picked up the fix as
+  well.
+- Three moderate advisories in `hono` below 4.13.5 (GHSA-gqvv-2mrq-wpjv,
+  GHSA-g6gw-c38x-mqfc, GHSA-crvj-82cr-hjcx — `toSSG()` path traversal,
+  `parseBody()` memory exhaustion, query parsing past the URL fragment), by
+  moving to `hono` 4.13.7. None of the three affected code that runs here; the
+  app uses neither `toSSG()` nor `parseBody()` and reads no query parameters of
+  its own.
 
-- `@hono/vite-dev-server` still depends on `@hono/node-server` 1.x, so the
-  advisory above lives on in a nested copy. It is loaded by the Vite dev server
-  only.
-- `drizzle-kit` pulls the abandoned `@esbuild-kit/esm-loader`, and with it
-  esbuild 0.18 (GHSA-67mh-4wv8-2f99). That advisory concerns esbuild's own
-  `--serve` dev server, which drizzle-kit never starts.
+One moderate advisory remains in a **development** dependency. It does not ship
+in the image and sits behind an upstream package with no fixed release:
+`drizzle-kit` pulls the abandoned `@esbuild-kit/esm-loader`, and with it esbuild
+0.18 (GHSA-67mh-4wv8-2f99). That advisory concerns esbuild's own `--serve` dev
+server, which drizzle-kit never starts.
 
 The CI gate stays at `npm audit --omit=dev --audit-level=high`: production
 dependencies are the ones that reach users.

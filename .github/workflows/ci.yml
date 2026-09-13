@@ -65,9 +65,8 @@ jobs:
       # nicht im Abbild und ist oft monatelang nicht behebbar – als Gate wäre
       # das Rauschen, das man irgendwann abschaltet.
       #
-      # Schwelle "high": Die verbliebenen moderaten Befunde stecken in
-      # Entwicklungswerkzeugen (@hono/vite-dev-server, drizzle-kit) und haben
-      # upstream keine behobene Fassung. Begründung steht in
-      # COMPLIANCE.md.
+      # Schwelle "high": Der verbliebene moderate Befund steckt in einem
+      # Entwicklungswerkzeug (drizzle-kit) und hat upstream keine behobene
+      # Fassung. Begründung steht in COMPLIANCE.md.
       - name: Schwachstellen in Produktionsabhängigkeiten
         run: npm audit --omit=dev --audit-level=high
