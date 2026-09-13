@@ -404,7 +404,7 @@ export default function Appearance() {
                   value={kind}
                   onValueChange={value => setKind(value as TextureKind)}
                 >
-                  <SelectTrigger id="a-texture-kind" className="flex-1">
+                  <SelectTrigger id="a-texture-kind" className="min-w-0 flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

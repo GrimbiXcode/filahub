@@ -7,6 +7,7 @@ import {
   type ContainerMaterial,
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
+import { DateInput } from "@/components/DateInput";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -447,7 +448,7 @@ export function CatalogEditorDialog({
               <div className="grid gap-2">
                 <Label>{t.catalogEditor.formLabel}</Label>
                 <Select value={form} onValueChange={setForm}>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -468,7 +469,7 @@ export function CatalogEditorDialog({
                   value={containerMaterial}
                   onValueChange={setContainerMaterial}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full min-w-0">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -486,21 +487,15 @@ export function CatalogEditorDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div className="grid min-w-0 gap-2">
                   <Label htmlFor="ce-from">{t.catalogEditor.validFrom}</Label>
-                  <Input
+                  <DateInput
                     id="ce-from"
-                    type="date"
                     value={validFrom}
-                    onChange={e => setValidFrom(e.target.value)}
+                    onChange={setValidFrom}
                   />
                 </div>
                 <div className="grid min-w-0 gap-2">
                   <Label htmlFor="ce-to">{t.catalogEditor.validTo}</Label>
-                  <Input
-                    id="ce-to"
-                    type="date"
-                    value={validTo}
-                    onChange={e => setValidTo(e.target.value)}
-                  />
+                  <DateInput id="ce-to" value={validTo} onChange={setValidTo} />
                 </div>
               </div>
               <p className="-mt-2 text-xs text-muted-foreground">

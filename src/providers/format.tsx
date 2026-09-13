@@ -10,6 +10,7 @@ import {
   formatMoney,
   formatNumber,
   formatPercent,
+  parseDateInput,
   parseMoneyToCents,
 } from "@contracts/format";
 import {
@@ -62,6 +63,7 @@ export function FormatProvider({ children }: { children: ReactNode }) {
       formatDate: date => formatDate(date, locale),
       formatDateTime: date => formatDateTime(date, locale),
       parseMoney: input => parseMoneyToCents(input, locale),
+      parseDate: input => parseDateInput(input, locale),
       centsToInput: cents => centsToInputString(cents, locale),
     }),
     [locale, localeSetting, currency]
