@@ -453,7 +453,7 @@ export default function ContainerTypes() {
                 value={form}
                 onValueChange={value => setForm(value as ContainerForm)}
               >
-                <SelectTrigger id="s-form">
+                <SelectTrigger id="s-form" className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

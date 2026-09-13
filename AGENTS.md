@@ -502,6 +502,22 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   Widerspruchs: Ein widersprechendes Merkmal schließt aus, sonst muss mindestens
   eines zustimmen, und zwei unbekannte heißen „weiß nicht“.
 
+- **Der Hersteller ist die einzige Ausnahme davon** und grenzt die Liste in
+  `ContainerPicker` tatsächlich ein: Wer beim Material „Polymaker“ einträgt,
+  bekommt beim Öffnen nur Polymaker-Gebinde vorgeschlagen – eigene Gebindearten
+  und Katalogeinträge gleichermaßen. Der Unterschied zu Form und Materialart ist,
+  dass der Hersteller auf beiden Seiten als eigener Wert steht; verglichen wird
+  er in `manufacturerMatches` (`contracts/presets.ts`) über einen Schlüssel ohne
+  Trennzeichen, ein Name darf der Anfang des anderen sein („Bambu“ trifft
+  „Bambu Lab“).
+
+  Die Eingrenzung nimmt trotzdem nichts weg, und das hängt an drei Bedingungen,
+  die zusammengehören: Sie gilt nur bei **leerem Suchfeld** – wer tippt, sucht im
+  ganzen Katalog –, sie greift **gar nicht**, wenn kein einziges Gebinde zum
+  Hersteller passt, und das **bereits gewählte** Gebinde bleibt immer sichtbar.
+  Ein Hinweis unter der Liste sagt, dass die Suche der Weg nach draußen ist. Wer
+  eine dieser Bedingungen streicht, macht aus der Vorauswahl eine Sackgasse.
+
 - **Ausblenden** (`hidden_container_presets`) wirkt kaskadierend nach unten und
   betrifft nur die Auswahl; bereits zugewiesene Gebinde bleiben gültig.
 - **Löschen** ist nur ohne Untereinträge und ohne referenzierende Materialien

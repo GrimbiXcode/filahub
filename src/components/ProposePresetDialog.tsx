@@ -181,7 +181,7 @@ export function ProposePresetDialog({
                 value={containerMaterial}
                 onValueChange={setContainerMaterial}
               >
-                <SelectTrigger>
+                <SelectTrigger className="w-full min-w-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

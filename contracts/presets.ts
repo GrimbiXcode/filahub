@@ -94,6 +94,38 @@ export function normalizeMaterialType(input: string): string {
 }
 
 /**
+ * Vergleichsschlüssel eines Herstellernamens: wie `slugify`, nur ohne
+ * Trennzeichen – „Bambu Lab“ und „bambulab“ ergeben denselben Schlüssel.
+ */
+function manufacturerKey(input: string | null | undefined): string {
+  return input ? slugify(input).replace(/-/g, "") : "";
+}
+
+/**
+ * Weicher Abgleich zweier Herstellernamen.
+ *
+ * Der Hersteller steht am Material als Freitext („polymaker“, „Bambu Lab“), im
+ * Katalog dagegen als gepflegter Eigenname. Verglichen wird deshalb über
+ * `manufacturerKey`, und ein Name darf der Anfang des anderen sein: „Bambu“
+ * trifft „Bambu Lab“, „Polymaker“ auch „Polymaker Inc.“.
+ *
+ * Die Untergrenze von drei Zeichen für den Präfixtreffer hält Kürzel auseinander,
+ * die zufällig ineinander stecken – „Su“ soll nicht „Sunlu“ treffen. Ein leerer
+ * Name passt zu nichts: „unbekannt“ ist keine Übereinstimmung.
+ */
+export function manufacturerMatches(
+  a: string | null | undefined,
+  b: string | null | undefined
+): boolean {
+  const left = manufacturerKey(a);
+  const right = manufacturerKey(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left.length < 3 || right.length < 3) return false;
+  return left.startsWith(right) || right.startsWith(left);
+}
+
+/**
  * Weicher Abgleich der Materialart. Ein Preset, das mit „PLA“ verschlagwortet
  * ist, passt auch zu „PLA+“ und „PLA Silk“ – Materialarten sind im Bestand
  * Freitext, deshalb wird nie hart gefiltert, sondern nur gruppiert.

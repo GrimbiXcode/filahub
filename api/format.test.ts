@@ -7,6 +7,7 @@ import {
   formatGrams,
   formatMoney,
   formatPercent,
+  parseDateInput,
   parseMoneyToCents,
 } from "@contracts/format";
 
@@ -120,6 +121,56 @@ describe("formatDate", () => {
     expect(formatDate("2026-07-20", "en-US")).toBe("07/20/2026");
     expect(formatDate(null, "de-DE")).toBe("–");
     expect(formatDate("kein Datum", "de-DE")).toBe("–");
+  });
+});
+
+describe("parseDateInput", () => {
+  it("liest die ISO-Form, mit und ohne Uhrzeit", () => {
+    expect(parseDateInput("2026-08-12", "de-DE")).toBe("2026-08-12");
+    expect(parseDateInput("2026-8-2", "de-DE")).toBe("2026-08-02");
+    expect(parseDateInput("2026-08-12T10:30:00Z", "de-DE")).toBe("2026-08-12");
+    expect(parseDateInput("  2026-08-12  ", "en-US")).toBe("2026-08-12");
+  });
+
+  it("liest die Schreibweise der Locale", () => {
+    expect(parseDateInput("12.08.2026", "de-DE")).toBe("2026-08-12");
+    expect(parseDateInput("12/08/2026", "de-CH")).toBe("2026-08-12");
+    expect(parseDateInput("08/12/2026", "en-US")).toBe("2026-08-12");
+    expect(parseDateInput("12 08 2026", "de-DE")).toBe("2026-08-12");
+  });
+
+  it("nimmt eine Zahl über zwölf als Tag, egal was die Locale sagt", () => {
+    expect(parseDateInput("20.07.2026", "en-US")).toBe("2026-07-20");
+    expect(parseDateInput("07/20/2026", "de-DE")).toBe("2026-07-20");
+    // Auch wenn dann beide Zahlen zur Locale quer stehen: 13 kann nur der
+    // Tag sein, also ist die andere der Monat.
+    expect(parseDateInput("12.13.2026", "de-DE")).toBe("2026-12-13");
+  });
+
+  it("ergänzt zweistellige Jahre und findet das Datum im Satz", () => {
+    expect(parseDateInput("1.9.26", "de-DE")).toBe("2026-09-01");
+    expect(parseDateInput("bestellt am 03.11.2025", "de-DE")).toBe(
+      "2025-11-03"
+    );
+  });
+
+  it("weist zurück, was kein Datum ist", () => {
+    expect(parseDateInput("", "de-DE")).toBeNull();
+    expect(parseDateInput("keine Ahnung", "de-DE")).toBeNull();
+    expect(parseDateInput("12.2026", "de-DE")).toBeNull();
+    expect(parseDateInput("31.02.2026", "de-DE")).toBeNull();
+    expect(parseDateInput("32.01.2026", "de-DE")).toBeNull();
+    expect(parseDateInput("13.13.2026", "de-DE")).toBeNull();
+    expect(parseDateInput("12.08.202", "de-DE")).toBeNull();
+    expect(parseDateInput("1899-01-01", "de-DE")).toBeNull();
+  });
+
+  it("liest, was formatDate geschrieben hat – in beiden Locales", () => {
+    for (const locale of ["de-DE", "de-CH", "en-US", "en-GB"]) {
+      for (const iso of ["2026-01-31", "2026-07-04", "2025-12-24"]) {
+        expect(parseDateInput(formatDate(iso, locale), locale)).toBe(iso);
+      }
+    }
   });
 });
 
