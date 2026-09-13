@@ -92,7 +92,11 @@ function Calendar({
             : "rounded-md pl-2 pr-1 flex items-center gap-1 text-sm h-8 [&>svg]:text-muted-foreground [&>svg]:size-3.5",
           defaultClassNames.caption_label
         ),
-        table: "w-full border-collapse",
+        // Abweichung von shadcn: Der Schlüssel hieß dort `table`. Das war
+        // schon unter v9 der abgekündigte Name von `month_grid` und griff
+        // deshalb nicht; v10 hat ihn ersatzlos gestrichen. Unter dem
+        // richtigen Namen tut die Klasse jetzt das, was sie sollte.
+        month_grid: cn("w-full border-collapse", defaultClassNames.month_grid),
         weekdays: cn("flex", defaultClassNames.weekdays),
         weekday: cn(
           "text-muted-foreground rounded-md flex-1 font-normal text-[0.8rem] select-none",
