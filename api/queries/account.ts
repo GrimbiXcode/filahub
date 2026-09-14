@@ -62,6 +62,13 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
       : await db.query.weighings.findMany({
           where: inArray(schema.weighings.materialId, materialIds),
         });
+  // Verbräuche hängen genauso am Material – derselbe Wächter.
+  const consumptions =
+    materialIds.length === 0
+      ? []
+      : await db.query.consumptions.findMany({
+          where: inArray(schema.consumptions.materialId, materialIds),
+        });
 
   const [
     containerTypes,
@@ -283,6 +290,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     lager,
     materials,
     weighings,
+    consumptions,
     containerTypes,
     storageBoxes,
     customColors,
@@ -388,18 +396,17 @@ export async function deleteUserAccount(
       .set({ sourceContainerTypeId: null })
       .where(eq(schema.presetProposals.userId, userId));
 
-    // 2. Wägungen der eigenen Rollen
+    // 2. Wägungen und Verbräuche der eigenen Rollen
+    const ownMaterialIds = tx
+      .select({ id: schema.materials.id })
+      .from(schema.materials)
+      .where(eq(schema.materials.userId, userId));
     await tx
       .delete(schema.weighings)
-      .where(
-        inArray(
-          schema.weighings.materialId,
-          tx
-            .select({ id: schema.materials.id })
-            .from(schema.materials)
-            .where(eq(schema.materials.userId, userId))
-        )
-      );
+      .where(inArray(schema.weighings.materialId, ownMaterialIds));
+    await tx
+      .delete(schema.consumptions)
+      .where(inArray(schema.consumptions.materialId, ownMaterialIds));
 
     // 3.–6. Eigener Bestand
     await tx

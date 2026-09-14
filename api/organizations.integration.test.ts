@@ -334,9 +334,16 @@ describe("Stufen", () => {
         grossWeight: 1200,
       })
     ).rejects.toThrow(/Rechte/);
+    await expect(
+      callerFor(member).material.addConsumption({
+        organizationId,
+        materialId,
+        weight: 40,
+      })
+    ).rejects.toThrow(/Rechte/);
   });
 
-  it("lässt `weigher` wiegen, aber nichts anlegen", async () => {
+  it("lässt `weigher` wiegen und abbuchen, aber nichts anlegen", async () => {
     const organizationId = await makeOrg();
     const { lagerId, materialId } = await seedLager(organizationId);
     await joinAs(organizationId, "weigher");
@@ -346,6 +353,13 @@ describe("Stufen", () => {
         organizationId,
         materialId,
         grossWeight: 1200,
+      })
+    ).resolves.toBeTruthy();
+    await expect(
+      callerFor(member).material.addConsumption({
+        organizationId,
+        materialId,
+        weight: 40,
       })
     ).resolves.toBeTruthy();
     await expect(
@@ -812,6 +826,123 @@ describe("Wägungen korrigieren", () => {
       callerFor(member).material.deleteWeighing({
         organizationId,
         id: weighingId,
+      })
+    ).rejects.toThrow(/Rechte/);
+  });
+});
+
+/**
+ * Dieselbe Regel für Verbräuche (seit 2.9.0) – über den Alias
+ * `mayDeleteConsumption` und die eigene Tabelle. Geprüft wird das Wesentliche:
+ * frisch und zuletzt erfasst geht, alt und mitten im Verlauf nicht, `editor`
+ * darf alles, `viewer` scheitert an der Stufe.
+ */
+describe("Verbräuche korrigieren", () => {
+  async function seedConsumption(organizationId: number) {
+    const lager = await callerFor(boss).lager.create({
+      organizationId,
+      name: "Filament",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
+    const material = await callerFor(boss).material.create({
+      organizationId,
+      lagerId: lager!.id,
+      name: "PLA",
+      materialType: "PLA",
+      nominalWeight: 1000,
+    });
+    const consumption = await callerFor(boss).material.addConsumption({
+      organizationId,
+      materialId: material.id,
+      weight: 40,
+    });
+    return { materialId: material.id, consumptionId: consumption!.id };
+  }
+
+  async function backdate(consumptionId: number, minutes: number) {
+    await db()
+      .update(schema.consumptions)
+      .set({ createdAt: new Date(Date.now() - minutes * 60_000) })
+      .where(eq(schema.consumptions.id, consumptionId));
+  }
+
+  it("lässt `weigher` den eben erfassten Verbrauch löschen", async () => {
+    const organizationId = await makeOrg();
+    const { consumptionId } = await seedConsumption(organizationId);
+    await joinAs(organizationId, "weigher");
+
+    await expect(
+      callerFor(member).material.deleteConsumption({
+        organizationId,
+        id: consumptionId,
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  it("verwehrt `weigher` einen Verbrauch außerhalb des Fensters", async () => {
+    const organizationId = await makeOrg();
+    const { materialId, consumptionId } = await seedConsumption(organizationId);
+    await backdate(consumptionId, WEIGHING_CORRECTION_MINUTES + 5);
+    await joinAs(organizationId, "weigher");
+
+    await expect(
+      callerFor(member).material.deleteConsumption({
+        organizationId,
+        id: consumptionId,
+      })
+    ).rejects.toThrow(/älter als/);
+
+    const detail = await callerFor(member).material.byId({
+      organizationId,
+      id: materialId,
+    });
+    expect(detail!.consumptions).toHaveLength(1);
+    expect(detail!.remainingWeight).toBe(960);
+  });
+
+  it("verwehrt `weigher` einen Verbrauch mitten aus dem Verlauf", async () => {
+    const organizationId = await makeOrg();
+    const { materialId, consumptionId: erster } =
+      await seedConsumption(organizationId);
+    await callerFor(boss).material.addConsumption({
+      organizationId,
+      materialId,
+      weight: 10,
+    });
+    await joinAs(organizationId, "weigher");
+
+    await expect(
+      callerFor(member).material.deleteConsumption({
+        organizationId,
+        id: erster,
+      })
+    ).rejects.toThrow(/zuletzt erfasste/);
+  });
+
+  it("lässt `editor` auch alte Verbräuche löschen", async () => {
+    const organizationId = await makeOrg();
+    const { consumptionId } = await seedConsumption(organizationId);
+    await backdate(consumptionId, 60 * 24);
+    await joinAs(organizationId, "editor");
+
+    await expect(
+      callerFor(member).material.deleteConsumption({
+        organizationId,
+        id: consumptionId,
+      })
+    ).resolves.toBeTruthy();
+  });
+
+  it("weist `viewer` schon an der Stufe ab", async () => {
+    const organizationId = await makeOrg();
+    const { consumptionId } = await seedConsumption(organizationId);
+    await joinAs(organizationId, "viewer");
+
+    await expect(
+      callerFor(member).material.deleteConsumption({
+        organizationId,
+        id: consumptionId,
       })
     ).rejects.toThrow(/Rechte/);
   });

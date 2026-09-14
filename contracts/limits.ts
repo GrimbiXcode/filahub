@@ -46,6 +46,16 @@ export const MAX_MATERIALS_PER_LAGER = 1000;
  */
 export const MAX_WEIGHINGS_PER_MATERIAL = 1000;
 
+/**
+ * Verbräuche je Material (seit 2.9.0).
+ *
+ * Ein Verbrauch je Druck, also mehr Einträge als Wägungen – aber auch eine
+ * 5-kg-Rolle ist nach ein paar Hundert Drucken leer. Tausend schneidet wie bei
+ * den Wägungen die Schleife ab, nicht den Benutzer; und die Endlosschleife ist
+ * hier näherliegend, weil ein Verbrauch ohne Waage erfasst wird.
+ */
+export const MAX_CONSUMPTIONS_PER_MATERIAL = 1000;
+
 /** Eigene Farben je Bereich (persönlich oder Organisation). */
 export const MAX_CUSTOM_COLORS_PER_SCOPE = 200;
 

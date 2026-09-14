@@ -145,6 +145,19 @@ export function mayDeleteWeighing(
   );
 }
 
+/**
+ * Dieselbe Regel für Verbräuche (seit 2.9.0), unter eigenem Namen.
+ *
+ * Ein Verbrauch ist wie eine Wägung eine Aufzeichnung über den Bestand, von
+ * derselben Stufe erfasst und aus denselben Gründen schützenswert – der
+ * Korrekturfall ist derselbe (vertippte Zahl, gerade eben). Ein **Alias** und
+ * keine Kopie: Der Kommentar oben beschreibt, was aus zwei Fassungen einer
+ * Bedingung wird. „Zuletzt erfasst“ meint hier den zuletzt erfassten
+ * **Verbrauch** (höchste `id` in `consumptions`), unabhängig davon, ob seither
+ * gewogen wurde – ein überholter Verbrauch zählt ohnehin nicht mehr.
+ */
+export const mayDeleteConsumption = mayDeleteWeighing;
+
 // ---------------------------------------------------------------------------
 // Beitrittscode
 // ---------------------------------------------------------------------------

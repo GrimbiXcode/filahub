@@ -45,6 +45,9 @@ const FORBIDDEN_FIELDS = [
   "storageBox",
   "weighings",
   "lastWeighing",
+  // Seit 2.9.0: Verbräuche sind Druckzeiten, wie der Wägungsverlauf.
+  "consumptions",
+  "consumedSinceWeighing",
   "containerTypeId",
   "createdAt",
   "updatedAt",
@@ -371,6 +374,41 @@ describe("Sichtbarkeitsstufen", () => {
     await expect(
       callerFor(bea).friend.inventory({ friendId: alex.id })
     ).rejects.toThrow(/nicht gefunden/);
+  });
+
+  /*
+    Seit 2.9.0: Die Restmenge, die ein Freund sieht, muss die Verbräuche seit
+    der letzten Wägung enthalten – sonst stützt er eine Leihbitte auf die Zahl
+    von vor dem letzten Druck. Der Eintrag selbst geht nicht hinaus (siehe
+    `FORBIDDEN_FIELDS`).
+  */
+  it("rechnet Verbräuche seit der letzten Wägung heraus", async () => {
+    await befriend({ main: "full" });
+    const [consumption] = await db()
+      .insert(schema.consumptions)
+      .values({ materialId: alexMaterialId, weight: 100 })
+      .returning();
+    try {
+      const inventory = await callerFor(bea).friend.inventory({
+        friendId: alex.id,
+      });
+      const pla = inventory.materials.find(m => m.id === alexMaterialId);
+      // 1440 g − 140 g Rolle − 800 g Box − 100 g seither = 400 g
+      expect(pla?.remainingWeight).toBe(400);
+      expect(pla?.remainingPercent).toBe(40);
+
+      const [hit] = await callerFor(bea).friend.searchMaterials({
+        query: "PolyTerra",
+      });
+      expect(hit.remainingWeight).toBe(400);
+      for (const field of FORBIDDEN_FIELDS) {
+        expect(hit).not.toHaveProperty(field);
+      }
+    } finally {
+      await db()
+        .delete(schema.consumptions)
+        .where(eq(schema.consumptions.id, consumption.id));
+    }
   });
 
   it("liefert bei `search` nur Treffer und nie das ganze Lager", async () => {

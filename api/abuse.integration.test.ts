@@ -18,6 +18,7 @@ import {
   MAX_MATERIALS_PER_LAGER,
   MAX_STORAGE_BOXES_PER_SCOPE,
   MAX_WEIGHINGS_PER_MATERIAL,
+  MAX_CONSUMPTIONS_PER_MATERIAL,
 } from "@contracts/limits";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
@@ -170,6 +171,35 @@ describe("Mengenobergrenzen", () => {
         grossWeight: 850,
       })
     ).rejects.toThrow(/Wägungen/);
+  });
+
+  it("begrenzt die Verbräuche je Material", async () => {
+    const lagerId = await lagerFuer(anna);
+    const created = await callerFor(anna).material.create({
+      ...PERSONAL,
+      lagerId,
+      name: "Vielgedruckt",
+      materialType: "PLA",
+      nominalWeight: 1000,
+    });
+    const materialId = created.id;
+
+    await db()
+      .insert(schema.consumptions)
+      .values(
+        Array.from({ length: MAX_CONSUMPTIONS_PER_MATERIAL }, () => ({
+          materialId,
+          weight: 1,
+        }))
+      );
+
+    await expect(
+      callerFor(anna).material.addConsumption({
+        ...PERSONAL,
+        materialId,
+        weight: 1,
+      })
+    ).rejects.toThrow(/Verbräuche/);
   });
 
   it("begrenzt eigene Farben, Gebindearten und Dryboxen je Bereich", async () => {

@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+  consumptions,
   lager,
   materials,
   organizationMembers,
@@ -128,11 +129,19 @@ export const materialsRelations = relations(materials, ({ one, many }) => ({
     references: [presetContainerVariants.id],
   }),
   weighings: many(weighings),
+  consumptions: many(consumptions),
 }));
 
 export const weighingsRelations = relations(weighings, ({ one }) => ({
   material: one(materials, {
     fields: [weighings.materialId],
+    references: [materials.id],
+  }),
+}));
+
+export const consumptionsRelations = relations(consumptions, ({ one }) => ({
+  material: one(materials, {
+    fields: [consumptions.materialId],
     references: [materials.id],
   }),
 }));

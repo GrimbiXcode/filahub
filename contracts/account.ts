@@ -34,6 +34,9 @@
  * steht in einer Auskunft ohnehin immer auf `null` – exportiert werden nur die
  * **persönlichen** Zeilen der Person. Erhöht wird, wenn sich die Form
  * bestehender Zeilen ändert, nicht wenn etwas dazukommt.
+ *
+ * **Bleibt `4` in 2.9.0**: Der Abschnitt `consumptions` kommt dazu, bestehende
+ * Zeilen bleiben, wie sie sind – dieselbe Erwägung wie bei `lager` in 2.2.0.
  */
 export const ACCOUNT_EXPORT_VERSION = 4;
 
@@ -55,6 +58,12 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "lager",
   "materials",
   "weighings",
+  /*
+    Verbräuche seit 2.9.0 – Abbuchungen in Gramm samt Notiz und Zeitpunkt.
+    Personenbezug wie bei den Wägungen über das Material, deshalb in der
+    handgepflegten Ausnahmeliste des Integrationstests.
+  */
+  "consumptions",
   "containerTypes",
   "storageBoxes",
   /* Eigene Farben und Oberflächen – seine Zuordnung, also seine Angabe. */

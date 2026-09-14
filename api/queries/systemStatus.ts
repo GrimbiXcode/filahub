@@ -125,6 +125,8 @@ const COUNTED_TABLES = [
   "lager",
   "materials",
   "weighings",
+  // Seit 2.9.0: Verbräuche, die Abbuchungen ohne Waage.
+  "consumptions",
   "hidden_container_presets",
   "preset_proposals",
   /*

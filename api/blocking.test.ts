@@ -73,6 +73,7 @@ describe("Erreichbarkeit trotz Sperre", () => {
   it.each([
     "material.create",
     "material.addWeighing",
+    "material.addConsumption",
     "material.list",
     "lager.create",
     "containerType.create",

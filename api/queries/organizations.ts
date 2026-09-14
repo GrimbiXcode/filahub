@@ -8,6 +8,7 @@ import {
   type OrganizationRole,
 } from "@contracts/organizations";
 import {
+  consumptions,
   lager,
   materials,
   containerTypes,
@@ -151,18 +152,17 @@ export async function deleteOrganizationCascade(
   tx: DbTransaction,
   organizationId: number
 ): Promise<void> {
-  // Wägungen hängen am Material und müssen vor ihm gehen.
+  // Wägungen und Verbräuche hängen am Material und müssen vor ihm gehen.
+  const orgMaterialIds = tx
+    .select({ id: materials.id })
+    .from(materials)
+    .where(eq(materials.organizationId, organizationId));
   await tx
     .delete(weighings)
-    .where(
-      inArray(
-        weighings.materialId,
-        tx
-          .select({ id: materials.id })
-          .from(materials)
-          .where(eq(materials.organizationId, organizationId))
-      )
-    );
+    .where(inArray(weighings.materialId, orgMaterialIds));
+  await tx
+    .delete(consumptions)
+    .where(inArray(consumptions.materialId, orgMaterialIds));
   await tx
     .delete(materials)
     .where(eq(materials.organizationId, organizationId));
