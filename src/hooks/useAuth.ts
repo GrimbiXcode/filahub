@@ -68,6 +68,16 @@ export function useAuth(options?: UseAuthOptions) {
       user: isUnauthenticated ? null : (user ?? null),
       isAuthenticated: !!user && !isUnauthenticated,
       isAdmin: !isUnauthenticated && user?.role === "admin",
+      /*
+        Gesperrt. Die Prüfung steht hier und nicht an den Aufrufstellen, damit
+        sie überall dieselbe ist – `AuthLayout` entscheidet daran, ob die App
+        oder die Sperrseite erscheint.
+
+        `auth.me` bleibt für Gesperrte erreichbar (`blockedQuery` in
+        `api/middleware.ts`); ohne das käme hier nur ein Fehler an und die
+        Oberfläche zeigte die Anmeldeschranke statt der Sperrseite.
+      */
+      isBlocked: !isUnauthenticated && !!user?.blockedAt,
       isLoading: isLoading || logoutMutation.isPending,
       error,
       logout,

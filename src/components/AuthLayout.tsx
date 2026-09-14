@@ -29,6 +29,11 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import {
+  ADMIN_ABUSE_PATH,
+  ADMIN_PRESETS_PATH,
+  ADMIN_PROPOSALS_PATH,
+  ADMIN_SYSTEM_PATH,
+  ADMIN_USERS_PATH,
   APP_NAME,
   APPEARANCE_PATH,
   CONTAINER_TYPES_PATH,
@@ -60,8 +65,10 @@ import {
   Scale,
   Search,
   Settings,
+  ShieldAlert,
   Sparkles,
   Sun,
+  UserCog,
   Users,
 } from "lucide-react";
 import {
@@ -72,6 +79,7 @@ import {
   useState,
 } from "react";
 import { useLocation, useNavigate } from "react-router";
+import Blocked from "@/pages/Blocked";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
 import { Wordmark } from "./Logo";
 import { QuickActionsHost } from "./QuickActions";
@@ -124,9 +132,11 @@ const adminMenuItems: {
   label: NavKey;
   path: string;
 }[] = [
-  { icon: Library, label: "presetCatalog", path: "/verwaltung/presets" },
-  { icon: Inbox, label: "proposals", path: "/verwaltung/vorschlaege" },
-  { icon: Database, label: "system", path: "/verwaltung/system" },
+  { icon: Library, label: "presetCatalog", path: ADMIN_PRESETS_PATH },
+  { icon: Inbox, label: "proposals", path: ADMIN_PROPOSALS_PATH },
+  { icon: UserCog, label: "users", path: ADMIN_USERS_PATH },
+  { icon: ShieldAlert, label: "abuse", path: ADMIN_ABUSE_PATH },
+  { icon: Database, label: "system", path: ADMIN_SYSTEM_PATH },
 ];
 
 const THEME_ICONS: Record<Theme, typeof Sun> = {
@@ -172,7 +182,7 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
   });
-  const { isLoading, user } = useAuth();
+  const { isLoading, user, isBlocked } = useAuth();
   const t = useT();
 
   useEffect(() => {
@@ -181,6 +191,21 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return <AuthLayoutSkeleton />;
+  }
+
+  /*
+    Gesperrt: keine Seitenleiste, keine Inhalte, nur die Sperrseite.
+
+    Die Prüfung steht **vor** `!user` und vor allem anderen, weil dies die
+    einzige Stelle ist, an der sich App-Oberfläche und Schranke entscheiden –
+    jede geschützte Seite rendert `AuthLayout`. Eine eigene Route wäre ein
+    zweiter Weg, und wer eine Route vergisst, hätte ein Loch; hier kann nichts
+    vorbeikommen. Abgesichert ist die Sperre ohnehin serverseitig
+    (`authedQuery` in `api/middleware.ts`) – das hier ist die Oberfläche dazu,
+    nicht der Riegel.
+  */
+  if (isBlocked) {
+    return <Blocked />;
   }
 
   if (!user) {

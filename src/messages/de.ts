@@ -73,6 +73,8 @@ export const de = {
     presetCatalog: "Preset-Katalog",
     proposals: "Vorschläge",
     system: "System",
+    users: "Nutzer",
+    abuse: "Missbrauch",
     releaseNotes: "Neuerungen",
     settings: "Einstellungen",
     material: "Material",
@@ -799,6 +801,119 @@ export const de = {
     source: "Quelle",
     tables: "Tabellen",
     colTable: "Tabelle",
+  },
+
+  /*
+    Sperre und Entsperr-Antrag. Der einzige Textbereich, den ausschließlich
+    jemand liest, der gerade keinen Zugang hat – entsprechend nüchtern und ohne
+    Vorwurf formuliert. Was er tun kann, steht vor dem, was er nicht kann.
+  */
+  blocked: {
+    title: "Dein Konto ist gesperrt",
+    description:
+      "Ein Administrator dieser Instanz hat dein Konto gesperrt. Dein Bestand bleibt erhalten.",
+    since: (vars: { date: string }) => `Gesperrt seit ${vars.date}`,
+    reasonLabel: "Grund",
+    reasons: {
+      abuse: "Massenhaftes Anlegen von Daten",
+      spam: "Unerwünschte Werbung oder Kontaktaufnahme",
+      terms: "Verstoß gegen die Nutzungsbedingungen",
+      automated: "Verdacht auf automatisierte Nutzung",
+      other: "Sonstiger Grund",
+    },
+    rightsTitle: "Was dir weiterhin offensteht",
+    rightsHint:
+      "Deine Daten herunterladen und dein Konto löschen – eine Sperre ändert daran nichts.",
+    requestTitle: "Aufhebung beantragen",
+    requestHint:
+      "Schildere kurz, worum es geht. Ein Administrator sieht deinen Antrag.",
+    requestPlaceholder: "Worum geht es?",
+    requestSubmit: "Antrag stellen",
+    requestSent: "Antrag gestellt",
+    requestPending: "Dein Antrag liegt zur Prüfung vor.",
+    requestApproved: "Dein Antrag wurde angenommen. Bitte melde dich neu an.",
+    requestRejected: "Dein Antrag wurde abgelehnt.",
+    requestedAt: (vars: { date: string }) => `Gestellt am ${vars.date}`,
+    noteLabel: "Begründung",
+    signOut: "Abmelden",
+  },
+
+  adminUsers: {
+    title: "Nutzer",
+    description: "Konten dieser Instanz sperren und entsperren",
+    searchPlaceholder: "Name oder Telegram-Benutzer",
+    blockedCount: (vars: { count: number }) => `${vars.count} gesperrt`,
+    empty: "Keine Konten gefunden",
+    colName: "Name",
+    colTelegram: "Telegram",
+    colRole: "Rolle",
+    colCreated: "Angelegt",
+    colLastSignIn: "Zuletzt angemeldet",
+    colState: "Zustand",
+    stateActive: "Aktiv",
+    stateBlocked: "Gesperrt",
+    roleAdmin: "Administrator",
+    roleUser: "Benutzer",
+    block: "Sperren",
+    unblock: "Entsperren",
+    blockTitle: (vars: { name: string }) => `„${vars.name}“ sperren?`,
+    blockDescription:
+      "Das Konto erreicht danach nur noch seine Betroffenenrechte und den Entsperr-Antrag. Der Bestand bleibt erhalten, alle Sitzungen werden beendet.",
+    blockReasonLabel: "Grund",
+    blockConfirm: "Sperren",
+    blocked: "Konto gesperrt",
+    unblocked: "Sperre aufgehoben",
+    requestsTitle: "Entsperr-Anträge",
+    requestsEmpty: "Keine Anträge",
+    requestStatus: {
+      pending: "Offen",
+      approved: "Angenommen",
+      rejected: "Abgelehnt",
+    },
+    approve: "Annehmen",
+    reject: "Ablehnen",
+    rejectTitle: "Antrag ablehnen",
+    rejectHint:
+      "Die Begründung geht als Telegram-Nachricht an den Betroffenen.",
+    rejectPlaceholder: "Begründung",
+    reviewed: "Antrag bearbeitet",
+    filterAll: "Alle",
+  },
+
+  adminAbuse: {
+    title: "Missbrauch",
+    description: "Abgewiesene Zugriffe, erreichte Grenzen und Sperren",
+    alertsTitle: "Gerissene Schwellen",
+    alertsNone: "Keine Schwelle gerissen",
+    alertLine: (vars: {
+      label: string;
+      count: number;
+      threshold: number;
+      /** `null` bei einer Schwelle über den Bestand statt über einen Zeitraum */
+      window: string | null;
+    }) =>
+      vars.window
+        ? `${vars.label}: ${vars.count} in ${vars.window} (Schwelle ${vars.threshold})`
+        : `${vars.label}: ${vars.count} (Schwelle ${vars.threshold})`,
+    counts: {
+      rateLimited: "Abgewiesene Zugriffe",
+      quotaExceeded: "Erreichte Obergrenzen",
+      registrationBlocked: "Abgewiesene Registrierungen",
+      pendingUnblockRequests: "Offene Entsperr-Anträge",
+    },
+    bucketsTitle: "Zugriffsbegrenzung nach Prozedur (24 h)",
+    quotasTitle: "Erreichte Obergrenzen (24 h)",
+    registrationsTitle: "Neue Konten je Tag (14 Tage)",
+    noisiestTitle: "Auffälligste Konten (7 Tage)",
+    blockedUsers: "Gesperrte Konten",
+    colBucket: "Prozedur",
+    colQuota: "Obergrenze",
+    colHits: "Treffer",
+    colDay: "Tag",
+    colCount: "Anzahl",
+    colAccount: "Konto",
+    empty: "Nichts aufgefallen",
+    unknownAccount: "Unbekannt",
   },
 
   weighing: {

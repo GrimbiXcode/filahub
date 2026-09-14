@@ -15,8 +15,10 @@ import {
   Plus,
   Scale,
   Settings as SettingsIcon,
+  ShieldAlert,
   Sparkles,
   Sun,
+  UserCog,
   Users,
 } from "lucide-react";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
@@ -36,6 +38,10 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import {
+  ADMIN_ABUSE_PATH,
+  ADMIN_PRESETS_PATH,
+  ADMIN_PROPOSALS_PATH,
+  ADMIN_USERS_PATH,
   APPEARANCE_PATH,
   CONTAINER_TYPES_PATH,
   DRYBOXES_PATH,
@@ -141,8 +147,10 @@ const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
 ];
 
 const ADMIN_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
-  { icon: Library, label: "presetCatalog", path: "/verwaltung/presets" },
-  { icon: Package, label: "proposals", path: "/verwaltung/vorschlaege" },
+  { icon: Library, label: "presetCatalog", path: ADMIN_PRESETS_PATH },
+  { icon: Package, label: "proposals", path: ADMIN_PROPOSALS_PATH },
+  { icon: UserCog, label: "users", path: ADMIN_USERS_PATH },
+  { icon: ShieldAlert, label: "abuse", path: ADMIN_ABUSE_PATH },
 ];
 
 type PaletteProps = {

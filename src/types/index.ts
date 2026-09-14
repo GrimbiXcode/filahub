@@ -44,6 +44,15 @@ export type AdminProposalItem =
 /** Systemzustand für /verwaltung/system */
 export type AdminSystemStatus = RouterOutputs["admin"]["system"]["status"];
 
+/** Nutzerverwaltung für /verwaltung/nutzer */
+export type AdminUserEntry =
+  RouterOutputs["admin"]["user"]["list"]["entries"][number];
+export type AdminUnblockRequest =
+  RouterOutputs["admin"]["user"]["unblockRequests"][number];
+
+/** Missbrauchsübersicht für /verwaltung/missbrauch */
+export type AdminAbuseOverview = RouterOutputs["admin"]["abuse"]["overview"];
+
 /** Gängige 3D-Druck-Materialarten für Vorschläge */
 export const COMMON_MATERIAL_TYPES = [
   "PLA",
