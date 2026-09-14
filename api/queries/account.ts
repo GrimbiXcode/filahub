@@ -244,6 +244,24 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     .orderBy(schema.auditLog.at);
 
   /*
+    Entsperr-Anträge dieser Person. Ohne `reviewedBy`: Wer entschieden hat, ist
+    die Angabe eines Dritten und für den Betroffenen nicht die Auskunft, die er
+    verlangen kann – die Entscheidung selbst und ihre Begründung stehen dabei.
+  */
+  const unblockRequests = await db
+    .select({
+      id: schema.unblockRequests.id,
+      message: schema.unblockRequests.message,
+      status: schema.unblockRequests.status,
+      createdAt: schema.unblockRequests.createdAt,
+      reviewedAt: schema.unblockRequests.reviewedAt,
+      reviewNote: schema.unblockRequests.reviewNote,
+    })
+    .from(schema.unblockRequests)
+    .where(eq(schema.unblockRequests.userId, userId))
+    .orderBy(schema.unblockRequests.createdAt);
+
+  /*
     Mitgliedschaften und Einladungen. Was hier **nicht** steht, ist der Bestand
     der Organisationen: Er ist nicht die Auskunft dieser Person, sondern das
     Material einer anderen Stelle – sie hat Zugriff darauf, aber er gehört ihr
@@ -278,6 +296,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     organizationMemberships,
     organizationInvitations,
     auditLog,
+    unblockRequests,
   };
 }
 
@@ -544,6 +563,25 @@ export async function deleteUserAccount(
       .returning({ organizationId: schema.organizationMembers.organizationId });
 
     /*
+      10c. Entsperr-Anträge.
+
+      Sie verschwinden ganz und bleiben **nicht** als Nachweis stehen, anders
+      als die angenommenen Preset-Vorschläge in Schritt 8: Ein Vorschlag lebt im
+      Katalog weiter und muss belegbar bleiben, ein Antrag betrifft nur das
+      Verhältnis zwischen dieser Person und der Instanz. Ist das Konto weg, ist
+      auch die Sperre gegenstandslos – und der Freitext darin ist so
+      persönlich, wie es im Projekt nur wird.
+
+      Dass die Sperre selbst mit dem Konto verschwindet, ist kein Schlupfloch:
+      Wer sein Konto löscht, um die Sperre loszuwerden, verliert dabei seinen
+      gesamten Bestand. Was ihn danach zurückhält, ist die Registrierungsgrenze
+      (`contracts/limits.ts`), nicht ein Rest in dieser Tabelle.
+    */
+    await tx
+      .delete(schema.unblockRequests)
+      .where(eq(schema.unblockRequests.userId, userId));
+
+    /*
       11. Sicherheitsprotokoll anonymisieren, nicht löschen.
 
       Würden die Einträge mitgelöscht, wäre die Vorfallaufklärung mit einem
@@ -564,6 +602,17 @@ export async function deleteUserAccount(
       .update(schema.auditLog)
       .set({ subjectUserId: null })
       .where(eq(schema.auditLog.subjectUserId, userId));
+
+    /*
+      Und die Sperren, die dieses Konto als Administrator verhängt hat: Die
+      Sperre bleibt, die Zuordnung geht – dasselbe Muster wie beim Einreicher
+      angenommener Vorschläge in Schritt 8. Ohne das stünde in `users.blockedBy`
+      dauerhaft eine ID, die auf niemanden mehr zeigt.
+    */
+    await tx
+      .update(schema.users)
+      .set({ blockedBy: null })
+      .where(eq(schema.users.blockedBy, userId));
 
     // 12. Zuletzt das Konto selbst
     await tx.delete(schema.users).where(eq(schema.users.id, userId));

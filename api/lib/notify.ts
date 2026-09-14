@@ -3,6 +3,7 @@ import {
   type NotificationMessages,
 } from "@contracts/notifications";
 import { findNotificationTarget } from "../queries/friends";
+import { findAdminUsers } from "../queries/users";
 import { appLink, sendTelegramMessage } from "../telegram/send";
 
 /**
@@ -36,6 +37,34 @@ export async function notify(
   return sendTelegramMessage(target.unionId, text);
 }
 
+/**
+ * Verschickt eine Meldung an **alle** Administratoren dieser Instanz.
+ *
+ * Getrennt von `notify`, weil der Empfänger ein anderer Art ist: Dort geht es
+ * an eine Person, die etwas angeht; hier an eine Rolle, die etwas tun muss. Es
+ * gibt keinen Rückgabewert über Erreichbarkeit – anders als bei einer
+ * Freundschaftsanfrage wartet niemand auf eine Antwort, und ein Administrator,
+ * der den Bot nie geöffnet hat, sieht die Meldung auf der Verwaltungsseite.
+ *
+ * `Promise.all` und nicht nacheinander: Bei einem Dutzend Administratoren wäre
+ * die Reihe sonst ein Dutzend Netzwerkrunden lang.
+ */
+export async function notifyAdmins(
+  build: (m: NotificationMessages) => string,
+  path: string
+): Promise<void> {
+  const admins = await findAdminUsers();
+  const link = appLink(path);
+  await Promise.all(
+    admins.map(admin => {
+      const messages = notificationMessages(admin.language);
+      const text =
+        build(messages) + (link ? messages.openLink({ url: link }) : "");
+      return sendTelegramMessage(admin.unionId, text);
+    })
+  );
+}
+
 /** Anzeigename für Benachrichtigungen. `users.name` ist nullable. */
 export function displayName(name: string | null | undefined): string {
   const trimmed = (name ?? "").trim();
@@ -51,3 +80,9 @@ export function displayName(name: string | null | undefined): string {
  * nach `contracts/` zu ziehen – das lohnt für einen Pfad noch nicht.
  */
 export const ORGANIZATIONS_PATH = "/organisationen";
+
+/** Wohin die Missbrauchsmeldung führt. Aus demselben Grund hier wie oben. */
+export const ABUSE_PATH = "/verwaltung/missbrauch";
+
+/** Wohin der Hinweis auf eine Sperre führt. */
+export const BLOCKED_PATH = "/";

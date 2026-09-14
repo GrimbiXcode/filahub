@@ -1,4 +1,5 @@
 import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
+import type { BlockReason } from "./limits";
 import type { OrganizationRole } from "./organizations";
 
 /**
@@ -53,6 +54,32 @@ const enRoleNames: RoleNames = {
   admin: "Manage",
 };
 
+/**
+ * Die Sperrgründe, wie sie **außerhalb** der App heißen.
+ *
+ * Dasselbe Vorgehen wie bei `RoleNames`: Ohne diese Übersetzung stünde in der
+ * Nachricht der technische Schlüssel („abuse“), und der sagt dem Empfänger
+ * nichts – gerade bei der Nachricht, die ihm den Zugang nimmt, ist das die
+ * falsche Stelle zum Sparen.
+ */
+type BlockReasonNames = Record<BlockReason, string>;
+
+const deBlockReasons: BlockReasonNames = {
+  abuse: "Massenhaftes Anlegen von Daten",
+  spam: "Unerwünschte Werbung oder Kontaktaufnahme",
+  terms: "Verstoß gegen die Nutzungsbedingungen",
+  automated: "Verdacht auf automatisierte Nutzung",
+  other: "Sonstiger Grund",
+};
+
+const enBlockReasons: BlockReasonNames = {
+  abuse: "Mass creation of records",
+  spam: "Unsolicited advertising or contact",
+  terms: "Breach of the terms of use",
+  automated: "Suspected automated use",
+  other: "Other reason",
+};
+
 const de = {
   friendRequest: (v: { from: string }) =>
     `${v.from} möchte sich auf filahub mit dir verbinden.\n\n` +
@@ -103,6 +130,34 @@ const de = {
     `Der Bestand der Organisation ist damit für dich nicht mehr sichtbar. ` +
     `Dein eigener Bestand ist davon nicht betroffen.`,
 
+  /*
+    Sperre und Entsperrung.
+
+    Sie gehen hinaus, obwohl der Betroffene den Stand auch in der App sieht:
+    Wer gesperrt wird, schaut nicht zufällig gerade hin, und die Sperre ist der
+    einzige Eingriff im Projekt, der jemanden ohne sein Zutun von seinem
+    eigenen Bestand trennt. Dass er davon erfährt, ohne danach zu suchen, ist
+    der Unterschied zwischen einer Maßnahme und einem stillen Verschwinden.
+  */
+  accountBlocked: (v: { reason: BlockReason }) =>
+    `Dein Konto auf filahub wurde gesperrt.\n\n` +
+    `Grund: ${deBlockReasons[v.reason]}\n\n` +
+    `Dein Bestand bleibt erhalten. Du kannst dich weiterhin anmelden, deine ` +
+    `Daten herunterladen, dein Konto löschen und die Aufhebung der Sperre ` +
+    `beantragen.`,
+
+  accountUnblocked: () =>
+    `Die Sperre deines Kontos auf filahub wurde aufgehoben.\n\n` +
+    `Bitte melde dich neu an.`,
+
+  unblockRejected: (v: { note: string }) =>
+    `Dein Antrag auf Aufhebung der Sperre wurde abgelehnt.\n\n${v.note}`,
+
+  /** Meldung an die Administratoren – nur sie bekommen sie. */
+  abuseAlert: (v: { lines: string }) =>
+    `filahub meldet auffällige Zugriffe:\n\n${v.lines}\n\n` +
+    `Einzelheiten unter „Verwaltung → Missbrauch“.`,
+
   /**
    * Ohne `APP_BASE_URL` fehlt der Link. Der Satz nennt dann nur den Ort in der
    * App – besser als ein kaputter Link oder eine erratene Adresse.
@@ -145,6 +200,22 @@ const en: NotificationMessages = {
     `You are no longer a member of "${v.organization}" on filahub.\n\n` +
     `The organization's stock is no longer visible to you. Your own stock is ` +
     `not affected.`,
+
+  accountBlocked: v =>
+    `Your filahub account has been blocked.\n\n` +
+    `Reason: ${enBlockReasons[v.reason]}\n\n` +
+    `Your stock is kept. You can still sign in, download your data, delete ` +
+    `your account and request that the block be lifted.`,
+
+  accountUnblocked: () =>
+    `The block on your filahub account has been lifted.\n\nPlease sign in again.`,
+
+  unblockRejected: v =>
+    `Your request to lift the block was rejected.\n\n${v.note}`,
+
+  abuseAlert: v =>
+    `filahub reports unusual activity:\n\n${v.lines}\n\n` +
+    `Details under "Administration → Abuse".`,
 
   openLink: v => `\n\n${v.url}`,
 };
