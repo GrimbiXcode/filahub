@@ -78,6 +78,21 @@ if (env.isProduction) {
   await runRetentionSweep();
   setInterval(() => void runRetentionSweep(), 6 * 60 * 60 * 1000).unref();
 
+  /*
+    Missbrauchsüberwachung: alle 15 Minuten.
+
+    Ein eigenes Intervall und nicht im Löschlauf mit: Sechs Stunden sind für
+    eine Aufbewahrungsfrist richtig und für einen laufenden Angriff eine
+    Ewigkeit. Beim Start bewusst **kein** Durchlauf – ein Neustart sagt über
+    die letzte Stunde nichts, was ein paar Minuten später nicht auch gilt, und
+    eine Meldung direkt beim Hochfahren ginge im Startrauschen unter.
+
+    Wie die Aufbewahrung nur im Produktivbetrieb: Im Entwicklungsmodus läuft
+    weder Bot noch Intervall, und eine Meldung hätte dort keinen Empfänger.
+  */
+  const { runAbuseCheck } = await import("./lib/abuseAlert");
+  setInterval(() => void runAbuseCheck(), 15 * 60 * 1000).unref();
+
   const port = parseInt(process.env.PORT || "3000");
   startTelegramBot();
   // Auf allen Interfaces lauschen, damit der Container von außen
