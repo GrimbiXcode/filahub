@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useT } from "@/lib/i18nContext";
+import { useAppTheme } from "@/lib/theme";
 import { trpc } from "@/lib/trpc";
 
 type TelegramWidgetUser = {
@@ -32,10 +33,11 @@ type TelegramWidgetUser = {
 
 /**
  * Nachrichten des Rahmendokuments (`public/telegram-login.js`): entweder die
- * Anmeldedaten oder die Höhe, die der Telegram-Knopf braucht.
+ * Anmeldedaten oder das Maß, das der Telegram-Knopf braucht.
  */
 type WidgetFrameMessage =
-  { kind: "auth"; user: TelegramWidgetUser } | { kind: "size"; height: number };
+  | { kind: "auth"; user: TelegramWidgetUser }
+  | { kind: "size"; width: number; height: number };
 
 /**
  * Liest eine `message`-Nutzlast, sofern sie vom eigenen Rahmen stammt und die
@@ -50,8 +52,12 @@ function widgetFrameMessage(data: unknown): WidgetFrameMessage | null {
   if (typeof data !== "object" || data === null) return null;
   const message = data as Record<string, unknown>;
   if (message.source !== TELEGRAM_LOGIN_FRAME_MESSAGE) return null;
-  if (message.kind === "size" && typeof message.height === "number") {
-    return { kind: "size", height: message.height };
+  if (
+    message.kind === "size" &&
+    typeof message.width === "number" &&
+    typeof message.height === "number"
+  ) {
+    return { kind: "size", width: message.width, height: message.height };
   }
   if (message.kind === "auth" && typeof message.user === "object") {
     return { kind: "auth", user: message.user as TelegramWidgetUser };
@@ -60,22 +66,25 @@ function widgetFrameMessage(data: unknown): WidgetFrameMessage | null {
 }
 
 /**
- * Höhe des Rahmens, bis das Widget geladen ist und seine echte meldet. Der
- * große Telegram-Knopf ist 40 Pixel hoch; so springt beim Laden nichts.
+ * Maß des Rahmens, bis das Widget geladen ist und sein echtes meldet. Der
+ * große Telegram-Knopf ist 40 Pixel hoch; so springt beim Laden nichts. Die
+ * Breite ist nur ein Platzhalter: Der Rahmen ist unsichtbar, bis der Knopf
+ * darin steht, und hat dann dessen Maß.
  */
-const WIDGET_FRAME_MIN_HEIGHT = 40;
+const WIDGET_FRAME_INITIAL_SIZE = { width: 240, height: 40 };
 
 export default function Login() {
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const { data: loginInfo, isLoading } = trpc.auth.loginInfo.useQuery();
   const widgetFrameRef = useRef<HTMLIFrameElement>(null);
-  const [widgetFrameHeight, setWidgetFrameHeight] = useState(
-    WIDGET_FRAME_MIN_HEIGHT
+  const [widgetFrameSize, setWidgetFrameSize] = useState(
+    WIDGET_FRAME_INITIAL_SIZE
   );
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const t = useT();
+  const { resolvedTheme } = useAppTheme();
   // Einmal getroffen, bleibt die Entscheidung bestehen – sonst müsste man sie
   // bei jedem Anmeldeversuch neu treffen.
   const [widgetConsent, setWidgetConsent] = useState(
@@ -109,6 +118,14 @@ export default function Login() {
     teilt Telegram IP-Adresse und Gerätedaten mit, unabhängig davon, ob am Ende
     eine Anmeldung zustande kommt. Die Anmeldung per Bot-Code kommt ohne jedes
     Telegram-Asset aus und bleibt deshalb der einwilligungsfreie Standardweg.
+
+    Der Rahmen bekommt das Farbschema der Seite als URL-Parameter mit: Ein
+    iframe ist nur durchsichtig, wenn sein Schema zu dem des einbettenden
+    Dokuments passt – sonst malt der Browser es deckend, und im dunklen Schema
+    standen weiße Flächen neben dem Knopf. Bei einem Wechsel lädt der Rahmen
+    neu; das ist selten und billiger als ein Nachrichtenkanal hinein. Zurück
+    meldet er neben den Anmeldedaten das Maß des Knopfes, auf das der Rahmen
+    zugeschnitten wird: So ragt nichts über den Knopf hinaus.
   */
   useEffect(() => {
     if (!widgetConsent) return;
@@ -121,9 +138,13 @@ export default function Login() {
       if (!message) return;
 
       if (message.kind === "size") {
-        setWidgetFrameHeight(
-          Math.max(WIDGET_FRAME_MIN_HEIGHT, Math.ceil(message.height))
-        );
+        // 0 × 0 heißt: Das Widget hat seinen Knopf noch nicht eingesetzt.
+        if (message.width > 0 && message.height > 0) {
+          setWidgetFrameSize({
+            width: Math.ceil(message.width),
+            height: Math.ceil(message.height),
+          });
+        }
       } else {
         loginWithWidget.mutate(message.user);
       }
@@ -183,9 +204,9 @@ export default function Login() {
                   <iframe
                     ref={widgetFrameRef}
                     title={t.login.widgetTitle}
-                    src={`${TELEGRAM_LOGIN_FRAME_PATH}?bot=${encodeURIComponent(botUsername)}`}
-                    className="w-full border-0"
-                    style={{ height: widgetFrameHeight }}
+                    src={`${TELEGRAM_LOGIN_FRAME_PATH}?bot=${encodeURIComponent(botUsername)}&theme=${resolvedTheme}`}
+                    className="mx-auto block max-w-full border-0"
+                    style={widgetFrameSize}
                   />
                 ) : null}
               </div>
@@ -207,7 +228,13 @@ export default function Login() {
                 className="space-y-3"
               >
                 <div className="space-y-1.5">
-                  <Label htmlFor="login-code" className="text-xs">
+                  {/* `block` statt des `flex` der Basiskomponente: Sonst
+                      werden Text und Link zu einzelnen Kacheln, die getrennt
+                      umbrechen. */}
+                  <Label
+                    htmlFor="login-code"
+                    className="block text-xs leading-snug"
+                  >
                     {t.login.codeFromBot}{" "}
                     {botUsername && (
                       <a

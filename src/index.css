@@ -174,9 +174,10 @@
     @apply border-border;
   }
   /* Fallback: next-themes setzt `color-scheme` selbst, vor dem Hydrieren
-     zählt aber das Inline-Skript aus index.html bzw. diese Regeln. Ohne
-     Angabe erben eingebettete iframes das Systemschema und rendern
-     transparente Flächen schwarz. */
+     zählt aber public/theme-init.js bzw. diese Regeln. Ein eingebettetes
+     iframe ist nur durchsichtig, wenn sein Schema zu diesem passt – das
+     Rahmendokument des Telegram-Widgets bekommt es deshalb als URL-Parameter
+     (public/telegram-login.js). */
   :root {
     color-scheme: light;
   }
@@ -187,10 +188,6 @@
     @apply bg-background text-foreground;
     /* Kein graues Aufblitzen beim Antippen auf Android */
     -webkit-tap-highlight-color: transparent;
-  }
-  /* Telegram-Login-Widget: Iframe-Canvas explizit hell halten */
-  iframe[src*="oauth.telegram.org"] {
-    color-scheme: light;
   }
 }
 
