@@ -1,8 +1,11 @@
 import { useSyncExternalStore } from "react";
 import type { FriendMaterial, MaterialOverview } from "@/types";
 
-/** „palette“ = Suche und Sprünge, „weigh“ = Material zum Wiegen auswählen */
-export type PaletteMode = "palette" | "weigh";
+/**
+ * „palette“ = Suche und Sprünge, „weigh“ = Material zum Wiegen auswählen,
+ * „consume“ = Material auswählen, von dem ein Verbrauch abgebucht wird
+ */
+export type PaletteMode = "palette" | "weigh" | "consume";
 
 export type QuickActionsState = {
   formOpen: boolean;
@@ -14,6 +17,8 @@ export type QuickActionsState = {
   formMounted: boolean;
   editing: MaterialOverview | null;
   weighingFor: MaterialOverview | null;
+  /** Material, von dem gerade ein Verbrauch abgebucht wird (seit 2.9.0) */
+  consumptionFor: MaterialOverview | null;
   /**
    * Material eines Freundes, für das eine Ausleih-Anfrage offen ist.
    *
@@ -38,6 +43,7 @@ let state: QuickActionsState = {
   formMounted: false,
   editing: null,
   weighingFor: null,
+  consumptionFor: null,
   loanFor: null,
   paletteOpen: false,
   paletteMode: "palette",
@@ -71,8 +77,9 @@ export function useQuickActionsState() {
 }
 
 /**
- * Häufige Aktionen von überall erreichbar: Material anlegen, wiegen und die
- * Schnellsuche (Strg/⌘ + K) – ohne vorher zur Übersicht zu navigieren.
+ * Häufige Aktionen von überall erreichbar: Material anlegen, wiegen, Verbrauch
+ * abbuchen und die Schnellsuche (Strg/⌘ + K) – ohne vorher zur Übersicht zu
+ * navigieren.
  */
 export const quickActions = {
   /** Materialformular öffnen – ohne Argument als „neues Material“ */
@@ -86,6 +93,10 @@ export const quickActions = {
   /** Wägedialog für ein bestimmtes Material öffnen */
   openWeighing(material: MaterialOverview) {
     setQuickActionsState({ weighingFor: material });
+  },
+  /** Verbrauch für ein bestimmtes Material abbuchen */
+  openConsumption(material: MaterialOverview) {
+    setQuickActionsState({ consumptionFor: material });
   },
   /** Ausleih-Anfrage für das Material eines Freundes öffnen */
   openLoanRequest(material: FriendMaterial) {

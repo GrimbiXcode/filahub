@@ -10,6 +10,7 @@ import {
   Columns3,
   Package,
   Plus,
+  Printer,
   Scale,
   Search,
   SlidersHorizontal,
@@ -174,7 +175,7 @@ export default function Home() {
     formatPercent,
     formatSecondary,
   } = useFormat();
-  const { openMaterialForm, openWeighing } = useQuickActions();
+  const { openMaterialForm, openWeighing, openConsumption } = useQuickActions();
   const t = useT();
 
   const [search, setSearch] = useState("");
@@ -852,6 +853,11 @@ export default function Home() {
                       ? () => openWeighing(material)
                       : undefined
                   }
+                  onConsume={
+                    roleAllows(role, "weigher")
+                      ? () => openConsumption(material)
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -1031,14 +1037,24 @@ export default function Home() {
                             onClick={e => e.stopPropagation()}
                           >
                             {roleAllows(role, "weigher") && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => openWeighing(m)}
-                              >
-                                <Scale className="mr-1 h-3.5 w-3.5" />{" "}
-                                {t.nav.weigh}
-                              </Button>
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openConsumption(m)}
+                                >
+                                  <Printer className="mr-1 h-3.5 w-3.5" />{" "}
+                                  {t.nav.consume}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openWeighing(m)}
+                                >
+                                  <Scale className="mr-1 h-3.5 w-3.5" />{" "}
+                                  {t.nav.weigh}
+                                </Button>
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -1234,6 +1250,7 @@ function MaterialCard({
   swatch,
   onOpen,
   onWeigh,
+  onConsume,
 }: {
   material: MaterialOverview;
   /** Fertig aufgelöst – der Katalog wird einmal je Seite geholt, nicht je Karte */
@@ -1241,6 +1258,8 @@ function MaterialCard({
   onOpen: () => void;
   /** Fehlt unterhalb der Stufe `weigher` – dann entfällt der Knopf. */
   onWeigh?: () => void;
+  /** Verbrauch abbuchen – dieselbe Stufe wie Wiegen. */
+  onConsume?: () => void;
 }) {
   const { formatGrams, formatPercent, formatSecondary } = useFormat();
   const t = useT();
@@ -1308,11 +1327,18 @@ function MaterialCard({
           )}
         </div>
       </button>
-      {onWeigh && (
-        <div className="border-t p-2">
-          <Button variant="ghost" className="h-10 w-full" onClick={onWeigh}>
-            <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-          </Button>
+      {(onWeigh || onConsume) && (
+        <div className="grid grid-cols-2 gap-1 border-t p-2">
+          {onConsume && (
+            <Button variant="ghost" className="h-10" onClick={onConsume}>
+              <Printer className="mr-2 h-4 w-4" /> {t.nav.consume}
+            </Button>
+          )}
+          {onWeigh && (
+            <Button variant="ghost" className="h-10" onClick={onWeigh}>
+              <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
+            </Button>
+          )}
         </div>
       )}
     </div>

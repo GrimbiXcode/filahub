@@ -80,6 +80,8 @@ export const de = {
     material: "Material",
     weigh: "Wiegen",
     weighMaterial: "Material wiegen",
+    consume: "Verbrauch",
+    consumeMaterial: "Verbrauch abbuchen",
     searchWithShortcut: (vars: { shortcut: string }) =>
       `Suchen (${vars.shortcut})`,
     releaseNotesUnread: (vars: { count: number }) =>
@@ -146,12 +148,16 @@ export const de = {
   quick: {
     weighTitle: "Material wiegen",
     weighDescription: "Material auswählen, das gewogen werden soll",
+    consumeTitle: "Verbrauch abbuchen",
+    consumeDescription: "Material auswählen, von dem abgebucht werden soll",
     searchTitle: "Schnellsuche",
     searchDescription:
       "Materialien finden, Seiten öffnen und Aktionen ausführen",
     weighPlaceholder: "Kennung oder Bezeichnung des Materials …",
+    consumePlaceholder: "Kennung oder Bezeichnung des Materials …",
     searchPlaceholder: "Suchen: Kennung, Material, Seite oder Aktion …",
     groupWeigh: "Material zum Wiegen",
+    groupConsume: "Material zum Abbuchen",
     groupActions: "Aktionen",
     groupJumpTo: "Springe zu",
     groupMaterials: "Materialien",
@@ -159,6 +165,7 @@ export const de = {
     remaining: (vars: { amount: string }) => `${vars.amount} übrig`,
     /** Suchbegriffe, unter denen ein Eintrag gefunden werden soll */
     keywordsWeigh: "wiegen wägung waage material",
+    keywordsConsume: "verbrauch abbuchen druck slicer gramm verbraucht",
     keywordsNewMaterial: "neues material anlegen filament hinzufügen",
     keywordsGoTo: (vars: { label: string }) => `gehe zu ${vars.label}`,
     keywordsAdmin: (vars: { label: string }) => `verwaltung ${vars.label}`,
@@ -354,25 +361,35 @@ export const de = {
     fromCatalog: "Katalog",
     storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} Tara)`,
-    history: "Wägungsverlauf",
+    consumedSince: (vars: { amount: string }) =>
+      `seitdem ${vars.amount} abgebucht`,
+    history: "Verlauf",
     newWeighing: "Neue Wägung",
-    colGross: "Brutto",
-    colNet: "Netto",
-    colNote: "Notiz",
+    newConsumption: "Verbrauch abbuchen",
+    colEntry: "Eintrag",
+    colRemainingAfter: "Übrig danach",
+    entryWeighing: "Wägung",
+    entryConsumption: "Verbrauch",
     net: "netto",
     grossAt: (vars: { when: string; amount: string }) =>
       `${vars.when} · ${vars.amount} brutto`,
-    noWeighings: "Noch keine Wägungen erfasst.",
+    remainingAfter: (vars: { amount: string }) => `${vars.amount} übrig danach`,
+    noHistory: "Noch keine Wägungen oder Verbräuche erfasst.",
     deleteMaterial: "Material löschen",
     deleteMaterialTitle: "Material löschen?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `„${vars.name}“ und alle zugehörigen Wägungen werden endgültig gelöscht.`,
+      `„${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht.`,
     materialDeleted: "Material gelöscht",
     deleteWeighing: "Wägung löschen",
     deleteWeighingTitle: "Wägung löschen?",
     deleteWeighingDescription:
       "Die Restmenge wird danach aus der nächstälteren Wägung berechnet.",
     weighingDeleted: "Wägung gelöscht",
+    deleteConsumption: "Verbrauch löschen",
+    deleteConsumptionTitle: "Verbrauch löschen?",
+    deleteConsumptionDescription:
+      "Die Menge wird der Restmenge wieder gutgeschrieben.",
+    consumptionDeleted: "Verbrauch gelöscht",
   },
 
   storageBoxes: {
@@ -933,6 +950,22 @@ export const de = {
     submit: "Wägung speichern",
     saved: "Wägung gespeichert",
     invalidWeight: "Bitte ein gültiges Gewicht in Gramm angeben",
+  },
+
+  consumption: {
+    title: "Verbrauch abbuchen",
+    description: (vars: { name: string }) =>
+      `Trage ein, wie viel von „${vars.name}“ verbraucht wurde – zum Beispiel die Angabe des Slicers. Die Restmenge sinkt sofort, ohne Waage.`,
+    weightLabel: "Verbrauchte Menge (g) *",
+    weightPlaceholder: "z. B. 42",
+    before: "Bisher übrig",
+    after: "Danach übrig",
+    exceeds:
+      "Das ist mehr, als laut App noch übrig ist – die Restmenge wird auf 0 g gesetzt. Eine Wägung bringt Gewissheit.",
+    notePlaceholder: "z. B. Gehäuse v2, laut Slicer",
+    submit: "Verbrauch abbuchen",
+    saved: "Verbrauch abgebucht",
+    invalidWeight: "Bitte eine gültige Menge in Gramm angeben",
   },
 
   preset: {
