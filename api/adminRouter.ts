@@ -13,8 +13,20 @@ import {
   variantFieldsSchema,
   type ProposalPayload,
 } from "@contracts/presets";
+import { BLOCK_REASONS, UNBLOCK_REQUEST_STATUSES } from "@contracts/limits";
+import { BLOCKED_PATH, notify } from "./lib/notify";
 import { adminQuery, createRouter } from "./middleware";
 import { recordAudit } from "./queries/audit";
+import {
+  blockUser,
+  closeUnblockRequest,
+  countBlockedUsers,
+  findUnblockRequestsForReview,
+  findUsersForAdmin,
+  unblockUser,
+} from "./queries/blocking";
+import { getAbuseOverview } from "./queries/abuse";
+import { findUserById } from "./queries/users";
 import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
   countAllTables,
@@ -479,6 +491,214 @@ const proposalAdminRouter = createRouter({
 });
 
 /**
+ * Benutzerverwaltung für `/verwaltung/nutzer`.
+ *
+ * Die Sperre ist der einzige Eingriff im Projekt, der jemanden von seinem
+ * eigenen Bestand trennt – deshalb hat sie hier einen eigenen Zweig und steht
+ * nicht als weiterer Knopf zwischen den Katalogpflegen.
+ */
+const userAdminRouter = createRouter({
+  list: adminQuery
+    .input(
+      z
+        .object({
+          search: z.string().trim().max(100).optional(),
+          limit: z.number().int().min(1).max(200).default(100),
+        })
+        .default({ limit: 100 })
+    )
+    .query(async ({ input }) => {
+      const [entries, blocked] = await Promise.all([
+        findUsersForAdmin({ search: input.search, limit: input.limit }),
+        countBlockedUsers(),
+      ]);
+      return { entries, blocked };
+    }),
+
+  /**
+   * Konto sperren.
+   *
+   * **Weder das eigene Konto noch ein anderes Administratorkonto.** Ohne diesen
+   * Riegel sperrt sich eine Instanz aus: Wer alle Administratoren sperrt – oder
+   * versehentlich sich selbst als einzigen –, kommt an die Verwaltung nicht
+   * mehr heran, und es gibt keinen Weg zurück außer einem Eingriff in die
+   * Datenbank. Die Rolle nimmt man einem Administrator über die Datenbank,
+   * nicht über diese Prozedur.
+   */
+  block: adminQuery
+    .input(
+      z.object({
+        userId: z.number().int().positive(),
+        reason: z.enum(BLOCK_REASONS),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.userId === ctx.user.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Das eigene Konto lässt sich nicht sperren.",
+        });
+      }
+      const target = await findUserById(input.userId);
+      if (!target) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Benutzer nicht gefunden",
+        });
+      }
+      if (target.role === "admin") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Administratoren lassen sich nicht sperren. Bitte zuerst die Rolle entziehen.",
+        });
+      }
+
+      const blocked = await blockUser({
+        userId: input.userId,
+        reason: input.reason,
+        blockedBy: ctx.user.id,
+      });
+      if (!blocked) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Dieses Konto ist bereits gesperrt.",
+        });
+      }
+
+      recordAudit({
+        event: "user.blocked",
+        actorUserId: ctx.user.id,
+        subjectUserId: input.userId,
+        ip: ctx.clientIp,
+        detail: { reason: input.reason },
+      });
+
+      /*
+        Der Hinweis geht hinaus, obwohl der Betroffene die Sperre auch in der
+        App sieht: Wer gesperrt wird, schaut nicht zufällig gerade hin.
+      */
+      await notify(
+        input.userId,
+        m => m.accountBlocked({ reason: input.reason }),
+        BLOCKED_PATH
+      );
+
+      return { ok: true };
+    }),
+
+  unblock: adminQuery
+    .input(z.object({ userId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => {
+      const lifted = await unblockUser(input.userId);
+      if (!lifted) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Dieses Konto ist nicht gesperrt.",
+        });
+      }
+
+      recordAudit({
+        event: "user.unblocked",
+        actorUserId: ctx.user.id,
+        subjectUserId: input.userId,
+        ip: ctx.clientIp,
+      });
+      await notify(input.userId, m => m.accountUnblocked(), BLOCKED_PATH);
+
+      return { ok: true };
+    }),
+
+  unblockRequests: adminQuery
+    .input(
+      z
+        .object({
+          status: z.enum(UNBLOCK_REQUEST_STATUSES).optional(),
+          limit: z.number().int().min(1).max(200).default(100),
+        })
+        .default({ limit: 100 })
+    )
+    .query(({ input }) =>
+      findUnblockRequestsForReview(input.status, input.limit)
+    ),
+
+  /**
+   * Antrag bescheiden.
+   *
+   * Das Annehmen hebt die Sperre **mit** auf. Beides getrennt zu bedienen wäre
+   * der Zustand, in dem ein Antrag angenommen ist und das Konto trotzdem
+   * gesperrt bleibt – für den Betroffenen nicht von einer Ablehnung zu
+   * unterscheiden.
+   */
+  reviewUnblockRequest: adminQuery
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        decision: z.enum(["approved", "rejected"]),
+        note: z.string().trim().max(1000).optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (input.decision === "rejected" && !input.note) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Bitte eine Begründung für die Ablehnung angeben.",
+        });
+      }
+
+      const closed = await closeUnblockRequest(input.id, {
+        status: input.decision,
+        reviewedBy: ctx.user.id,
+        reviewNote: input.note ?? null,
+      });
+      if (!closed) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Der Antrag wurde bereits bearbeitet.",
+        });
+      }
+
+      recordAudit({
+        event: "unblock.reviewed",
+        actorUserId: ctx.user.id,
+        subjectUserId: closed.userId,
+        ip: ctx.clientIp,
+        detail: { requestId: input.id, decision: input.decision },
+      });
+
+      if (input.decision === "approved") {
+        await unblockUser(closed.userId);
+        recordAudit({
+          event: "user.unblocked",
+          actorUserId: ctx.user.id,
+          subjectUserId: closed.userId,
+          ip: ctx.clientIp,
+          detail: { reason: "unblock_approved" },
+        });
+        await notify(closed.userId, m => m.accountUnblocked(), BLOCKED_PATH);
+      } else {
+        await notify(
+          closed.userId,
+          m => m.unblockRejected({ note: input.note ?? "" }),
+          BLOCKED_PATH
+        );
+      }
+
+      return { ok: true };
+    }),
+});
+
+/**
+ * Missbrauchsübersicht für `/verwaltung/missbrauch`.
+ *
+ * Read-only wie der Systemzustand: Gehandelt wird nebenan unter „Nutzer“, hier
+ * wird nur hingeschaut.
+ */
+const abuseAdminRouter = createRouter({
+  overview: adminQuery.query(() => getAbuseOverview()),
+});
+
+/**
  * Systemzustand für `/verwaltung/system`.
  *
  * Zeigt, worauf der Server läuft und was beim Start passiert ist: Verbindung,
@@ -500,4 +720,6 @@ export const adminRouter = createRouter({
   preset: presetAdminRouter,
   proposal: proposalAdminRouter,
   system: systemAdminRouter,
+  user: userAdminRouter,
+  abuse: abuseAdminRouter,
 });

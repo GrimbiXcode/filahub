@@ -68,6 +68,20 @@ export function friendInventoryPath(friendId: number): string {
  * Die Pfade sind deutsch wie überall in der App (`/gebinde`,
  * `/einstellungen`), unabhängig von der eingestellten Oberflächensprache.
  */
+/**
+ * Die Verwaltungsseiten.
+ *
+ * Sie standen bis 2.7.0 als Zeichenketten in `App.tsx`, `AuthLayout.tsx` und
+ * `QuickActions.tsx` – dreimal derselbe Wert, den beim Umbenennen niemand
+ * gemeinsam findet. Mit den beiden neuen Seiten wären es sechs Stellen
+ * geworden; deshalb jetzt hier wie alle anderen Pfade auch.
+ */
+export const ADMIN_PRESETS_PATH = "/verwaltung/presets";
+export const ADMIN_PROPOSALS_PATH = "/verwaltung/vorschlaege";
+export const ADMIN_SYSTEM_PATH = "/verwaltung/system";
+export const ADMIN_USERS_PATH = "/verwaltung/nutzer";
+export const ADMIN_ABUSE_PATH = "/verwaltung/missbrauch";
+
 export const LEGAL_DOCUMENTS = ["privacy", "imprint", "terms"] as const;
 
 export type LegalDocument = (typeof LEGAL_DOCUMENTS)[number];

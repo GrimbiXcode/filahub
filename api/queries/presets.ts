@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, count, eq, gte } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   hiddenKey,
@@ -753,6 +753,29 @@ export async function countOpenProposals(userId: number) {
       )
     );
   return rows.length;
+}
+
+/**
+ * Vorschläge eines Benutzers seit einem Zeitpunkt – **über alle Status**.
+ *
+ * Die zweite Achse neben `countOpenProposals`: Wer zwanzig einreicht und sie
+ * ablehnen lässt, hätte sonst sofort wieder zwanzig frei. Gezählt wird deshalb
+ * das Einreichen, nicht der Bestand. Nutzt `preset_proposals_user_idx`.
+ */
+export async function countProposalsSince(
+  userId: number,
+  since: Date
+): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(presetProposals)
+    .where(
+      and(
+        eq(presetProposals.userId, userId),
+        gte(presetProposals.createdAt, since)
+      )
+    );
+  return Number(rows.at(0)?.value ?? 0);
 }
 
 export type ProposalWithUsers = PresetProposal & {

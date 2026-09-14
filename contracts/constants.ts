@@ -14,6 +14,16 @@ export const Session = {
 export const ErrorMessages = {
   unauthenticated: "Authentication required",
   insufficientRole: "Insufficient permissions",
+  /**
+   * Antwort auf jeden Fachaufruf eines gesperrten Kontos.
+   *
+   * Eine feste Zeichenfolge und kein übersetzter Satz: Die Oberfläche erkennt
+   * daran den Zustand, ohne einen Text vergleichen zu müssen, und formuliert
+   * ihn selbst in der Sprache des Benutzers (`t.blocked` in `src/messages/`).
+   * Wie die beiden darüber steht sie hier und nicht im Server, weil beide
+   * Seiten denselben Wert brauchen.
+   */
+  blocked: "Account blocked",
 } as const;
 
 export const Paths = {

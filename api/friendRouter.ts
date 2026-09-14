@@ -91,7 +91,12 @@ export const friendRouter = createRouter({
    */
   request: authedQuery
     .use(
-      rateLimited({ key: "friend.request", limit: 20, windowMs: 60 * 60_000 })
+      rateLimited({
+        key: "friend.request",
+        limit: 20,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
     )
     .input(
       z
@@ -298,7 +303,14 @@ export const friendRouter = createRouter({
       Anfragen, und wer suchend arbeitet, soll nicht anstoßen. Sie schneidet das
       systematische Durchprobieren ab, nicht das Suchen.
     */
-    .use(rateLimited({ key: "friend.search", limit: 120, windowMs: 60_000 }))
+    .use(
+      rateLimited({
+        key: "friend.search",
+        limit: 120,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
     .input(
       z.object({
         query: z

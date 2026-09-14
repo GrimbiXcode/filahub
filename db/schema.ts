@@ -11,6 +11,7 @@ import {
   ORGANIZATION_INVITATION_STATUSES,
   ORGANIZATION_ROLES,
 } from "@contracts/organizations";
+import { UNBLOCK_REQUEST_STATUSES } from "@contracts/limits";
 import { CONTAINER_MATERIALS, type NameI18n } from "@contracts/presets";
 import {
   pgTable,
@@ -132,6 +133,32 @@ export const users = pgTable("users", {
    * `authenticateRequest` die Benutzerzeile ohnehin bei jedem Request lädt.
    */
   tokenVersion: integer("tokenVersion").default(0).notNull(),
+  /**
+   * Zeitpunkt der Sperre; `NULL` heißt „nicht gesperrt“.
+   *
+   * Ein Zeitstempel und kein `boolean`: Die Sperrseite nennt dem Betroffenen,
+   * seit wann sie gilt, und ein Flag daneben wäre eine zweite Wahrheit über
+   * denselben Zustand.
+   *
+   * Bewusst **keine** Löschung und keine entzogene Rolle: Ein gesperrtes Konto
+   * behält seinen Bestand und seine Betroffenenrechte nach Art. 15 und 17
+   * DSGVO – wer gesperrt ist, muss seine Daten weiterhin herunterladen und
+   * löschen können (durchgesetzt über `blockedQuery` in `api/middleware.ts`).
+   */
+  blockedAt: tsColumn("blockedAt"),
+  /**
+   * Wer gesperrt hat. `NULL`, wenn dieses Administratorkonto gelöscht wurde –
+   * die Sperre überlebt ihn, die Zuordnung nicht (Art. 17 DSGVO), dasselbe
+   * Muster wie `preset_proposals.userId`.
+   */
+  blockedBy: bigint("blockedBy", { mode: "number" }),
+  /**
+   * Grund als Schlüssel aus `BLOCK_REASONS` (contracts/limits.ts), nicht als
+   * Freitext: Der Wert wird dem Gesperrten angezeigt und muss übersetzbar
+   * bleiben. Ein Freitextfeld wäre außerdem ein weiteres personenbezogenes
+   * Datum ohne festen Zweck – siehe die Begründung am Audit-Log.
+   */
+  blockedReason: varchar("blockedReason", { length: 32 }),
   createdAt: tsColumn("createdAt").defaultNow().notNull(),
   updatedAt: tsColumn("updatedAt")
     .defaultNow()
@@ -882,6 +909,62 @@ export const auditLog = pgTable(
 
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type InsertAuditLogEntry = typeof auditLog.$inferInsert;
+
+export const unblockRequestStatusEnum = pgEnum(
+  "unblock_request_status",
+  UNBLOCK_REQUEST_STATUSES
+);
+
+/**
+ * Antrag eines gesperrten Benutzers, die Sperre aufzuheben.
+ *
+ * Die Sperre ist die einzige Maßnahme im Projekt, die jemanden von seinem
+ * eigenen Bestand trennt. Ohne einen Weg zurück wäre sie endgültig, und über
+ * ihre Richtigkeit entschiede allein der, der sie verhängt hat. Der Vorgang
+ * lebt deshalb in der App und nicht im Postfach des Betreibers: Beide Seiten
+ * sehen denselben Stand, und der Antrag geht nicht verloren, wenn der Bot den
+ * Betroffenen nicht erreicht – dieselbe Erwägung wie bei `loan_requests`.
+ *
+ * Die Spalte des Antragstellers heißt `userId` und nicht `requesterId`: Der
+ * Wächter in `api/account.integration.test.ts` sucht im `information_schema`
+ * nach genau diesem Namen und schlägt an, solange Auskunft und Löschung die
+ * neue Tabelle nicht kennen. Ein hübscherer Name würde still durchrutschen.
+ */
+export const unblockRequests = pgTable(
+  "unblock_requests",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Der Gesperrte */
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    /**
+     * Was der Betroffene vorbringt. Freitext, und hier ausdrücklich gewollt:
+     * Eine Auswahl an Gründen kann nicht vorwegnehmen, was jemand zu seiner
+     * Verteidigung zu sagen hat.
+     */
+    message: text("message").notNull(),
+    status: unblockRequestStatusEnum("status").default("pending").notNull(),
+    reviewedBy: bigint("reviewedBy", { mode: "number" }),
+    reviewedAt: tsColumn("reviewedAt"),
+    /** Begründung der Entscheidung, vor allem bei Ablehnung */
+    reviewNote: text("reviewNote"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  /*
+    Die Verwaltungsseite liest nach Status, die Sperrseite des Betroffenen nach
+    Benutzer, und die Kontolöschung räumt nach Benutzer ab. Dass es je Benutzer
+    höchstens **einen** offenen Antrag gibt, sichert ein partieller
+    Unique-Index, der von Hand in der Migration steht – als Ausdruck im Schema
+    gibt Drizzle ihn nicht her, und ohne ihn ließe sich die Warteschlange der
+    Moderation mit Anträgen desselben Kontos fluten.
+  */
+  t => [
+    index("unblock_requests_status_idx").on(t.status),
+    index("unblock_requests_user_idx").on(t.userId),
+  ]
+);
+
+export type UnblockRequest = typeof unblockRequests.$inferSelect;
+export type InsertUnblockRequest = typeof unblockRequests.$inferInsert;
 
 // ---------------------------------------------------------------------------
 // Community: Freundschaften und Ausleih-Anfragen

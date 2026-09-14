@@ -166,10 +166,17 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "organization_members",
       "preset_proposals",
       "storage_boxes",
+      /*
+        Seit 2.8.0. Der Antrag eines gesperrten Kontos auf Aufhebung der Sperre
+        ist die persönlichste Zeile im ganzen Projekt – Freitext, den jemand zu
+        seiner Verteidigung geschrieben hat. Sie steht in der Auskunft und
+        verschwindet mit dem Konto.
+      */
+      "unblock_requests",
     ]);
 
     /*
-      Diese vierzehn plus drei, die den Personenbezug über eine andere Spalte
+      Diese fünfzehn plus drei, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` (über das Material) und
       `loginCodes` (Telegram-ID). Ändert sich die linke Seite, muss die rechte
       nachziehen.
@@ -199,6 +206,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "customColors",
         "customTextures",
         "weighings",
+        "unblockRequests",
       ].sort()
     );
   });

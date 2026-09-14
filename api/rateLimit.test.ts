@@ -47,6 +47,54 @@ describe("consumeRateLimit", () => {
   });
 });
 
+describe("Eimer je Benutzer statt je Adresse", () => {
+  /*
+    Die Achsenkorrektur aus 2.8.0, als Zusicherung festgehalten.
+
+    Bis dahin zählte `rateLimited` ausschließlich nach IP. Für die Anmeldung ist
+    das richtig – vorher gibt es nichts anderes –, für alles Angemeldete war es
+    die falsche Achse: Eine Werkstatt hinter einem NAT teilte sich einen Eimer
+    und sperrte sich gegenseitig aus, während ein Angreifer die Adresse ohnehin
+    leichter wechselt als das Konto.
+
+    Geprüft wird hier die Schlüsselbildung, nicht die Middleware: Dass aus
+    Benutzer und Adresse verschiedene Schlüssel entstehen, ist die ganze
+    Aussage – und sie lässt sich ohne tRPC-Kontext prüfen.
+  */
+  const KEY = "material.create";
+
+  it("sperrt zwei Benutzer hinter einer Adresse nicht gegenseitig", () => {
+    const now = 1_000_000;
+    // Benutzer 1 reizt sein Kontingent aus.
+    expect(consumeRateLimit(`${KEY}:u1`, 1, 60_000, now).allowed).toBe(true);
+    expect(consumeRateLimit(`${KEY}:u1`, 1, 60_000, now).allowed).toBe(false);
+    // Benutzer 2 am selben Anschluss darf trotzdem.
+    expect(consumeRateLimit(`${KEY}:u2`, 1, 60_000, now).allowed).toBe(true);
+  });
+
+  it("hält Prozeduren desselben Benutzers auseinander", () => {
+    const now = 1_000_000;
+    consumeRateLimit(`${KEY}:u1`, 1, 60_000, now);
+    expect(consumeRateLimit(`${KEY}:u1`, 1, 60_000, now).allowed).toBe(false);
+    // Die Grundlast ist ein eigener Eimer und bleibt davon unberührt.
+    expect(consumeRateLimit(`authed:u1`, 1, 60_000, now).allowed).toBe(true);
+  });
+
+  it("trennt Benutzer- und Adresseimer derselben Prozedur", () => {
+    const now = 1_000_000;
+    consumeRateLimit(`${KEY}:u1`, 1, 60_000, now);
+    expect(consumeRateLimit(`${KEY}:u1`, 1, 60_000, now).allowed).toBe(false);
+    /*
+      Der Rückfall auf die Adresse, wenn wider Erwarten kein Benutzer im
+      Kontext steht. Er darf den Benutzereimer weder füllen noch aus ihm
+      schöpfen – sonst wäre die Sperre über eine fehlende Kopfzeile zu umgehen.
+    */
+    expect(consumeRateLimit(`${KEY}:203.0.113.9`, 1, 60_000, now).allowed).toBe(
+      true
+    );
+  });
+});
+
 describe("clientIpFrom", () => {
   const headers = (values: Record<string, string>) => new Headers(values);
 

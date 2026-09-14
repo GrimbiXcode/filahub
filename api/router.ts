@@ -11,6 +11,7 @@ import { organizationRouter } from "./organizationRouter";
 import { presetRouter } from "./presetRouter";
 import { containerTypeRouter } from "./containerTypeRouter";
 import { storageBoxRouter } from "./storageBoxRouter";
+import { unblockRouter } from "./unblockRouter";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -26,6 +27,8 @@ export const appRouter = createRouter({
   preset: presetRouter,
   admin: adminRouter,
   legal: legalRouter,
+  /* Erreichbar aus einer Sperre heraus – siehe `blockedQuery`. */
+  unblock: unblockRouter,
 });
 
 export type AppRouter = typeof appRouter;

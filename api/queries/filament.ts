@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   resolveName,
@@ -120,6 +120,21 @@ export async function countMaterialsWithContainerType(
   return rows.length;
 }
 
+/**
+ * Wie viele eigene Gebindearten der Bereich schon hat – Grundlage der
+ * Obergrenze. `count()` und nicht das Laden aller Zeilen: Der Aufrufer braucht
+ * die Zahl, nicht die Gebindearten. Vorbild `countLagerInScope`.
+ */
+export async function countContainerTypesInScope(
+  scope: Scope
+): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(containerTypes)
+    .where(scopeWhere(containerTypes, scope));
+  return Number(rows.at(0)?.value ?? 0);
+}
+
 export async function deleteContainerType(scope: Scope, id: number) {
   await getDb()
     .delete(containerTypes)
@@ -192,6 +207,15 @@ export async function countMaterialsWithStorageBox(scope: Scope, id: number) {
     .from(materials)
     .where(and(eq(materials.storageBoxId, id), scopeWhere(materials, scope)));
   return rows.length;
+}
+
+/** Wie viele Dryboxen der Bereich schon hat – Grundlage der Obergrenze. */
+export async function countStorageBoxesInScope(scope: Scope): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(storageBoxes)
+    .where(scopeWhere(storageBoxes, scope));
+  return Number(rows.at(0)?.value ?? 0);
 }
 
 export async function deleteStorageBox(scope: Scope, id: number) {
@@ -511,6 +535,23 @@ export async function addWeighing(data: {
     .values(data)
     .returning({ id: weighings.id });
   return getDb().query.weighings.findFirst({ where: eq(weighings.id, id) });
+}
+
+/**
+ * Wie viele Wägungen ein Material schon trägt – Grundlage der Obergrenze.
+ *
+ * Ohne Bereichsfilter: Der Aufrufer hat die Zugehörigkeit über
+ * `materialInScope` bereits geprüft, und gezählt werden muss **alles** am
+ * Material. Dieselbe Begründung wie bei `countMaterialsInLager`.
+ */
+export async function countWeighingsForMaterial(
+  materialId: number
+): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(weighings)
+    .where(eq(weighings.materialId, materialId));
+  return Number(rows.at(0)?.value ?? 0);
 }
 
 export async function findWeighing(id: number) {

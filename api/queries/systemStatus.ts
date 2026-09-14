@@ -143,6 +143,8 @@ const COUNTED_TABLES = [
   "organization_members",
   "organization_invitations",
   "audit_log",
+  // Seit 2.8.0: die Anträge gesperrter Konten auf Aufhebung der Sperre.
+  "unblock_requests",
 ] as const;
 
 /** Zeilenzahlen aller Fachtabellen für die Verwaltungsseite. */

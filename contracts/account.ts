@@ -100,6 +100,16 @@ export const ACCOUNT_EXPORT_SECTIONS = [
     betroffenen Person nichts und wäre nur für Dritte interessant.
   */
   "auditLog",
+  /*
+    Die eigenen Entsperr-Anträge. Sie sind ganz und gar die Angabe dieser Person
+    – Freitext, den sie selbst verfasst hat – samt der Entscheidung darüber.
+    Gerade bei einer Maßnahme gegen sie muss die Auskunft vollständig sein:
+    Auskunft heißt Auskunft, auch und besonders über das Unbequeme.
+
+    Der Sperrzustand selbst steht nicht hier, sondern in `profile` – er ist eine
+    Eigenschaft des Kontos, keine eigene Zeile.
+  */
+  "unblockRequests",
 ] as const;
 
 export type AccountExportSection = (typeof ACCOUNT_EXPORT_SECTIONS)[number];

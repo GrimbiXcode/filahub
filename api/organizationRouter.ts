@@ -279,6 +279,7 @@ export const organizationRouter = createRouter({
         key: "organization.join",
         limit: 20,
         windowMs: 60 * 60_000,
+        by: "user",
       })
     )
     .input(z.object({ code: z.string().min(1).max(32) }))
@@ -341,6 +342,7 @@ export const organizationRouter = createRouter({
         key: "organization.invite",
         limit: 20,
         windowMs: 60 * 60_000,
+        by: "user",
       })
     )
     .input(

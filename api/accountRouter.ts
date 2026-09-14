@@ -3,7 +3,7 @@ import { z } from "zod";
 import { deletionConfirmationMatches } from "@contracts/account";
 import { clearSessionCookie } from "./lib/cookies";
 import { ORGANIZATIONS_PATH, notify } from "./lib/notify";
-import { authedQuery, createRouter } from "./middleware";
+import { blockedQuery, createRouter } from "./middleware";
 import { deleteUserAccount, exportUserData } from "./queries/account";
 import { recordAudit } from "./queries/audit";
 import { findOrganization } from "./queries/organizations";
@@ -11,9 +11,13 @@ import { findOrganization } from "./queries/organizations";
 /**
  * Betroffenenrechte am eigenen Konto: Auskunft, Datenübertragbarkeit, Löschung.
  *
- * Beide Prozeduren sind `authedQuery` – jeder darf nur an die eigenen Daten.
- * Eine Auskunft über fremde Konten gibt es hier bewusst auch für
- * Administratoren nicht.
+ * Jeder darf nur an die eigenen Daten. Eine Auskunft über fremde Konten gibt es
+ * hier bewusst auch für Administratoren nicht.
+ *
+ * **Beide Prozeduren sind `blockedQuery`:** Art. 15 und Art. 17 DSGVO stehen
+ * nicht unter dem Vorbehalt des Wohlverhaltens. Eine Sperre, die den
+ * Datenexport oder die Kontolöschung mitsperrt, wäre rechtswidrig – und
+ * ausgerechnet beim Gesperrten ist das Interesse an beidem am größten.
  */
 export const accountRouter = createRouter({
   /**
@@ -24,7 +28,7 @@ export const accountRouter = createRouter({
    * landen im Cache von TanStack Query und blieben dort als vollständiger
    * Personendatensatz liegen. Ein Datenabzug soll fließen, nicht herumliegen.
    */
-  export: authedQuery.mutation(({ ctx }) => {
+  export: blockedQuery.mutation(({ ctx }) => {
     recordAudit({
       event: "account.exported",
       actorUserId: ctx.user.id,
@@ -40,7 +44,7 @@ export const accountRouter = createRouter({
    * ist endgültig, und ein Dialog mit „Abbrechen/OK“ wird routiniert
    * weggeklickt.
    */
-  delete: authedQuery
+  delete: blockedQuery
     .input(z.object({ confirmation: z.string().min(1).max(255) }))
     .mutation(async ({ ctx, input }) => {
       if (!deletionConfirmationMatches(input.confirmation, ctx.user.name)) {

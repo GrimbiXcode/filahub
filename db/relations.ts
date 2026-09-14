@@ -10,6 +10,7 @@ import {
   presetContainerVersions,
   containerTypes,
   storageBoxes,
+  unblockRequests,
   users,
   weighings,
 } from "./schema";
@@ -20,7 +21,23 @@ export const usersRelations = relations(users, ({ many }) => ({
   storageBoxes: many(storageBoxes),
   lager: many(lager),
   organizationMemberships: many(organizationMembers),
+  unblockRequests: many(unblockRequests),
 }));
+
+/*
+  Nur die Seite des Antragstellers. `reviewedBy` zeigt ein zweites Mal auf
+  `users` und bleibt deshalb ohne Relation – dieselbe Auslassung wie bei
+  `friendships` und `organization_invitations`, siehe der Hinweis unten.
+*/
+export const unblockRequestsRelations = relations(
+  unblockRequests,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [unblockRequests.userId],
+      references: [users.id],
+    }),
+  })
+);
 
 /*
   Die `organization`-Relation steht neben `user` und nicht statt ihr: Ein Lager

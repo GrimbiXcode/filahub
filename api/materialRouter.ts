@@ -6,10 +6,16 @@ import {
   mayDeleteWeighing,
   roleAllows,
 } from "@contracts/organizations";
-import { createRouter, authedQuery } from "./middleware";
+import {
+  MAX_MATERIALS_PER_LAGER,
+  MAX_WEIGHINGS_PER_MATERIAL,
+} from "@contracts/limits";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
+import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput, scopeRole, type Scope } from "./scope";
 import {
   addWeighing,
+  countWeighingsForMaterial,
   createMaterial,
   deleteMaterial,
   deleteWeighing,
@@ -24,7 +30,7 @@ import {
   storageBoxInScope,
   updateMaterial,
 } from "./queries/filament";
-import { lagerInScope } from "./queries/lager";
+import { countMaterialsInLager, lagerInScope } from "./queries/lager";
 
 const dateString = z
   .string()
@@ -125,6 +131,21 @@ export const materialRouter = createRouter({
    * mit.
    */
   list: authedQuery
+    /*
+      Ohne `lagerId` liefert die Prozedur den **gesamten** Bestand – so füttert
+      die Schnellsuche (Strg/⌘ + K) ihre Trefferliste. Das macht sie zur
+      teuersten Leseprozedur überhaupt und damit zu der, mit der sich eine
+      Instanz am billigsten beschäftigen lässt. Die Grenze ist weit genug, dass
+      auch hektisches Tippen nicht anstößt.
+    */
+    .use(
+      rateLimited({
+        key: "material.list",
+        limit: 240,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
     .input(
       z.object({
         lagerId: z.number().int().positive().optional(),
@@ -169,6 +190,14 @@ export const materialRouter = createRouter({
     }),
 
   create: authedQuery
+    .use(
+      rateLimited({
+        key: "material.create",
+        limit: 60,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
     .input(
       materialInput.extend({
         /** Optionale Erstwägung (Bruttogewicht inkl. Gebinde/Box) beim Kauf */
@@ -186,6 +215,19 @@ export const materialRouter = createRouter({
         data.storageBoxId,
         data.lagerId
       );
+      /*
+        Erst nach `validateForeignKeys`: Das Lager muss zum Bereich gehören,
+        bevor seine Belegung gezählt wird – sonst verriete die Meldung „Lager
+        ist voll“ die Existenz eines fremden Lagers.
+      */
+      assertWithinLimit({
+        current: await countMaterialsInLager(data.lagerId),
+        max: MAX_MATERIALS_PER_LAGER,
+        quota: "materials_per_lager",
+        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Materialien. Bitte Verbrauchtes löschen oder ein weiteres Lager anlegen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       const id = await createMaterial(
         scope,
         {
@@ -256,6 +298,19 @@ export const materialRouter = createRouter({
 
   /** Massenimport: erzeugt pro Position `anzahl` identische Materialien. */
   importMany: authedQuery
+    /*
+      Ein Aufruf legt bis zu 200 Zeilen an – die Prozedur mit dem größten
+      Hebel überhaupt. Fünf in der Stunde reichen für jede Umzugsaktion aus
+      einer Tabellenkalkulation und für nichts sonst.
+    */
+    .use(
+      rateLimited({
+        key: "material.import",
+        limit: 5,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
+    )
     .input(importManyInputSchema.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
       const scope = await resolveScope(
@@ -275,6 +330,20 @@ export const materialRouter = createRouter({
       }
       // Einmal vorab statt je Position – es ist für alle dasselbe Lager.
       await validateForeignKeys(scope, null, null, null, input.lagerId);
+      /*
+        Die Obergrenze **vor** der Schleife und für den ganzen Stapel: Ein
+        Abbruch mittendrin hinterließe einen halben Import, den niemand
+        zuordnen kann. Entweder passt alles hinein oder nichts.
+      */
+      assertWithinLimit({
+        current: await countMaterialsInLager(input.lagerId),
+        max: MAX_MATERIALS_PER_LAGER,
+        adding: gesamt,
+        quota: "materials_per_lager",
+        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Materialien; der Import würde das überschreiten. Bitte in kleineren Schritten importieren oder ein weiteres Lager anlegen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       let created = 0;
       for (const item of input.items) {
         // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
@@ -301,6 +370,14 @@ export const materialRouter = createRouter({
 
   /** Neue Wägung: gemessenes Bruttogewicht (Material + Gebinde + ggf. Box) */
   addWeighing: authedQuery
+    .use(
+      rateLimited({
+        key: "material.addWeighing",
+        limit: 120,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
     .input(
       z.object({
         materialId: z.number().int().positive(),
@@ -324,6 +401,14 @@ export const materialRouter = createRouter({
           message: "Material nicht gefunden",
         });
       }
+      assertWithinLimit({
+        current: await countWeighingsForMaterial(data.materialId),
+        max: MAX_WEIGHINGS_PER_MATERIAL,
+        quota: "weighings_per_material",
+        message: `Für dieses Material sind bereits ${MAX_WEIGHINGS_PER_MATERIAL} Wägungen erfasst. Bitte alte Einträge entfernen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       return addWeighing(data);
     }),
 
