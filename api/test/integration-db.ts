@@ -1,6 +1,7 @@
 /** Hilfsfunktionen für die Integrationstests (nur mit `TEST_DATABASE_URL`). */
 import { sql } from "drizzle-orm";
 import { closePool, getDb, migrateDb } from "../queries/connection";
+import { resetRateLimits } from "../lib/rateLimit";
 import { appRouter } from "../router";
 import type { User } from "@db/schema";
 import type { LanguageCode } from "@contracts/i18n";
@@ -39,6 +40,14 @@ export async function resetSchema() {
   }
   await db.execute(sql`CREATE SCHEMA public`);
   await migrateDb();
+  /*
+    Die Zugriffsbegrenzung zählt im Arbeitsspeicher und überlebt das
+    `DROP SCHEMA` (`api/lib/rateLimit.ts`). Ohne diesen Schnitt trüge der
+    nächste Test die Zähler des vorigen mit sich – eine Abhängigkeit zwischen
+    Tests, die sich erst zeigt, wenn einer von ihnen zufällig das Kontingent
+    reißt. Ein frischer Bestand heißt frische Instanz.
+  */
+  resetRateLimits();
 }
 
 /** Schließt den Verbindungspool, sonst endet der Vitest-Prozess nicht. */

@@ -6,9 +6,16 @@ import {
   normalizeHex,
   textureKindSchema,
 } from "@contracts/appearance";
-import { createRouter, authedQuery } from "./middleware";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { resolveScope, scopeInput } from "./scope";
 import {
+  MAX_CUSTOM_COLORS_PER_SCOPE,
+  MAX_CUSTOM_TEXTURES_PER_SCOPE,
+} from "@contracts/limits";
+import { assertWithinLimit } from "./lib/quota";
+import {
+  countCustomColorsInScope,
+  countCustomTexturesInScope,
   countMaterialsWithAppearanceName,
   createCustomColor,
   createCustomTexture,
@@ -104,10 +111,26 @@ export const appearanceRouter = createRouter({
   }),
 
   createColor: authedQuery
+    .use(
+      rateLimited({
+        key: "appearance.createColor",
+        limit: 60,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
+    )
     .input(colorInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...data } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      assertWithinLimit({
+        current: await countCustomColorsInScope(scope),
+        max: MAX_CUSTOM_COLORS_PER_SCOPE,
+        quota: "custom_colors_per_scope",
+        message: `Mehr als ${MAX_CUSTOM_COLORS_PER_SCOPE} eigene Farben sind nicht vorgesehen. Bitte nicht mehr genutzte löschen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       try {
         return await createCustomColor(scope, data);
       } catch (error) {
@@ -148,10 +171,26 @@ export const appearanceRouter = createRouter({
   }),
 
   createTexture: authedQuery
+    .use(
+      rateLimited({
+        key: "appearance.createTexture",
+        limit: 60,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
+    )
     .input(textureInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...data } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      assertWithinLimit({
+        current: await countCustomTexturesInScope(scope),
+        max: MAX_CUSTOM_TEXTURES_PER_SCOPE,
+        quota: "custom_textures_per_scope",
+        message: `Mehr als ${MAX_CUSTOM_TEXTURES_PER_SCOPE} eigene Oberflächen sind nicht vorgesehen. Bitte nicht mehr genutzte löschen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       try {
         return await createCustomTexture(scope, data);
       } catch (error) {

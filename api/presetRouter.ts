@@ -10,7 +10,9 @@ import {
   CONTAINER_MATERIALS,
   materialTypesSchema,
 } from "@contracts/presets";
-import { createRouter, authedQuery } from "./middleware";
+import { MAX_OPEN_PROPOSALS, MAX_PROPOSALS_PER_DAY } from "@contracts/limits";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
+import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput } from "./scope";
 import {
   createContainerType,
@@ -19,6 +21,7 @@ import {
 import {
   closeProposal,
   countOpenProposals,
+  countProposalsSince,
   createProposal,
   findCatalogTree,
   findManufacturerById,
@@ -31,9 +34,6 @@ import {
   findVersionById,
   setHiddenPreset,
 } from "./queries/presets";
-
-/** Höchstzahl gleichzeitig offener Vorschläge pro Benutzer */
-const MAX_OPEN_PROPOSALS = 20;
 
 const scopeSchema = z.enum(PRESET_SCOPES);
 
@@ -76,14 +76,38 @@ const proposeFromContainerTypeInput = z.object({
   comment: z.string().trim().max(1000).optional(),
 });
 
-async function assertProposalQuota(userId: number) {
-  const open = await countOpenProposals(userId);
-  if (open >= MAX_OPEN_PROPOSALS) {
-    throw new TRPCError({
-      code: "TOO_MANY_REQUESTS",
-      message: `Du hast bereits ${MAX_OPEN_PROPOSALS} offene Vorschläge. Bitte warte auf die Prüfung.`,
-    });
-  }
+/**
+ * Die beiden Grenzen für Vorschläge. Sie messen Verschiedenes und müssen
+ * deshalb beide gelten:
+ *
+ *  - **Offene** Vorschläge begrenzen, wie lang die Warteschlange wird, die ein
+ *    einzelner Benutzer der Moderation hinstellen kann.
+ *  - **Eingereichte je Tag** begrenzen den Durchsatz. Ohne sie ließe sich die
+ *    erste Grenze umgehen, indem man zwanzig einreicht, sie zurückzieht und
+ *    sofort zwanzig neue stellt – die Moderation hätte dieselbe Arbeit, nur
+ *    ohne dass die Zahl je auffällig würde.
+ *
+ * Beide Werte stehen in `contracts/limits.ts`, weil die Oberfläche sie nennt.
+ */
+async function assertProposalQuota(userId: number, clientIp: string | null) {
+  assertWithinLimit({
+    current: await countOpenProposals(userId),
+    max: MAX_OPEN_PROPOSALS,
+    quota: "open_proposals",
+    message: `Du hast bereits ${MAX_OPEN_PROPOSALS} offene Vorschläge. Bitte warte auf die Prüfung.`,
+    actorUserId: userId,
+    ip: clientIp,
+  });
+
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  assertWithinLimit({
+    current: await countProposalsSince(userId, since),
+    max: MAX_PROPOSALS_PER_DAY,
+    quota: "proposals_per_day",
+    message: `Mehr als ${MAX_PROPOSALS_PER_DAY} Vorschläge am Tag nimmt die Moderation nicht an. Bitte morgen weitermachen.`,
+    actorUserId: userId,
+    ip: clientIp,
+  });
 }
 
 /** Prüft, ob der Katalogeintrag existiert, auf den sich ein Vorschlag bezieht. */
@@ -197,9 +221,17 @@ export const presetRouter = createRouter({
 
     /** Kompletten neuen Katalogpfad vorschlagen */
     submitNew: authedQuery
+      .use(
+        rateLimited({
+          key: "preset.propose",
+          limit: 30,
+          windowMs: 60 * 60_000,
+          by: "user",
+        })
+      )
       .input(proposeNewInput)
       .mutation(async ({ ctx, input }) => {
-        await assertProposalQuota(ctx.user.id);
+        await assertProposalQuota(ctx.user.id, ctx.clientIp);
         return createProposal({
           userId: ctx.user.id,
           kind: "new",
@@ -215,9 +247,17 @@ export const presetRouter = createRouter({
      * kommen aus der eigenen Gebindeart, der Rest aus dem Formular.
      */
     submitFromContainerType: authedQuery
+      .use(
+        rateLimited({
+          key: "preset.propose",
+          limit: 30,
+          windowMs: 60 * 60_000,
+          by: "user",
+        })
+      )
       .input(proposeFromContainerTypeInput)
       .mutation(async ({ ctx, input }) => {
-        await assertProposalQuota(ctx.user.id);
+        await assertProposalQuota(ctx.user.id, ctx.clientIp);
         /*
           Vorschläge kommen aus dem persönlichen Bestand. Eine Gebindeart einer
           Organisation einzureichen hieße, fremde Angaben unter eigenem Namen in
@@ -274,9 +314,17 @@ export const presetRouter = createRouter({
 
     /** Änderung an einem bestehenden Katalogeintrag vorschlagen */
     submitChange: authedQuery
+      .use(
+        rateLimited({
+          key: "preset.propose",
+          limit: 30,
+          windowMs: 60 * 60_000,
+          by: "user",
+        })
+      )
       .input(proposeChangeInput)
       .mutation(async ({ ctx, input }) => {
-        await assertProposalQuota(ctx.user.id);
+        await assertProposalQuota(ctx.user.id, ctx.clientIp);
         if (input.payload.scope !== input.targetType) {
           throw new TRPCError({
             code: "BAD_REQUEST",

@@ -1,9 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createRouter, authedQuery } from "./middleware";
+import { MAX_STORAGE_BOXES_PER_SCOPE } from "@contracts/limits";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
+import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput } from "./scope";
 import {
   countMaterialsWithStorageBox,
+  countStorageBoxesInScope,
   createStorageBox,
   deleteStorageBox,
   findStorageBoxesInScope,
@@ -29,10 +32,26 @@ export const storageBoxRouter = createRouter({
   }),
 
   create: authedQuery
+    .use(
+      rateLimited({
+        key: "storageBox.create",
+        limit: 60,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
+    )
     .input(storageBoxInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...data } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      assertWithinLimit({
+        current: await countStorageBoxesInScope(scope),
+        max: MAX_STORAGE_BOXES_PER_SCOPE,
+        quota: "storage_boxes_per_scope",
+        message: `Mehr als ${MAX_STORAGE_BOXES_PER_SCOPE} Dryboxen sind nicht vorgesehen. Bitte nicht mehr genutzte löschen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       return createStorageBox(scope, data);
     }),
 

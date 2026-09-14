@@ -18,7 +18,7 @@ export const AUDIT_EVENTS = [
   "login.failed",
   /** Konto nicht freigeschaltet bzw. Registrierung geschlossen */
   "login.blocked",
-  /** Zugriffsbegrenzung hat zugeschlagen */
+  /** Zugriffsbegrenzung am Anmeldeweg hat zugeschlagen */
   "login.rate_limited",
   /** Signatur des Telegram-Widgets nicht verifizierbar */
   "login.widget_invalid",
@@ -123,6 +123,45 @@ export const AUDIT_EVENTS = [
   "organization.member_removed",
   /** Beitrittscode neu erzeugt oder abgeschaltet, alter damit entwertet */
   "organization.join_code_rotated",
+  /*
+    Missbrauchsabwehr. Sie steht hier, weil sie dieselbe Frage beantwortet wie
+    der Rest des Protokolls: Was ist passiert, und wer war es? Ein einzelner
+    abgewiesener Versuch ist belanglos – tausend davon sind ein Vorfall, und
+    ohne diese Zeilen wäre er aus den Aufzeichnungen heraus nicht belegbar.
+
+    Wie bei den Anmeldeversuchen wird **nur das Zuschlagen** festgehalten, nie
+    der erlaubte Aufruf: Sonst schriebe ein Angriff genau das Protokoll voll,
+    das ihn aufklären soll – und aus der Abwehr würde das Nutzungsprotokoll,
+    das der Absatz am Dateianfang ausschließt.
+  */
+  /**
+   * Zugriffsbegrenzung außerhalb des Anmeldewegs hat zugeschlagen;
+   * `detail.bucket` nennt den Eimer.
+   *
+   * Getrennt von `login.rate_limited`, weil die beiden Verschiedenes bedeuten:
+   * Dort probiert jemand Anmeldedaten durch, hier reizt ein angemeldetes Konto
+   * eine Prozedur aus. Bis 2.7.0 trug jeder Eimer das Anmelde-Ereignis – bei
+   * `material.create` schlicht falsch.
+   */
+  "limit.rate_limited",
+  /** Mengenobergrenze erreicht; `detail.quota` nennt welche. */
+  "limit.quota_exceeded",
+  /** Registrierung abgewiesen; `detail.reason` unterscheidet Instanz und Adresse. */
+  "registration.rate_limited",
+  /*
+    Sperre und Entsperrung. Sie gehören aus demselben Grund hierher wie die
+    Freundschaften: Sie verändern Zugriffsrechte, und zwar die weitreichendsten
+    – ein gesperrtes Konto erreicht nichts mehr außer seinen Betroffenenrechten.
+    Wer wann gesperrt hat und warum, muss rekonstruierbar sein.
+  */
+  /** Konto gesperrt; `subjectUserId` ist der Gesperrte, `detail.reason` der Grund. */
+  "user.blocked",
+  /** Sperre aufgehoben */
+  "user.unblocked",
+  /** Gesperrter hat die Aufhebung beantragt */
+  "unblock.requested",
+  /** Antrag beschieden; `detail.decision` nennt das Ergebnis. */
+  "unblock.reviewed",
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

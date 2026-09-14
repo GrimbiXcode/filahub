@@ -1,10 +1,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { containerFormSchema } from "@contracts/materials";
-import { createRouter, authedQuery } from "./middleware";
+import { MAX_CONTAINER_TYPES_PER_SCOPE } from "@contracts/limits";
+import { createRouter, authedQuery, rateLimited } from "./middleware";
+import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput } from "./scope";
 import {
   containerTypeInScope,
+  countContainerTypesInScope,
   countMaterialsWithContainerType,
   createContainerType,
   deleteContainerType,
@@ -40,10 +43,26 @@ export const containerTypeRouter = createRouter({
   }),
 
   create: authedQuery
+    .use(
+      rateLimited({
+        key: "containerType.create",
+        limit: 60,
+        windowMs: 60 * 60_000,
+        by: "user",
+      })
+    )
     .input(containerTypeInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
       const { organizationId, ...data } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      assertWithinLimit({
+        current: await countContainerTypesInScope(scope),
+        max: MAX_CONTAINER_TYPES_PER_SCOPE,
+        quota: "container_types_per_scope",
+        message: `Mehr als ${MAX_CONTAINER_TYPES_PER_SCOPE} eigene Gebindearten sind nicht vorgesehen. Bitte nicht mehr genutzte löschen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
       return createContainerType(scope, data);
     }),
 

@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { count, eq, gte, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
 import {
@@ -16,6 +16,56 @@ export async function findUserByUnionId(unionId: string) {
     .where(eq(schema.users.unionId, unionId))
     .limit(1);
   return rows.at(0);
+}
+
+/**
+ * Wie viele Konten seit einem Zeitpunkt angelegt wurden – Grundlage der
+ * Registrierungsgrenze.
+ *
+ * Instanzweit und nicht je Adresse: Die Adresse deckt `consumeRateLimit` ab,
+ * hier geht es um den Ansturm aus vielen Richtungen, den eine offene
+ * Registrierung einlädt.
+ */
+/**
+ * Ein Konto über seine interne ID.
+ *
+ * Neben `findUserByUnionId`, das die Telegram-ID nachschlägt: Die Verwaltung
+ * arbeitet mit den IDs aus ihrer eigenen Liste und kennt die Telegram-ID
+ * bewusst nicht (siehe `findUsersForAdmin`).
+ */
+export async function findUserById(id: number) {
+  const rows = await getDb()
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, id))
+    .limit(1);
+  return rows.at(0);
+}
+
+export async function countUsersCreatedSince(since: Date): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(schema.users)
+    .where(gte(schema.users.createdAt, since));
+  return Number(rows.at(0)?.value ?? 0);
+}
+
+/**
+ * Alle Administratoren dieser Instanz – Empfänger der Missbrauchsmeldungen.
+ *
+ * Liefert nur, was der Versand braucht (`unionId` ist die Telegram-ID, dazu die
+ * Sprache): Ein `select()` über die ganze Zeile zöge Anzeigeeinstellungen und
+ * Freundescodes mit, die eine Benachrichtigung nichts angehen.
+ */
+export async function findAdminUsers() {
+  return getDb()
+    .select({
+      id: schema.users.id,
+      unionId: schema.users.unionId,
+      language: schema.users.language,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.role, "admin"));
 }
 
 /**

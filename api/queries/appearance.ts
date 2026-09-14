@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import {
   normalizeAppearanceName,
   type AppearanceCatalog,
@@ -54,6 +54,18 @@ export async function createCustomColor(
   });
 }
 
+/**
+ * Wie viele eigene Farben der Bereich schon hat – Grundlage der Obergrenze.
+ * Vorbild `countLagerInScope` (`api/queries/lager.ts`).
+ */
+export async function countCustomColorsInScope(scope: Scope): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(customColors)
+    .where(scopeWhere(customColors, scope));
+  return Number(rows.at(0)?.value ?? 0);
+}
+
 export async function updateCustomColor(
   scope: Scope,
   id: number,
@@ -107,6 +119,17 @@ export async function createCustomTexture(
   return getDb().query.customTextures.findFirst({
     where: eq(customTextures.id, id),
   });
+}
+
+/** Wie viele eigene Oberflächen der Bereich schon hat. */
+export async function countCustomTexturesInScope(
+  scope: Scope
+): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(customTextures)
+    .where(scopeWhere(customTextures, scope));
+  return Number(rows.at(0)?.value ?? 0);
 }
 
 export async function updateCustomTexture(

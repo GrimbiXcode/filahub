@@ -5,11 +5,17 @@ import { currencySchema, localeSchema } from "@contracts/locale";
 import { hiddenMaterialColumnsSchema } from "@contracts/materialColumns";
 import { releaseVersionSchema } from "@contracts/releaseNotes";
 import { clearSessionCookie, sessionCookie } from "./lib/cookies";
+import {
+  MAX_REGISTRATIONS_PER_DAY,
+  MAX_REGISTRATIONS_PER_IP_PER_DAY,
+} from "@contracts/limits";
 import { env } from "./lib/env";
+import { consumeRateLimit } from "./lib/rateLimit";
 import { recordAudit } from "./queries/audit";
 import {
   createRouter,
   authedQuery,
+  blockedQuery,
   publicQuery,
   rateLimited,
 } from "./middleware";
@@ -17,6 +23,8 @@ import { redeemLoginCode } from "./telegram/bot";
 import { signSessionToken } from "./telegram/session";
 import { verifyTelegramWidgetData } from "./telegram/widget";
 import {
+  countUsersCreatedSince,
+  findUserByUnionId,
   markReleaseNotesSeen,
   revokeSessions,
   updateUserSettings,
@@ -64,11 +72,109 @@ function assertAllowed(telegramId: string, ip: string | null) {
   }
 }
 
+/**
+ * Hält fest, dass sich ein gesperrtes Konto angemeldet hat.
+ *
+ * **Die Anmeldung selbst wird nicht verhindert**, und das ist Absicht: Der
+ * Gesperrte soll erfahren, woran er ist, und seinen Entsperr-Antrag stellen
+ * können (`api/unblockRouter.ts`). Fachlich erreicht er nichts – dafür sorgt
+ * `authedQuery`. Wer sich trotz Sperre regelmäßig anmeldet, ist aber genau das,
+ * was ein Betreiber sehen will, wenn er einen Vorfall aufklärt.
+ */
+function noteBlockedSignIn(
+  user: { id: number; unionId: string; blockedAt: Date | null },
+  ip: string | null
+) {
+  if (!user.blockedAt) return;
+  recordAudit({
+    event: "login.blocked",
+    actorUserId: user.id,
+    telegramId: user.unionId,
+    ip,
+    detail: { reason: "user_blocked" },
+  });
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Bremst den Zustrom neuer Konten.
+ *
+ * `assertAllowed` daneben beantwortet, **wer** herein darf; diese Funktion,
+ * **wie viele auf einmal**. Die Trennung ist nötig, weil die Freigabeliste bei
+ * offener Registrierung gar nicht greift – dort ist dies die einzige Bremse.
+ *
+ * Läuft nur bei **neuen** Konten: Eine Anmeldung an einem bestehenden Konto ist
+ * keine Registrierung, und wer schon da ist, soll nicht aussperrt werden, weil
+ * andere sich gerade anmelden. Deshalb die Abfrage zuerst – sie kostet nichts,
+ * `upsertUser` lädt die Zeile gleich danach ohnehin.
+ *
+ * Zwei Achsen, und beide braucht es: Die Instanzgrenze fängt den Ansturm aus
+ * vielen Richtungen, die Adressgrenze verhindert, dass ein einzelner Aufrufer
+ * das Tageskontingent ausschöpft und damit alle anderen aussperrt – die Abwehr
+ * wäre sonst selbst der Angriff.
+ */
+async function assertRegistrationAllowed(
+  telegramId: string,
+  ip: string | null
+) {
+  const existing = await findUserByUnionId(telegramId);
+  if (existing) return;
+
+  /*
+    Bei gesetzter Freigabeliste entscheidet der Betreiber über jeden einzelnen
+    Zugang. Eine Tagesgrenze träfe dort nur den Fall, dass er zwanzig Kollegen
+    auf einmal freischaltet – eine Bremse gegen den eigenen Willen.
+  */
+  if (env.telegramOpenRegistration && env.telegramAllowedIds.length === 0) {
+    const since = new Date(Date.now() - DAY_MS);
+    if ((await countUsersCreatedSince(since)) >= MAX_REGISTRATIONS_PER_DAY) {
+      recordAudit({
+        event: "registration.rate_limited",
+        telegramId,
+        ip,
+        detail: { reason: "instance" },
+      });
+      throw new TRPCError({
+        code: "TOO_MANY_REQUESTS",
+        message:
+          "Diese Instanz nimmt heute keine neuen Anmeldungen mehr an. Bitte morgen erneut versuchen.",
+      });
+    }
+  }
+
+  const perIp = consumeRateLimit(
+    `auth.register:${ip ?? "unbekannt"}`,
+    MAX_REGISTRATIONS_PER_IP_PER_DAY,
+    DAY_MS
+  );
+  if (!perIp.allowed) {
+    recordAudit({
+      event: "registration.rate_limited",
+      telegramId,
+      ip,
+      detail: { reason: "ip" },
+    });
+    throw new TRPCError({
+      code: "TOO_MANY_REQUESTS",
+      message:
+        "Von diesem Anschluss wurden heute schon mehrere Konten angelegt. Bitte morgen erneut versuchen.",
+    });
+  }
+}
+
 export const authRouter = createRouter({
-  me: authedQuery.query(opts => opts.ctx.user),
+  /*
+    `blockedQuery` und nicht `authedQuery`: Ohne diese Prozedur wüsste die
+    Oberfläche nicht, dass das Konto gesperrt ist – sie zeigte dem Betroffenen
+    die Anmeldeschranke statt seiner Sperrseite. Aus demselben Grund stehen
+    Sprachwahl und beide Abmeldewege weiter unten ebenfalls darauf: Eine Sperre
+    darf niemanden an sein Gerät fesseln, und die Sperrseite soll lesbar sein.
+  */
+  me: blockedQuery.query(opts => opts.ctx.user),
 
   /** Anzeige-Einstellungen des angemeldeten Benutzers ändern */
-  updateSettings: authedQuery
+  updateSettings: blockedQuery
     .input(
       z.object({
         currency: currencySchema.optional(),
@@ -114,9 +220,21 @@ export const authRouter = createRouter({
    * einzige wirksame Bremse.
    */
   login: publicQuery
-    .use(rateLimited({ key: "auth.login", limit: 10, windowMs: 10 * 60_000 }))
     .use(
-      rateLimited({ key: "auth.login.hour", limit: 30, windowMs: 60 * 60_000 })
+      rateLimited({
+        key: "auth.login",
+        limit: 10,
+        windowMs: 10 * 60_000,
+        event: "login.rate_limited",
+      })
+    )
+    .use(
+      rateLimited({
+        key: "auth.login.hour",
+        limit: 30,
+        windowMs: 60 * 60_000,
+        event: "login.rate_limited",
+      })
     )
     .input(
       z.object({
@@ -147,6 +265,7 @@ export const authRouter = createRouter({
       }
 
       assertAllowed(entry.telegramId, ctx.clientIp);
+      await assertRegistrationAllowed(entry.telegramId, ctx.clientIp);
 
       const user = await upsertUser({
         unionId: entry.telegramId,
@@ -162,6 +281,7 @@ export const authRouter = createRouter({
         ip: ctx.clientIp,
         detail: { method: "code" },
       });
+      noteBlockedSignIn(user, ctx.clientIp);
 
       const token = await signSessionToken({
         unionId: entry.telegramId,
@@ -183,7 +303,14 @@ export const authRouter = createRouter({
    * auf Wunsch teilt der Nutzer im Dialog auch seine Telefonnummer mit Telegram.
    */
   loginWithWidget: publicQuery
-    .use(rateLimited({ key: "auth.widget", limit: 20, windowMs: 10 * 60_000 }))
+    .use(
+      rateLimited({
+        key: "auth.widget",
+        limit: 20,
+        windowMs: 10 * 60_000,
+        event: "login.rate_limited",
+      })
+    )
     .input(
       z.object({
         id: z.number(),
@@ -221,6 +348,7 @@ export const authRouter = createRouter({
 
       const telegramId = String(input.id);
       assertAllowed(telegramId, ctx.clientIp);
+      await assertRegistrationAllowed(telegramId, ctx.clientIp);
 
       const name =
         [input.first_name, input.last_name].filter(Boolean).join(" ") ||
@@ -248,6 +376,7 @@ export const authRouter = createRouter({
         ip: ctx.clientIp,
         detail: { method: "widget" },
       });
+      noteBlockedSignIn(user, ctx.clientIp);
 
       const token = await signSessionToken({
         unionId: telegramId,
@@ -264,7 +393,7 @@ export const authRouter = createRouter({
    * Abmelden auf diesem Gerät. Entwertet bewusst **nur** das Cookie: Wer sich
    * am Telefon abmeldet, will nicht zugleich am Rechner hinausfliegen.
    */
-  logout: authedQuery.mutation(async ({ ctx }) => {
+  logout: blockedQuery.mutation(async ({ ctx }) => {
     recordAudit({
       event: "logout",
       actorUserId: ctx.user.id,
@@ -279,7 +408,7 @@ export const authRouter = createRouter({
    * abhandengekommen ist. Erhöht `users.tokenVersion` und macht damit jedes
    * ausgestellte Token ungültig, auch das der eigenen Sitzung.
    */
-  logoutAllDevices: authedQuery.mutation(async ({ ctx }) => {
+  logoutAllDevices: blockedQuery.mutation(async ({ ctx }) => {
     await revokeSessions(ctx.user.id);
     recordAudit({
       event: "session.revoked",
