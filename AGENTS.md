@@ -29,7 +29,8 @@ src/            React-Frontend
                 Appearance (eigene Farben und Oberflächen),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
-                AdminProposals, AdminSystem, Login, NotFound
+                AdminProposals, AdminUsers, AdminMonitoring, AdminSystem,
+                Blocked (Sperrseite), Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
                 (Dialoge + Schnellsuche), ThemeToggle
@@ -53,13 +54,16 @@ api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
-                appearance, friend, organization, preset, admin
-                (admin: preset, proposal, system)
+                appearance, friend, organization, preset, admin, legal, unblock
+                (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
-  middleware.ts publicQuery / authedQuery / adminQuery (tRPC-Prozeduren)
+  middleware.ts publicQuery / authedQuery / blockedQuery / adminQuery und
+                rateLimited (tRPC-Prozeduren; siehe „Grenzen gegen Missbrauch")
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
-  lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving)
+  lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving),
+                clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
+                (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
@@ -69,6 +73,8 @@ api/            Hono/tRPC-Backend
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
                 patch.ts (leerer Änderungssatz), presets.ts (Preset-Katalog),
                 presetSeed.ts (Startkatalog),
+                blocking.ts (Sperre, Entsperr-Anträge),
+                abuse.ts (Auswertung des Protokolls für /verwaltung/missbrauch),
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
@@ -77,6 +83,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 codes.ts (Alphabet und Normalform beider Codes),
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
+                limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
+                audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
@@ -541,6 +549,110 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   dauerhaft unangetastet. Für inhaltliche Korrekturen am Startkatalog
   `PRESET_SEED_REVISION` erhöhen.
 
+## Grenzen gegen Missbrauch
+
+Seit 2.8.0. Drei Mittel, die verschiedene Dinge tun und deshalb nebeneinander
+stehen:
+
+**1. Zugriffsbegrenzung** (`rateLimited` in `api/middleware.ts`, Zähler in
+`api/lib/rateLimit.ts`). Sie begrenzt, wie **oft** etwas aufgerufen wird.
+Bewusst als tRPC-Middleware: Der Client bündelt über `httpBatchLink` mehrere
+Prozeduren in einer HTTP-Anfrage, auf HTTP-Ebene gezählt liefe sie ins Leere.
+
+Zwei Achsen, und die Wahl ist keine Geschmacksfrage:
+
+- `by: "ip"` für alles **Offene**. Vor der Anmeldung gibt es nichts anderes.
+- `by: "user"` für alles **Angemeldete**. Die Adresse wäre dort falsch: Eine
+  Werkstatt hinter einem NAT teilte sich einen Eimer, während ein Angreifer die
+  Adresse leichter wechselt als das Konto.
+
+`authedQuery` trägt eine großzügige Grundlast (600/min je Benutzer), damit auch
+Prozeduren versorgt sind, an die beim nächsten Feature niemand denkt. Die engen
+Grenzen stehen an den einzelnen Prozeduren.
+
+**2. Mengenobergrenzen** (`contracts/limits.ts`, durchgesetzt über
+`assertWithinLimit` in `api/lib/quota.ts`). Sie begrenzen, **wie viel** es
+insgesamt gibt. Feste Zahlen und keine Umgebungsvariablen – es ist keine
+Kommerzialisierung geplant, es gibt also keine Stufen (dieselbe Erwägung wie bei
+den Grenzen in `contracts/organizations.ts`).
+
+**Keine dieser Grenzen garantiert die Datenbank.** Ein Zähler ist weder als
+Unique- noch als partieller Index ausdrückbar; zwei gleichzeitige Anfragen
+können jede um eins überschreiten. Der Schaden ist gering, aber die Lücke ist
+benannt und keine Zusicherung.
+
+Muster für eine neue Grenze – dreimal derselbe Griff:
+
+1. Konstante samt Begründung nach `contracts/limits.ts`.
+2. `count()`-Abfrage mit `scopeWhere` nach `api/queries/` (Vorbild
+   `countLagerInScope`).
+3. `assertWithinLimit(...)` im Router, **nach** der Bereichsprüfung: Sonst
+   verriete „Lager ist voll“ die Existenz eines fremden Lagers.
+
+**3. Registrierungsgrenze** (`assertRegistrationAllowed` in
+`api/auth-router.ts`). Greift nur bei **neuen** Konten und nur bei offener
+Registrierung – mit `TELEGRAM_ALLOWED_IDS` entscheidet der Betreiber ohnehin
+über jeden Zugang. Zwei Achsen, instanzweit und je Adresse: Ohne die zweite
+schöpfte ein einzelner Aufrufer das Tageskontingent aus und sperrte alle
+anderen aus.
+
+**Protokolliert wird nur das Zuschlagen**, nie der erlaubte Aufruf. Sonst
+schriebe ein Angriff das Protokoll voll, das ihn aufklären soll – und aus der
+Abwehr würde das Nutzungsprotokoll, das `contracts/audit.ts` ausschließt.
+Deshalb ist jede Zahl auf `/verwaltung/missbrauch` eine Abweisung und eine leere
+Seite die gute Nachricht.
+
+**Alarmierung**: `runAbuseCheck` (`api/lib/abuseAlert.ts`) prüft alle 15 Minuten
+die Schwellen aus `ABUSE_ALERT_THRESHOLDS` und schickt eine Telegram-Nachricht
+an alle Administratoren (`notifyAdmins`). Mit sechs Stunden Abklingzeit je
+Schwelle – eine Meldung, die man wegwischt, ist schlechter als keine. Läuft wie
+der Aufbewahrungslauf nur unter `NODE_ENV=production`.
+
+## Sperre und Entsperr-Antrag
+
+Seit 2.8.0. Die Sperre ist der **einzige Eingriff im Projekt, der jemanden von
+seinem eigenen Bestand trennt** – entsprechend eng ist sie gefasst.
+
+Zustand am Konto: `users.blockedAt` (NULL = nicht gesperrt), `blockedBy`,
+`blockedReason` (Schlüssel aus `BLOCK_REASONS`, kein Freitext). `blockUser`
+(`api/queries/blocking.ts`) setzt beides **in einem** `UPDATE` zusammen mit
+`tokenVersion + 1`: Zwei Anweisungen hinterließen ein Fenster, in dem die Sperre
+steht und die alten Token noch gelten.
+
+**Durchgesetzt wird sie in `api/middleware.ts`, nicht in
+`authenticateRequest`.** Was dort geworfen wird, verschluckt `createContext` –
+der Gesperrte hätte keinen Benutzer im Kontext und sähe die Anmeldeschranke
+statt seiner Sperrseite.
+
+- `authedQuery` = angemeldet **und** nicht gesperrt. Die Vorgabe für alles
+  Fachliche, damit eine vergessene Bedingung **zu**fällt und nicht auf.
+- `blockedQuery` = angemeldet, Sperre egal. Nur für: `auth.me`,
+  `auth.updateSettings`, beide Abmeldewege, `account.export`, `account.delete`
+  und `unblock.*`.
+
+**Auskunft und Löschung stehen dort, weil Art. 15 und Art. 17 DSGVO nicht unter
+dem Vorbehalt des Wohlverhaltens stehen.** Eine Sperre, die den Datenexport
+mitsperrt, wäre rechtswidrig. `api/blocking.test.ts` hält die Liste als geprüfte
+Zusicherung fest – wer eine Prozedur auf `blockedQuery` setzt, ohne sie dort
+einzutragen, macht den Test rot.
+
+Ein Gesperrter darf sich weiter **anmelden** (sonst käme er nicht an seinen
+Antrag); der Versuch landet als `login.blocked` mit `reason: "user_blocked"` im
+Protokoll.
+
+In der Oberfläche entscheidet `AuthLayout` – die eine Stelle, an der sich
+App-Oberfläche und Schranke trennen. Eine eigene Route wäre ein zweiter Weg und
+damit ein Loch; die Rechtsseiten bleiben erreichbar, weil sie ohne `AuthLayout`
+laufen.
+
+Ein Administrator kann **weder sich selbst noch einen anderen Administrator**
+sperren: Sonst sperrt sich eine Instanz aus, und es gäbe keinen Weg zurück außer
+einem Eingriff in die Datenbank.
+
+Höchstens ein offener Antrag je Konto – gesichert über den partiellen
+Unique-Index `unblock_requests_open_unique`, der von Hand in der Migration steht
+(wie `loan_requests_open_unique`).
+
 ## Sprachen (i18n)
 
 Die Oberfläche gibt es auf Deutsch und Englisch. Umgeschaltet wird pro
@@ -739,9 +851,15 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `materialUnits`, `format`, `releaseNotes`, `friendVisibility`
-  und `friendCode`. Alle laufen ohne Datenbank – reine zod- und Funktionstests. Bei
-  neuen Backend-Features Tests in `api/` anlegen.
+  `materialStats`, `materialUnits`, `format`, `releaseNotes`, `friendVisibility`,
+  `friendCode`, `rateLimit`, `limits` und `blocking`. Alle laufen ohne Datenbank
+  – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
+  anlegen.
+- `api/blocking.test.ts` ist wie `friendVisibility` mehr als ein Funktionstest:
+  Die Zusicherung darüber, welche Prozeduren **ohne** Sperrprüfung laufen, ist
+  der Riegel gegen zwei stille Fehler – eine neue Prozedur auf `blockedQuery`
+  (die Sperre wäre ausgehebelt) und eine der Betroffenenrechte auf `authedQuery`
+  (der Datenexport wäre mitgesperrt, und auffallen würde es nur dem Gesperrten).
 - `api/friendVisibility.test.ts` ist mehr als ein Funktionstest: Die Zusicherung
   über die Schlüsselmenge von `toFriendMaterial` ist der Riegel dagegen, dass
   eine später zu `materials` ergänzte Spalte still bei Freunden landet.
@@ -756,8 +874,9 @@ Datenbank.
 ### Integrationstests (`npm run test:integration`)
 
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
-  `api/friends.integration.test.ts`, `api/lager.integration.test.ts` und
-  `api/organizations.integration.test.ts`, konfiguriert in
+  `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
+  `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`
+  und `api/abuse.integration.test.ts`, konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in
@@ -769,6 +888,12 @@ Datenbank.
   Freigaberichtungen, alle drei Stufen **je Lager**, die Abwesenheit der
   verbotenen Felder in **jeder** Antwort, die zwei handgeschriebenen Indizes und
   die Löschung in beiden Richtungen.
+- `api/abuse.integration.test.ts` prüft die Obergrenzen **an** der Grenze (das
+  letzte geht hinein, das nächste nicht), dass der Massenimport abbricht, bevor
+  eine einzige Zeile entsteht, und dass eine Sperre das Fachliche schließt und
+  `account.export` offen lässt. Dazu den partiellen Unique-Index auf den
+  Entsperr-Anträgen – er steht von Hand in der Migration und in keinem
+  Schema-Ausdruck.
 - **Zwei dieser Tests sichern Fehler ab, die still schiefgehen** und deshalb
   keinen Nutzer erreichen würden: „weckt nach dem Auflösen und Neuschließen
   keinen Zugriff“ (die Kaskade in `deleteFriendship`) und „gewährt nichts, wenn
@@ -860,3 +985,8 @@ CSP-Fehler zeigen sich also erst im Produktionsbau.
 - Whitelist `TELEGRAM_ALLOWED_IDS` begrenzt Registrierungen; `OWNER_TELEGRAM_ID`
   bekommt die Admin-Rolle.
 - Body-Limit des Servers: 50 MB (`api/boot.ts`).
+- Zugriffsbegrenzung, Mengenobergrenzen und die Registrierungsgrenze sind feste
+  Werte im Code, keine Umgebungsvariablen – siehe „Grenzen gegen Missbrauch".
+- Die Sperre nimmt einem Konto **nicht** seine Betroffenenrechte: Auskunft und
+  Löschung laufen über `blockedQuery`. Wer daran etwas ändert, ändert eine
+  Rechtsposition, nicht eine Zugriffsregel.

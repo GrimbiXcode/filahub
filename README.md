@@ -262,6 +262,10 @@ For administrators, under **Verwaltung**:
 - **Vorschläge** (`/verwaltung/vorschlaege`) – accept a suggestion (it is
   applied to the catalogue and becomes visible to everyone) or reject it with
   a reason.
+- **Nutzer** (`/verwaltung/nutzer`) – see the accounts on this instance, block
+  and unblock them, and decide unblock requests. See "Abuse protection" below.
+- **Missbrauch** (`/verwaltung/missbrauch`) – what the abuse protection has
+  turned away in the last hours and days.
 
 Catalogue limits are set for containers, not just for spools: up to 50 kg of
 content and up to 20 kg empty weight, and the empty weight may exceed the
@@ -300,6 +304,60 @@ data export. Their memberships and invitations are. See
 Limits per account and organization (`contracts/organizations.ts`): 3
 organizations founded per account, 10 stores per organization, 100 members per
 organization. Personal accounts get 5 stores (`contracts/materials.ts`).
+
+## 9. Abuse protection
+
+An instance that anyone can sign up to (`TELEGRAM_OPEN_REGISTRATION=1`) will
+eventually meet someone who is not there to track filament. Three mechanisms
+keep that from costing you a database, and all three are **fixed values in the
+code** — there is no environment variable to tune, because there are no paid
+tiers to tune them for.
+
+**Rate limits** (`api/middleware.ts`). Counted per account for anything signed
+in and per IP address for the sign-in itself. Every signed-in procedure carries
+a generous baseline; creating material, weighing, importing, searching and
+sending catalogue suggestions carry tighter ones.
+
+**Upper bounds** (`contracts/limits.ts`). Per store: 1000 materials. Per
+material: 1000 weigh-ins. Per scope (personal or organization): 200 own colours,
+100 own finishes, 100 own container types, 100 dryboxes. Per account: 20 open
+catalogue suggestions and 50 per day. None of these is enforced by the database —
+two simultaneous requests can exceed any of them by one. The numbers sit far
+above what a person reaches; if your users meet one, the value is wrong and the
+project would like to hear about it.
+
+**Registration limits.** With open registration, 20 new accounts per day across
+the whole instance and 3 per IP address per day. Neither applies when
+`TELEGRAM_ALLOWED_IDS` is set — there you decide about every single account
+anyway. Both apply only to _new_ accounts; signing in to an existing one is
+never turned away.
+
+Everything that is turned away is written to the audit log — and nothing that is
+allowed, so the numbers on `/verwaltung/missbrauch` are never ordinary traffic.
+When a threshold is crossed, every administrator gets a Telegram message, at
+most once every six hours per threshold. That check runs every 15 minutes and
+only with `NODE_ENV=production`.
+
+### Blocking an account
+
+Under **Verwaltung → Nutzer** you can block an account. It keeps its entire
+stock, all its sessions end, and the person gets a Telegram message naming the
+reason.
+
+A blocked account can still sign in. What it reaches is a page saying it is
+blocked, from which three things remain possible: **download all data**
+(Art. 15/20 GDPR), **delete the account** (Art. 17), and **request that the
+block be lifted**. The first two are not optional for you to keep — data subject
+rights do not depend on good behaviour, and the code enforces this rather than
+leaving it to the person doing the blocking.
+
+Requests appear under **Verwaltung → Nutzer**; approving one lifts the block.
+Rejecting one requires a reason, which is sent to the person. There is at most
+one open request per account.
+
+You cannot block yourself or another administrator — an instance that locks out
+its own administration has no way back except a manual database edit. Remove the
+role first if you really mean it.
 
 ## Useful commands
 

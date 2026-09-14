@@ -27,23 +27,32 @@ details into the Markdown** — the next person to pull the image would ship the
 
 ## What the application stores
 
-| Data                                                                                                                                    | Where                      | How long                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ |
-| Telegram ID, display name, Telegram username                                                                                            | `users`                    | until the account is deleted                     |
-| Last sign-in timestamp                                                                                                                  | `users`                    | until the account is deleted                     |
-| Display settings (language, currency, format)                                                                                           | `users`                    | until the account is deleted                     |
-| Stores (name, material kind, filament diameter, free-text notes)                                                                        | `lager`                    | until the account is deleted                     |
-| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes       | own tables                 | until the account is deleted                     |
-| Friendships: who is connected to whom and who asked                                                                                     | `friendships`              | until either account is deleted                  |
-| Store sharing: which of a user's stores a given friend may see, and how much                                                            | `lager_shares`             | until either account is deleted                  |
-| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                         | `loan_requests`            | until either account is deleted                  |
-| Friend code — a shareable identifier, created only when a user opens the friends page                                                   | `users`                    | until the account is deleted                     |
-| Organizations: name and free-text notes. **No owner column** — who administers one is a membership, not a property of the organization  | `organizations`            | until the last member's account is deleted       |
-| Memberships: who belongs to which organization, at which level, since when                                                              | `organization_members`     | until the account or the organization is deleted |
-| Invitations: who invited whom into which organization, at which level, and the answer                                                   | `organization_invitations` | until either account is deleted                  |
-| Preset proposals with reasoning and moderation record                                                                                   | `preset_proposals`         | see "Deletion" below                             |
-| Sign-in codes with Telegram ID and name                                                                                                 | `login_codes`              | **purged automatically after 24 h**              |
-| Security log: sign-ins, failed attempts, deletions, moderation decisions — with an HMAC of the client address, never the address itself | `audit_log`                | **purged automatically after 90 days**           |
+| Data                                                                                                                                                                  | Where                      | How long                                         |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ |
+| Telegram ID, display name, Telegram username                                                                                                                          | `users`                    | until the account is deleted                     |
+| Last sign-in timestamp                                                                                                                                                | `users`                    | until the account is deleted                     |
+| Display settings (language, currency, format)                                                                                                                         | `users`                    | until the account is deleted                     |
+| Stores (name, material kind, filament diameter, free-text notes)                                                                                                      | `lager`                    | until the account is deleted                     |
+| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes                                     | own tables                 | until the account is deleted                     |
+| Friendships: who is connected to whom and who asked                                                                                                                   | `friendships`              | until either account is deleted                  |
+| Store sharing: which of a user's stores a given friend may see, and how much                                                                                          | `lager_shares`             | until either account is deleted                  |
+| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                                                       | `loan_requests`            | until either account is deleted                  |
+| Friend code — a shareable identifier, created only when a user opens the friends page                                                                                 | `users`                    | until the account is deleted                     |
+| Organizations: name and free-text notes. **No owner column** — who administers one is a membership, not a property of the organization                                | `organizations`            | until the last member's account is deleted       |
+| Memberships: who belongs to which organization, at which level, since when                                                                                            | `organization_members`     | until the account or the organization is deleted |
+| Invitations: who invited whom into which organization, at which level, and the answer                                                                                 | `organization_invitations` | until either account is deleted                  |
+| Preset proposals with reasoning and moderation record                                                                                                                 | `preset_proposals`         | see "Deletion" below                             |
+| Sign-in codes with Telegram ID and name                                                                                                                               | `login_codes`              | **purged automatically after 24 h**              |
+| Security log: sign-ins, failed attempts, deletions, moderation decisions, rejected requests and blocks — with an HMAC of the client address, never the address itself | `audit_log`                | **purged automatically after 90 days**           |
+| Block state: whether an account is blocked, since when, by which administrator and for which of five fixed reasons (no free text)                                     | `users`                    | until the account is deleted                     |
+| Unblock requests: the free-text case a blocked person makes, the decision and its reason                                                                              | `unblock_requests`         | until the account is deleted                     |
+
+Abuse protection (rate limits, upper bounds, registration limits) keeps its
+counters **in memory only** and writes nothing per user. What reaches the
+database is the rejection itself, in the security log above: the procedure or
+quota involved, the HMAC of the address, and the account if one was signed in —
+never the request, never its content. Allowed requests are not recorded at all,
+which is why the log cannot be turned into a usage profile.
 
 No profile pictures. No email addresses — the column existed until 1.1.1 and was
 dropped, because nothing ever wrote to it except the legacy MySQL import.
@@ -202,6 +211,19 @@ Memberships and invitations go the same way, in both directions. **The
 organization's stock does not**, and that is the point of organization rows
 carrying no author: there is nothing personal in them to erase, so the deletion
 leaves the workshop's inventory intact for the people still using it.
+
+Unblock requests do **not** survive either — they are deleted with the account,
+unlike accepted catalogue proposals. A proposal lives on in a shared catalogue
+and has to stay traceable; a request concerns nothing but the relationship
+between one person and this instance, and once the account is gone the block is
+moot. The free-text in them is as personal as anything in this app gets.
+
+The block itself disappears with the account, and that is not a loophole: anyone
+deleting their account to shed a block loses their entire stock with it, and what
+keeps them from simply signing up again is the registration limit, not a leftover
+row. Blocks that a _departing administrator_ imposed on others stay in force;
+only the pointer to them is cleared, the same treatment as the submitter of an
+accepted proposal.
 
 One case needs a decision rather than a rule. Everywhere else the app refuses
 the step that would remove an organization's last administrator — an

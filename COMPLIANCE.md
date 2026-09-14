@@ -128,7 +128,8 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
   the shared preset catalogue; sharing stock between users who have connected as
   friends, and passing on loan requests between them; since 2.5.0, running a
   stock jointly in an organization (companies, university print hubs,
-  makerspaces)
+  makerspaces); since 2.8.0, keeping the instance usable by limiting how much
+  one account can create and by blocking accounts that abuse it
 - **Categories of data subjects**: registered users of this instance
 - **Categories of data**: see the table in [PRIVACY.md](PRIVACY.md)
 - **Recipients**: Telegram FZ-LLC (authentication, loan and organization
@@ -137,6 +138,12 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
   friend and never including monetary amounts, or, within an organization, its
   fellow members, who see the shared stock itself and each other's display name
   and Telegram username (see "Who else gets data" in [PRIVACY.md](PRIVACY.md))
+- **Legal basis for abuse protection**: Art. 6(1)(f) GDPR — the operator's and
+  the other users' interest in an instance that stays usable. The data involved
+  is minimal by construction: counters live in memory only, and the database
+  sees a rejection, never an allowed request. A block additionally records who
+  imposed it, when and for which of five fixed reasons, so that the measure is
+  accountable to the person it hits
 - **Legal basis for sharing between users**: Art. 6(1)(a) GDPR — the sharing
   level is a per-friend choice by the data subject, defaults to the narrowest
   useful setting, and is revocable at any time with immediate effect. The same
@@ -149,8 +156,8 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
 - **Third-country transfers**: Telegram, United Arab Emirates — no adequacy
   decision; based on explicit consent (Art. 49(1)(a) GDPR / Art. 17(1)(a)
   revFADP), obtained through the click-to-load gate on the login page
-- **Erasure periods**: sign-in codes 24 h; everything else until the account is
-  deleted
+- **Erasure periods**: sign-in codes 24 h; security log 90 days; everything else
+  until the account is deleted
 - **Technical and organisational measures**: see below
 
 Small operators may be exempt from keeping this (Art. 30(5) GDPR, Art. 12(5)
@@ -173,15 +180,24 @@ For Art. 32 GDPR / Art. 8 revFADP. What the software provides:
   parameter, with explicit ownership checks on top
 - **Input validation** with shared zod schemas, client and server using the same
   definitions
-- **Rate limiting** on sign-in attempts, friend requests and friend search, keyed
-  on the client address
+- **Rate limiting** on every signed-in procedure, keyed on the account, and on
+  sign-in attempts and registration, keyed on the client address; plus fixed
+  upper bounds on how much one account can create (`contracts/limits.ts`)
+- **Blocking** of an account, which ends all its sessions in the same statement
+  that sets the block. It never removes the data subject rights: export and
+  erasure run on a separate procedure type (`blockedQuery`), and a test asserts
+  which procedures that is — a block that swallowed Art. 15 or Art. 17 would be
+  unlawful, and only the blocked person would notice
 - **Transport and browser hardening**: Content-Security-Policy,
   `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`; HSTS in production
 - **Data minimisation**: sign-in codes purged after 24 h; no profile pictures;
   no email addresses
 - **Security logging**: sign-ins, failed and blocked attempts, rate-limit hits,
-  account exports and deletions, moderation decisions — client addresses stored
-  as an HMAC keyed with `APP_SECRET`, never in the clear, purged after 90 days
+  quotas reached, rejected registrations, blocks and unblock decisions, account
+  exports and deletions, moderation decisions — client addresses stored as an
+  HMAC keyed with `APP_SECRET`, never in the clear, purged after 90 days. Only
+  rejections are written, never an allowed request, so the log cannot become a
+  usage profile
 - **SQL injection**: Drizzle ORM throughout; the few raw fragments use only
   module constants and the identifier escaper
 
@@ -191,13 +207,19 @@ agreement with the hosting provider.
 
 Known gaps, deliberately recorded rather than glossed over:
 
-- **No admin screen for the security log.** The `audit_log` table is written
-  and purged automatically, but reading it means querying Postgres directly.
+- **No admin screen for the raw security log.** Since 2.8.0
+  `/verwaltung/missbrauch` aggregates the rejection events for administrators,
+  but reading individual entries still means querying Postgres directly.
 - **No coverage measurement**, and no test for the authorisation boundary as a
   whole — though account deletion, export, session handling, the rate limiter
   and role assignment are covered.
 - **Rate limiting is per process.** A deployment with several replicas
-  multiplies the effective limit by the replica count.
+  multiplies the effective limit by the replica count, and each replica sends
+  its own abuse alert.
+- **Upper bounds are not enforced by the database.** A counter is expressible
+  neither as a unique nor as a partial index, so two simultaneous requests can
+  exceed any of them by one. Recorded rather than glossed over: the bounds are
+  a brake on scripts, not a guarantee.
 - **Commits are not consistently signed**, and release tags are lightweight
   rather than signed and annotated.
 
@@ -220,6 +242,8 @@ Known gaps, deliberately recorded rather than glossed over:
 | Stock owned by an organization the account belonged to                      | kept; it carries no author and is not the member's personal data                 |
 | Friend code                                                                 | deleted with the account row                                                     |
 | Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
+| Unblock requests the account filed                                          | deleted                                                                          |
+| Blocks the account imposed on others as an administrator                    | kept in force; `blockedBy` set to NULL                                           |
 | Account                                                                     | deleted                                                                          |
 
 Sign-in codes are additionally purged after 24 hours, and security log entries
@@ -231,6 +255,13 @@ if deleting an account emptied the log, anyone who gained unauthorised access
 could erase their own traces by deleting the account they broke into. Art. 17(3)
 lit. b and e cover keeping the sequence of events; what goes is the link to the
 person.
+
+Unblock requests are deleted rather than anonymised, unlike accepted proposals:
+a proposal lives on in a shared catalogue and has to stay traceable, whereas a
+request concerns only the relationship between one person and this instance and
+is moot once the account is gone. The block on the deleted account goes with it,
+which is no loophole — the account's entire stock goes too, and what prevents an
+immediate return is the registration limit rather than a leftover row.
 
 The reasoning for keeping accepted proposals is in
 `deleteUserAccount` and in the privacy policy shown to users. It rests on
