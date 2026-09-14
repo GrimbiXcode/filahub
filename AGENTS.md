@@ -957,7 +957,12 @@ Es gibt zwei Richtlinien, ausgewählt nach Pfad:
   Anwendungscode und keine Benutzerdaten, `frame-ancestors 'self'` lässt nur
   die eigene Anmeldeseite es einbetten, und es schickt die signierten
   Anmeldedaten per `postMessage` an `src/pages/Login.tsx` zurück (Herkunft,
-  Absenderfenster und Form werden dort geprüft).
+  Absenderfenster und Form werden dort geprüft). Zwei Kleinigkeiten hängen
+  daran: Die Anmeldeseite gibt dem Rahmen ihr Farbschema als URL-Parameter
+  `theme` mit – ein iframe ist nur durchsichtig, wenn sein Schema zu dem des
+  einbettenden Dokuments passt, sonst malt der Browser es deckend –, und der
+  Rahmen meldet das Maß des Knopfes zurück, damit die Anmeldeseite ihn darauf
+  zuschneidet.
 
 Zwei Stolpersteine, die beide an dieser Anmeldung hängen:
 

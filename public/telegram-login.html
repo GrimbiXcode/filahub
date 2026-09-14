@@ -18,13 +18,33 @@
       body {
         margin: 0;
         padding: 0;
-        /* Der Rahmen soll im Kartenhintergrund der Anmeldeseite verschwinden. */
+        /*
+          Der Rahmen soll im Kartenhintergrund der Anmeldeseite verschwinden.
+          Das gelingt nur, wenn sein Farbschema zu dem der Anmeldeseite passt:
+          Weichen beide voneinander ab, malt der Browser den Rahmen deckend in
+          der Grundfarbe seines Schemas, und neben dem Knopf stehen weiße
+          Flächen. Deshalb setzt telegram-login.js `color-scheme` aus dem
+          Parameter `theme`, den die Anmeldeseite mitgibt.
+        */
         background: transparent;
+      }
+
+      /*
+        Der Rumpf ist genau so groß wie der Telegram-Knopf und sitzt in der
+        Mitte: Der ResizeObserver in telegram-login.js meldet damit das Maß des
+        Knopfes, und die Anmeldeseite schneidet den Rahmen darauf zu. Nichts
+        von diesem Dokument ragt dann über den Knopf hinaus – auch dann nicht,
+        wenn ein Browser den Rahmen doch einmal deckend malt.
+      */
+      html {
+        display: flex;
+        justify-content: center;
+        overflow: hidden;
       }
 
       body {
         display: flex;
-        justify-content: center;
+        width: max-content;
       }
     </style>
   </head>

@@ -29,7 +29,20 @@
     window.parent.postMessage(message, window.location.origin);
   }
 
-  var bot = new URLSearchParams(window.location.search).get("bot") || "";
+  var params = new URLSearchParams(window.location.search);
+
+  /*
+    Farbschema der Anmeldeseite übernehmen, bevor irgendetwas gemalt wird. Ein
+    iframe ist nur durchsichtig, solange sein Schema zu dem des einbettenden
+    Dokuments passt; sonst malt ihn der Browser deckend in der Grundfarbe
+    seines eigenen Schemas – im dunklen Modus der Anmeldeseite standen so weiße
+    Flächen neben dem Knopf. `prefers-color-scheme` reichte dafür nicht: Die
+    Anmeldeseite lässt das Schema auch gegen die Einstellung des Geräts wählen.
+  */
+  document.documentElement.style.colorScheme =
+    params.get("theme") === "dark" ? "dark" : "light";
+
+  var bot = params.get("bot") || "";
   /*
     Telegram-Benutzernamen bestehen aus Buchstaben, Ziffern und Unterstrich.
     Der Wert stammt zwar aus der eigenen Anwendung, landet hier aber in einem
@@ -54,14 +67,17 @@
   document.body.appendChild(script);
 
   /*
-    Die Höhe des Telegram-Knopfes hängt an Größe und Profilbild und steht erst
-    fest, wenn das Widget geladen ist. Ein fester Wert im Rahmen schnitte ihn
-    ab, sobald Telegram etwas daran ändert – also meldet der Rahmen selbst,
-    wie viel Platz er braucht.
+    Das Maß des Telegram-Knopfes hängt an Größe, Beschriftung und Profilbild
+    und steht erst fest, wenn das Widget geladen ist. Ein fester Wert im Rahmen
+    schnitte ihn ab, sobald Telegram etwas daran ändert – also meldet der Rahmen
+    selbst, wie viel Platz er braucht. Der Rumpf ist per Stylesheet genau so
+    groß wie der Knopf (telegram-login.html), sein Maß ist also dessen Maß;
+    0 × 0 heißt, dass der Knopf noch nicht eingesetzt ist.
   */
   if (typeof ResizeObserver === "function") {
     new ResizeObserver(function () {
-      post({ kind: "size", height: document.body.scrollHeight });
+      var box = document.body.getBoundingClientRect();
+      post({ kind: "size", width: box.width, height: box.height });
     }).observe(document.body);
   }
 })();
