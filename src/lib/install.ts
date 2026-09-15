@@ -5,7 +5,8 @@
  * bietet dafür `beforeinstallprompt` an, verlangt für dieses Ereignis aber
  * weiterhin einen Service Worker mit `fetch`-Handler – den hat filahub
  * bewusst nicht, weil eine selbst gehostete App sonst nach jedem Deploy auf
- * alten Dateien hängen bleiben kann. Safari kennt gar kein solches Ereignis
+ * alten Dateien hängen bleiben kann (wie sie sich ohne ihn trotzdem aktuell
+ * hält, steht in `src/lib/appUpdate.ts`). Safari kennt gar kein solches Ereignis
  * (WebKit-Bug 255716) und wird es absehbar auch nicht bekommen.
  *
  * Bleibt: dem Benutzer den Weg zeigen, den sein Browser tatsächlich hat.

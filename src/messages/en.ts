@@ -235,6 +235,12 @@ export const en: Messages = {
     sourceOutro: "is public.",
   },
 
+  update: {
+    available:
+      "A new version of filahub is ready – reload once you are done here.",
+    reload: "Reload",
+  },
+
   errorBoundary: {
     title: "Something went wrong",
     description:

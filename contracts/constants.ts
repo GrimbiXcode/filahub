@@ -54,3 +54,14 @@ export const TELEGRAM_LOGIN_FRAME_PATH = "/telegram-login.html";
  * ohne diese Kennung wäre jede davon ein Anmeldeversuch.
  */
 export const TELEGRAM_LOGIN_FRAME_MESSAGE = "filahub-telegram-login";
+
+/**
+ * Versionsdatei neben `index.html`, Inhalt `{ "version": "X.Y.Z" }`.
+ *
+ * Angelegt beim Bau (`vite.config.ts`), gelesen von `src/lib/appUpdate.ts`:
+ * Die laufende Oberfläche fragt darüber nach, ob der Server inzwischen eine
+ * andere Version ausliefert, und lädt sich dann neu – siehe AGENTS.md,
+ * „Aktualisierung der installierten App“. Der Server behandelt die Datei wie
+ * jede andere ohne Hash im Namen (`api/lib/vite.ts`).
+ */
+export const VERSION_FILE_PATH = "/version.json";
