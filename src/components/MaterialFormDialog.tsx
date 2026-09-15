@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { COMMON_TEXTURES, resolveDensity } from "@contracts/materials";
+import {
+  COMMON_MATERIAL_TYPES,
+  COMMON_TEXTURES,
+  canonicalMaterialType,
+  normalizeMaterialType,
+  resolveDensity,
+} from "@contracts/materials";
 import { resolveAppearance } from "@contracts/appearance";
 import {
   decodeContainerRef,
@@ -34,7 +40,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
-import { COMMON_MATERIAL_TYPES, type MaterialOverview } from "@/types";
+import type { MaterialOverview } from "@/types";
 import { useActiveScope } from "@/lib/activeScope";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { useAppearanceCatalog, useSwatchLabel } from "@/lib/appearance";
@@ -153,21 +159,38 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     }
   }
 
+  /*
+    Vorschläge aus der gepflegten Liste und dem eigenen Bestand (neue Werte
+    erscheinen beim nächsten Mal automatisch in der Auswahl) – je
+    Vergleichsform **eine** Schreibweise, die Liste zuerst. Das ist dieselbe
+    Rangfolge, mit der der Server die Schreibweise festlegt
+    (`canonicalMaterialType`); ohne sie stand ein einmal getipptes „Pla“ aus
+    dem Bestand als zweiter Vorschlag neben „PLA“ (#36).
+  */
+  const typeSuggestions = useMemo(() => {
+    const byKey = new Map<string, string>();
+    for (const type of [
+      ...COMMON_MATERIAL_TYPES,
+      ...(allMaterials ?? []).map(m => m.materialType),
+    ]) {
+      const key = normalizeMaterialType(type);
+      if (key && !byKey.has(key)) byKey.set(key, type);
+    }
+    return [...byKey.values()].sort((a, b) => a.localeCompare(b));
+  }, [allMaterials]);
+
+  /*
+    Die Schreibweise, die der Server speichern wird – abgeleitet, damit die
+    vorgeschlagene Bezeichnung „Prusament PLA Rot“ heißt, während im Feld noch
+    „pla“ steht. Das Feld selbst zieht beim Verlassen nach (`onBlur` unten).
+  */
+  const canonicalType = canonicalMaterialType(materialType, typeSuggestions);
+
   // Bezeichnung aus Hersteller + Typ + Farbe vorschlagen, solange der
   // Benutzer das Feld nicht selbst bearbeitet hat – abgeleitet statt in
   // den Zustand zurückgeschrieben.
-  const autoName = buildAutoName(manufacturer, materialType, color);
+  const autoName = buildAutoName(manufacturer, canonicalType, color);
   const effectiveName = nameTouched ? name : autoName;
-
-  // Vorschläge aus bereits erfassten Materialien (neue Werte erscheinen
-  // beim nächsten Mal automatisch in der Auswahl)
-  const typeSuggestions = useMemo(() => {
-    const set = new Set<string>(COMMON_MATERIAL_TYPES);
-    (allMaterials ?? []).forEach(
-      m => m.materialType && set.add(m.materialType)
-    );
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [allMaterials]);
 
   const manufacturerSuggestions = useMemo(() => {
     const set = new Set<string>();
@@ -306,7 +329,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     const nominal = parseInt(nominalWeight, 10);
     const finalName = effectiveName.trim() || autoName;
     if (!finalName) return toast.error(t.materialForm.nameRequired);
-    if (!materialType.trim()) return toast.error(t.materialForm.typeRequired);
+    if (!canonicalType) return toast.error(t.materialForm.typeRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.materialForm.nominalRequired);
     const lager = Number(effectiveLagerId);
@@ -329,7 +352,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       lagerId: lager,
       name: finalName,
       identifier: identifier.trim() || null,
-      materialType: materialType.trim(),
+      materialType: canonicalType,
       manufacturer: manufacturer.trim() || null,
       color: color.trim() || null,
       texture: texture.trim() || null,
@@ -448,6 +471,20 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 onChange={setMaterialType}
                 suggestions={typeSuggestions}
                 placeholder="z. B. PLA, PETG, ABS"
+                /*
+                  Beim Verlassen die bekannte Schreibweise einsetzen: Wer „pla“
+                  tippt, sieht „PLA“ im Feld, bevor er speichert. Als
+                  Funktionsaktualisierung, damit ein gerade angeklickter
+                  Vorschlag nicht von einem älteren Tippstand überschrieben
+                  wird. Nur hier und nicht bei Hersteller, Farbe und
+                  Oberfläche: Für die Materialart setzt der Server dieselbe
+                  Regel durch, für die anderen drei gibt es keine.
+                */
+                onBlur={() =>
+                  setMaterialType(v =>
+                    canonicalMaterialType(v, typeSuggestions)
+                  )
+                }
               />
             </div>
             <div className="grid gap-2">

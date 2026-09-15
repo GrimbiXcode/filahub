@@ -52,20 +52,3 @@ export type AdminUnblockRequest =
 
 /** Missbrauchsübersicht für /verwaltung/missbrauch */
 export type AdminAbuseOverview = RouterOutputs["admin"]["abuse"]["overview"];
-
-/** Gängige 3D-Druck-Materialarten für Vorschläge */
-export const COMMON_MATERIAL_TYPES = [
-  "PLA",
-  "PLA+",
-  "PETG",
-  "ABS",
-  "ASA",
-  "TPU",
-  "PA (Nylon)",
-  "PC",
-  "PET",
-  "HIPS",
-  "PVA",
-  "PP",
-  "Resin",
-] as const;

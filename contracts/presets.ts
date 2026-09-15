@@ -3,6 +3,7 @@ import { FALLBACK_LANGUAGE, type LanguageCode } from "./i18n";
 import {
   containerFormSchema,
   formFitsKind,
+  normalizeMaterialType,
   type ContainerForm,
   type MaterialKind,
 } from "./materials";
@@ -86,11 +87,6 @@ export function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 100);
-}
-
-/** Vereinheitlicht eine Materialart für den Vergleich: „ pla+ “ → „PLA+“ */
-export function normalizeMaterialType(input: string): string {
-  return input.trim().replace(/\s+/g, " ").toUpperCase();
 }
 
 /**

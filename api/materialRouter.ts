@@ -12,6 +12,10 @@ import {
   MAX_MATERIALS_PER_LAGER,
   MAX_WEIGHINGS_PER_MATERIAL,
 } from "@contracts/limits";
+import {
+  COMMON_MATERIAL_TYPES,
+  canonicalMaterialType,
+} from "@contracts/materials";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput, scopeRole, type Scope } from "./scope";
@@ -28,6 +32,7 @@ import {
   findLatestConsumptionId,
   findLatestWeighingId,
   findMaterialInScope,
+  findMaterialTypesInScope,
   findMaterialsInScope,
   findRecentWeighings,
   findWeighing,
@@ -50,7 +55,12 @@ const materialInput = z.object({
   lagerId: z.number().int().positive("Bitte ein Lager wählen"),
   name: z.string().min(1, "Name ist erforderlich"),
   identifier: z.string().max(50).nullable().optional(),
-  materialType: z.string().min(1, "Materialart ist erforderlich"),
+  /**
+   * Freitext, aber case-insensitiv: Die gespeicherte Schreibweise legt
+   * `canonicalMaterialType` fest, siehe `knownMaterialTypes` unten. `trim()`
+   * vor `min(1)`, sonst wäre „ “ eine gültige Materialart.
+   */
+  materialType: z.string().trim().min(1, "Materialart ist erforderlich"),
   manufacturer: z.string().nullable().optional(),
   color: z.string().nullable().optional(),
   /** Oberfläche als Freitext („Matt", „Silk") – Vorschläge im Formular */
@@ -127,6 +137,21 @@ async function validateForeignKeys(
   if (storageBoxId != null && !(await storageBoxInScope(scope, storageBoxId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültige Lagerbox" });
   }
+}
+
+/**
+ * Die Schreibweisen, gegen die eine eingegebene Materialart abgeglichen wird:
+ * die Vorschlagsliste zuerst, dann der Bestand des Bereichs – in dieser
+ * Reihenfolge, weil `canonicalMaterialType` die **erste** Übereinstimmung nimmt
+ * und „pla“ auch dann „PLA“ werden soll, wenn im Bestand noch etwas anderes
+ * stünde. Das Formular baut seine Vorschlagsliste aus denselben zwei Quellen.
+ *
+ * Jeder Schreibpfad (`create`, `update`, `importMany`) geht hier durch. Erst
+ * **nach** `resolveScope` aufrufen: Die Liste verrät, welche Materialarten ein
+ * Bereich führt.
+ */
+async function knownMaterialTypes(scope: Scope): Promise<string[]> {
+  return [...COMMON_MATERIAL_TYPES, ...(await findMaterialTypesInScope(scope))];
 }
 
 export const materialRouter = createRouter({
@@ -239,6 +264,10 @@ export const materialRouter = createRouter({
         scope,
         {
           ...data,
+          materialType: canonicalMaterialType(
+            data.materialType,
+            await knownMaterialTypes(scope)
+          ),
           identifier: data.identifier ?? undefined,
           manufacturer: data.manufacturer ?? undefined,
           color: data.color ?? undefined,
@@ -281,7 +310,18 @@ export const materialRouter = createRouter({
         data.storageBoxId,
         data.lagerId
       );
-      await updateMaterial(scope, id, data);
+      /*
+        Nur wenn das Feld mitgeschickt wurde – `undefined` heißt „nicht
+        ändern“ (siehe `hasChanges`), und dabei bleibt es.
+      */
+      const materialType =
+        data.materialType !== undefined
+          ? canonicalMaterialType(
+              data.materialType,
+              await knownMaterialTypes(scope)
+            )
+          : undefined;
+      await updateMaterial(scope, id, { ...data, materialType });
       return { ok: true };
     }),
 
@@ -352,9 +392,17 @@ export const materialRouter = createRouter({
         ip: ctx.clientIp,
       });
       let created = 0;
+      /*
+        Einmal für den ganzen Stapel geladen. Eine Schreibweise, die dieser
+        Import neu einführt, gilt ab dann auch für seine folgenden Positionen –
+        sonst stünden „Wood“ und „wood“ aus derselben Tabelle nebeneinander.
+      */
+      const known = await knownMaterialTypes(scope);
       for (const item of input.items) {
+        const materialType = canonicalMaterialType(item.typ, known);
+        if (!known.includes(materialType)) known.push(materialType);
         // Bezeichnung aus Hersteller + Typ + Farbe (wie buildAutoName im Formular)
-        const name = [item.hersteller, item.typ, item.farbe]
+        const name = [item.hersteller, materialType, item.farbe]
           .map(s => s?.trim())
           .filter(Boolean)
           .join(" ");
@@ -362,7 +410,7 @@ export const materialRouter = createRouter({
           await createMaterial(scope, {
             lagerId: input.lagerId,
             name,
-            materialType: item.typ,
+            materialType,
             manufacturer: item.hersteller || undefined,
             color: item.farbe || undefined,
             priceCents: item.priceCents ?? undefined,

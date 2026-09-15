@@ -25,6 +25,7 @@ import {
   type MaterialColumn,
 } from "@contracts/materialColumns";
 import { roleAllows } from "@contracts/organizations";
+import { normalizeMaterialType } from "@contracts/materials";
 import AuthLayout from "@/components/AuthLayout";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
 import { PageHeader } from "@/components/PageHeader";
@@ -242,10 +243,19 @@ export default function Home() {
     updateSettings.mutate({ hiddenMaterialColumns: next });
   };
 
-  const materialTypes = useMemo(
-    () => [...new Set((materials ?? []).map(m => m.materialType))].sort(),
-    [materials]
-  );
+  /*
+    Je Vergleichsform ein Eintrag (`normalizeMaterialType`): Der Bestand führt
+    seit 2.9.1 je Bereich nur noch eine Schreibweise, aber der Filter fragt
+    nach derselben Gleichheit wie der Rest der App – nicht nach der Zeichenkette.
+  */
+  const materialTypes = useMemo(() => {
+    const byKey = new Map<string, string>();
+    (materials ?? []).forEach(m => {
+      const key = normalizeMaterialType(m.materialType);
+      if (!byKey.has(key)) byKey.set(key, m.materialType);
+    });
+    return [...byKey.values()].sort();
+  }, [materials]);
   const manufacturers = useMemo(
     () =>
       [
@@ -277,6 +287,8 @@ export default function Home() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const typeKey =
+      typeFilter === ALL ? null : normalizeMaterialType(typeFilter);
     return (materials ?? []).filter(m => {
       if (q) {
         const haystack = [
@@ -293,7 +305,8 @@ export default function Home() {
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-      if (typeFilter !== ALL && m.materialType !== typeFilter) return false;
+      if (typeKey !== null && normalizeMaterialType(m.materialType) !== typeKey)
+        return false;
       if (textureFilter !== ALL && m.texture !== textureFilter) return false;
       if (manufacturerFilter !== ALL && m.manufacturer !== manufacturerFilter)
         return false;

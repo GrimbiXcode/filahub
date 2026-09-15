@@ -16,6 +16,12 @@ type Props = {
   /** Bisher erfasste Werte als Vorschläge */
   suggestions: string[];
   placeholder?: string;
+  /**
+   * Wird gerufen, wenn das Feld den Fokus verliert – **nicht** beim Anklicken
+   * eines Vorschlags, das lässt den Fokus im Feld. Das Materialformular setzt
+   * damit die bekannte Schreibweise ein.
+   */
+  onBlur?: () => void;
 };
 
 /**
@@ -44,6 +50,7 @@ export function AutocompleteInput({
   onChange,
   suggestions,
   placeholder,
+  onBlur,
 }: Props) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -142,6 +149,7 @@ export function AutocompleteInput({
             onBlur={() => {
               // Verzögert schließen, damit Klick auf Vorschlag greift
               setTimeout(close, 150);
+              onBlur?.();
             }}
             onKeyDown={event => {
               if (event.key === "ArrowDown" || event.key === "ArrowUp") {

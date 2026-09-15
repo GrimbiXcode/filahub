@@ -2,6 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { CONTAINER_MATERIALS } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, SUPPORTED_LANGUAGES } from "@contracts/i18n";
+import { COMMON_MATERIAL_TYPES } from "@contracts/materials";
 
 /** Sprachen, für die ein zusätzliches Namensfeld erscheint */
 const TRANSLATION_LANGUAGES = SUPPORTED_LANGUAGES.filter(
@@ -29,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
-import { COMMON_MATERIAL_TYPES, type ContainerTypeItem } from "@/types";
+import type { ContainerTypeItem } from "@/types";
 
 type Props = {
   containerType: ContainerTypeItem | null;
