@@ -39,7 +39,8 @@ src/            React-Frontend
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
-  hooks/        useAuth, use-mobile, useReleaseNotes
+  hooks/        useAuth, use-mobile, useReleaseNotes, useAppUpdate
+                (Neuladen bei neuer Version)
   lib/          activeScope.ts (aktiver Bereich: privat oder Organisation),
                 activeLager.ts (gewähltes Lager, je Bereich getrennt),
                 organizationRole.ts (Stufen-Beschriftungen),
@@ -48,7 +49,8 @@ src/            React-Frontend
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
-                appVersion.ts, importPrompt.ts, utils.ts (cn-Helfer)
+                appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
+                importPrompt.ts, utils.ts (cn-Helfer)
   release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
                 **Englisch**, eigene AGENTS.md im Verzeichnis
   types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
@@ -63,7 +65,8 @@ api/            Hono/tRPC-Backend
   middleware.ts publicQuery / authedQuery / blockedQuery / adminQuery und
                 rateLimited (tRPC-Prozeduren; siehe „Grenzen gegen Missbrauch")
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
-  lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts, vite.ts (Static-Serving),
+  lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts,
+                vite.ts (Static-Serving samt Cache-Kopfzeilen),
                 clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
                 (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
@@ -80,7 +83,8 @@ api/            Hono/tRPC-Backend
                 systemStatus.ts (Zustand für /verwaltung/system)
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
-contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths), errors.ts,
+contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths,
+                Versionsdatei), errors.ts,
                 types.ts, import.ts, friends.ts (Freigabestufen, Freundescode),
                 codes.ts (Alphabet und Normalform beider Codes),
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
@@ -812,6 +816,8 @@ Bilder liegen daneben in `images/` und werden über `import.meta.glob` mitgebaut
 - `vite.config.ts` reicht die Version aus `package.json` als `__APP_VERSION__`
   ins Frontend; benutzt wird sie ausschließlich über `APP_VERSION` aus
   `src/lib/appVersion.ts`. In `api/` und `contracts/` gibt es den Wert nicht.
+  Der Bau legt ihn zusätzlich als `version.json` neben `index.html` – siehe
+  „Aktualisierung der installierten App“.
 
 ## Mehrsprachige Katalognamen
 
@@ -941,7 +947,7 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
-  `friendCode`, `rateLimit`, `limits` und `blocking`. Alle laufen ohne Datenbank
+  `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
   – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
   anlegen.
 - `api/blocking.test.ts` ist wie `friendVisibility` mehr als ein Funktionstest:
@@ -956,6 +962,9 @@ Datenbank.
   `src/release-notes/` (Namen, Frontmatter, Bildverweise, Alternativtexte).
   Das ist Absicht: `vite build` führt die Module nicht aus, eine kaputte
   Release Note fiele sonst erst im Browser auf.
+- `api/staticFiles.test.ts` prüft die Cache-Kopfzeilen der statischen
+  Auslieferung gegen ein Wegwerf-Verzeichnis – ohne `npm run build`. Der
+  Grund steht unter „Aktualisierung der installierten App“.
 - `api/format.test.ts` testet die gemeinsamen Formatierer aus
   `contracts/format.ts` – Tests unterhalb von `src/` würde vitest nicht
   einsammeln.
@@ -1027,6 +1036,59 @@ TEST_DATABASE_URL='postgres://filahub:filahub@127.0.0.1:5433/filahub_test' \
   ebenfalls.
 - PostgreSQL muss vom Container/Host aus erreichbar sein; Setup siehe
   `README.md` (Datenbank anlegen, `npm run db:push`).
+
+## Aktualisierung der installierten App
+
+filahub lässt sich auf den Home-Bildschirm legen (`InstallAppCard`), hat aber
+bewusst **keinen Service Worker** – die Begründung steht in
+`src/lib/install.ts`. Ohne ihn liegt die Frische der Dateien allein beim
+HTTP-Cache des Browsers, und der braucht dafür eine Ansage. Bis 2.9.1 fehlte
+sie: `serveStatic` schickte nur `Last-Modified`, und der Browser schätzte die
+Haltbarkeit selbst – ein Zehntel der Zeit seit der letzten Änderung, im
+Docker-Abbild also seit dem Bau. Ein vier Wochen altes Abbild hielt
+`index.html` damit drei Tage lang für frisch, samt Verweisen auf Bundles, die
+es längst nicht mehr gab. Auf dem iPhone, wo eine Home-Bildschirm-App keinen
+Neuladen-Knopf hat, half nur Löschen und neu Anlegen.
+
+Seit 2.9.2 greifen zwei Dinge ineinander:
+
+- **Cache-Kopfzeilen** (`api/lib/vite.ts`, geprüft in
+  `api/staticFiles.test.ts`). Zwei Klassen: Alles unter `/assets/` trägt einen
+  Inhalts-Hash im Namen und ist `immutable` für ein Jahr; alles andere
+  (`index.html`, Manifest, Icons, `theme-init.js`, `version.json`) ist
+  `no-cache` – aufbewahren, aber vor jedem Gebrauch nachfragen. Die
+  404-Antworten bleiben ohne Kopfzeile: Ein fehlendes Bundle mit `immutable`
+  zu beantworten hieße, dem Browser das Fehlen für ein Jahr einzuschärfen.
+  Gesetzt wird die Kopfzeile in einer Middleware **nach** `next()` und nicht
+  über `onFound` von `serveStatic`: Der Rückruf kommt erst, wenn die Antwort
+  schon gebaut ist, eine dort gesetzte Kopfzeile verpufft.
+- **Versionsabgleich** (`src/lib/appUpdate.ts`, angehängt in
+  `src/hooks/useAppUpdate.ts`, aufgerufen in `App.tsx`). Der Bau legt
+  `version.json` neben `index.html` (`vite.config.ts`, Pfad
+  `VERSION_FILE_PATH` in `contracts/constants.ts`); der Entwicklungsserver
+  beantwortet den Pfad gleich. Die laufende Oberfläche holt die Datei beim
+  Start und bei jeder Rückkehr in den Vordergrund (`visibilitychange`,
+  höchstens einmal je Minute) mit `cache: "no-store"` und lädt sich neu,
+  sobald die Version von `APP_VERSION` abweicht. Auf dem Telefon ist die
+  Rückkehr in den Vordergrund der einzige Moment, in dem überhaupt etwas
+  passiert – iOS legt die App beim Verlassen nur schlafen.
+
+Drei Regeln, die dabei leicht kippen:
+
+- **Nicht mitten in einer Eingabe.** Bei offenem Dialog oder Text im gerade
+  bearbeiteten Feld wird nicht neu geladen, sondern eine Meldung mit Knopf
+  gezeigt (`t.update`); der nächste Vordergrund-Wechsel versucht es wieder.
+  Eine Heuristik (`isMidInput`), bewusst in die vorsichtige Richtung falsch.
+- **Je Version einmal.** `sessionStorage` merkt sich, für welche Version schon
+  neu geladen wurde. Liefert ein Proxy davor `index.html` aus seinem eigenen
+  Cache, käme sonst nach dem Neuladen dieselbe alte Oberfläche zurück – und
+  fände dieselbe neue Version vor, endlos. Ohne Speicherzugriff (privates
+  Fenster) wird nicht automatisch neu geladen, sondern nur angeboten.
+- **Die Version ist der Auslöser, nicht der Bau.** Ein Deploy ohne
+  Versionssprung löst kein Neuladen aus – die Regel unter „Release Notes“
+  (Version und Note in derselben Änderung) hat hier also eine zweite
+  Bedeutung. Und ein Reverse Proxy darf die `Cache-Control`-Kopfzeilen der
+  App nicht überschreiben; das README sagt es beim Caddy-Beispiel.
 
 ## Content Security Policy
 
