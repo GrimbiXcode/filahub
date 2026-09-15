@@ -184,6 +184,12 @@ The app sets its own Content-Security-Policy, `X-Frame-Options`,
 `Referrer-Policy` and `Permissions-Policy` (see `api/app.ts`), so the proxy
 does not have to. Do not strip or overwrite them.
 
+The same goes for `Cache-Control`: the app marks its hashed bundles under
+`/assets/` as immutable and everything else — `index.html`, the manifest,
+`version.json` — as `no-cache`. That is what lets a copy installed on a
+phone's home screen notice a new release and reload itself. A proxy that
+caches HTML in front of the app brings the stale-app problem back.
+
 Caddy sets `X-Forwarded-For` by default, which is what the sign-in rate limit
 keys on. If you have a second proxy in front of Caddy — Cloudflare, say — set
 `TRUST_PROXY_HOPS=2`, otherwise the limit counts the wrong address.

@@ -248,6 +248,12 @@ export const de = {
     sourceOutro: "ist öffentlich.",
   },
 
+  update: {
+    available:
+      "Eine neue Version von filahub ist da – lade neu, sobald du hier fertig bist.",
+    reload: "Neu laden",
+  },
+
   errorBoundary: {
     title: "Etwas ist schiefgelaufen",
     description:

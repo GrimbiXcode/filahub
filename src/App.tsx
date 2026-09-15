@@ -18,6 +18,7 @@ import {
   SETTINGS_PATH,
 } from "@/const";
 import { Toaster } from "@/components/ui/sonner";
+import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { useIsMobile } from "@/hooks/use-mobile";
 import AdminPresets from "./pages/AdminPresets";
 import Appearance from "./pages/Appearance";
@@ -65,6 +66,10 @@ function ProtectedRoutes() {
 
 export default function App() {
   const isMobile = useIsMobile();
+  // Lädt die Oberfläche neu, sobald der Server eine andere Version
+  // ausliefert – ganz oben, damit es auf jeder Seite gilt, auch vor der
+  // Anmeldung. Begründung in src/lib/appUpdate.ts.
+  useAppUpdate();
 
   return (
     <ErrorBoundary>
