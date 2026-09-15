@@ -33,6 +33,93 @@ export type MaterialKind = (typeof MATERIAL_KINDS)[number];
 export const materialKindSchema = z.enum(MATERIAL_KINDS);
 
 // ---------------------------------------------------------------------------
+// Materialart-Bezeichnung
+// ---------------------------------------------------------------------------
+
+/**
+ * Gängige 3D-Druck-Materialarten für die Vorschläge im Formular.
+ *
+ * Bis 2.9.0 lag die Liste in `src/types/index.ts`. Seit 2.9.1 braucht sie auch
+ * der Server: Sie ist die erste Quelle einer Schreibweise in
+ * `canonicalMaterialType`, und Formular und Router müssen dieselbe Liste in
+ * derselben Reihenfolge sehen.
+ */
+export const COMMON_MATERIAL_TYPES = [
+  "PLA",
+  "PLA+",
+  "PETG",
+  "ABS",
+  "ASA",
+  "TPU",
+  "PA (Nylon)",
+  "PC",
+  "PET",
+  "HIPS",
+  "PVA",
+  "PP",
+  "Resin",
+] as const;
+
+/** „  pla   silk “ → „pla silk“ – Leerraum bereinigt, sonst unverändert. */
+function tidyMaterialType(input: string): string {
+  return input.trim().replace(/\s+/g, " ");
+}
+
+/**
+ * Vergleichsform einer Materialart: „ pla+ “ → „PLA+“.
+ *
+ * `materials.materialType` ist Freitext, und zwei Materialarten sind
+ * **dieselbe**, wenn ihre Vergleichsform übereinstimmt – Groß-/Kleinschreibung
+ * und Leerraum zählen nicht. Bis 2.9.0 galt das nur für den weichen Abgleich
+ * mit dem Preset-Katalog (`materialTypeMatches` in `contracts/presets.ts`);
+ * die Vorschlagsliste des Formulars und der Filter der Übersicht verglichen
+ * exakt, also stand nach einem einmal getippten „Pla“ von da an eine zweite
+ * Materialart neben „PLA“ (#36).
+ *
+ * Nur ein Schlüssel zum Vergleichen, nie das, was gespeichert wird: Welche
+ * Schreibweise in der Datenbank steht, entscheidet `canonicalMaterialType`.
+ */
+export function normalizeMaterialType(input: string): string {
+  return tidyMaterialType(input).toUpperCase();
+}
+
+/**
+ * Die Schreibweise, unter der eine eingegebene Materialart gespeichert wird.
+ *
+ * Trifft die Vergleichsform der Eingabe eine der bekannten Schreibweisen,
+ * gewinnt die bekannte – die **erste** in der Reihenfolge von `known`. Deshalb
+ * steht `COMMON_MATERIAL_TYPES` überall davor: „pla“ wird „PLA“, auch wenn im
+ * Bestand noch ein „Pla“ stünde. Sonst bleibt die Eingabe, wie sie ist, nur um
+ * Leerraum bereinigt: „Nylon“ ist eine neue Materialart und wird nicht zu
+ * „NYLON“ – diese Schreibweise hat sich jemand ausgesucht, und die nächste
+ * Eingabe von „nylon“ im selben Bereich bekommt sie vorgesetzt.
+ *
+ * **Die einzige Stelle, an der diese Regel steht.** Der Server ruft sie in
+ * jedem Schreibpfad mit der Vorschlagsliste und den Materialarten des Bereichs
+ * auf (`knownMaterialTypes` in `api/materialRouter.ts`), das Formular mit
+ * seiner Vorschlagsliste, die aus denselben zwei Quellen besteht. Beide kommen
+ * damit auf dieselbe Schreibweise; die Migration `0019_material_type_case.sql`
+ * hat den Altbestand nach derselben Rangfolge zusammengeführt.
+ *
+ * Der Preis: Eine Materialart lässt sich nicht **um**schreiben, solange sie im
+ * Bereich vorkommt – wer „Nylon“ an einem Material zu „NYLON“ ändert, bekommt
+ * „Nylon“ zurück. Für Abkürzungen, und das sind Materialarten, ist das die
+ * richtige Seite des Kompromisses.
+ */
+export function canonicalMaterialType(
+  input: string,
+  known: Iterable<string>
+): string {
+  const cleaned = tidyMaterialType(input);
+  const key = cleaned.toUpperCase();
+  if (!key) return cleaned;
+  for (const candidate of known) {
+    if (normalizeMaterialType(candidate) === key) return candidate;
+  }
+  return cleaned;
+}
+
+// ---------------------------------------------------------------------------
 // Gebindeform
 // ---------------------------------------------------------------------------
 

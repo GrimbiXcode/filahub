@@ -456,6 +456,26 @@ export async function findMaterialInScope(
   };
 }
 
+/**
+ * Alle Materialarten des Bereichs, jede Schreibweise einmal.
+ *
+ * Futter für `canonicalMaterialType`: Was hier steht, ist die Schreibweise,
+ * die eine neue Eingabe derselben Vergleichsform bekommt. Seit der Migration
+ * `0019_material_type_case.sql` führt ein Bereich je Vergleichsform nur noch
+ * eine Schreibweise; sollten es durch zwei gleichzeitige Anfragen doch einmal
+ * zwei sein, sorgt die Sortierung dafür, dass stets dieselbe gewinnt.
+ */
+export async function findMaterialTypesInScope(
+  scope: Scope
+): Promise<string[]> {
+  const rows = await getDb()
+    .selectDistinct({ materialType: materials.materialType })
+    .from(materials)
+    .where(scopeWhere(materials, scope))
+    .orderBy(materials.materialType);
+  return rows.map(row => row.materialType);
+}
+
 export async function createMaterial(
   scope: Scope,
   data: {

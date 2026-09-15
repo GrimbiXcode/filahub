@@ -10,7 +10,6 @@ import {
   isPresetHidden,
   manufacturerMatches,
   materialTypeMatches,
-  normalizeMaterialType,
   resolveContainerTare,
   slugify,
 } from "@contracts/presets";
@@ -30,13 +29,6 @@ describe("slugify", () => {
 
   it("begrenzt die Länge auf 100 Zeichen", () => {
     expect(slugify("a".repeat(200))).toHaveLength(100);
-  });
-});
-
-describe("normalizeMaterialType", () => {
-  it("vereinheitlicht Schreibweise und Leerzeichen", () => {
-    expect(normalizeMaterialType("  pla+ ")).toBe("PLA+");
-    expect(normalizeMaterialType("pla   silk")).toBe("PLA SILK");
   });
 });
 

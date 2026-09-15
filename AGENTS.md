@@ -84,7 +84,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 types.ts, import.ts, friends.ts (Freigabestufen, Freundescode),
                 codes.ts (Alphabet und Normalform beider Codes),
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
-                materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten),
+                materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten,
+                Vergleichsform und Schreibweise der Materialart-Bezeichnung),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -196,6 +197,29 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   Oberfläche in `materialType` geschmuggelt („PLA Silk"), was den
   Materialart-Filter zersplitterte: Er vergleicht exakt, also fanden sich „PLA"
   und „PLA Silk" gegenseitig nie.
+- **Die Materialart-Bezeichnung ist case-insensitiv** (seit 2.9.1, #36).
+  `materials.materialType` bleibt Freitext, aber „Pla“ und „PLA“ sind
+  **dieselbe** Materialart: Verglichen wird über die Vergleichsform
+  `normalizeMaterialType` (Leerraum bereinigt, Großbuchstaben), gespeichert
+  wird die Schreibweise, die `canonicalMaterialType` liefert – die aus
+  `COMMON_MATERIAL_TYPES`, sonst die im Bereich schon vorhandene, sonst die
+  Eingabe (beides `contracts/materials.ts`). Der Server ruft sie in **allen
+  drei** Schreibpfaden auf (`knownMaterialTypes` in `api/materialRouter.ts`:
+  `create`, `update`, `importMany`); das Formular baut seine Vorschlagsliste
+  aus denselben zwei Quellen, entdoppelt sie nach Vergleichsform und setzt beim
+  Verlassen des Feldes dieselbe Schreibweise ein; der Filter der Übersicht
+  vergleicht über die Vergleichsform. Vorher verglichen Vorschlagsliste und
+  Filter exakt, und ein einmal getipptes „Pla“ war von da an eine zweite
+  Materialart. Der Preis: Eine Materialart lässt sich nicht **um**schreiben,
+  solange sie im Bereich vorkommt – „Nylon“ → „NYLON“ kommt als „Nylon“
+  zurück. **Die Migration `0019_material_type_case.sql` ist von Hand
+  geschrieben** – drizzle-kit kennt keine Datenmigrationen – und führt den
+  Altbestand je Bereich nach derselben Rangfolge zusammen (Vorschlagsliste,
+  sonst die häufigste Schreibweise, bei Gleichstand die des ältesten
+  Materials); die Vorschlagsliste steht darin als Kopie vom Stand 2.9.1.
+  `api/materialType.integration.test.ts` wendet die Datei auf einen von Hand
+  angelegten Altbestand ein zweites Mal an und prüft das Ergebnis, weil sie in
+  Produktion genau einmal läuft.
 - **Die Migration `0009_lager.sql` ist von Hand ergänzt.** drizzle-kit erzeugt
   ein nacktes `ADD COLUMN ... NOT NULL`, das auf jeder Datenbank mit Daten
   scheitert. Der Backfill legt je Benutzer ein Lager „Mein Lager" an, füllt
@@ -915,8 +939,8 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `materialUnits`, `consumption`, `format`, `releaseNotes`,
-  `friendVisibility`,
+  `materialStats`, `materialUnits`, `materialType`, `consumption`, `format`,
+  `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits` und `blocking`. Alle laufen ohne Datenbank
   – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
   anlegen.
@@ -940,8 +964,9 @@ Datenbank.
 
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
   `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
-  `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`
-  und `api/abuse.integration.test.ts`, konfiguriert in
+  `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
+  `api/abuse.integration.test.ts` und `api/materialType.integration.test.ts`,
+  konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.
 - Getestet wird gegen **PostgreSQL 17** – dieselbe Version wie in

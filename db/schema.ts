@@ -481,7 +481,13 @@ export const materials = pgTable(
     name: varchar("name", { length: 255 }).notNull(),
     /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
     identifier: varchar("identifier", { length: 50 }),
-    /** Materialart, z. B. PLA, PETG, ABS */
+    /**
+     * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
+     * Verglichen wird über `normalizeMaterialType`, und je Bereich steht je
+     * Vergleichsform nur eine Schreibweise. Die legt `canonicalMaterialType`
+     * (`contracts/materials.ts`) in jedem Schreibpfad fest; den Altbestand
+     * hat `0019_material_type_case.sql` zusammengeführt (#36).
+     */
     materialType: varchar("materialType", { length: 100 }).notNull(),
     manufacturer: varchar("manufacturer", { length: 255 }),
     color: varchar("color", { length: 100 }),
