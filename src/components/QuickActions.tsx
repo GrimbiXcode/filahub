@@ -13,6 +13,7 @@ import {
   Package,
   Palette,
   Plus,
+  Printer,
   Scale,
   Settings as SettingsIcon,
   ShieldAlert,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
 import { roleAllows } from "@contracts/organizations";
+import { ConsumptionDialog } from "@/components/ConsumptionDialog";
 import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
 import { WeighingDialog } from "@/components/WeighingDialog";
@@ -103,6 +105,13 @@ export function QuickActionsHost() {
           !open && setQuickActionsState({ weighingFor: null })
         }
         material={current.weighingFor}
+      />
+      <ConsumptionDialog
+        open={current.consumptionFor != null}
+        onOpenChange={open =>
+          !open && setQuickActionsState({ consumptionFor: null })
+        }
+        material={current.consumptionFor}
       />
       <LoanRequestDialog
         open={current.loanFor != null}
@@ -222,11 +231,11 @@ function CommandPalette({
         .filter(Boolean)
         .join(" ")}
       onSelect={() =>
-        run(() =>
-          mode === "weigh"
-            ? quickActions.openWeighing(material)
-            : navigate(`/material/${material.id}`)
-        )
+        run(() => {
+          if (mode === "weigh") quickActions.openWeighing(material);
+          else if (mode === "consume") quickActions.openConsumption(material);
+          else navigate(`/material/${material.id}`);
+        })
       }
     >
       <Package className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
@@ -285,32 +294,49 @@ function CommandPalette({
     </CommandItem>
   ));
 
+  /*
+    Kopf und Gruppe der Palette je Modus: Die beiden Auswahlmodi (wiegen,
+    abbuchen) zeigen dieselbe Materialliste unter anderer Überschrift.
+  */
+  const heading = {
+    palette: {
+      title: t.quick.searchTitle,
+      description: t.quick.searchDescription,
+      placeholder: t.quick.searchPlaceholder,
+      group: t.quick.groupMaterials,
+    },
+    weigh: {
+      title: t.quick.weighTitle,
+      description: t.quick.weighDescription,
+      placeholder: t.quick.weighPlaceholder,
+      group: t.quick.groupWeigh,
+    },
+    consume: {
+      title: t.quick.consumeTitle,
+      description: t.quick.consumeDescription,
+      placeholder: t.quick.consumePlaceholder,
+      group: t.quick.groupConsume,
+    },
+  }[mode];
+
   return (
     <CommandDialog
       open={open}
       onOpenChange={onOpenChange}
-      title={mode === "weigh" ? t.quick.weighTitle : t.quick.searchTitle}
-      description={
-        mode === "weigh" ? t.quick.weighDescription : t.quick.searchDescription
-      }
+      title={heading.title}
+      description={heading.description}
       className="sm:max-w-xl"
     >
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder={
-          mode === "weigh"
-            ? t.quick.weighPlaceholder
-            : t.quick.searchPlaceholder
-        }
+        placeholder={heading.placeholder}
       />
       <CommandList className="max-h-[60vh]">
         <CommandEmpty>{t.common.nothingFound}</CommandEmpty>
 
-        {mode === "weigh" ? (
-          <CommandGroup heading={t.quick.groupWeigh}>
-            {materialItems}
-          </CommandGroup>
+        {mode !== "palette" ? (
+          <CommandGroup heading={heading.group}>{materialItems}</CommandGroup>
         ) : (
           <>
             {/*
@@ -327,6 +353,13 @@ function CommandPalette({
                 >
                   <Scale className="mr-2 h-4 w-4" />
                   {t.quick.weighTitle}
+                </CommandItem>
+                <CommandItem
+                  value={t.quick.keywordsConsume}
+                  onSelect={() => onModeChange("consume")}
+                >
+                  <Printer className="mr-2 h-4 w-4" />
+                  {t.quick.consumeTitle}
                 </CommandItem>
                 {roleAllows(role, "editor") && (
                   <CommandItem

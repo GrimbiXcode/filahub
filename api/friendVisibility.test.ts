@@ -88,6 +88,9 @@ describe("visibilityAllows", () => {
   });
 });
 
+/** Fester Zeitpunkt der Wägung in den Fixtures – Verbräuche liegen davor oder danach. */
+const WEIGHED_AT = new Date("2026-03-01T12:00:00Z");
+
 function materialRow(
   overrides: Partial<FriendMaterialRow> = {}
 ): FriendMaterialRow {
@@ -108,6 +111,7 @@ function materialRow(
     storageBox: null,
     lager: { materialKind: "filament", filamentDiameterUm: 1750 },
     weighings: [],
+    consumptions: [],
     ...overrides,
   };
 }
@@ -234,7 +238,7 @@ describe("toFriendMaterial", () => {
 
   it("rechnet die Restmenge aus der letzten Wägung", () => {
     const result = toFriendMaterial(
-      materialRow({ weighings: [{ grossWeight: 640 }] }),
+      materialRow({ weighings: [{ grossWeight: 640, weighedAt: WEIGHED_AT }] }),
       "Alex"
     );
     // 640 g brutto − 140 g Rollentara = 500 g Material
@@ -253,7 +257,7 @@ describe("toFriendMaterial", () => {
     const result = toFriendMaterial(
       materialRow({
         storageBox: { tareWeight: 800 },
-        weighings: [{ grossWeight: 1440 }],
+        weighings: [{ grossWeight: 1440, weighedAt: WEIGHED_AT }],
       }),
       "Alex"
     );
@@ -263,12 +267,37 @@ describe("toFriendMaterial", () => {
     expect(result).not.toHaveProperty("storageBoxId");
   });
 
+  /*
+    Seit 2.9.0 dieselbe stille Fehlerquelle ein zweites Mal: Verbräuche sind für
+    Freunde unsichtbar, gehören aber in die Rechnung. Ohne sie meldete der
+    Freund die Restmenge von vor dem letzten Druck.
+  */
+  it("zieht Verbräuche seit der letzten Wägung ab, ohne sie herauszugeben", () => {
+    const result = toFriendMaterial(
+      materialRow({
+        storageBox: { tareWeight: 800 },
+        weighings: [{ grossWeight: 1440, weighedAt: WEIGHED_AT }],
+        consumptions: [
+          // Vor der Wägung: von ihr überholt, zählt nicht.
+          { weight: 300, consumedAt: new Date("2026-02-01T12:00:00Z") },
+          { weight: 100, consumedAt: new Date("2026-03-02T12:00:00Z") },
+        ],
+      }),
+      "Alex"
+    );
+    // 1440 g − 140 g Rolle − 800 g Box − 100 g seither = 400 g Material
+    expect(result.remainingWeight).toBe(400);
+    expect(result.remainingPercent).toBe(40);
+    expect(result).not.toHaveProperty("consumptions");
+    expect(result).not.toHaveProperty("consumedSinceWeighing");
+  });
+
   it("bevorzugt die Preset-Variante vor dem eigenen Rollentyp", () => {
     const result = toFriendMaterial(
       materialRow({
         containerType: { tareWeight: 140 },
         containerPresetVariant: { tareWeight: 220 },
-        weighings: [{ grossWeight: 720 }],
+        weighings: [{ grossWeight: 720, weighedAt: WEIGHED_AT }],
       }),
       "Alex"
     );
@@ -278,7 +307,7 @@ describe("toFriendMaterial", () => {
 
   it("fällt nicht unter null", () => {
     const result = toFriendMaterial(
-      materialRow({ weighings: [{ grossWeight: 100 }] }),
+      materialRow({ weighings: [{ grossWeight: 100, weighedAt: WEIGHED_AT }] }),
       "Alex"
     );
     expect(result.remainingWeight).toBe(0);
@@ -287,7 +316,10 @@ describe("toFriendMaterial", () => {
 
   it("liefert ohne Nennmenge keinen Prozentwert", () => {
     const result = toFriendMaterial(
-      materialRow({ nominalWeight: 0, weighings: [{ grossWeight: 500 }] }),
+      materialRow({
+        nominalWeight: 0,
+        weighings: [{ grossWeight: 500, weighedAt: WEIGHED_AT }],
+      }),
       "Alex"
     );
     expect(result.remainingPercent).toBeNull();

@@ -223,6 +223,40 @@ describe("computeMaterialStats", () => {
     expect(stats.remainingPercent).toBe(0);
   });
 
+  // Seit 2.9.0: die Verbräuche seit der Wägung als fünftes Argument.
+  it("zieht Verbräuche seit der letzten Wägung ab", () => {
+    const stats = computeMaterialStats(
+      material({ containerType: ownContainer }),
+      {
+        id: 1,
+        materialId: 1,
+        grossWeight: 1000,
+        weighedAt: new Date(),
+        note: null,
+        createdAt: new Date(),
+      },
+      1,
+      "de",
+      100
+    );
+    // 1000 g − 220 g Tara − 100 g seither = 680 g
+    expect(stats.remainingWeight).toBe(680);
+    expect(stats.remainingPercent).toBe(68);
+    expect(stats.consumedSinceWeighing).toBe(100);
+  });
+
+  it("zieht Verbräuche ohne Wägung von der Nennmenge ab", () => {
+    const stats = computeMaterialStats(material(), null, 0, "de", 250);
+    expect(stats.remainingWeight).toBe(750);
+    expect(stats.consumedSinceWeighing).toBe(250);
+  });
+
+  it("meldet ohne Verbräuche 0 und rechnet wie vor 2.9.0", () => {
+    const stats = computeMaterialStats(material(), null, 0);
+    expect(stats.consumedSinceWeighing).toBe(0);
+    expect(stats.remainingWeight).toBe(1000);
+  });
+
   /*
     Die Zweitanzeige des Besitzers. Sie war bis 2.4.1 unbelegt – die Vorgabe des
     Fixtures hatte kein `lager`, also war `kind` in jedem Test `null` und der

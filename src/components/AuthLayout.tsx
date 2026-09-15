@@ -62,6 +62,7 @@ import {
   Moon,
   PanelLeft,
   Palette,
+  Printer,
   Scale,
   Search,
   Settings,
@@ -379,6 +380,25 @@ function AuthLayoutContent({
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              {/*
+                Verbrauch abbuchen (seit 2.9.0): so häufig wie Wiegen, aber
+                ohne die Hervorhebung – der auffälligste Knopf bleibt einer.
+              */}
+              {roleAllows(role, "weigher") && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    onClick={() => {
+                      setOpenMobile(false);
+                      openPalette("consume");
+                    }}
+                    tooltip={t.nav.consumeMaterial}
+                    className="h-10 font-medium"
+                  >
+                    <Printer className="h-4 w-4" />
+                    <span>{t.nav.consume}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               <SidebarMenuItem>
                 <SidebarMenuButton
                   onClick={() => {
@@ -639,6 +659,17 @@ function AuthLayoutContent({
               onClick={() => openPalette("weigh")}
             >
               <Scale className="h-5 w-5" />
+            </Button>
+          )}
+          {roleAllows(role, "weigher") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-10"
+              aria-label={t.nav.consumeMaterial}
+              onClick={() => openPalette("consume")}
+            >
+              <Printer className="h-5 w-5" />
             </Button>
           )}
           <Button

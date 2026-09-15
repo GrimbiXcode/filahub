@@ -3,7 +3,8 @@
 Webapplikation zur Verwaltung eines 3D-Druck-Materiallagers: Filament, Pulver
 und Harz in **Lagern** (bis fünf je Benutzer, je Lager eine Materialart),
 Gebindearten (Rolle, Beutel, Flasche, Eimer, Kartusche) und Dryboxen inkl.
-Leergewicht (Tara), Wägungen mit automatischer Restmengenberechnung,
+Leergewicht (Tara), Wägungen und Verbräuche mit automatischer
+Restmengenberechnung,
 Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
 anfragen. Seit 2.5.0 kann ein Lager statt einer Person auch einer
@@ -33,7 +34,8 @@ src/            React-Frontend
                 Blocked (Sperrseite), Login, NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
                 mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
-                (Dialoge + Schnellsuche), ThemeToggle
+                (Dialoge + Schnellsuche), WeighingDialog und
+                ConsumptionDialog (Wiegen, Verbrauch abbuchen), ThemeToggle
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -216,6 +218,62 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
 
+## Verbräuche (Abbuchen ohne Waage)
+
+Seit 2.9.0. Ein Verbrauch ist das, was der Slicer nach dem Druck meldet: „42 g“
+– ein **Delta**, keine Messung. Er zieht von der Restmenge ab, bis die nächste
+Wägung ihn einholt.
+
+- **Eigene Tabelle `consumptions`, keine abgeleitete Wägungszeile.** Ein
+  gerechnetes Brutto („vorheriges Brutto minus Verbrauch“) wäre eine zweite
+  Wahrheit, die still veraltet, sobald ein früherer Eintrag gelöscht wird
+  (W 1000 → −100 → −100; den ersten Verbrauch löschen, und der zweite zeigt
+  weiter 800 statt 900). Gespeichert wird nur `weight` in Gramm samt
+  `consumedAt`, `note` und `createdAt`; wie `weighings` ohne Fremdschlüssel und
+  ohne `userId`.
+- **Die Restmenge entsteht weiter an genau einer Stelle.** `remainingAmount`
+  hat einen Eingang mehr, `consumedSinceWeighing`, und klemmt **nach** dem
+  Abzug einmal auf 0. Gerechnet wird der Wert in `consumedSince`
+  (`contracts/materials.ts`): die Summe der Verbräuche mit
+  `consumedAt >= weighedAt` der jüngsten Wägung (jüngste nach `weighedAt desc,
+id desc`, wie bisher); ohne Wägung zählen alle, ab der Nennmenge. Eine neue
+  Wägung setzt damit zurück, und das Löschen der jüngsten Wägung lässt die
+  Verbräuche davor von selbst wieder zählen – nichts ist nachzurechnen.
+- **`>=` bei Gleichstand**, und `materialHistory` stellt bei gleichem
+  Zeitpunkt die Wägung vor den Verbrauch: dieselbe Reihenfolge, zweimal
+  ausgedrückt. `api/consumption.test.ts` prüft über eine Fixture-Tabelle, dass
+  `materialHistory(...)[0].remainingAfter` und `remainingAmount` dieselbe Zahl
+  liefern – die Bremse dagegen, dass Detailseite und Übersicht auseinanderlaufen.
+- **`materialHistory` rechnet den Verlauf, nicht die Seite.** Bis 2.8.0 stand
+  „Brutto minus Tara“ in `MaterialDetail.tsx` zweimal, einmal je Darstellung.
+  Jetzt liefert die Funktion beide Arten als eine Liste, neueste zuerst, mit
+  `remainingAfter` je Eintrag.
+- **Überziehen wird nicht abgelehnt.** Der Slicer schätzt, und wer 60 g abbucht,
+  wo die App 50 g vermutet, hält eine leere Rolle in der Hand. Der Dialog warnt
+  vorher, der Server klemmt auf 0.
+- **Rolle `weigher`**, aus demselben Grund wie beim Wiegen. Die Löschregel ist
+  dieselbe: `mayDeleteConsumption` ist ein **Alias** von `mayDeleteWeighing`
+  (`api/weighingCorrection.test.ts` prüft die Identität), „zuletzt erfasst“
+  meint den Verbrauch mit der höchsten `id` – auch wenn seither gewogen wurde;
+  ein überholter Verbrauch zählt ohnehin nicht mehr.
+- **Freunde sehen die verringerte Menge.** `FRIEND_MATERIAL_WITH` lädt von den
+  Verbräuchen nur Menge und Zeitpunkt (und von der jüngsten Wägung jetzt auch
+  `weighedAt`); hinaus geht nichts davon, die Schlüsselmenge von
+  `toFriendMaterial` ist unverändert. Ohne den Abzug meldete der Freund die
+  Restmenge von vor dem letzten Druck – dieselbe Falle wie bei der Drybox-Tara.
+- **Der Listenpfad lädt zwei Spalten je Verbrauch** (`findMaterialsInScope`),
+  wie er alle Wägungen lädt. Ein SQL-Aggregat wäre die Optimierung, wenn die
+  Übersicht einmal zu langsam wird – nicht vorher.
+- **Kein Audit-Ereignis.** Abbuchen ist Nutzung, nicht Sicherheit
+  (`contracts/audit.ts`). Obergrenze `MAX_CONSUMPTIONS_PER_MATERIAL` (1000),
+  Zugriffsbegrenzung `material.addConsumption` 120/min je Benutzer, beides nach
+  dem Muster unter „Grenzen gegen Missbrauch“.
+- **Registriert ist die Tabelle** in `COUNTED_TABLES`, der Tabellenliste in
+  `api/postgres.integration.test.ts`, der Ausnahmeliste des DSGVO-Wächters
+  (`api/account.integration.test.ts`), dem Export (`ACCOUNT_EXPORT_SECTIONS`,
+  Version bleibt 4 – additiv) und in allen drei Löschkaskaden (Material, Konto,
+  Organisation).
+
 ## Farbe und Oberfläche als Darstellung
 
 Seit 2.7.0 zeigt die Übersicht Farbe und Oberfläche nicht nur als Text, sondern
@@ -280,8 +338,8 @@ Der DSGVO-Wächter prüft `column_name ILIKE '%userid%'` und nicht `= 'userId'` 
 sonst wäre er eine Benennungsvorschrift statt einer Prüfung, und eine Tabelle,
 die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
 er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
-nur noch `profile` (über `users.id`), `weighings` (über das Material) und
-`loginCodes` (über die Telegram-ID).
+nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
+über das Material) und `loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -336,7 +394,8 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
   eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
   nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
-  `notes`, `purchaseDate`, alles zur Drybox, der Wägungsverlauf, `lagerId` und
+  `notes`, `purchaseDate`, alles zur Drybox, der Wägungs- und
+  Verbrauchsverlauf, `lagerId` und
   der Lagername (Freitext, kann einen Ort verraten) sowie
   `densityGramsPerLiter`.
 - **Die Zweitanzeige rechnet der Server, auch für Freunde.** Sie braucht
@@ -350,6 +409,10 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   `grossWeight − Gebindetara − Boxtara`. Wer den Box-Join weglässt, „weil Freunde
   die Box nicht sehen dürfen“, meldet eine zu hohe Restmenge – also genau die
   Zahl falsch, um die es geht.
+- **Verbräuche zählen auch bei Freunden.** Seit 2.9.0 zieht `toFriendMaterial`
+  die Verbräuche seit der jüngsten Wägung ab, mit derselben Funktion wie der
+  Besitzer; hinaus geht davon nichts. Wer den Abzug weglässt, meldet die
+  Restmenge von vor dem letzten Druck – siehe „Verbräuche“.
 - **Die Suche bei Freunden läuft serverseitig**, anders als die im eigenen Lager
   (`Home.tsx`, `QuickActions.tsx`). Das ist der Kern der Stufe `search`: Läge
   die Liste im Browser, wäre die Stufe mit einem Blick in die
@@ -417,12 +480,12 @@ required)` in `api/scope.ts` löst die Behauptung aus der Eingabe gegen die
 Die vier Stufen (`contracts/organizations.ts`, `roleAllows` nach dem Vorbild von
 `visibilityAllows`):
 
-| Vorgang                                                                                             | Stufe     |
-| --------------------------------------------------------------------------------------------------- | --------- |
-| Bestand, Lager, Gebindearten, Dryboxen ansehen; suchen                                              | `viewer`  |
-| Wägung erfassen (**abbuchen**); die eigene gerade eben korrigieren                                  | `weigher` |
-| Material anlegen/ändern/löschen, Import, Gebindearten und Dryboxen pflegen; **jede** Wägung löschen | `editor`  |
-| Lager anlegen/ändern/löschen, Mitglieder und Stufen, Beitrittscode, Org selbst                      | `admin`   |
+| Vorgang                                                                                                                 | Stufe     |
+| ----------------------------------------------------------------------------------------------------------------------- | --------- |
+| Bestand, Lager, Gebindearten, Dryboxen ansehen; suchen                                                                  | `viewer`  |
+| Wägung oder Verbrauch erfassen (**abbuchen**); den eigenen gerade eben korrigieren                                      | `weigher` |
+| Material anlegen/ändern/löschen, Import, Gebindearten und Dryboxen pflegen; **jede** Wägung und jeden Verbrauch löschen | `editor`  |
+| Lager anlegen/ändern/löschen, Mitglieder und Stufen, Beitrittscode, Org selbst                                          | `admin`   |
 
 Ein Lager ist Struktur und sein Löschen wirkt auf alle – deshalb `admin`, obwohl
 das Material darin schon `editor` darf.
@@ -439,7 +502,8 @@ Riegel in `material.deleteWeighing` und von der Sichtbarkeit des Knopfes in
 `MaterialDetail.tsx`; zwei Fassungen liefen auseinander. Verglichen wird
 `createdAt` und nicht `weighedAt` – letzteres ist eine Eingabe und ließe sich
 auf „jetzt“ setzen. „Zuletzt erfasst“ heißt höchste `id`, nicht jüngstes
-`weighedAt`.
+`weighedAt`. Seit 2.9.0 gilt das wortgleich für Verbräuche über den Alias
+`mayDeleteConsumption` (siehe „Verbräuche“).
 
 **`admin` heißt zweierlei, und die beiden haben nichts miteinander zu tun.**
 `users.role = "admin"` ist der Betreiber der Instanz (Preset-Katalog,
@@ -851,7 +915,8 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `materialUnits`, `format`, `releaseNotes`, `friendVisibility`,
+  `materialStats`, `materialUnits`, `consumption`, `format`, `releaseNotes`,
+  `friendVisibility`,
   `friendCode`, `rateLimit`, `limits` und `blocking`. Alle laufen ohne Datenbank
   – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
   anlegen.

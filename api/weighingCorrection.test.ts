@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ORGANIZATION_ROLES,
   WEIGHING_CORRECTION_MINUTES,
+  mayDeleteConsumption,
   mayDeleteWeighing,
 } from "@contracts/organizations";
 
@@ -99,5 +100,15 @@ describe("mayDeleteWeighing", () => {
       mayDeleteWeighing(role, frisch, frisch.id, JETZT)
     );
     expect(erlaubt).toEqual(["weigher", "editor", "admin"]);
+  });
+
+  /*
+    Seit 2.9.0 gilt die Regel wortgleich für Verbräuche – als Alias, nicht als
+    Kopie. Die Identität ist die Zusicherung: Wer daraus eine eigene Funktion
+    macht, hat zwei Fassungen derselben Bedingung, und genau davor warnt der
+    Kommentar an `mayDeleteWeighing`.
+  */
+  it("gilt wortgleich für Verbräuche", () => {
+    expect(mayDeleteConsumption).toBe(mayDeleteWeighing);
   });
 });

@@ -93,6 +93,9 @@ beforeEach(async () => {
       .insert(schema.weighings)
       .values({ materialId: material.id, grossWeight: 1340 });
     await db()
+      .insert(schema.consumptions)
+      .values({ materialId: material.id, weight: 50, note: "Testdruck" });
+    await db()
       .insert(schema.hiddenContainerPresets)
       .values({ userId: user.id, scope: "manufacturer", refId: 1 });
     await db()
@@ -176,10 +179,10 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese fünfzehn plus drei, die den Personenbezug über eine andere Spalte
-      führen: `profile` (users.id), `weighings` (über das Material) und
-      `loginCodes` (Telegram-ID). Ändert sich die linke Seite, muss die rechte
-      nachziehen.
+      Diese fünfzehn plus vier, die den Personenbezug über eine andere Spalte
+      führen: `profile` (users.id), `weighings` und seit 2.9.0 `consumptions`
+      (beide über das Material) sowie `loginCodes` (Telegram-ID). Ändert sich
+      die linke Seite, muss die rechte nachziehen.
 
       Vier waren es bis 2.3.0 – `audit_log` gehörte dazu, weil seine Spalten
       `actorUserId`/`subjectUserId` am engen Namensvergleich vorbeikamen. Mit dem
@@ -206,6 +209,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "customColors",
         "customTextures",
         "weighings",
+        "consumptions",
         "unblockRequests",
       ].sort()
     );
@@ -219,6 +223,9 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
 
     const weighings = dump.weighings as unknown[];
     expect(weighings).toHaveLength(1);
+    const consumptions = dump.consumptions as { note: string | null }[];
+    expect(consumptions).toHaveLength(1);
+    expect(consumptions[0].note).toBe("Testdruck");
 
     const codes = dump.loginCodes as { telegramId: string }[];
     expect(codes.every(c => c.telegramId === owner.unionId)).toBe(true);
@@ -226,6 +233,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
 
   it("kommt ohne eigene Rollen aus", async () => {
     await db().delete(schema.weighings);
+    await db().delete(schema.consumptions);
     await db()
       .delete(schema.materials)
       .where(eq(schema.materials.userId, owner.id));
@@ -234,6 +242,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     // ließe die Abfrage scheitern.
     const dump = await exportUserData(owner.id);
     expect(dump.weighings).toEqual([]);
+    expect(dump.consumptions).toEqual([]);
   });
 });
 
@@ -277,6 +286,10 @@ describe("Kontolöschung (Art. 17 DSGVO)", () => {
     const materialIds = (await db().query.materials.findMany()).map(m => m.id);
     for (const weighing of all) {
       expect(materialIds).toContain(weighing.materialId);
+    }
+    // Dasselbe für Verbräuche – gleiche Tabelle ohne Fremdschlüssel.
+    for (const consumption of await db().query.consumptions.findMany()) {
+      expect(materialIds).toContain(consumption.materialId);
     }
   });
 
@@ -533,6 +546,9 @@ describe("Kontolöschung und Organisationen", () => {
     await db()
       .insert(schema.weighings)
       .values({ materialId: orgMaterial.id, grossWeight: 1200 });
+    await db()
+      .insert(schema.consumptions)
+      .values({ materialId: orgMaterial.id, weight: 30 });
 
     const result = await deleteUserAccount(owner.id);
 
@@ -550,6 +566,11 @@ describe("Kontolöschung und Organisationen", () => {
     expect(
       await db().query.weighings.findMany({
         where: eq(schema.weighings.materialId, orgMaterial.id),
+      })
+    ).toHaveLength(0);
+    expect(
+      await db().query.consumptions.findMany({
+        where: eq(schema.consumptions.materialId, orgMaterial.id),
       })
     ).toHaveLength(0);
   });

@@ -1,7 +1,23 @@
 import { useState } from "react";
-import { mayDeleteWeighing, roleAllows } from "@contracts/organizations";
+import {
+  materialHistory,
+  type MaterialHistoryEntry,
+} from "@contracts/materials";
+import {
+  mayDeleteConsumption,
+  mayDeleteWeighing,
+  roleAllows,
+} from "@contracts/organizations";
 import { useNavigate, useParams } from "react-router";
-import { Archive, ArrowLeft, Disc3, Pencil, Scale, Trash2 } from "lucide-react";
+import {
+  Archive,
+  ArrowLeft,
+  Disc3,
+  Pencil,
+  Printer,
+  Scale,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
 import { PageHeader } from "@/components/PageHeader";
@@ -42,7 +58,7 @@ export default function MaterialDetail() {
   const materialId = Number(id);
   const navigate = useNavigate();
   const utils = trpc.useUtils();
-  const { openMaterialForm, openWeighing } = useQuickActions();
+  const { openMaterialForm, openWeighing, openConsumption } = useQuickActions();
   const {
     formatDate,
     formatDateTime,
@@ -71,6 +87,9 @@ export default function MaterialDetail() {
 
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingWeighing, setDeletingWeighing] = useState<number | null>(null);
+  const [deletingConsumption, setDeletingConsumption] = useState<number | null>(
+    null
+  );
 
   const deleteMutation = trpc.material.delete.useMutation({
     onSuccess: () => {
@@ -86,6 +105,15 @@ export default function MaterialDetail() {
       utils.material.byId.invalidate();
       utils.material.list.invalidate();
       setDeletingWeighing(null);
+    },
+    onError: e => toast.error(e.message),
+  });
+  const deleteConsumption = trpc.material.deleteConsumption.useMutation({
+    onSuccess: () => {
+      toast.success(t.materialDetail.consumptionDeleted);
+      utils.material.byId.invalidate();
+      utils.material.list.invalidate();
+      setDeletingConsumption(null);
     },
     onError: e => toast.error(e.message),
   });
@@ -119,8 +147,8 @@ export default function MaterialDetail() {
     0,
     material.nominalWeight - material.remainingWeight
   );
-  // Für die Dialoge (erwarten MaterialOverview ohne weighings-Liste)
-  const { weighings, ...overview } = material;
+  // Für die Dialoge (erwarten MaterialOverview ohne die beiden Verläufe)
+  const { weighings, consumptions, ...overview } = material;
   const asOverview = overview as MaterialOverview;
 
   /*
@@ -131,6 +159,57 @@ export default function MaterialDetail() {
     der `FORBIDDEN` liefert.
   */
   const latestWeighingId = weighings.reduce((max, w) => Math.max(max, w.id), 0);
+  const latestConsumptionId = consumptions.reduce(
+    (max, c) => Math.max(max, c.id),
+    0
+  );
+  /*
+    Ein Verlauf aus beiden Listen, mit der Restmenge nach jedem Eintrag – die
+    Rechnung steht in `contracts/materials.ts`, nicht hier (siehe dort, warum).
+  */
+  const history = materialHistory({
+    weighings,
+    consumptions,
+    tareWeight: material.tareWeight,
+    nominalWeight: material.nominalWeight,
+  });
+
+  /** Löschknopf je Eintragsart – die Regel kommt für beide aus `contracts/`. */
+  const deleteButton = (entry: MaterialHistoryEntry) => {
+    const allowed =
+      entry.kind === "weighing"
+        ? mayDeleteWeighing(role, entry, latestWeighingId)
+        : mayDeleteConsumption(role, entry, latestConsumptionId);
+    if (!allowed) return null;
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label={
+          entry.kind === "weighing"
+            ? t.materialDetail.deleteWeighing
+            : t.materialDetail.deleteConsumption
+        }
+        onClick={() =>
+          entry.kind === "weighing"
+            ? setDeletingWeighing(entry.id)
+            : setDeletingConsumption(entry.id)
+        }
+      >
+        <Trash2 className="h-4 w-4 text-muted-foreground" />
+      </Button>
+    );
+  };
+  const entryLabel = (entry: MaterialHistoryEntry) => (
+    <Badge
+      variant={entry.kind === "weighing" ? "secondary" : "outline"}
+      className="font-normal"
+    >
+      {entry.kind === "weighing"
+        ? t.materialDetail.entryWeighing
+        : t.materialDetail.entryConsumption}
+    </Badge>
+  );
 
   return (
     <AuthLayout>
@@ -155,14 +234,23 @@ export default function MaterialDetail() {
           }
           actions={
             <>
-              {/* Wiegen ist `weigher`, Bearbeiten und Löschen `editor`. */}
+              {/* Wiegen und Abbuchen sind `weigher`, Bearbeiten und Löschen `editor`. */}
               {roleAllows(role, "weigher") && (
-                <Button
-                  className="flex-1 sm:flex-none"
-                  onClick={() => openWeighing(asOverview)}
-                >
-                  <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-                </Button>
+                <>
+                  <Button
+                    className="flex-1 sm:flex-none"
+                    onClick={() => openWeighing(asOverview)}
+                  >
+                    <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    onClick={() => openConsumption(asOverview)}
+                  >
+                    <Printer className="mr-2 h-4 w-4" /> {t.nav.consume}
+                  </Button>
+                </>
               )}
               {roleAllows(role, "editor") && (
                 <>
@@ -268,6 +356,13 @@ export default function MaterialDetail() {
                       })
                     : t.materialDetail.noWeighingYet}
                 </div>
+                {material.consumedSinceWeighing > 0 && (
+                  <div className="text-xs text-muted-foreground">
+                    {t.materialDetail.consumedSince({
+                      amount: formatGrams(material.consumedSinceWeighing),
+                    })}
+                  </div>
+                )}
               </div>
               <div className="rounded-lg border p-3">
                 <div className="text-xs text-muted-foreground">
@@ -380,69 +475,82 @@ export default function MaterialDetail() {
             </CardContent>
           </Card>
 
-          {/* Wägungsverlauf */}
+          {/* Verlauf: Wägungen und Verbräuche in einer Liste, neueste zuerst */}
           <Card>
-            <CardHeader className="flex-row items-center justify-between pb-2">
+            <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 pb-2">
               <CardTitle className="text-base">
                 {t.materialDetail.history}
               </CardTitle>
               {/* Ausgeblendet statt deaktiviert – siehe `Lager.tsx`. */}
               {roleAllows(role, "weigher") && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => openWeighing(asOverview)}
-                >
-                  <Scale className="mr-2 h-3.5 w-3.5" />{" "}
-                  {t.materialDetail.newWeighing}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openConsumption(asOverview)}
+                  >
+                    <Printer className="mr-2 h-3.5 w-3.5" />{" "}
+                    {t.materialDetail.newConsumption}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => openWeighing(asOverview)}
+                  >
+                    <Scale className="mr-2 h-3.5 w-3.5" />{" "}
+                    {t.materialDetail.newWeighing}
+                  </Button>
+                </div>
               )}
             </CardHeader>
             <CardContent>
-              {weighings.length === 0 ? (
+              {history.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  {t.materialDetail.noWeighings}
+                  {t.materialDetail.noHistory}
                 </p>
               ) : (
                 <>
                   {/* Telefon: Liste statt Tabelle */}
                   <ul className="flex flex-col gap-2 sm:hidden">
-                    {weighings.map(w => (
+                    {history.map(entry => (
                       <li
-                        key={w.id}
+                        key={`${entry.kind}-${entry.id}`}
                         className="flex items-start justify-between gap-2 rounded-lg border p-3"
                       >
                         <div className="min-w-0">
-                          <div className="font-medium tabular-nums">
-                            {formatGrams(
-                              Math.max(0, w.grossWeight - material.tareWeight)
-                            )}
-                            <span className="ml-1 text-xs font-normal text-muted-foreground">
-                              {t.materialDetail.net}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="font-medium tabular-nums">
+                              {entry.kind === "weighing"
+                                ? formatGrams(entry.netWeight)
+                                : `− ${formatGrams(entry.weight)}`}
                             </span>
+                            {entry.kind === "weighing" && (
+                              <span className="text-xs text-muted-foreground">
+                                {t.materialDetail.net}
+                              </span>
+                            )}
+                            {entryLabel(entry)}
                           </div>
                           <div className="text-xs text-muted-foreground">
-                            {t.materialDetail.grossAt({
-                              when: formatDateTime(w.weighedAt),
-                              amount: formatGrams(w.grossWeight),
+                            {entry.kind === "weighing"
+                              ? t.materialDetail.grossAt({
+                                  when: formatDateTime(entry.at),
+                                  amount: formatGrams(entry.grossWeight),
+                                })
+                              : formatDateTime(entry.at)}
+                          </div>
+                          <div className="text-xs text-muted-foreground tabular-nums">
+                            {t.materialDetail.remainingAfter({
+                              amount: formatGrams(entry.remainingAfter),
                             })}
                           </div>
-                          {w.note && (
+                          {entry.note && (
                             <div className="mt-1 wrap-break-word text-xs text-muted-foreground">
-                              {w.note}
+                              {entry.note}
                             </div>
                           )}
                         </div>
-                        {mayDeleteWeighing(role, w, latestWeighingId) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            aria-label={t.materialDetail.deleteWeighing}
-                            onClick={() => setDeletingWeighing(w.id)}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground" />
-                          </Button>
-                        )}
+                        {deleteButton(entry)}
                       </li>
                     ))}
                   </ul>
@@ -452,38 +560,49 @@ export default function MaterialDetail() {
                       <TableHeader>
                         <TableRow>
                           <TableHead>{t.common.date}</TableHead>
-                          <TableHead>{t.materialDetail.colGross}</TableHead>
-                          <TableHead>{t.materialDetail.colNet}</TableHead>
-                          <TableHead>{t.materialDetail.colNote}</TableHead>
+                          <TableHead>{t.materialDetail.colEntry}</TableHead>
+                          <TableHead>
+                            {t.materialDetail.colRemainingAfter}
+                          </TableHead>
                           <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {weighings.map(w => (
-                          <TableRow key={w.id}>
-                            <TableCell className="whitespace-nowrap">
-                              {formatDateTime(w.weighedAt)}
+                        {history.map(entry => (
+                          <TableRow key={`${entry.kind}-${entry.id}`}>
+                            {/* Nur das Datum – die Karte teilt sich die Breite
+                                mit den Stammdaten; die Uhrzeit steht im Titel
+                                und in der Telefon-Liste. */}
+                            <TableCell
+                              className="whitespace-nowrap"
+                              title={formatDateTime(entry.at)}
+                            >
+                              {formatDate(entry.at)}
                             </TableCell>
-                            <TableCell>{formatGrams(w.grossWeight)}</TableCell>
-                            <TableCell className="font-medium">
-                              {formatGrams(
-                                Math.max(0, w.grossWeight - material.tareWeight)
+                            {/* Art, Menge und Notiz in einer Zelle – sechs
+                                Spalten passen nicht neben die Stammdaten. */}
+                            <TableCell>
+                              <div className="flex items-center gap-2 whitespace-nowrap">
+                                {entryLabel(entry)}
+                                <span className="tabular-nums">
+                                  {entry.kind === "weighing"
+                                    ? t.materialDetail.lastWeighingGross({
+                                        amount: formatGrams(entry.grossWeight),
+                                      })
+                                    : `− ${formatGrams(entry.weight)}`}
+                                </span>
+                              </div>
+                              {entry.note && (
+                                <div className="mt-1 wrap-break-word text-xs text-muted-foreground">
+                                  {entry.note}
+                                </div>
                               )}
                             </TableCell>
-                            <TableCell className="text-muted-foreground">
-                              {w.note ?? "–"}
+                            <TableCell className="font-medium tabular-nums">
+                              {formatGrams(entry.remainingAfter)}
                             </TableCell>
                             <TableCell className="text-right">
-                              {mayDeleteWeighing(role, w, latestWeighingId) && (
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  aria-label={t.materialDetail.deleteWeighing}
-                                  onClick={() => setDeletingWeighing(w.id)}
-                                >
-                                  <Trash2 className="h-4 w-4 text-muted-foreground" />
-                                </Button>
-                              )}
+                              {deleteButton(entry)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -547,6 +666,38 @@ export default function MaterialDetail() {
                 deleteWeighing.mutate({
                   ...scope,
                   id: deletingWeighing,
+                })
+              }
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {t.common.delete}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={deletingConsumption != null}
+        onOpenChange={open => !open && setDeletingConsumption(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t.materialDetail.deleteConsumptionTitle}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t.materialDetail.deleteConsumptionDescription}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deleteConsumption.isPending}
+              onClick={() =>
+                deletingConsumption != null &&
+                deleteConsumption.mutate({
+                  ...scope,
+                  id: deletingConsumption,
                 })
               }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"

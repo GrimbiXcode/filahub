@@ -26,6 +26,7 @@ import {
   type TextureKind,
 } from "@contracts/appearance";
 import {
+  consumedSince,
   remainingAmount,
   type MaterialKind,
   type SecondaryAmount,
@@ -398,9 +399,17 @@ const FRIEND_MATERIAL_WITH = {
     columns: { materialKind: true, filamentDiameterUm: true } as const,
   },
   weighings: {
-    columns: { grossWeight: true } as const,
+    columns: { grossWeight: true, weighedAt: true } as const,
     orderBy: [desc(weighings.weighedAt), desc(weighings.id)],
     limit: 1,
+  },
+  /*
+    Von den Verbräuchen nur Menge und Zeitpunkt – genug für `consumedSince`,
+    und nichts davon geht hinaus. Ohne sie meldete die Freundesansicht die
+    Restmenge von vor dem letzten Druck, also zu viel.
+  */
+  consumptions: {
+    columns: { weight: true, consumedAt: true } as const,
   },
   /*
     `as const` gehört an die inneren `columns`-Objekte, nicht an das äußere:
@@ -434,7 +443,8 @@ export type FriendMaterialRow = {
     materialKind: MaterialKind;
     filamentDiameterUm: number | null;
   } | null;
-  weighings: { grossWeight: number }[];
+  weighings: { grossWeight: number; weighedAt: Date }[];
+  consumptions: { weight: number; consumedAt: Date }[];
 };
 
 /**
@@ -477,11 +487,16 @@ export function toFriendMaterial(
     Ohne Lager keine Zweitanzeige: Nach der Migration hat jedes Material eines,
     aber der Typ lässt `null` zu und eine geratene Länge wäre schlimmer als keine.
   */
+  const last = row.weighings.at(0);
   const { remainingWeight, remainingPercent, secondary } = remainingAmount({
     nominalWeight: row.nominalWeight,
     containerTareWeight: resolveContainerTare(row),
     boxTareWeight: row.storageBox?.tareWeight,
-    grossWeight: row.weighings.at(0)?.grossWeight,
+    grossWeight: last?.grossWeight,
+    consumedSinceWeighing: consumedSince(
+      last?.weighedAt ?? null,
+      row.consumptions
+    ),
     materialType: row.materialType,
     kind: row.lager?.materialKind,
     densityGramsPerLiter: row.densityGramsPerLiter,

@@ -383,6 +383,12 @@ export function remainingAmount(input: {
   boxTareWeight?: number | null;
   /** Bruttogewicht der jüngsten Wägung; `null` = noch keine */
   grossWeight?: number | null;
+  /**
+   * Summe der Verbräuche seit der jüngsten Wägung in Gramm, üblicherweise aus
+   * `consumedSince`. Ohne Wägung sind das **alle** Verbräuche des Materials.
+   * Fehlt der Wert, gilt 0 – die Rechnung von vor 2.9.0.
+   */
+  consumedSinceWeighing?: number | null;
   materialType: string;
   /** Materialart des Lagers; `null` = unbekannt, dann keine Zweitanzeige */
   kind?: MaterialKind | null;
@@ -390,10 +396,21 @@ export function remainingAmount(input: {
   diameterUm?: number | null;
 }): RemainingAmount {
   const tareWeight = input.containerTareWeight + (input.boxTareWeight ?? 0);
-  const remainingWeight =
+  /*
+    Basis ist die jüngste Wägung (Brutto minus Tara), sonst die Nennmenge; davon
+    gehen die seither abgebuchten Verbräuche ab. Die Klemme auf 0 steht bewusst
+    **nach** dem Abzug und nur hier: Ein Verbrauch darf die berechnete Restmenge
+    übersteigen – der Slicer schätzt, und eine leere Rolle ist ein ehrlicher
+    Zustand, kein Eingabefehler.
+  */
+  const base =
     input.grossWeight != null
-      ? Math.max(0, input.grossWeight - tareWeight)
+      ? input.grossWeight - tareWeight
       : input.nominalWeight;
+  const remainingWeight = Math.max(
+    0,
+    base - (input.consumedSinceWeighing ?? 0)
+  );
   const remainingPercent =
     input.nominalWeight > 0
       ? Math.min(
@@ -430,4 +447,142 @@ export function remainingAmount(input: {
     secondary,
     densityUsed,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Verbräuche
+// ---------------------------------------------------------------------------
+
+/**
+ * Summe der Verbräuche, die **seit der jüngsten Wägung** abgebucht wurden.
+ *
+ * Ein Verbrauch ist ein Delta („der Druck hat 42 g gebraucht“), keine
+ * Messung. Er zählt, solange keine Wägung ihn überholt hat: Wer danach wiegt,
+ * misst den Verbrauch mit, und die Wägung ist die Wahrheit. Ohne Wägung zählt
+ * alles, gerechnet ab der Nennmenge.
+ *
+ * `>=` und nicht `>`: Bei gleichem Zeitstempel gilt die Wägung als zuerst
+ * geschehen und der Verbrauch als danach – dieselbe Reihenfolge, die
+ * `materialHistory` bei Gleichstand anwendet. Beide Fassungen müssen dieselbe
+ * Zahl liefern; `api/consumption.test.ts` prüft das.
+ *
+ * Rein und ohne Datenbank, weil Besitzer- und Freundesansicht sie beide
+ * brauchen – aus demselben Grund wie `remainingAmount`.
+ */
+export function consumedSince(
+  /** `weighedAt` der jüngsten Wägung; `null` = noch keine */
+  lastWeighedAt: Date | null,
+  consumptions: readonly { weight: number; consumedAt: Date }[]
+): number {
+  const since = lastWeighedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+  let sum = 0;
+  for (const entry of consumptions) {
+    if (entry.consumedAt.getTime() >= since) sum += entry.weight;
+  }
+  return sum;
+}
+
+/** Ein Eintrag im gemeinsamen Verlauf aus Wägungen und Verbräuchen. */
+export type MaterialHistoryEntry =
+  | {
+      kind: "weighing";
+      id: number;
+      /** `weighedAt` */
+      at: Date;
+      createdAt: Date;
+      note: string | null;
+      grossWeight: number;
+      /** Brutto minus Tara, nie negativ */
+      netWeight: number;
+      /** Restmenge nach diesem Eintrag */
+      remainingAfter: number;
+    }
+  | {
+      kind: "consumption";
+      id: number;
+      /** `consumedAt` */
+      at: Date;
+      createdAt: Date;
+      note: string | null;
+      /** Abgebuchte Menge in Gramm */
+      weight: number;
+      /** Restmenge nach diesem Eintrag */
+      remainingAfter: number;
+    };
+
+/**
+ * Wägungen und Verbräuche als **ein** Verlauf, neueste zuerst, mit der
+ * Restmenge nach jedem Eintrag.
+ *
+ * Reihenfolge: nach Zeitpunkt, bei Gleichstand Wägung vor Verbrauch, dann
+ * `id`. Der laufende Stand beginnt bei der Nennmenge; eine Wägung setzt ihn auf
+ * Brutto minus Tara, ein Verbrauch zieht ab. Beides klemmt auf 0.
+ *
+ * `[0].remainingAfter` ist damit dieselbe Zahl, die `remainingAmount` aus der
+ * jüngsten Wägung und `consumedSince` liefert – und die Zusicherung darüber
+ * steht in `api/consumption.test.ts`. Hier gerechnet, damit die Detailseite
+ * nicht ihre eigene Fassung von „Brutto minus Tara“ führt: Bis 2.8.0 stand sie
+ * dort zweimal, einmal je Darstellung.
+ */
+export function materialHistory(input: {
+  weighings: readonly {
+    id: number;
+    grossWeight: number;
+    weighedAt: Date;
+    createdAt: Date;
+    note: string | null;
+  }[];
+  consumptions: readonly {
+    id: number;
+    weight: number;
+    consumedAt: Date;
+    createdAt: Date;
+    note: string | null;
+  }[];
+  /** Gebindetara plus Drybox-Tara */
+  tareWeight: number;
+  nominalWeight: number;
+}): MaterialHistoryEntry[] {
+  // Verteilend über die Union, sonst blieben von den beiden Arten nur die
+  // gemeinsamen Felder übrig.
+  type Pending = MaterialHistoryEntry extends infer E
+    ? E extends MaterialHistoryEntry
+      ? Omit<E, "remainingAfter">
+      : never
+    : never;
+  const pending: Pending[] = [
+    ...input.weighings.map<Pending>(w => ({
+      kind: "weighing",
+      id: w.id,
+      at: w.weighedAt,
+      createdAt: w.createdAt,
+      note: w.note,
+      grossWeight: w.grossWeight,
+      netWeight: Math.max(0, w.grossWeight - input.tareWeight),
+    })),
+    ...input.consumptions.map<Pending>(c => ({
+      kind: "consumption",
+      id: c.id,
+      at: c.consumedAt,
+      createdAt: c.createdAt,
+      note: c.note,
+      weight: c.weight,
+    })),
+  ];
+  pending.sort(
+    (a, b) =>
+      a.at.getTime() - b.at.getTime() ||
+      // Wägung vor Verbrauch – siehe `consumedSince`.
+      Number(a.kind === "consumption") - Number(b.kind === "consumption") ||
+      a.id - b.id
+  );
+  let running = input.nominalWeight;
+  const entries = pending.map<MaterialHistoryEntry>(entry => {
+    running =
+      entry.kind === "weighing"
+        ? entry.netWeight
+        : Math.max(0, running - entry.weight);
+    return { ...entry, remainingAfter: running };
+  });
+  return entries.reverse();
 }

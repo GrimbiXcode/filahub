@@ -225,26 +225,26 @@ Known gaps, deliberately recorded rather than glossed over:
 
 ## Erasure concept
 
-| Data                                                                        | On account deletion                                                              |
-| --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Own stock: materials, weigh-ins, container types, dryboxes, hidden presets  | deleted                                                                          |
-| Store shares (`lager_shares`) — granted and received, **before** the stores | deleted                                                                          |
-| Stores (`lager`) — deleted **after** the materials that point at them       | deleted                                                                          |
-| Proposals — pending, rejected, withdrawn                                    | deleted                                                                          |
-| Proposals — accepted                                                        | anonymised: `userId` and comment set to NULL                                     |
-| Global catalogue entries                                                    | kept; they carry no personal data                                                |
-| Moderation record where the deleted user reviewed                           | `reviewedBy` set to NULL                                                         |
-| Sign-in codes                                                               | deleted                                                                          |
-| Friendships — in both directions                                            | deleted                                                                          |
-| Loan requests — asked and been asked                                        | deleted                                                                          |
-| Organization memberships and invitations — in both directions               | deleted                                                                          |
-| Organizations where the account was the **last** administrator              | successor promoted, or the organization and its stock deleted if nobody is left  |
-| Stock owned by an organization the account belonged to                      | kept; it carries no author and is not the member's personal data                 |
-| Friend code                                                                 | deleted with the account row                                                     |
-| Security log entries                                                        | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
-| Unblock requests the account filed                                          | deleted                                                                          |
-| Blocks the account imposed on others as an administrator                    | kept in force; `blockedBy` set to NULL                                           |
-| Account                                                                     | deleted                                                                          |
+| Data                                                                                     | On account deletion                                                              |
+| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Own stock: materials, weigh-ins, consumptions, container types, dryboxes, hidden presets | deleted                                                                          |
+| Store shares (`lager_shares`) — granted and received, **before** the stores              | deleted                                                                          |
+| Stores (`lager`) — deleted **after** the materials that point at them                    | deleted                                                                          |
+| Proposals — pending, rejected, withdrawn                                                 | deleted                                                                          |
+| Proposals — accepted                                                                     | anonymised: `userId` and comment set to NULL                                     |
+| Global catalogue entries                                                                 | kept; they carry no personal data                                                |
+| Moderation record where the deleted user reviewed                                        | `reviewedBy` set to NULL                                                         |
+| Sign-in codes                                                                            | deleted                                                                          |
+| Friendships — in both directions                                                         | deleted                                                                          |
+| Loan requests — asked and been asked                                                     | deleted                                                                          |
+| Organization memberships and invitations — in both directions                            | deleted                                                                          |
+| Organizations where the account was the **last** administrator                           | successor promoted, or the organization and its stock deleted if nobody is left  |
+| Stock owned by an organization the account belonged to                                   | kept; it carries no author and is not the member's personal data                 |
+| Friend code                                                                              | deleted with the account row                                                     |
+| Security log entries                                                                     | anonymised: actor, subject and Telegram ID set to NULL; event and timestamp kept |
+| Unblock requests the account filed                                                       | deleted                                                                          |
+| Blocks the account imposed on others as an administrator                                 | kept in force; `blockedBy` set to NULL                                           |
+| Account                                                                                  | deleted                                                                          |
 
 Sign-in codes are additionally purged after 24 hours, and security log entries
 after 90 days, regardless of any deletion request

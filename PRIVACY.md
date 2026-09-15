@@ -33,7 +33,7 @@ details into the Markdown** — the next person to pull the image would ship the
 | Last sign-in timestamp                                                                                                                                                | `users`                    | until the account is deleted                     |
 | Display settings (language, currency, format)                                                                                                                         | `users`                    | until the account is deleted                     |
 | Stores (name, material kind, filament diameter, free-text notes)                                                                                                      | `lager`                    | until the account is deleted                     |
-| Materials, weigh-ins, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes                                     | own tables                 | until the account is deleted                     |
+| Materials, weigh-ins, consumptions, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes                       | own tables                 | until the account is deleted                     |
 | Friendships: who is connected to whom and who asked                                                                                                                   | `friendships`              | until either account is deleted                  |
 | Store sharing: which of a user's stores a given friend may see, and how much                                                                                          | `lager_shares`             | until either account is deleted                  |
 | Loan requests: who asked whom for which material, its name at the time, and a free-text message                                                                       | `loan_requests`            | until either account is deleted                  |
@@ -101,7 +101,8 @@ What a friend can see, at most: name, short identifier, material type, surface
 finish, manufacturer, colour, nominal weight, remaining amount and percentage,
 and the remaining amount converted to metres or litres. What they can never see,
 at any level: prices, free-text notes, purchase dates, storage box and its
-location, the weigh-in history, and which store a material sits in — a store
+location, the weigh-in and consumption history, and which store a material
+sits in — a store
 name is free text and can name a place, the same reason the storage box is
 excluded. **The store becoming the unit of sharing changed nothing about that
 list**: a friend's view stays a flat list, never grouped by store, so the
@@ -164,7 +165,8 @@ Two consequences worth telling your users plainly:
 Creating, joining, leaving, invitations, level changes and removals are recorded
 in the security log (`organization.*` events, purged after 90 days) — they change
 access rights, the same reason friendships are logged. What a member _does_ with
-the stock is not: weighing and recording are usage, and logging them would build
+the stock is not: weighing, logging consumption and recording are usage, and
+logging them would build
 the movement profile the log is designed to avoid.
 
 **Nobody else.** No analytics, no tracking, no CDN, no external fonts, no error

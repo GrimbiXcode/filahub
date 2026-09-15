@@ -568,6 +568,38 @@ export const weighings = pgTable(
 export type Weighing = typeof weighings.$inferSelect;
 export type InsertWeighing = typeof weighings.$inferInsert;
 
+/**
+ * Verbrauch eines Materials (seit 2.9.0): eine Abbuchung in Gramm, ohne Waage –
+ * üblicherweise die Angabe des Slicers nach einem Druck.
+ *
+ * Eine **eigene Tabelle** und keine abgeleitete Wägungszeile mit gerechnetem
+ * Bruttogewicht: Das gerechnete Brutto wäre eine zweite Wahrheit, die still
+ * veraltet, sobald ein früherer Eintrag gelöscht wird. Gespeichert wird nur das
+ * Delta; die Restmenge entsteht in `remainingAmount` (`contracts/materials.ts`)
+ * aus der jüngsten Wägung minus der Verbräuche seither (`consumedSince`).
+ *
+ * Wie `weighings` ohne Fremdschlüssel und ohne `userId` – der Personenbezug
+ * läuft über das Material, deshalb steht die Tabelle in der Ausnahmeliste des
+ * DSGVO-Wächters (`api/account.integration.test.ts`).
+ */
+export const consumptions = pgTable(
+  "consumptions",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    materialId: bigint("materialId", { mode: "number" }).notNull(),
+    /** Abgebuchte Menge in Gramm */
+    weight: integer("weight").notNull(),
+    consumedAt: tsColumn("consumedAt").defaultNow().notNull(),
+    note: varchar("note", { length: 500 }),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  // Dieselbe Begründung wie bei `weighings_material_idx`.
+  t => [index("consumptions_material_idx").on(t.materialId)]
+);
+
+export type Consumption = typeof consumptions.$inferSelect;
+export type InsertConsumption = typeof consumptions.$inferInsert;
+
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde
 //

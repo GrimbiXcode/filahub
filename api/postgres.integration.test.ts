@@ -69,6 +69,7 @@ describe("Migrationen", () => {
       "lager",
       "materials",
       "weighings",
+      "consumptions",
       "container_types",
       "storage_boxes",
       "custom_colors",
@@ -699,6 +700,99 @@ describe("Materialien und Wiegungen", () => {
     });
     expect(detail?.weighings).toHaveLength(2);
     expect(detail?.containerPresetVariantId).toBe(option.id);
+  });
+
+  /*
+    Seit 2.9.0: Ein Verbrauch zieht ab, ohne dass gewogen wird – und die
+    nächste Wägung holt ihn wieder ein. Beides durch den echten Router, weil
+    hier zwei Tabellen und die Sortierung „jüngste Wägung“ zusammenspielen.
+  */
+  it("bucht Verbräuche ab und setzt sie mit der nächsten Wägung zurück", async () => {
+    const lager = await asUser.lager.create({
+      ...PERSONAL,
+      name: "IT Verbrauch",
+      materialKind: "filament",
+      filamentDiameterUm: 1750,
+    });
+    const container = await asUser.containerType.create({
+      ...PERSONAL,
+      name: "IT Rolle",
+      tareWeight: 180,
+    });
+    const material = await asUser.material.create({
+      ...PERSONAL,
+      lagerId: lager!.id,
+      name: "IT Verbrauchsfilament",
+      materialType: "PLA",
+      nominalWeight: 1000,
+      containerTypeId: container!.id,
+    });
+    const overview = async () =>
+      (await asUser.material.list(PERSONAL)).find(m => m.id === material.id)!;
+
+    await asUser.material.addWeighing({
+      ...PERSONAL,
+      materialId: material.id,
+      grossWeight: 1180,
+    });
+    expect((await overview()).remainingWeight).toBe(1000);
+
+    const consumption = await asUser.material.addConsumption({
+      ...PERSONAL,
+      materialId: material.id,
+      weight: 100,
+      note: "Halterung",
+    });
+    expect(consumption?.weight).toBe(100);
+    let listed = await overview();
+    expect(listed.remainingWeight).toBe(900);
+    expect(listed.consumedSinceWeighing).toBe(100);
+
+    const detail = await asUser.material.byId({
+      ...PERSONAL,
+      id: material.id,
+    });
+    expect(detail?.consumptions).toHaveLength(1);
+    expect(detail?.consumptions[0].note).toBe("Halterung");
+
+    await asUser.material.deleteConsumption({
+      ...PERSONAL,
+      id: consumption!.id,
+    });
+    expect((await overview()).remainingWeight).toBe(1000);
+
+    // Erneut abbuchen, dann wiegen: Die Wägung ist die Wahrheit.
+    await asUser.material.addConsumption({
+      ...PERSONAL,
+      materialId: material.id,
+      weight: 100,
+    });
+    await asUser.material.addWeighing({
+      ...PERSONAL,
+      materialId: material.id,
+      grossWeight: 1000,
+    });
+    listed = await overview();
+    expect(listed.remainingWeight).toBe(820);
+    expect(listed.consumedSinceWeighing).toBe(0);
+
+    // Überziehen wird nicht abgelehnt – die Rolle ist dann leer.
+    await asUser.material.addConsumption({
+      ...PERSONAL,
+      materialId: material.id,
+      weight: 5000,
+    });
+    listed = await overview();
+    expect(listed.remainingWeight).toBe(0);
+    expect(listed.remainingPercent).toBe(0);
+
+    // Das Material mitsamt Verbräuchen löschen – nichts bleibt verwaist.
+    await asUser.material.delete({ ...PERSONAL, id: material.id });
+    expect(
+      await db().query.consumptions.findMany({
+        where: eq(schema.consumptions.materialId, material.id),
+      })
+    ).toHaveLength(0);
   });
 
   it("trennt die Daten der Benutzer", async () => {

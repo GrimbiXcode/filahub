@@ -5,7 +5,9 @@ resin and powder. Material lives in **stores**, one kind of material per store;
 it sits in a **container** (spool, bag, bottle, pail, cartridge) and optionally
 in a **drybox**, both with a stored tare weight. A weigh-in is a gross weight
 typed in from a kitchen scale, and the remaining quantity is what is left after
-the tare comes off. Short IDs for quick retrieval, a shared preset catalogue of
+the tare comes off. Between weigh-ins, a consumption is the grams a print used,
+typed in from the slicer; it comes off the last weigh-in until the next one
+replaces it. Short IDs for quick retrieval, a shared preset catalogue of
 manufacturers and containers, per-store sharing with friends, organizations for
 a stock several people work on, and Telegram-only login.
 
@@ -286,7 +288,7 @@ Membership comes at one of four levels, each including the ones below it:
 | Level      | May                                                                     |
 | ---------- | ----------------------------------------------------------------------- |
 | **View**   | see and search the stock, the stores, container types and dryboxes      |
-| **Weigh**  | also weigh                                                              |
+| **Weigh**  | also weigh and log consumption                                          |
 | **Record** | also add, change, delete and import material; maintain containers/boxes |
 | **Manage** | also create and delete stores, invite people, assign levels, rename     |
 
@@ -315,11 +317,13 @@ tiers to tune them for.
 
 **Rate limits** (`api/middleware.ts`). Counted per account for anything signed
 in and per IP address for the sign-in itself. Every signed-in procedure carries
-a generous baseline; creating material, weighing, importing, searching and
+a generous baseline; creating material, weighing, logging consumption,
+importing, searching and
 sending catalogue suggestions carry tighter ones.
 
 **Upper bounds** (`contracts/limits.ts`). Per store: 1000 materials. Per
-material: 1000 weigh-ins. Per scope (personal or organization): 200 own colours,
+material: 1000 weigh-ins and 1000 consumptions. Per scope (personal or
+organization): 200 own colours,
 100 own finishes, 100 own container types, 100 dryboxes. Per account: 20 open
 catalogue suggestions and 50 per day. None of these is enforced by the database —
 two simultaneous requests can exceed any of them by one. The numbers sit far

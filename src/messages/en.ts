@@ -71,6 +71,8 @@ export const en: Messages = {
     material: "Material",
     weigh: "Weigh",
     weighMaterial: "Weigh material",
+    consume: "Log usage",
+    consumeMaterial: "Log material usage",
     searchWithShortcut: (vars: { shortcut: string }) =>
       `Search (${vars.shortcut})`,
     releaseNotesUnread: (vars: { count: number }) =>
@@ -134,17 +136,22 @@ export const en: Messages = {
   quick: {
     weighTitle: "Weigh material",
     weighDescription: "Pick the material you want to weigh",
+    consumeTitle: "Log usage",
+    consumeDescription: "Pick the material a print used",
     searchTitle: "Quick search",
     searchDescription: "Find materials, open pages and run actions",
     weighPlaceholder: "Identifier or name of the material …",
+    consumePlaceholder: "Identifier or name of the material …",
     searchPlaceholder: "Search: identifier, material, page or action …",
     groupWeigh: "Material to weigh",
+    groupConsume: "Material to log usage for",
     groupActions: "Actions",
     groupJumpTo: "Jump to",
     groupMaterials: "Materials",
     newMaterial: "Add a material",
     remaining: (vars: { amount: string }) => `${vars.amount} left`,
     keywordsWeigh: "weigh weighing scale material",
+    keywordsConsume: "usage used consumption print slicer grams log",
     keywordsNewMaterial: "new material add filament create",
     keywordsGoTo: (vars: { label: string }) => `go to ${vars.label}`,
     keywordsAdmin: (vars: { label: string }) => `administration ${vars.label}`,
@@ -340,25 +347,35 @@ export const en: Messages = {
     fromCatalog: "Catalogue",
     storageBox: "Drybox",
     tareSuffix: (vars: { amount: string }) => `(${vars.amount} tare)`,
-    history: "Weighing history",
+    consumedSince: (vars: { amount: string }) =>
+      `${vars.amount} used since then`,
+    history: "History",
     newWeighing: "New weigh-in",
-    colGross: "Gross",
-    colNet: "Net",
-    colNote: "Note",
+    newConsumption: "Log usage",
+    colEntry: "Entry",
+    colRemainingAfter: "Left after",
+    entryWeighing: "Weigh-in",
+    entryConsumption: "Usage",
     net: "net",
     grossAt: (vars: { when: string; amount: string }) =>
       `${vars.when} · ${vars.amount} gross`,
-    noWeighings: "No weigh-ins recorded yet.",
+    remainingAfter: (vars: { amount: string }) => `${vars.amount} left after`,
+    noHistory: "No weigh-ins or usage recorded yet.",
     deleteMaterial: "Delete material",
     deleteMaterialTitle: "Delete this material?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `“${vars.name}” and every weigh-in that belongs to it will be deleted for good.`,
+      `“${vars.name}” and every weigh-in and usage entry that belongs to it will be deleted for good.`,
     materialDeleted: "Material deleted",
     deleteWeighing: "Delete weigh-in",
     deleteWeighingTitle: "Delete this weigh-in?",
     deleteWeighingDescription:
       "The remaining quantity will then be derived from the next older weigh-in.",
     weighingDeleted: "Weigh-in deleted",
+    deleteConsumption: "Delete usage entry",
+    deleteConsumptionTitle: "Delete this usage entry?",
+    deleteConsumptionDescription:
+      "The amount is credited back to the remaining quantity.",
+    consumptionDeleted: "Usage entry deleted",
   },
 
   storageBoxes: {
@@ -904,6 +921,22 @@ export const en: Messages = {
     submit: "Save weigh-in",
     saved: "Weigh-in saved",
     invalidWeight: "Please enter a valid weight in grams",
+  },
+
+  consumption: {
+    title: "Log usage",
+    description: (vars: { name: string }) =>
+      `Enter how much of “${vars.name}” was used – the slicer's estimate, for example. The remaining quantity drops right away, no scale needed.`,
+    weightLabel: "Amount used (g) *",
+    weightPlaceholder: "e.g. 42",
+    before: "Left so far",
+    after: "Left afterwards",
+    exceeds:
+      "That is more than the app thinks is left – the remaining quantity will be set to 0 g. A weigh-in will settle it.",
+    notePlaceholder: "e.g. enclosure v2, slicer estimate",
+    submit: "Log usage",
+    saved: "Usage logged",
+    invalidWeight: "Please enter a valid amount in grams",
   },
 
   preset: {

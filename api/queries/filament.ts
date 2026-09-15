@@ -6,11 +6,13 @@ import {
 } from "@contracts/presets";
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
+  consumedSince,
   remainingAmount,
   type ContainerForm,
   type SecondaryAmount,
 } from "@contracts/materials";
 import {
+  consumptions,
   materials,
   presetContainerVariants,
   containerTypes,
@@ -274,6 +276,13 @@ export type MaterialOverview = MaterialWithRelations & {
   /** Anzahl aller Wägungen */
   weighingCount: number;
   /**
+   * Seit der letzten Wägung abgebuchte Verbräuche in Gramm – ohne Wägung alle
+   * (siehe `consumedSince` in `contracts/materials.ts`). Für die Kachel „seitdem
+   * abgebucht“ auf der Detailseite; in `remainingWeight` ist der Wert schon
+   * abgezogen.
+   */
+  consumedSinceWeighing: number;
+  /**
    * Restmenge in der Zweiteinheit der Materialart: Meter beim Filament, Liter
    * beim Harz, `null` beim Pulver und immer dann, wenn eine nötige Angabe
    * fehlt.
@@ -297,12 +306,17 @@ function normalizeRelation<T extends { id: number | null } | null>(
   return (relation != null && relation.id != null ? relation : null) as never;
 }
 
-/** Berechnet Tara und Restmenge aus letzter Wägung bzw. Nennmenge. */
+/**
+ * Berechnet Tara und Restmenge aus letzter Wägung bzw. Nennmenge, abzüglich
+ * der seither abgebuchten Verbräuche.
+ */
 export function computeMaterialStats(
   material: MaterialWithRelations,
   lastWeighing: Weighing | null,
   weighingCount: number,
-  language: LanguageCode = FALLBACK_LANGUAGE
+  language: LanguageCode = FALLBACK_LANGUAGE,
+  /** Aus `consumedSince`; 0 = nichts abgebucht (oder von vor 2.9.0) */
+  consumedSinceWeighing = 0
 ): MaterialOverview {
   const containerTareWeight = resolveContainerTare(material);
   const preset = material.containerPresetVariant;
@@ -329,6 +343,7 @@ export function computeMaterialStats(
       containerTareWeight,
       boxTareWeight: material.storageBox?.tareWeight,
       grossWeight: lastWeighing?.grossWeight,
+      consumedSinceWeighing,
       materialType: material.materialType,
       kind: material.lager?.materialKind,
       densityGramsPerLiter: material.densityGramsPerLiter,
@@ -343,6 +358,7 @@ export function computeMaterialStats(
     remainingPercent,
     lastWeighing,
     weighingCount,
+    consumedSinceWeighing,
     secondary,
     densityUsed,
   };
@@ -370,6 +386,11 @@ export async function findMaterialsInScope(
       containerPresetVariant: withPresetPath,
       lager: true,
       weighings: true,
+      /*
+        Nur die zwei Spalten, die `consumedSince` braucht: Die Übersicht ist
+        die teuerste Leseprozedur, und der Verlauf gehört auf die Detailseite.
+      */
+      consumptions: { columns: { weight: true, consumedAt: true } },
     },
     orderBy: (t, { desc: d }) => [d(t.createdAt)],
   });
@@ -378,7 +399,7 @@ export async function findMaterialsInScope(
       (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id
     );
     const last = sorted[0] ?? null;
-    const { weighings: _omit, ...rest } = row;
+    const { weighings: _omit, consumptions: _omitToo, ...rest } = row;
     return computeMaterialStats(
       {
         ...rest,
@@ -389,7 +410,8 @@ export async function findMaterialsInScope(
       },
       last,
       row.weighings.length,
-      language
+      language,
+      consumedSince(last?.weighedAt ?? null, row.consumptions)
     );
   });
 }
@@ -407,11 +429,14 @@ export async function findMaterialInScope(
       containerPresetVariant: withPresetPath,
       lager: true,
       weighings: { orderBy: (t, { desc: d }) => [d(t.weighedAt), d(t.id)] },
+      consumptions: {
+        orderBy: (t, { desc: d }) => [d(t.consumedAt), d(t.id)],
+      },
     },
   });
   if (!row) return null;
   const last = row.weighings[0] ?? null;
-  const { weighings: list, ...rest } = row;
+  const { weighings: list, consumptions: consumed, ...rest } = row;
   return {
     ...computeMaterialStats(
       {
@@ -423,9 +448,11 @@ export async function findMaterialInScope(
       },
       last,
       list.length,
-      language
+      language,
+      consumedSince(last?.weighedAt ?? null, consumed)
     ),
     weighings: list,
+    consumptions: consumed,
   };
 }
 
@@ -499,7 +526,7 @@ export async function updateMaterial(
 }
 
 /**
- * Löscht ein Material samt seinen Wägungen.
+ * Löscht ein Material samt seinen Wägungen und Verbräuchen.
  *
  * **In einer Transaktion und beide Schritte im Bereich.** Bis 2.5.0 lief das
  * Löschen der Wägungen ohne Bereichsfilter und außerhalb jeder Transaktion:
@@ -518,6 +545,9 @@ export async function deleteMaterial(scope: Scope, id: number) {
       .from(materials)
       .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
     await tx.delete(weighings).where(inArray(weighings.materialId, scoped));
+    await tx
+      .delete(consumptions)
+      .where(inArray(consumptions.materialId, scoped));
     await tx
       .delete(materials)
       .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
@@ -581,6 +611,63 @@ export async function findLatestWeighingId(
     .from(weighings)
     .where(eq(weighings.materialId, materialId))
     .orderBy(desc(weighings.id))
+    .limit(1);
+  return rows.at(0)?.id ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Verbräuche – Spiegel der Wägungsfunktionen oben, mit denselben Begründungen
+// ---------------------------------------------------------------------------
+
+export async function addConsumption(data: {
+  materialId: number;
+  weight: number;
+  consumedAt?: Date;
+  note?: string;
+}) {
+  const [{ id }] = await getDb()
+    .insert(consumptions)
+    .values(data)
+    .returning({ id: consumptions.id });
+  return getDb().query.consumptions.findFirst({
+    where: eq(consumptions.id, id),
+  });
+}
+
+/** Wie `countWeighingsForMaterial` – ohne Bereichsfilter, aus demselben Grund. */
+export async function countConsumptionsForMaterial(
+  materialId: number
+): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(consumptions)
+    .where(eq(consumptions.materialId, materialId));
+  return Number(rows.at(0)?.value ?? 0);
+}
+
+export async function findConsumption(id: number) {
+  return getDb().query.consumptions.findFirst({
+    where: eq(consumptions.id, id),
+  });
+}
+
+export async function deleteConsumption(id: number) {
+  await getDb().delete(consumptions).where(eq(consumptions.id, id));
+}
+
+/**
+ * Der zuletzt **erfasste** Verbrauch eines Materials, oder `null` – nach `id`,
+ * wie `findLatestWeighingId` und aus demselben Grund. Grundlage von
+ * `mayDeleteConsumption`.
+ */
+export async function findLatestConsumptionId(
+  materialId: number
+): Promise<number | null> {
+  const rows = await getDb()
+    .select({ id: consumptions.id })
+    .from(consumptions)
+    .where(eq(consumptions.materialId, materialId))
+    .orderBy(desc(consumptions.id))
     .limit(1);
   return rows.at(0)?.id ?? null;
 }

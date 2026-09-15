@@ -3,10 +3,12 @@ import { z } from "zod";
 import { importManyInputSchema } from "@contracts/import";
 import {
   WEIGHING_CORRECTION_MINUTES,
+  mayDeleteConsumption,
   mayDeleteWeighing,
   roleAllows,
 } from "@contracts/organizations";
 import {
+  MAX_CONSUMPTIONS_PER_MATERIAL,
   MAX_MATERIALS_PER_LAGER,
   MAX_WEIGHINGS_PER_MATERIAL,
 } from "@contracts/limits";
@@ -14,11 +16,16 @@ import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput, scopeRole, type Scope } from "./scope";
 import {
+  addConsumption,
   addWeighing,
+  countConsumptionsForMaterial,
   countWeighingsForMaterial,
   createMaterial,
+  deleteConsumption,
   deleteMaterial,
   deleteWeighing,
+  findConsumption,
+  findLatestConsumptionId,
   findLatestWeighingId,
   findMaterialInScope,
   findMaterialsInScope,
@@ -456,6 +463,96 @@ export const materialRouter = createRouter({
         }
       }
       await deleteWeighing(input.id);
+      return { ok: true };
+    }),
+
+  /**
+   * Verbrauch abbuchen (seit 2.9.0): verbrauchte Gramm ohne Waage, üblicherweise
+   * die Angabe des Slicers nach einem Druck. Die Restmenge sinkt sofort; die
+   * nächste Wägung ersetzt die Schätzungen wieder durch eine Messung.
+   */
+  addConsumption: authedQuery
+    .use(
+      rateLimited({
+        key: "material.addConsumption",
+        limit: 120,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
+    .input(
+      z.object({
+        materialId: z.number().int().positive(),
+        /*
+          Keine Obergrenze gegen die Restmenge: Der Slicer schätzt, und wer 60 g
+          abbucht, wo die App 50 g vermutet, hat eine leere Rolle in der Hand –
+          kein Eingabefehler. `remainingAmount` klemmt auf 0.
+        */
+        weight: z.number().int().positive("Menge muss > 0 sein"),
+        consumedAt: z.date().optional(),
+        note: z.string().max(500).optional(),
+        ...scopeInput.shape,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { organizationId, ...data } = input;
+      // `weigher`, aus demselben Grund wie bei `addWeighing`: Abbuchen ist
+      // genau das, wofür die Stufe da ist.
+      const scope = await resolveScope(ctx.user.id, organizationId, "weigher");
+      if (!(await materialInScope(scope, data.materialId))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
+      }
+      assertWithinLimit({
+        current: await countConsumptionsForMaterial(data.materialId),
+        max: MAX_CONSUMPTIONS_PER_MATERIAL,
+        quota: "consumptions_per_material",
+        message: `Für dieses Material sind bereits ${MAX_CONSUMPTIONS_PER_MATERIAL} Verbräuche erfasst. Bitte alte Einträge entfernen.`,
+        actorUserId: ctx.user.id,
+        ip: ctx.clientIp,
+      });
+      return addConsumption(data);
+    }),
+
+  /** Spiegel von `deleteWeighing` – dieselbe Korrekturregel, siehe dort. */
+  deleteConsumption: authedQuery
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "weigher"
+      );
+      const consumption = await findConsumption(input.id);
+      if (
+        !consumption ||
+        !(await materialInScope(scope, consumption.materialId))
+      ) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Verbrauch nicht gefunden",
+        });
+      }
+      const role = scopeRole(scope);
+      if (!roleAllows(role, "editor")) {
+        const latestId = await findLatestConsumptionId(consumption.materialId);
+        if (consumption.id !== latestId) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message:
+              "Nur der zuletzt erfasste Verbrauch lässt sich so entfernen. Ältere Einträge kann bereinigen, wer Material erfassen darf.",
+          });
+        }
+        if (!mayDeleteConsumption(role, consumption, latestId)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Dieser Verbrauch ist älter als ${WEIGHING_CORRECTION_MINUTES} Minuten. Nur wer Material erfassen darf, kann ihn noch löschen.`,
+          });
+        }
+      }
+      await deleteConsumption(input.id);
       return { ok: true };
     }),
 });
