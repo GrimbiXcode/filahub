@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentProps, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
 import { useNavigate } from "react-router";
 import {
@@ -8,14 +8,14 @@ import {
   ChevronDown,
   ChevronUp,
   Columns3,
+  LayoutGrid,
+  List,
   Package,
   Plus,
   Printer,
   Scale,
   Search,
   SlidersHorizontal,
-  Wallet,
-  Weight,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -27,8 +27,14 @@ import {
 import { roleAllows } from "@contracts/organizations";
 import { normalizeMaterialType } from "@contracts/materials";
 import AuthLayout from "@/components/AuthLayout";
+import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
+import { IdentifierLookup } from "@/components/IdentifierLookup";
+import { MaterialPanel } from "@/components/MaterialPanel";
+import { MaterialShelf } from "@/components/MaterialShelf";
 import { PageHeader } from "@/components/PageHeader";
+import { Spool } from "@/components/Spool";
+import { LOW_STOCK_PERCENT, StockTiles } from "@/components/StockTiles";
 import { LAGER_PATH } from "@/const";
 import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +51,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -69,8 +80,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDebounced } from "@/hooks/useDebounced";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useActiveLagerId } from "@/lib/activeLager";
+import { groupByStorageBox } from "@/lib/shelf";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -82,13 +96,11 @@ import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
-import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
+import type { ResolvedAppearance } from "@contracts/appearance";
 
 const ALL = "__all__";
 const NO_BOX = "none";
-/** Ab hier gilt ein Material als „niedriger Bestand“ */
-const LOW_STOCK_PERCENT = 25;
 
 /** `label` ist der Schlüssel in `t.home`, nicht der fertige Text */
 const SORT_OPTIONS = [
@@ -101,6 +113,15 @@ const SORT_OPTIONS = [
 
 type SortKey = (typeof SORT_OPTIONS)[number]["value"];
 type SortDir = "asc" | "desc";
+
+/**
+ * Regal oder Liste. Das Regal ist seit 3.0 die Übersicht; die Liste bleibt
+ * für alles, was Spalten braucht – sortieren, vergleichen, Preise sehen.
+ * Die Wahl liegt im Browser: Sie ist eine Frage des Geräts und der Gewohnheit,
+ * nicht des Kontos (anders als die Spaltenauswahl).
+ */
+type View = "shelf" | "list";
+const VIEW_KEY = "home-view";
 
 /** Vergleich für die gewählte Sortierspalte; leere Werte immer ans Ende. */
 function compareBy(
@@ -153,15 +174,6 @@ export default function Home() {
       activeLagerId != null ? { ...scope, lagerId: activeLagerId } : skipToken
     );
   /*
-    Über die Kennung wird über **alle** Lager gesucht: Wer eine Kennung von einem
-    Gebinde in der Hand abliest, weiß nicht, welcher Lager-Reiter gerade offen
-    ist – und „nicht gefunden“ für etwas, das man in der Hand hält, ist die
-    schlechteste Antwort. Die Schnellsuche tut dasselbe.
-  */
-  const { data: allMaterials } = trpc.material.list.useQuery({
-    ...scope,
-  });
-  /*
     Solange die Lagerliste noch unterwegs ist, ist „kein Material“ nicht wahr,
     sondern unbekannt. Eine abgeschaltete Abfrage meldet `isLoading === false`
     (`isPending && isFetching`), weshalb hier `isPending` steht – sonst zeigte die
@@ -180,7 +192,6 @@ export default function Home() {
   const t = useT();
 
   const [search, setSearch] = useState("");
-  const [identifierLookup, setIdentifierLookup] = useState("");
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [manufacturerFilter, setManufacturerFilter] = useState(ALL);
   const [textureFilter, setTextureFilter] = useState(ALL);
@@ -189,6 +200,26 @@ export default function Home() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("identifier");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [view, setView] = useState<View>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "shelf";
+    } catch {
+      return "shelf";
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      /* Ohne Speicher gilt die Wahl für diese Seite – das reicht. */
+    }
+  }, [view]);
+  /*
+    Die gewählte Spule fürs Detail daneben. Das Panel gibt es erst ab `xl`;
+    darunter öffnet ein Tipp die Detailseite – dasselbe wie in der Liste.
+  */
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const hasPanel = useMediaQuery("(min-width: 1280px)");
 
   /*
     Spaltenauswahl. Sie blendet **zusätzlich** aus: Was hier an bleibt, kann
@@ -207,7 +238,9 @@ export default function Home() {
   */
   const resolveAppearance = useAppearanceResolver();
   const swatchLabel = useSwatchLabel();
-  const swatchFor = (m: MaterialOverview) => {
+  const appearanceFor = (
+    m: MaterialOverview
+  ): ResolvedAppearance & { label: string } => {
     const { hex, kind } = resolveAppearance(m.color, m.texture);
     return { hex, kind, label: swatchLabel(m.color, m.texture, hex) };
   };
@@ -339,6 +372,24 @@ export default function Home() {
     return [...filtered].sort((a, b) => compareBy(sortKey, a, b) * factor);
   }, [filtered, sortKey, sortDir]);
 
+  const groups = useMemo(
+    () => groupByStorageBox(sorted, t.home.noBox),
+    [sorted, t]
+  );
+
+  /*
+    Die gewählte Spule, sonst die erste der Liste: Ein leeres Panel neben einem
+    vollen Regal wäre eine Aufforderung, erst einmal zu klicken.
+  */
+  const selected = useMemo(
+    () => sorted.find(m => m.id === selectedId) ?? sorted[0] ?? null,
+    [sorted, selectedId]
+  );
+  const pick = (m: MaterialOverview) => {
+    if (hasPanel && view === "shelf") setSelectedId(m.id);
+    else navigate(`/material/${m.id}`);
+  };
+
   const stats = useMemo(() => {
     const list = materials ?? [];
     const totalRemaining = list.reduce((s, m) => s + m.remainingWeight, 0);
@@ -407,36 +458,6 @@ export default function Home() {
     setOnlyLowStock(false);
   };
 
-  /**
-   * Schnellzugriff: Kennung eintippen und sofort wiegen. Erst exakt suchen,
-   * danach als Teiltreffer – aber nur, wenn genau ein Material passt.
-   */
-  const quickWeigh = (event: React.FormEvent) => {
-    event.preventDefault();
-    const q = identifierLookup.trim().toLowerCase();
-    if (!q) return;
-    // Über alle Lager – siehe die Begründung an `allMaterials`.
-    const list = allMaterials ?? [];
-    const exact = list.find(m => m.identifier?.toLowerCase() === q);
-    const candidates = exact
-      ? [exact]
-      : list.filter(
-          m =>
-            m.identifier?.toLowerCase().includes(q) ||
-            m.name.toLowerCase().includes(q)
-        );
-    if (candidates.length === 1) {
-      setIdentifierLookup("");
-      openWeighing(candidates[0]);
-      return;
-    }
-    toast.error(
-      candidates.length === 0
-        ? t.home.lookupNotFound({ query: identifierLookup.trim() })
-        : t.home.lookupAmbiguous({ query: identifierLookup.trim() })
-    );
-  };
-
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) setSortDir(dir => (dir === "asc" ? "desc" : "asc"));
     else {
@@ -446,7 +467,7 @@ export default function Home() {
   };
 
   const filterFields = (
-    <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2">
       <div className="grid gap-2">
         <Label htmlFor="f-type">{t.home.materialType}</Label>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
@@ -554,7 +575,7 @@ export default function Home() {
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2 md:col-span-4">
+      <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
         <Label htmlFor="low-stock" className="font-normal">
           {t.home.onlyLowStock({ percent: LOW_STOCK_PERCENT })}
         </Label>
@@ -567,520 +588,594 @@ export default function Home() {
     </div>
   );
 
+  const filterBadge = activeFilters.length > 0 && (
+    <Badge className="ml-2 h-5 min-w-5 justify-center px-1">
+      {activeFilters.length}
+    </Badge>
+  );
+
+  const showsPanel = view === "shelf";
+
   return (
-    <AuthLayout>
-      <div className="flex flex-col gap-4 sm:gap-6">
-        <PageHeader
-          title={t.home.title}
-          description={t.home.description}
-          actions={
-            // Ausgeblendet statt deaktiviert – siehe `Lager.tsx`.
-            roleAllows(role, "editor") && (
-              <Button
-                className="w-full sm:w-auto"
-                onClick={() => openMaterialForm()}
-              >
-                <Plus className="mr-2 h-4 w-4" /> {t.home.newMaterial}
-              </Button>
-            )
-          }
+    <AuthLayout fullWidth>
+      <div className="flex flex-col gap-4 md:gap-5">
+        {/*
+          Schnellzugriff auf dem Telefon: Kennung ablesen und sofort wiegen. Ab
+          dem Tablet steht das Feld in der Kopfzeile (`TopBar`).
+        */}
+        <IdentifierLookup className="md:hidden" />
+
+        <StockTiles
+          materials={materials ?? []}
+          stats={stats}
+          appearanceFor={appearanceFor}
+          onlyLowStock={onlyLowStock}
+          onToggleLowStock={() => setOnlyLowStock(v => !v)}
+          onPick={pick}
         />
 
-        {/*
-          Schnellzugriff: Kennung vom Gebinde ablesen und sofort wiegen.
-          Ab `weigher` – das Feld führt nirgendwo anders hin als ins Wiegen.
-        */}
-        {roleAllows(role, "weigher") && (
-          <Card>
-            <CardContent className="p-3 sm:p-4">
-              <form className="flex gap-2" onSubmit={quickWeigh}>
-                <div className="relative min-w-0 flex-1">
-                  <Scale className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <div className="flex items-start gap-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-4">
+            <PageHeader
+              title={t.home.title}
+              description={t.home.summary({
+                count: stats.count,
+                remaining: formatGrams(stats.totalRemaining),
+                low: stats.lowStock,
+              })}
+              actions={
+                <>
+                  {/* Ab dem Tablet trägt die Kopfzeile den Knopf. Ausgeblendet
+                      statt deaktiviert – siehe `Lager.tsx`. */}
+                  {roleAllows(role, "editor") && (
+                    <Button
+                      className="w-full md:hidden"
+                      onClick={() => openMaterialForm()}
+                    >
+                      <Plus className="mr-2 h-4 w-4" /> {t.home.newMaterial}
+                    </Button>
+                  )}
+                  <ToggleGroup
+                    type="single"
+                    variant="outline"
+                    value={view}
+                    onValueChange={value => value && setView(value as View)}
+                    aria-label={t.home.viewLabel}
+                    className="hidden md:flex"
+                  >
+                    <ToggleGroupItem
+                      value="shelf"
+                      aria-label={t.home.shelfView}
+                      className="px-3"
+                    >
+                      <LayoutGrid className="h-4 w-4" /> {t.home.shelfView}
+                    </ToggleGroupItem>
+                    <ToggleGroupItem
+                      value="list"
+                      aria-label={t.home.listView}
+                      className="px-3"
+                    >
+                      <List className="h-4 w-4" /> {t.home.listView}
+                    </ToggleGroupItem>
+                  </ToggleGroup>
+                </>
+              }
+            />
+
+            {/* Suche und Filter */}
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-2">
+                <div className="relative min-w-0 flex-1 md:max-w-sm">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    id="identifier-lookup"
-                    className="h-11 pl-9"
-                    placeholder={t.home.lookupPlaceholder}
-                    autoComplete="off"
-                    value={identifierLookup}
-                    onChange={e => setIdentifierLookup(e.target.value)}
-                    aria-label={t.home.lookupAria}
+                    className="h-10 pl-9"
+                    placeholder={t.common.search}
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    aria-label={t.home.searchAria}
                   />
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => setSearch("")}
+                      aria-label={t.home.clearSearch}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-                <Button type="submit" className="h-11 shrink-0">
-                  <Scale className="mr-2 h-4 w-4" /> {t.nav.weigh}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        )}
+                {/* Ab dem Tablet liegen die Filter in einem Popover – die
+                    Übersicht soll mit dem Regal beginnen, nicht mit vier
+                    Auswahlfeldern. */}
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="hidden h-10 md:inline-flex"
+                    >
+                      <SlidersHorizontal className="mr-2 h-4 w-4" />
+                      {t.home.filters}
+                      {filterBadge}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="start"
+                    className="w-[min(92vw,600px)] p-4"
+                  >
+                    {filterFields}
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={resetFilters}
+                        disabled={activeFilters.length === 0}
+                      >
+                        {t.home.reset}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+                {/* Nur in der Liste: Darunter gibt es keine Spalten – im Regal
+                    wäre eine Spaltenauswahl eine Einstellung für etwas, das
+                    man nicht sieht. */}
+                {view === "list" && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="hidden h-10 md:flex">
+                        <Columns3 className="mr-2 h-4 w-4" />
+                        {t.home.columns}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-60">
+                      <DropdownMenuLabel>
+                        {t.home.columnsTitle}
+                      </DropdownMenuLabel>
+                      {/* Anders als das Farbschema hängt die Auswahl am Konto –
+                          das sagen wir, statt es die Leute auf dem zweiten
+                          Gerät herausfinden zu lassen. */}
+                      <p className="px-2 pb-1 text-xs text-muted-foreground">
+                        {t.home.columnsHint}
+                      </p>
+                      <DropdownMenuSeparator />
+                      {TOGGLEABLE_MATERIAL_COLUMNS.map(column => (
+                        <DropdownMenuCheckboxItem
+                          key={column}
+                          checked={showsColumn(column)}
+                          /* Ohne das schließt Radix das Menü nach jedem Haken –
+                             wer drei Spalten umstellt, müsste es dreimal
+                             öffnen. */
+                          onSelect={e => e.preventDefault()}
+                          onCheckedChange={checked =>
+                            setColumnVisible(column, checked)
+                          }
+                        >
+                          {t.home[MATERIAL_COLUMN_LABELS[column]]}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        disabled={hiddenColumns.length === 0}
+                        onSelect={() =>
+                          updateSettings.mutate({ hiddenMaterialColumns: [] })
+                        }
+                      >
+                        {t.home.columnsReset}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+                {/* Auf dem Telefon liegen die Filter in einer Schublade, sonst
+                    bräuchte man vier Bildschirmhöhen bis zur Liste. */}
+                <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" className="h-10 md:hidden">
+                      <SlidersHorizontal className="mr-2 h-4 w-4" />
+                      {t.home.filters}
+                      {filterBadge}
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent
+                    side="bottom"
+                    className="max-h-[85vh] overflow-y-auto rounded-t-xl p-4"
+                  >
+                    <SheetHeader className="p-0">
+                      <SheetTitle>{t.home.filterSheetTitle}</SheetTitle>
+                    </SheetHeader>
+                    {filterFields}
+                    <div className="flex gap-2 pb-safe">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={resetFilters}
+                        disabled={activeFilters.length === 0}
+                      >
+                        {t.home.reset}
+                      </Button>
+                      <Button
+                        className="flex-1"
+                        onClick={() => setFilterSheetOpen(false)}
+                      >
+                        {t.home.showCount({ count: sorted.length })}
+                      </Button>
+                    </div>
+                  </SheetContent>
+                </Sheet>
+              </div>
 
-        {/* Kennzahlen – zwei Spalten auf dem Telefon, vier ab dem Laptop */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard
-            icon={<Package className="h-4 w-4" />}
-            label={t.home.statMaterials}
-            value={String(stats.count)}
-            hint={
-              stats.lowStock > 0
-                ? t.home.statMaterialsLow({ count: stats.lowStock })
-                : t.home.statMaterialsOk
-            }
-            highlight={stats.lowStock > 0}
-            onClick={
-              stats.lowStock > 0 ? () => setOnlyLowStock(v => !v) : undefined
-            }
-            active={onlyLowStock}
-          />
-          <StatCard
-            icon={<Weight className="h-4 w-4" />}
-            label={t.home.statRemaining}
-            value={formatGrams(stats.totalRemaining)}
-            hint={t.home.statRemainingHint}
-          />
-          <StatCard
-            icon={<Wallet className="h-4 w-4" />}
-            label={t.home.statValue}
-            value={formatMoney(stats.totalValue)}
-            hint={t.home.statValueHint}
-          />
-          <StatCard
-            icon={<Archive className="h-4 w-4" />}
-            label={t.home.statInBox}
-            value={String(stats.inBox)}
-            hint={t.home.statInBoxHint}
-          />
-        </div>
-
-        {/* Suche und Filter */}
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="h-10 pl-9"
-                placeholder={t.common.search}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                aria-label={t.home.searchAria}
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch("")}
-                  aria-label={t.home.clearSearch}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-1 text-muted-foreground hover:bg-accent"
-                >
-                  <X className="h-4 w-4" />
-                </button>
+              {activeFilters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  {activeFilters.map(filter => (
+                    <Badge
+                      key={filter.key}
+                      variant="secondary"
+                      className="gap-1 py-1 pl-2.5 pr-1 font-normal"
+                    >
+                      {filter.label}
+                      <button
+                        type="button"
+                        onClick={filter.clear}
+                        aria-label={t.home.removeFilter({
+                          label: filter.label,
+                        })}
+                        className="rounded-full p-0.5 hover:bg-background/60"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                  <Button variant="ghost" size="sm" onClick={resetFilters}>
+                    {t.home.resetAll}
+                  </Button>
+                </div>
               )}
             </div>
-            {/* Erst ab dem Tablet: Darunter gibt es die Tabelle gar nicht,
-                sondern die Kartenliste – dort wäre eine Spaltenauswahl eine
-                Einstellung für etwas, das man nicht sieht. */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="hidden h-10 md:flex">
-                  <Columns3 className="mr-2 h-4 w-4" />
-                  {t.home.columns}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-60">
-                <DropdownMenuLabel>{t.home.columnsTitle}</DropdownMenuLabel>
-                {/* Anders als das Farbschema hängt die Auswahl am Konto – das
-                    sagen wir, statt es die Leute auf dem zweiten Gerät
-                    herausfinden zu lassen. */}
-                <p className="px-2 pb-1 text-xs text-muted-foreground">
-                  {t.home.columnsHint}
-                </p>
-                <DropdownMenuSeparator />
-                {TOGGLEABLE_MATERIAL_COLUMNS.map(column => (
-                  <DropdownMenuCheckboxItem
-                    key={column}
-                    checked={showsColumn(column)}
-                    /* Ohne das schließt Radix das Menü nach jedem Haken – wer
-                       drei Spalten umstellt, müsste es dreimal öffnen. */
-                    onSelect={e => e.preventDefault()}
-                    onCheckedChange={checked =>
-                      setColumnVisible(column, checked)
-                    }
-                  >
-                    {t.home[MATERIAL_COLUMN_LABELS[column]]}
-                  </DropdownMenuCheckboxItem>
+
+            {/* Regal, Liste oder Karten */}
+            {isLoading ? (
+              <div className="space-y-3">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton
+                    key={i}
+                    className="h-20 w-full rounded-xl md:h-12"
+                  />
                 ))}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  disabled={hiddenColumns.length === 0}
-                  onSelect={() =>
-                    updateSettings.mutate({ hiddenMaterialColumns: [] })
-                  }
-                >
-                  {t.home.columnsReset}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {/* Auf dem Telefon liegen die Filter in einer Schublade, sonst
-                bräuchte man vier Bildschirmhöhen bis zur Liste. */}
-            <Sheet open={filterSheetOpen} onOpenChange={setFilterSheetOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="h-10 md:hidden">
-                  <SlidersHorizontal className="mr-2 h-4 w-4" />
-                  {t.home.filters}
-                  {activeFilters.length > 0 && (
-                    <Badge className="ml-2 h-5 min-w-5 justify-center px-1">
-                      {activeFilters.length}
-                    </Badge>
+              </div>
+            ) : hasNoLager ? (
+              /*
+                Ohne Lager gibt es nichts einzulagern, und „Erstes Material
+                anlegen“ führte ins Leere: Das Formular öffnete sich mit leerer
+                Lagerauswahl und konnte nur mit „Material braucht ein Lager“
+                antworten. Ein neu angemeldetes Konto hat kein Lager – die
+                Migration hat nur die damals bestehenden Konten versorgt –, also
+                ist das der erste Bildschirm, den es sieht.
+              */
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                  <Boxes className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="font-medium">{t.lager.noLagerTitle}</p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    {t.lager.noLagerDescription}
+                  </p>
+                  <Button onClick={() => navigate(LAGER_PATH)}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    {t.lager.firstLager}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : sorted.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+                  <Package className="h-10 w-10 text-muted-foreground/50" />
+                  <p className="font-medium">
+                    {(materials ?? []).length === 0
+                      ? t.home.emptyTitle
+                      : t.home.emptyFiltered}
+                  </p>
+                  <p className="max-w-sm text-sm text-muted-foreground">
+                    {(materials ?? []).length === 0
+                      ? t.home.emptyHint
+                      : t.home.emptyFilteredHint}
+                  </p>
+                  {(materials ?? []).length === 0 ? (
+                    roleAllows(role, "editor") && (
+                      <Button onClick={() => openMaterialForm()}>
+                        <Plus className="mr-2 h-4 w-4" /> {t.home.emptyAction}
+                      </Button>
+                    )
+                  ) : (
+                    <Button variant="outline" onClick={resetFilters}>
+                      {t.home.resetFilters}
+                    </Button>
                   )}
-                </Button>
-              </SheetTrigger>
-              <SheetContent
-                side="bottom"
-                className="max-h-[85vh] overflow-y-auto rounded-t-xl p-4"
-              >
-                <SheetHeader className="p-0">
-                  <SheetTitle>{t.home.filterSheetTitle}</SheetTitle>
-                </SheetHeader>
-                {filterFields}
-                <div className="flex gap-2 pb-safe">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={resetFilters}
-                    disabled={activeFilters.length === 0}
-                  >
-                    {t.home.reset}
-                  </Button>
-                  <Button
-                    className="flex-1"
-                    onClick={() => setFilterSheetOpen(false)}
-                  >
-                    {t.home.showCount({ count: sorted.length })}
-                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* Telefon: Karten statt Regal oder Tabelle */}
+                <div className="flex flex-col gap-3 md:hidden">
+                  <p className="text-xs text-muted-foreground">
+                    {t.home.countOf({
+                      shown: sorted.length,
+                      total: stats.count,
+                    })}
+                  </p>
+                  {sorted.map(material => (
+                    <MaterialCard
+                      key={material.id}
+                      material={material}
+                      appearance={appearanceFor(material)}
+                      onOpen={() => navigate(`/material/${material.id}`)}
+                      onWeigh={
+                        roleAllows(role, "weigher")
+                          ? () => openWeighing(material)
+                          : undefined
+                      }
+                      onConsume={
+                        roleAllows(role, "weigher")
+                          ? () => openConsumption(material)
+                          : undefined
+                      }
+                    />
+                  ))}
                 </div>
-              </SheetContent>
-            </Sheet>
+
+                <div className="hidden md:block">
+                  {view === "shelf" ? (
+                    <MaterialShelf
+                      groups={groups}
+                      appearanceFor={appearanceFor}
+                      selectedId={hasPanel ? (selected?.id ?? null) : null}
+                      onPick={pick}
+                      onWeigh={
+                        roleAllows(role, "weigher")
+                          ? m => openWeighing(m)
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    /* Die Liste: Tabelle mit sortierbaren Spaltenköpfen */
+                    <Card>
+                      <CardContent className="p-0">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              {showsColumn("identifier") && (
+                                <SortableHead
+                                  label={t.home.colIdentifier}
+                                  sortKey="identifier"
+                                  activeKey={sortKey}
+                                  dir={sortDir}
+                                  onSort={toggleSort}
+                                />
+                              )}
+                              {showsColumn("appearance") && (
+                                <TableHead className="w-10">
+                                  {t.home.colAppearance}
+                                </TableHead>
+                              )}
+                              <SortableHead
+                                label={t.home.colMaterial}
+                                sortKey="name"
+                                activeKey={sortKey}
+                                dir={sortDir}
+                                onSort={toggleSort}
+                              />
+                              {showsColumn("type") && (
+                                <TableHead>{t.home.colType}</TableHead>
+                              )}
+                              {/* Spalten fallen zuerst weg, die anderswo
+                                  ohnehin stehen – sonst rutscht die
+                                  Aktionsspalte aus dem Blick und „Wiegen“ ist
+                                  nur noch scrollbar. */}
+                              {showsColumn("manufacturer") && (
+                                <TableHead className="hidden xl:table-cell">
+                                  {t.home.colManufacturer}
+                                </TableHead>
+                              )}
+                              {showsColumn("remaining") && (
+                                <SortableHead
+                                  label={t.home.colRemaining}
+                                  sortKey="percent"
+                                  activeKey={sortKey}
+                                  dir={sortDir}
+                                  onSort={toggleSort}
+                                  className="min-w-[180px]"
+                                />
+                              )}
+                              {showsColumn("containerBox") && (
+                                <TableHead className="hidden 2xl:table-cell">
+                                  {t.home.colContainerBox}
+                                </TableHead>
+                              )}
+                              {showsColumn("price") && (
+                                <TableHead className="hidden lg:table-cell">
+                                  {t.home.colPrice}
+                                </TableHead>
+                              )}
+                              {showsColumn("purchase") && (
+                                <SortableHead
+                                  label={t.home.colPurchase}
+                                  sortKey="purchase"
+                                  activeKey={sortKey}
+                                  dir={sortDir}
+                                  onSort={toggleSort}
+                                  className="hidden lg:table-cell"
+                                />
+                              )}
+                              <TableHead className="text-right">
+                                {t.home.colActions}
+                              </TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {sorted.map(m => (
+                              <TableRow
+                                key={m.id}
+                                className="cursor-pointer"
+                                onClick={() => navigate(`/material/${m.id}`)}
+                              >
+                                {showsColumn("identifier") && (
+                                  <TableCell>
+                                    {m.identifier ? (
+                                      <Badge
+                                        variant="outline"
+                                        className="font-mono"
+                                      >
+                                        {m.identifier}
+                                      </Badge>
+                                    ) : (
+                                      <span className="text-muted-foreground">
+                                        –
+                                      </span>
+                                    )}
+                                  </TableCell>
+                                )}
+                                {showsColumn("appearance") && (
+                                  <TableCell>
+                                    <AppearanceSwatch {...appearanceFor(m)} />
+                                  </TableCell>
+                                )}
+                                <TableCell className="max-w-[260px]">
+                                  <div className="truncate font-medium">
+                                    {m.name}
+                                  </div>
+                                  {m.color && (
+                                    <div className="truncate text-xs text-muted-foreground">
+                                      {m.color}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                {showsColumn("type") && (
+                                  <TableCell>
+                                    <Badge variant="secondary">
+                                      {m.materialType}
+                                    </Badge>
+                                  </TableCell>
+                                )}
+                                {showsColumn("manufacturer") && (
+                                  <TableCell className="hidden xl:table-cell">
+                                    {m.manufacturer ?? "–"}
+                                  </TableCell>
+                                )}
+                                {showsColumn("remaining") && (
+                                  <TableCell>
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                          className={`h-full ${fillLevelColor(m.remainingPercent)}`}
+                                          style={{
+                                            width: `${m.remainingPercent ?? 0}%`,
+                                          }}
+                                        />
+                                      </div>
+                                      <span
+                                        className={`whitespace-nowrap font-mono text-sm font-medium tabular-nums ${fillLevelTextColor(m.remainingPercent)}`}
+                                      >
+                                        {formatGrams(m.remainingWeight)}
+                                        {m.remainingPercent != null && (
+                                          <span className="font-normal text-muted-foreground">
+                                            {" "}
+                                            ({formatPercent(m.remainingPercent)}
+                                            )
+                                          </span>
+                                        )}
+                                        {/* Meter beim Filament, Liter beim
+                                            Harz */}
+                                        {m.secondary && (
+                                          <span className="font-normal text-muted-foreground">
+                                            {" · "}
+                                            {t.lager.approx({
+                                              value: formatSecondary(
+                                                m.secondary
+                                              ),
+                                            })}
+                                          </span>
+                                        )}
+                                      </span>
+                                    </div>
+                                  </TableCell>
+                                )}
+                                {showsColumn("containerBox") && (
+                                  <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
+                                    <div>{m.containerLabel ?? "–"}</div>
+                                    {m.storageBox && (
+                                      <div className="flex items-center gap-1 text-xs">
+                                        <Archive className="h-3 w-3" />{" "}
+                                        {m.storageBox.name}
+                                      </div>
+                                    )}
+                                  </TableCell>
+                                )}
+                                {showsColumn("price") && (
+                                  <TableCell className="hidden font-mono tabular-nums lg:table-cell">
+                                    {formatMoney(m.priceCents)}
+                                  </TableCell>
+                                )}
+                                {showsColumn("purchase") && (
+                                  <TableCell className="hidden font-mono tabular-nums lg:table-cell">
+                                    {formatDate(m.purchaseDate)}
+                                  </TableCell>
+                                )}
+                                <TableCell className="text-right">
+                                  <div
+                                    className="flex justify-end gap-1"
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    {roleAllows(role, "weigher") && (
+                                      <>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => openConsumption(m)}
+                                        >
+                                          <Printer className="mr-1 h-3.5 w-3.5" />{" "}
+                                          {t.nav.consume}
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => openWeighing(m)}
+                                        >
+                                          <Scale className="mr-1 h-3.5 w-3.5" />{" "}
+                                          {t.nav.weigh}
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              </>
+            )}
+
+            <FriendResults query={search} />
           </div>
 
-          <div className="hidden md:block">
-            <Card>
-              <CardContent className="p-4">{filterFields}</CardContent>
-            </Card>
-          </div>
-
-          {activeFilters.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {activeFilters.map(filter => (
-                <Badge
-                  key={filter.key}
-                  variant="secondary"
-                  className="gap-1 py-1 pl-2.5 pr-1 font-normal"
-                >
-                  {filter.label}
-                  <button
-                    type="button"
-                    onClick={filter.clear}
-                    aria-label={t.home.removeFilter({ label: filter.label })}
-                    className="rounded-full p-0.5 hover:bg-background/60"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              <Button variant="ghost" size="sm" onClick={resetFilters}>
-                {t.home.resetAll}
-              </Button>
-            </div>
+          {/* Das Detail neben dem Regal – erst ab `xl`, darunter öffnet ein
+              Tipp die Detailseite. */}
+          {showsPanel && !hasNoLager && (
+            <MaterialPanel
+              className="sticky top-20 hidden w-[360px] shrink-0 xl:flex xl:max-h-[calc(100vh-6rem)] xl:overflow-y-auto"
+              material={selected}
+              appearance={selected ? appearanceFor(selected) : null}
+              onWeigh={
+                roleAllows(role, "weigher") ? m => openWeighing(m) : undefined
+              }
+              onConsume={
+                roleAllows(role, "weigher")
+                  ? m => openConsumption(m)
+                  : undefined
+              }
+            />
           )}
         </div>
-
-        {/* Liste */}
-        {isLoading ? (
-          <div className="space-y-3">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-20 w-full rounded-xl md:h-12" />
-            ))}
-          </div>
-        ) : hasNoLager ? (
-          /*
-            Ohne Lager gibt es nichts einzulagern, und „Erstes Material anlegen“
-            führte ins Leere: Das Formular öffnete sich mit leerer Lagerauswahl
-            und konnte nur mit „Material braucht ein Lager“ antworten. Ein neu
-            angemeldetes Konto hat kein Lager – die Migration hat nur die damals
-            bestehenden Konten versorgt –, also ist das der erste Bildschirm, den
-            es sieht. `t.lager.noLagerTitle` gab es schon; verdrahtet war es nicht.
-          */
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <Boxes className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium">{t.lager.noLagerTitle}</p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                {t.lager.noLagerDescription}
-              </p>
-              <Button onClick={() => navigate(LAGER_PATH)}>
-                <Plus className="mr-2 h-4 w-4" />
-                {t.lager.firstLager}
-              </Button>
-            </CardContent>
-          </Card>
-        ) : sorted.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
-              <Package className="h-10 w-10 text-muted-foreground/50" />
-              <p className="font-medium">
-                {(materials ?? []).length === 0
-                  ? t.home.emptyTitle
-                  : t.home.emptyFiltered}
-              </p>
-              <p className="max-w-sm text-sm text-muted-foreground">
-                {(materials ?? []).length === 0
-                  ? t.home.emptyHint
-                  : t.home.emptyFilteredHint}
-              </p>
-              {(materials ?? []).length === 0 ? (
-                roleAllows(role, "editor") && (
-                  <Button onClick={() => openMaterialForm()}>
-                    <Plus className="mr-2 h-4 w-4" /> {t.home.emptyAction}
-                  </Button>
-                )
-              ) : (
-                <Button variant="outline" onClick={resetFilters}>
-                  {t.home.resetFilters}
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <>
-            {/* Telefon: Karten statt einer neunspaltigen Tabelle */}
-            <div className="flex flex-col gap-3 md:hidden">
-              <p className="text-xs text-muted-foreground">
-                {t.home.countOf({ shown: sorted.length, total: stats.count })}
-              </p>
-              {sorted.map(material => (
-                <MaterialCard
-                  key={material.id}
-                  material={material}
-                  swatch={swatchFor(material)}
-                  onOpen={() => navigate(`/material/${material.id}`)}
-                  onWeigh={
-                    roleAllows(role, "weigher")
-                      ? () => openWeighing(material)
-                      : undefined
-                  }
-                  onConsume={
-                    roleAllows(role, "weigher")
-                      ? () => openConsumption(material)
-                      : undefined
-                  }
-                />
-              ))}
-            </div>
-
-            {/* Ab dem Tablet: Tabelle mit sortierbaren Spaltenköpfen */}
-            <Card className="hidden md:block">
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      {showsColumn("identifier") && (
-                        <SortableHead
-                          label={t.home.colIdentifier}
-                          sortKey="identifier"
-                          activeKey={sortKey}
-                          dir={sortDir}
-                          onSort={toggleSort}
-                        />
-                      )}
-                      {showsColumn("appearance") && (
-                        <TableHead className="w-10">
-                          {t.home.colAppearance}
-                        </TableHead>
-                      )}
-                      <SortableHead
-                        label={t.home.colMaterial}
-                        sortKey="name"
-                        activeKey={sortKey}
-                        dir={sortDir}
-                        onSort={toggleSort}
-                      />
-                      {showsColumn("type") && (
-                        <TableHead>{t.home.colType}</TableHead>
-                      )}
-                      {/* Spalten fallen zuerst weg, die anderswo ohnehin
-                          stehen – sonst rutscht die Aktionsspalte aus dem
-                          Blick und „Wiegen“ ist nur noch scrollbar. */}
-                      {showsColumn("manufacturer") && (
-                        <TableHead className="hidden xl:table-cell">
-                          {t.home.colManufacturer}
-                        </TableHead>
-                      )}
-                      {showsColumn("remaining") && (
-                        <SortableHead
-                          label={t.home.colRemaining}
-                          sortKey="percent"
-                          activeKey={sortKey}
-                          dir={sortDir}
-                          onSort={toggleSort}
-                          className="min-w-[180px]"
-                        />
-                      )}
-                      {showsColumn("containerBox") && (
-                        <TableHead className="hidden 2xl:table-cell">
-                          {t.home.colContainerBox}
-                        </TableHead>
-                      )}
-                      {showsColumn("price") && (
-                        <TableHead className="hidden lg:table-cell">
-                          {t.home.colPrice}
-                        </TableHead>
-                      )}
-                      {showsColumn("purchase") && (
-                        <SortableHead
-                          label={t.home.colPurchase}
-                          sortKey="purchase"
-                          activeKey={sortKey}
-                          dir={sortDir}
-                          onSort={toggleSort}
-                          className="hidden lg:table-cell"
-                        />
-                      )}
-                      <TableHead className="text-right">
-                        {t.home.colActions}
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sorted.map(m => (
-                      <TableRow
-                        key={m.id}
-                        className="cursor-pointer"
-                        onClick={() => navigate(`/material/${m.id}`)}
-                      >
-                        {showsColumn("identifier") && (
-                          <TableCell>
-                            {m.identifier ? (
-                              <Badge variant="outline" className="font-mono">
-                                {m.identifier}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground">–</span>
-                            )}
-                          </TableCell>
-                        )}
-                        {showsColumn("appearance") && (
-                          <TableCell>
-                            <AppearanceSwatch {...swatchFor(m)} />
-                          </TableCell>
-                        )}
-                        <TableCell className="max-w-[260px]">
-                          <div className="truncate font-medium">{m.name}</div>
-                          {m.color && (
-                            <div className="truncate text-xs text-muted-foreground">
-                              {m.color}
-                            </div>
-                          )}
-                        </TableCell>
-                        {showsColumn("type") && (
-                          <TableCell>
-                            <Badge variant="secondary">{m.materialType}</Badge>
-                          </TableCell>
-                        )}
-                        {showsColumn("manufacturer") && (
-                          <TableCell className="hidden xl:table-cell">
-                            {m.manufacturer ?? "–"}
-                          </TableCell>
-                        )}
-                        {showsColumn("remaining") && (
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
-                                <div
-                                  className={`h-full ${fillLevelColor(m.remainingPercent)}`}
-                                  style={{
-                                    width: `${m.remainingPercent ?? 0}%`,
-                                  }}
-                                />
-                              </div>
-                              <span
-                                className={`whitespace-nowrap text-sm font-medium ${fillLevelTextColor(m.remainingPercent)}`}
-                              >
-                                {formatGrams(m.remainingWeight)}
-                                {m.remainingPercent != null && (
-                                  <span className="font-normal text-muted-foreground">
-                                    {" "}
-                                    ({formatPercent(m.remainingPercent)})
-                                  </span>
-                                )}
-                                {/* Meter beim Filament, Liter beim Harz */}
-                                {m.secondary && (
-                                  <span className="font-normal text-muted-foreground">
-                                    {" · "}
-                                    {t.lager.approx({
-                                      value: formatSecondary(m.secondary),
-                                    })}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          </TableCell>
-                        )}
-                        {showsColumn("containerBox") && (
-                          <TableCell className="hidden text-sm text-muted-foreground 2xl:table-cell">
-                            <div>{m.containerLabel ?? "–"}</div>
-                            {m.storageBox && (
-                              <div className="flex items-center gap-1 text-xs">
-                                <Archive className="h-3 w-3" />{" "}
-                                {m.storageBox.name}
-                              </div>
-                            )}
-                          </TableCell>
-                        )}
-                        {showsColumn("price") && (
-                          <TableCell className="hidden lg:table-cell">
-                            {formatMoney(m.priceCents)}
-                          </TableCell>
-                        )}
-                        {showsColumn("purchase") && (
-                          <TableCell className="hidden lg:table-cell">
-                            {formatDate(m.purchaseDate)}
-                          </TableCell>
-                        )}
-                        <TableCell className="text-right">
-                          <div
-                            className="flex justify-end gap-1"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {roleAllows(role, "weigher") && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openConsumption(m)}
-                                >
-                                  <Printer className="mr-1 h-3.5 w-3.5" />{" "}
-                                  {t.nav.consume}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => openWeighing(m)}
-                                >
-                                  <Scale className="mr-1 h-3.5 w-3.5" />{" "}
-                                  {t.nav.weigh}
-                                </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </>
-        )}
-
-        <FriendResults query={search} />
       </div>
     </AuthLayout>
   );
@@ -1155,69 +1250,6 @@ function FriendResults({ query }: { query: string }) {
   );
 }
 
-function StatCard({
-  icon,
-  label,
-  value,
-  hint,
-  highlight,
-  active,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  hint: string;
-  highlight?: boolean;
-  active?: boolean;
-  onClick?: () => void;
-}) {
-  const content = (
-    <>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground sm:text-sm">
-          {label}
-        </span>
-        <span
-          className={cn(
-            "text-muted-foreground",
-            highlight && "text-orange-600 dark:text-orange-400"
-          )}
-        >
-          {icon}
-        </span>
-      </div>
-      <div className="mt-1 text-xl font-bold tabular-nums sm:text-2xl">
-        {value}
-      </div>
-      <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        onClick={onClick}
-        aria-pressed={active}
-        className={cn(
-          "rounded-xl border bg-card p-3 text-left shadow-xs transition-colors sm:p-4",
-          "hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring",
-          active && "border-primary bg-accent"
-        )}
-      >
-        {content}
-      </button>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border bg-card p-3 shadow-xs sm:p-4">
-      {content}
-    </div>
-  );
-}
-
 function SortableHead({
   label,
   sortKey,
@@ -1258,16 +1290,20 @@ function SortableHead({
   );
 }
 
+/**
+ * Ein Material auf dem Telefon: die Spule klein links, die Zahlen daneben,
+ * die beiden Handgriffe darunter.
+ */
 function MaterialCard({
   material,
-  swatch,
+  appearance,
   onOpen,
   onWeigh,
   onConsume,
 }: {
   material: MaterialOverview;
   /** Fertig aufgelöst – der Katalog wird einmal je Seite geholt, nicht je Karte */
-  swatch: ComponentProps<typeof AppearanceSwatch>;
+  appearance: ResolvedAppearance & { label: string };
   onOpen: () => void;
   /** Fehlt unterhalb der Stufe `weigher` – dann entfällt der Knopf. */
   onWeigh?: () => void;
@@ -1282,62 +1318,56 @@ function MaterialCard({
       <button
         type="button"
         onClick={onOpen}
-        className="w-full rounded-t-xl p-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex w-full items-center gap-3 rounded-t-xl p-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex min-w-0 items-start gap-2">
-            <AppearanceSwatch {...swatch} className="mt-0.5" />
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {material.identifier && (
-                  <Badge variant="outline" className="font-mono text-xs">
-                    {material.identifier}
-                  </Badge>
-                )}
-                <span className="truncate font-medium">{material.name}</span>
-              </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {[material.materialType, material.manufacturer, material.color]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
-            </div>
+        <Spool
+          size={56}
+          hex={appearance.hex}
+          kind={appearance.kind}
+          percent={material.remainingPercent}
+          label={appearance.label}
+        />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate font-bold">{material.name}</span>
+            <span
+              className={cn(
+                "shrink-0 font-mono text-sm font-semibold tabular-nums",
+                fillLevelTextColor(material.remainingPercent)
+              )}
+            >
+              {material.remainingPercent != null
+                ? formatPercent(material.remainingPercent)
+                : "–"}
+            </span>
           </div>
-          <span
-            className={`shrink-0 text-sm font-semibold tabular-nums ${fillLevelTextColor(material.remainingPercent)}`}
-          >
-            {material.remainingPercent != null
-              ? formatPercent(material.remainingPercent)
-              : "–"}
-          </span>
-        </div>
-
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className={`h-full ${fillLevelColor(material.remainingPercent)}`}
-            style={{ width: `${material.remainingPercent ?? 0}%` }}
-          />
-        </div>
-
-        <div className="mt-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">
-            {t.home.remaining({
-              amount: formatGrams(material.remainingWeight),
-            })}
-            {/* Meter beim Filament, Liter beim Harz – auf dem Telefon knapp */}
-            {material.secondary && (
-              <span className="font-normal text-muted-foreground">
-                {" · "}
-                {formatSecondary(material.secondary)}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            {[material.materialType, material.manufacturer, material.color]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <div className="mt-1.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-1.5">
+              {material.identifier && (
+                <span className="rounded-md bg-foreground/8 px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                  {material.identifier}
+                </span>
+              )}
+              <span className="truncate font-mono tabular-nums">
+                {formatGrams(material.remainingWeight)}
+                {/* Meter beim Filament, Liter beim Harz – auf dem Telefon
+                    knapp */}
+                {material.secondary &&
+                  ` · ${formatSecondary(material.secondary)}`}
+              </span>
+            </span>
+            {material.storageBox && (
+              <span className="flex min-w-0 items-center gap-1">
+                <Archive className="h-3 w-3 shrink-0" />
+                <span className="truncate">{material.storageBox.name}</span>
               </span>
             )}
-          </span>
-          {material.storageBox && (
-            <span className="flex min-w-0 items-center gap-1">
-              <Archive className="h-3 w-3 shrink-0" />
-              <span className="truncate">{material.storageBox.name}</span>
-            </span>
-          )}
+          </div>
         </div>
       </button>
       {(onWeigh || onConsume) && (

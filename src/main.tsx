@@ -3,6 +3,9 @@ import "@/lib/zodConfig";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
+// Die Schriften vor dem Stylesheet, damit dessen `--font-*` sie schon kennen.
+import "@fontsource-variable/manrope";
+import "@fontsource-variable/jetbrains-mono";
 import "./index.css";
 import { FormatProvider } from "@/providers/format";
 import { I18nProvider } from "@/providers/i18n";

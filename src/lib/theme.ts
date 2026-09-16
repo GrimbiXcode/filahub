@@ -6,10 +6,10 @@ export type Theme = (typeof THEMES)[number];
 
 /**
  * Hintergrundfarbe der Adressleiste je Farbschema. Muss zu `--background`
- * aus `index.css` passen – dieselben Werte stehen im Inline-Skript in
- * `index.html`, das das Schema vor dem ersten Paint setzt.
+ * aus `index.css` passen – dieselben Werte stehen im Startskript in
+ * `public/theme-init.js`, das das Schema vor dem ersten Paint setzt.
  */
-export const THEME_COLORS = { light: "#ffffff", dark: "#09090b" } as const;
+export const THEME_COLORS = { light: "#f5f6f8", dark: "#121417" } as const;
 
 /**
  * Farbschema lesen und setzen. `theme` ist die Auswahl inkl. „system“,

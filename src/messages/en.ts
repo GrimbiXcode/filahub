@@ -331,6 +331,25 @@ export const en: Messages = {
     columnsReset: "Restore defaults",
     remaining: (vars: { amount: string }) => `${vars.amount} left`,
     sortBy: (vars: { label: string }) => `Sort by ${vars.label}`,
+    shelfView: "Shelf",
+    listView: "List",
+    viewLabel: "View",
+    summary: (vars: { count: number; remaining: string; low: number }) =>
+      `${vars.count} materials · ${vars.remaining} left · ${vars.low} running low`,
+    groupCount: (vars: { count: number }) => `${vars.count} materials`,
+    groupTare: (vars: { amount: string }) => `tare ${vars.amount}`,
+    tileRemainingTitle: "Remaining",
+    tileLowTitle: "Running low",
+    tileLowSub: (vars: { percent: number }) => `under ${vars.percent} %`,
+    tileLowOf: (vars: { count: number; total: number }) =>
+      `${vars.count} of ${vars.total}`,
+    tileValueTitle: "Remaining value",
+    tileInBoxTitle: "In a drybox",
+    moreMaterials: (vars: { count: number }) => `+ ${vars.count} more`,
+    noSelection: "Tap a material on the shelf to see it here.",
+    details: "Details",
+    weighNamed: (vars: { name: string }) => `Weigh ${vars.name}`,
+    selectNamed: (vars: { name: string }) => `Select ${vars.name}`,
   },
 
   materialDetail: {
@@ -367,6 +386,14 @@ export const en: Messages = {
       `${vars.when} · ${vars.amount} gross`,
     remainingAfter: (vars: { amount: string }) => `${vars.amount} left after`,
     noHistory: "No weigh-ins or usage recorded yet.",
+    chartTitle: "History",
+    trendPerWeek: (vars: { amount: string }) => `Trend −${vars.amount} / week`,
+    trendReach: (vars: { weeks: number }) =>
+      `lasts about ${vars.weeks} more weeks at this rate`,
+    trendNone: "Trend: not enough entries yet",
+    trendFlat: "Trend: nothing used in this period",
+    purchasedOn: (vars: { date: string }) => `bought ${vars.date}`,
+    fullHistory: "Full history",
     deleteMaterial: "Delete material",
     deleteMaterialTitle: "Delete this material?",
     deleteMaterialDescription: (vars: { name: string }) =>

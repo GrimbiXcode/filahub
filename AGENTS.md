@@ -32,15 +32,21 @@ src/            React-Frontend
                 OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminUsers, AdminMonitoring, AdminSystem,
                 Blocked (Sperrseite), Login, NotFound
-  components/   App-Komponenten + ui/ (shadcn); AuthLayout (Seitenleiste,
-                mobile Kopfzeile), PageHeader (Seitenkopf), QuickActions
-                (Dialoge + Schnellsuche), WeighingDialog und
-                ConsumptionDialog (Wiegen, Verbrauch abbuchen), ThemeToggle
+  components/   App-Komponenten + ui/ (shadcn); AuthLayout (Symbolleiste,
+                Kopfzeile ab Tablet, mobile Kopfzeile), TopBar (Bereich, Lager,
+                Kennung, Wiegen/Verbrauch), IdentifierLookup (Kennung → Wiegen),
+                PageHeader (Seitenkopf), QuickActions (Dialoge + Schnellsuche),
+                WeighingDialog und ConsumptionDialog (Wiegen, Verbrauch
+                abbuchen), ThemeToggle; die Übersicht seit 3.0: StockTiles
+                (Kacheln), MaterialShelf (Regal, Spulenkarten), MaterialPanel
+                (Detail neben dem Regal), Spool (Spule: Ring = Füllstand, Kern =
+                Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
+                (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
-  hooks/        useAuth, use-mobile, useReleaseNotes, useAppUpdate
-                (Neuladen bei neuer Version)
+  hooks/        useAuth, use-mobile, useMediaQuery, useElementWidth,
+                useReleaseNotes, useAppUpdate (Neuladen bei neuer Version)
   lib/          activeScope.ts (aktiver Bereich: privat oder Organisation),
                 activeLager.ts (gewähltes Lager, je Bereich getrennt),
                 organizationRole.ts (Stufen-Beschriftungen),
@@ -48,6 +54,7 @@ src/            React-Frontend
                 appearance.ts (Katalog-Hook, Auflösung und Feld-Beschriftung),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
+                shelf.ts (Regal: Gruppierung nach Drybox),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, utils.ts (cn-Helfer)
@@ -905,13 +912,29 @@ Entwicklungsdatenbank.
   wie `--spacing(n)` oder `size-(--cell-size)` darf so bleiben, wie sie kommt.
 - **Mobile zuerst denken:** Das Layout gibt den Seitenrand vor (`AuthLayout`),
   Seiten fangen mit `<PageHeader …>` an und bringen kein eigenes Padding mit.
-  Tabellen sind auf dem Telefon unbedienbar – ab drei Spalten daneben eine
-  Kartenliste stellen (`sm:hidden` / `hidden sm:block`, siehe `Home.tsx`).
+  Die Übersicht ist die Ausnahme mit `fullWidth` – Regal und Detail brauchen
+  die Breite. Tabellen sind auf dem Telefon unbedienbar – ab drei Spalten
+  daneben eine Kartenliste stellen (`sm:hidden` / `hidden sm:block`, siehe
+  `Home.tsx`).
 - **Farbschema:** hell/dunkel/System über `useAppTheme()` (`src/lib/theme.ts`).
-  Die Auswahl liegt in `localStorage` unter `theme` und wird zusätzlich vom
-  Inline-Skript in `index.html` vor dem ersten Paint angewendet – Schlüssel und
-  Farbwerte dort und in `src/index.css` müssen zusammenpassen. Keine festen
-  Farben schreiben, sondern die Tokens (`bg-card`, `text-muted-foreground` …).
+  Die Auswahl liegt in `localStorage` unter `theme` und wird zusätzlich von
+  `public/theme-init.js` vor dem ersten Paint angewendet – Schlüssel und
+  Farbwerte dort, in `THEME_COLORS` und in `src/index.css` müssen
+  zusammenpassen. Keine festen Farben schreiben, sondern die Tokens (`bg-card`,
+  `text-muted-foreground` …). Die Palette seit 3.0 („Spulen-Cockpit“) ist
+  dunkel zuerst entworfen; das helle Schema ist das Gegenstück mit denselben
+  Formen, nicht ein automatisches Umkehren.
+- **Schrift:** Manrope für Text, JetBrains Mono (`font-mono`) für alles, was
+  eine Zahl ist – Kennungen, Gramm, Prozent, Beträge, Daten. Beide selbst
+  gehostet (`@fontsource-variable/*`, importiert in `main.tsx`), weil die
+  CSP `font-src self` setzt.
+- **Die Spule ist das Bauteil** (`src/components/Spool.tsx`): Ring =
+  Füllstand in der Skala von `fillLevelStroke`, Kern = Farbcode mit den
+  Mustern aus `textures.tsx`. Wo ein Material als Bild steht, steht die
+  Spule – in Regal, Kacheln, Detail und Telefon-Liste; in der Tabelle bleibt
+  das kleine Feld (`AppearanceSwatch`). Die Tendenz daneben rechnet
+  `consumptionTrend` (`contracts/materials.ts`) über zwei Punkte des
+  Verlaufs; sie ist eine Schätzung fürs Auge und geht in keine Rechnung ein.
 - **Häufige Aktionen** hängen am Layout, nicht an einzelnen Seiten: Wiegen,
   Material anlegen und die Schnellsuche (Strg/⌘ + K) werden über
   `quickActions` (`src/lib/quickActions.ts`) von überall geöffnet.
