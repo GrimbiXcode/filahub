@@ -390,6 +390,7 @@ export const en: Messages = {
     trendPerWeek: (vars: { amount: string }) => `Trend −${vars.amount} / week`,
     trendReach: (vars: { weeks: number }) =>
       `lasts about ${vars.weeks} more weeks at this rate`,
+    trendLong: "lasts more than two years at this rate",
     trendNone: "Trend: not enough entries yet",
     trendFlat: "Trend: nothing used in this period",
     purchasedOn: (vars: { date: string }) => `bought ${vars.date}`,

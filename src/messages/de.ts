@@ -407,6 +407,7 @@ export const de = {
       `Tendenz −${vars.amount} / Woche`,
     trendReach: (vars: { weeks: number }) =>
       `reicht so noch ≈ ${vars.weeks} Wochen`,
+    trendLong: "reicht so noch über zwei Jahre",
     trendNone: "Tendenz: noch zu wenige Einträge",
     trendFlat: "Tendenz: kein Verbrauch im Zeitraum",
     purchasedOn: (vars: { date: string }) => `gekauft ${vars.date}`,

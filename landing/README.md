@@ -10,14 +10,14 @@ once. The workflow cannot do it for you: its token is not allowed to create a
 Pages site, so the job fails until the setting exists.
 
 Plain HTML and CSS, no build step and no external requests — `index.html`,
-`style.css` and the PNGs in `assets/` are the whole thing. To work on it, open
-`index.html` in a browser.
+`style.css`, the PNGs in `assets/` and the four font files in `assets/fonts/`
+are the whole thing. To work on it, open `index.html` in a browser.
 
 `landing/` is **not** in `.prettierignore`, so `npm run format:check` covers
 both files and CI fails on a stray line break. Run `npx prettier --write
 landing/` before committing.
 
-## Colours
+## Colours and type
 
 The colour tokens at the top of `style.css` are the app's own dark theme from
 [`src/index.css`](../src/index.css), converted from HSL to hex, plus the
@@ -30,8 +30,17 @@ The ramp values come from Tailwind's palette, and **Tailwind 4 restated that
 palette in OKLCH**, so `emerald-500` and friends no longer resolve to the hexes
 Tailwind 3 shipped. Do not copy them out of any documentation. Measure them
 from a freshly captured screenshot instead — decode `assets/overview.png` and
-read the pixels out of a fill bar — so that the swatches on the page and the
-bars in the screenshots are the same colour.
+read the pixels out of a fill ring — so that the swatches on the page and the
+rings in the screenshots are the same colour.
+
+The two typefaces are the app's own: **Manrope Variable** for text and
+**JetBrains Mono Variable** for numbers, identifiers and labels. The page
+self-hosts the latin and latin-ext subsets from `assets/fonts/`, copied from
+`node_modules/@fontsource-variable/manrope/files/` and
+`node_modules/@fontsource-variable/jetbrains-mono/files/` together with their
+licences, so the page makes no request to anyone else — same rule as the app's
+`font-src 'self'`. If the app changes typeface, copy the new files over and
+update the `@font-face` blocks at the top of `style.css`.
 
 ## Regenerating the screenshots
 
@@ -68,36 +77,67 @@ changes. There are ten of them: `overview`, `weighing`, `detail`, `stores`,
 3. Run the dev server against it with `DEV_LOGIN=1` and
    `DEV_LOGIN_NAME=Demo` — the `filahub-landing` entry in
    [`.claude/launch.json`](../.claude/launch.json) has the full command — then
-   open `/api/dev-login` once to create the account.
+   open `/api/dev-login` once to create the account. Set the name variable
+   **before** that first login: every visit to `/api/dev-login` writes the
+   name into the account again, so a later rename in SQL only holds until the
+   next login.
 
 4. Set the account to the **English interface** (`users.language = 'en'`) with
    the `en-GB` regional format and EUR — the page is in English, so the
    screenshots have to be too. Then insert sample data.
 
-   Four things the sample data has to contain, or a screenshot loses its point:
+   Six things the sample data has to contain, or a screenshot loses its point:
 
    - **At least two stores.** With exactly one, the store switcher hides itself
-     (`AuthLayout.tsx`), and half of what `stores.png` and `overview.png` are
-     there to show disappears.
+     (`AuthLayout.tsx`), and half of what `stores.png` and `overview.png` are there
+     to show disappears.
    - **One material at 10 % or below**, so the red step of the ramp appears
      somewhere. Nothing else on the page proves it exists.
    - **A weighing history of four entries** on the material behind
-     `detail.png`, which is what makes it a consumption record rather than a
-     number.
+     `detail.png`, spread over months, which is what makes it a consumption
+     record rather than a number. The trend line needs the newest weigh-in and
+     one older reference (`consumptionTrend` in `contracts/materials.ts`), and
+     the copy quotes what it says: −25 g a week, about fifteen weeks left.
+   - **Weigh-in notes in English.** They are free text, so nothing translates
+     them, and they show in the history table and in the panel on the
+     overview.
    - **A second user account.** `friends.png` and `organizations.png` need
      somebody on the other side, and `DEV_LOGIN` only ever creates one account.
-     Insert the row directly and set the friendship, the per-store shares and
-     the organization memberships in SQL.
+     Insert the rows directly and set the friendship, the per-store shares and
+     the organization memberships in SQL — four members at the four levels.
+   - **A handful of container types**, six or seven, so the list behind the
+     dialog in `containers.png` looks like an inventory rather than an empty
+     table.
 
    The numbers in the copy come from that data — nine materials, 4,194 g
-   remaining, three running low, and the 1,954 − 140 − 1,450 = 364 g weigh-in
-   on `F01`. **Update the copy if you change the data**, including the
-   figcaptions and the `.ledger` block in the hero.
+   remaining, three running low, €117.42 remaining value, and the
+   1,954 − 140 − 1,450 = 364 g weigh-in on `F01`. **Update the copy if you
+   change the data**, including the figcaptions and the `.ledger` block in the
+   hero.
 
 5. Capture at 1440 × 1000 CSS pixels, dark theme, device scale factor 1.5;
-   `mobile.png` at 390 × 844 with factor 2. Short pages (`stores`,
-   `containers`) look better in a lower window than in a tall one with half of
-   it empty — the height is the one value worth varying per shot.
+   `mobile.png` at 390 × 844 with factor 2. Two shots use a different height:
+   `stores` at 620, because a short page looks better in a low window than in
+   a tall one with half of it empty, and `import` at 1080, so the import
+   button fits under the review table. `containers` is 900. Each shot has a
+   state it has to be in:
+
+   - `overview`: `/` as it loads. The first material in sort order is the one
+     the panel shows, so `F01` needs to sort first.
+   - `weighing`: the panel's **Weigh** button on `/`, then `1954` typed into
+     the weight field so the dialog shows the subtraction.
+   - `detail`: the material page of `F01`.
+   - `containers`: **New container type** on `/gebinde`, with the form dropdown
+     open.
+   - `presets`: the **Preset catalogue** tab on `/gebinde` with Polymaker
+     expanded, scrolled so the Polymaker heading sits just below the header.
+   - `import`: the compact one-line JSON pasted, **Check it** pressed, scrolled
+     to the top of step 2.
+   - `mobile`: `/`, scrolled to the **Materials** heading so the cards are
+     what the phone shows.
+
+   The header is sticky and slightly translucent, so when a shot is scrolled,
+   land a card's top edge just below it rather than cutting through text.
 
 6. Stop the container: `docker rm -f filahub-landing-db`.
 

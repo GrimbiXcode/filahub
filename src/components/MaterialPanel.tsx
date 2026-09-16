@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveScope } from "@/lib/activeScope";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
+import { describeTrend } from "@/lib/trend";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
@@ -180,22 +181,8 @@ function PanelContent({
       <p className="text-center text-xs text-muted-foreground">
         {history == null ? (
           <Skeleton className="mx-auto h-3 w-48" />
-        ) : trend == null ? (
-          t.materialDetail.trendNone
-        ) : trend.weeksLeft == null ? (
-          t.materialDetail.trendFlat
         ) : (
-          <>
-            <span className="font-mono text-foreground">
-              {t.materialDetail.trendPerWeek({
-                amount: formatGrams(Math.round(trend.gramsPerWeek)),
-              })}
-            </span>
-            {" · "}
-            {t.materialDetail.trendReach({
-              weeks: Math.max(1, Math.round(trend.weeksLeft)),
-            })}
-          </>
+          describeTrend(trend, t, formatGrams)
         )}
       </p>
 

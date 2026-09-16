@@ -180,7 +180,7 @@ export function StockTiles({
                   <span className="rounded-md bg-foreground/8 px-1.5 py-0.5 font-mono text-[11px] font-semibold">
                     {m.identifier ?? "–"}
                   </span>
-                  <span className="flex items-center gap-1 font-mono text-[11px] font-semibold tabular-nums">
+                  <span className="flex items-center gap-1 whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums">
                     <TriangleAlert
                       aria-hidden="true"
                       className={cn(

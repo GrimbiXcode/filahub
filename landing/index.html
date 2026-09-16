@@ -28,7 +28,7 @@
 
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23a9a9b1' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23f0b100' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%23a9a9b1' stroke-width='2.5'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%238b93a2' stroke-width='2.5'/%3E%3Cpath d='M16 3a13 13 0 0 1 11.3 19.4' fill='none' stroke='%23f0b100' stroke-width='2.5' stroke-linecap='round'/%3E%3Ccircle cx='16' cy='16' r='4' fill='none' stroke='%238b93a2' stroke-width='2.5'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="style.css" />
   </head>
@@ -149,10 +149,11 @@
           src="assets/overview.png"
           width="2160"
           height="1500"
-          alt="The filahub overview: a sidebar with an area switcher set to Personal and a store switcher set to Filament 1.75 mm, stat cards for materials, remaining grams, remaining value and materials in a drybox, and a table of filaments with coloured fill bars and remaining amounts in grams and metres."
+          alt="The filahub overview: an icon rail down the left, a header with an area switcher set to Personal, a store switcher set to Filament 1.75 mm and an identifier field, three tiles showing 4,194 g remaining across nine materials with one bar segment per material, the three materials running low as small spool gauges, and a remaining value of €117.42. Below them the shelf: one spool per material with a coloured fill ring, grouped by drybox, and a panel on the right for F01 Panchroma PLA with its gauge, trend, totals and weigh-in history."
         />
         <figcaption>
-          Nine materials, 4,194 g left, three of them running low.
+          Nine materials, 4,194 g left, three of them running low — and F01 open
+          in the panel on the right.
         </figcaption>
       </figure>
 
@@ -177,11 +178,12 @@
             </p>
             <p>
               Give a material a short identifier — <code>F01</code> — and write
-              it on the label. Typing it into the box at the top of the overview
-              opens the weigh-in dialog on that one. The field searches every
-              store, because whoever reads a code off a spool in their hand has
-              no idea which store happens to be selected. Standing at the
-              printer, the whole loop is: scale, F01, number, done.
+              it on the label. Typing it into the field in the header — it is
+              there on every page — opens the weigh-in dialog on that one. The
+              field searches every store, because whoever reads a code off a
+              spool in their hand has no idea which store happens to be
+              selected. Standing at the printer, the whole loop is: scale, F01,
+              number, done.
             </p>
             <p>The fill level is coloured on one scale throughout:</p>
             <ul class="ramp">
@@ -198,7 +200,7 @@
             src="assets/weighing.png"
             width="2160"
             height="1500"
-            alt="The weigh-in dialog: an entered total weight of 1954 g, a highlighted result of 364 g at 36 percent, and a breakdown listing 140 g container tare, 1,450 g drybox tare for Drybox A, and 1,590 g total tare."
+            alt="The weigh-in dialog over the overview: an entered total weight of 1954 g, a highlighted result of 364 g at 36 percent, and a breakdown listing 140 g container tare, 1,450 g drybox tare for Drybox A, and 1,590 g total tare."
             loading="lazy"
           />
           <figcaption>
@@ -214,6 +216,17 @@
               inventory into a consumption record: 1,000 g in March, 812 g in
               April, 590 g in June, 364 g in August.
             </p>
+            <p>
+              Those points also draw a line. From the newest weigh-in and the
+              oldest one within the last ninety days filahub works out a rate —
+              on this spool, 25 g a week — and how long the rest lasts at that
+              rate: about fifteen more weeks. It is deliberately that simple, a
+              straight line through two points rather than a forecast, and it
+              feeds into nothing else. A weigh-in that reads
+              <em>more</em> than the one before is a new spool or a corrected
+              tare, not negative consumption, so the trend goes quiet instead of
+              going wrong.
+            </p>
           </div>
         </div>
 
@@ -222,12 +235,12 @@
             src="assets/detail.png"
             width="2160"
             height="1500"
-            alt="A material's detail page: fill level 364 g of 1,000 g nominal at 36 percent with approximately 122 metres, cards for consumed grams, total tare, last gross weight and remaining value, a details list naming the container and drybox with their tare, and a weighing history table with four dated entries."
+            alt="A material's detail page: a spool gauge at 364 g of 1,000 g nominal, 36 percent and approximately 122 metres, the trend of minus 25 g per week with about 15 weeks left, a chart of the four weigh-ins, cards for consumed grams, total tare, last gross weight and remaining value, a details list naming the container and drybox with their tare, and the weighing history table with four dated entries."
             loading="lazy"
           />
           <figcaption>
-            Consumed, total tare, last gross reading and the remaining value of
-            what is on the spool.
+            Consumed, total tare, last gross reading, the remaining value of
+            what is on the spool — and the line the four weigh-ins draw.
           </figcaption>
         </figure>
       </section>
@@ -252,11 +265,11 @@
               <dd>Liquid resin. Remaining amount also in litres.</dd>
             </dl>
             <p>
-              Up to five of them, switched in the sidebar; the overview, the
-              statistics and the filters all follow that choice. The diameter
-              belongs to the store rather than to each material, because it
-              changes the answer more than anything else does: 1 kg of PLA is
-              about 335 m at 1.75 mm, and only about 126 m at 2.85 mm.
+              Up to five of them, switched in the header; the overview, the
+              tiles and the filters all follow that choice. The diameter belongs
+              to the store rather than to each material, because it changes the
+              answer more than anything else does: 1 kg of PLA is about 335 m at
+              1.75 mm, and only about 126 m at 2.85 mm.
             </p>
             <p>
               Grams are still what you weigh and what you type in. But next to
@@ -312,7 +325,7 @@
             src="assets/containers.png"
             width="2160"
             height="1350"
-            alt="The new container type dialog over the list of container types, with the form dropdown open showing spool, bag, bottle, pail, cartridge and other, and below it a calculator that works out the empty weight from the weight of a full container and its nominal fill."
+            alt="The new container type dialog over a list of seven container types, with the form dropdown open showing spool, bag, bottle, pail, cartridge and other, and partly behind it the calculator that works out the empty weight from the weight of a full container and its nominal fill."
             loading="lazy"
           />
           <figcaption>
@@ -442,10 +455,10 @@
               A company, a university print hub or a makerspace has one shelf of
               filament and a dozen people reaching into it. Create an
               organization, give it stores, and everyone you let in works on the
-              same stock — not a copy, not a shared view, the stock itself. A
-              switcher above the store switcher decides which side you are
-              looking at, and nothing mixes: your personal stock stays exactly
-              as private as it was.
+              same stock — not a copy, not a shared view, the stock itself. The
+              first switcher in the header decides which side you are looking
+              at, and nothing mixes: your personal stock stays exactly as
+              private as it was.
             </p>
             <p>
               Not everyone in a workshop should be able to delete a store, so
@@ -484,11 +497,11 @@
             src="assets/organizations.png"
             width="2160"
             height="1500"
-            alt="An organization page for Makerspace Bern with four members at the levels manage, record, weigh and view, a card for inviting someone by friend code or Telegram name, and a card showing the join code ORG-7H4K-2N9P with the level it hands out."
+            alt="An organization page for Makerspace North with four members at the levels manage, record, weigh and view, a card for inviting someone by friend code or Telegram name with the level the invitation carries, and the start of the open joining card below it."
             loading="lazy"
           />
           <figcaption>
-            Four members, four levels, and a join code that hands out the level
+            Four members, four levels, and an invitation that carries the level
             you picked for it.
           </figcaption>
         </figure>
@@ -531,8 +544,8 @@
           <img
             src="assets/import.png"
             width="2160"
-            height="1500"
-            alt="The import page: pasted JSON with German keys in a text area, and below it a review table with four order lines from Polymaker, Prusament, Bambu Lab and SUNLU, a picker for the target store, and a button labelled import 5 materials."
+            height="1620"
+            alt="The import page: pasted JSON with German keys in a text area, and below it the review step with a picker for the target store, a purchase date, a table of four order lines from Polymaker, Prusament, Bambu Lab and SUNLU, and a button labelled import 5 materials."
             loading="lazy"
           />
           <figcaption>
@@ -566,7 +579,8 @@
                 The interface is available in English and German, and the
                 language belongs to the account rather than the browser. Number,
                 weight and date formats are a separate setting — an English
-                interface does not force you into American dates.
+                interface does not force you into American dates. Dark and light
+                theme follow the system unless you pin one.
               </p>
               <p>
                 Environment variables, a ready-to-use Compose file and the
@@ -603,7 +617,7 @@
                 src="assets/mobile.png"
                 width="780"
                 height="1688"
-                alt="filahub on a phone: the overview as stacked cards, each with fill percentage, remaining grams and metres, drybox and a weigh button."
+                alt="filahub on a phone: the overview as stacked cards, each with a fill ring, the percentage, remaining grams and metres, the drybox, and buttons to log usage and to weigh."
                 loading="lazy"
               />
               <figcaption>

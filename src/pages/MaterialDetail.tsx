@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/table";
 import { fillLevelTextColor } from "@/lib/format";
 import { HistoryChart } from "@/components/HistoryChart";
+import { describeTrend } from "@/lib/trend";
 import { Spool } from "@/components/Spool";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -332,15 +333,7 @@ export default function MaterialDetail() {
                 )}
                 {/* Tendenz: zwei Punkte aus dem Verlauf, siehe `consumptionTrend` */}
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {trend == null
-                    ? t.materialDetail.trendNone
-                    : trend.weeksLeft == null
-                      ? t.materialDetail.trendFlat
-                      : `${t.materialDetail.trendPerWeek({
-                          amount: formatGrams(Math.round(trend.gramsPerWeek)),
-                        })} · ${t.materialDetail.trendReach({
-                          weeks: Math.max(1, Math.round(trend.weeksLeft)),
-                        })}`}
+                  {describeTrend(trend, t, formatGrams)}
                 </p>
               </div>
               <div className="w-full sm:max-w-md sm:flex-1">
