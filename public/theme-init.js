@@ -18,7 +18,7 @@
     root.classList.toggle("dark", dark);
     root.style.colorScheme = dark ? "dark" : "light";
     var meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", dark ? "#09090b" : "#ffffff");
+    if (meta) meta.setAttribute("content", dark ? "#121417" : "#f5f6f8");
   } catch (e) {
     /* localStorage kann blockiert sein – dann bleibt es hell */
   }

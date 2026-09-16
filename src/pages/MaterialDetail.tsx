@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  consumptionTrend,
   materialHistory,
   type MaterialHistoryEntry,
 } from "@contracts/materials";
@@ -44,7 +45,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
+import { fillLevelTextColor } from "@/lib/format";
+import { HistoryChart } from "@/components/HistoryChart";
+import { describeTrend } from "@/lib/trend";
+import { Spool } from "@/components/Spool";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
@@ -64,7 +68,6 @@ export default function MaterialDetail() {
     formatDateTime,
     formatGrams,
     formatMoney,
-    formatPercent,
     formatSecondary,
   } = useFormat();
   const t = useT();
@@ -173,6 +176,8 @@ export default function MaterialDetail() {
     tareWeight: material.tareWeight,
     nominalWeight: material.nominalWeight,
   });
+
+  const trend = consumptionTrend({ history });
 
   /** Löschknopf je Eintragsart – die Regel kommt für beide aus `contracts/`. */
   const deleteButton = (entry: MaterialHistoryEntry) => {
@@ -284,10 +289,19 @@ export default function MaterialDetail() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+              <Spool
+                size={140}
+                hex={swatch.hex}
+                kind={swatch.kind}
+                percent={material.remainingPercent}
+                label={swatch.label}
+                showPercent
+                className="mx-auto sm:mx-0"
+              />
+              <div className="min-w-0 flex-1">
                 <div
-                  className={`text-3xl font-bold tabular-nums ${fillLevelTextColor(material.remainingPercent)}`}
+                  className={`font-mono text-3xl font-semibold tabular-nums ${fillLevelTextColor(material.remainingPercent)}`}
                 >
                   {formatGrams(material.remainingWeight)}
                 </div>
@@ -317,18 +331,17 @@ export default function MaterialDetail() {
                     })}
                   </p>
                 )}
+                {/* Tendenz: zwei Punkte aus dem Verlauf, siehe `consumptionTrend` */}
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {describeTrend(trend, t, formatGrams)}
+                </p>
               </div>
-              {material.remainingPercent != null && (
-                <span className="shrink-0 text-2xl font-semibold tabular-nums text-muted-foreground">
-                  {formatPercent(material.remainingPercent)}
-                </span>
-              )}
-            </div>
-            <div className="h-3 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className={`h-full transition-all ${fillLevelColor(material.remainingPercent)}`}
-                style={{ width: `${material.remainingPercent ?? 0}%` }}
-              />
+              <div className="w-full sm:max-w-md sm:flex-1">
+                <HistoryChart
+                  history={history}
+                  nominalWeight={material.nominalWeight}
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
               <div className="rounded-lg border p-3">

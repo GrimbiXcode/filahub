@@ -82,7 +82,8 @@ import {
 import { useLocation, useNavigate } from "react-router";
 import Blocked from "@/pages/Blocked";
 import { AuthLayoutSkeleton } from "./AuthLayoutSkeleton";
-import { Wordmark } from "./Logo";
+import { LogoMark, Wordmark } from "./Logo";
+import { TopBar } from "./TopBar";
 import { QuickActionsHost } from "./QuickActions";
 import { useQuickActions } from "@/lib/quickActions";
 import { setActiveLagerId, useActiveLagerId } from "@/lib/activeLager";
@@ -178,7 +179,23 @@ function titleForPath(pathname: string, t: Messages): string {
   return APP_NAME;
 }
 
-export default function AuthLayout({ children }: { children: ReactNode }) {
+/**
+ * Ob die Seitenleiste ausgefahren startet. Seit 3.0 ist sie standardmäßig eine
+ * Symbolleiste; wer sie ausfährt, bekommt das über das Cookie der
+ * Sidebar-Komponente beim nächsten Mal wieder.
+ */
+function sidebarStartsOpen(): boolean {
+  return document.cookie.split("; ").includes("sidebar_state=true");
+}
+
+export default function AuthLayout({
+  children,
+  fullWidth = false,
+}: {
+  children: ReactNode;
+  /** Ohne Maximalbreite – die Übersicht braucht den Platz für Regal und Detail */
+  fullWidth?: boolean;
+}) {
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_WIDTH_KEY);
     return saved ? parseInt(saved, 10) : DEFAULT_WIDTH;
@@ -237,13 +254,19 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider
+      defaultOpen={sidebarStartsOpen()}
       style={
         {
           "--sidebar-width": `${sidebarWidth}px`,
+          // Die Symbolleiste: 64 px, damit 44-px-Knöpfe Luft haben
+          "--sidebar-width-icon": "4rem",
         } as CSSProperties
       }
     >
-      <AuthLayoutContent setSidebarWidth={setSidebarWidth}>
+      <AuthLayoutContent
+        setSidebarWidth={setSidebarWidth}
+        fullWidth={fullWidth}
+      >
         {children}
       </AuthLayoutContent>
     </SidebarProvider>
@@ -253,11 +276,20 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
 type AuthLayoutContentProps = {
   children: ReactNode;
   setSidebarWidth: (width: number) => void;
+  fullWidth: boolean;
 };
+
+/**
+ * Knöpfe der Leiste: in der Symbolleiste 44 px groß und rund, mittig – die
+ * Sidebar-Komponente setzt dort 32 px mit `!important`, deshalb ebenso.
+ */
+const railButton =
+  "h-10 transition-all group-data-[collapsible=icon]:size-11! group-data-[collapsible=icon]:rounded-xl group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:[&>span:last-child]:hidden";
 
 function AuthLayoutContent({
   children,
   setSidebarWidth,
+  fullWidth,
 }: AuthLayoutContentProps) {
   const { user, logout, isAdmin } = useAuth();
   const location = useLocation();
@@ -342,10 +374,16 @@ function AuthLayoutContent({
             <div className="flex w-full items-center gap-3 px-2 transition-all">
               <button
                 onClick={toggleSidebar}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-accent focus:outline-hidden focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:mx-auto"
                 aria-label={t.nav.toggleSidebar}
               >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                {/* Eingeklappt ist die Bildmarke der Griff – ein zweites
+                    Symbol hätte in 64 px keinen Platz. */}
+                {isCollapsed ? (
+                  <LogoMark className="h-6 w-6" />
+                ) : (
+                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                )}
               </button>
               {!isCollapsed ? (
                 <Wordmark className="min-w-0 [&>span]:truncate" />
@@ -354,11 +392,17 @@ function AuthLayoutContent({
           </SidebarHeader>
 
           <SidebarContent className="gap-0">
-            <OrganizationSwitcher />
-            <LagerSwitcher />
+            {/* Ab dem Tablet stehen Bereich und Lager in der Kopfzeile
+                (`TopBar`); hier nur noch für die ausgefahrene Leiste auf dem
+                Telefon. */}
+            <div className="md:hidden">
+              <OrganizationSwitcher />
+              <LagerSwitcher />
+            </div>
 
-            {/* Häufigste Aktionen ganz oben: wiegen und suchen */}
-            <SidebarMenu className="px-2 py-1">
+            {/* Häufigste Aktionen ganz oben: wiegen und suchen. Ab dem Tablet
+                trägt sie die Kopfzeile, deshalb dort ausgeblendet. */}
+            <SidebarMenu className="px-2 py-1 md:hidden">
               {/*
                 Der auffälligste Knopf der ganzen Oberfläche – unterhalb von
                 `weigher` gehört er weg, sonst führt der wichtigste Weg der App
@@ -421,7 +465,7 @@ function AuthLayoutContent({
 
             <SidebarSeparator className="my-2" />
 
-            <SidebarMenu className="px-2 py-1">
+            <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
               {menuItems.map(item => {
                 const isActive = location.pathname === item.path;
                 /*
@@ -448,7 +492,7 @@ function AuthLayoutContent({
                             ? t.nav.friendsPending({ count: badge })
                             : t.nav.organizationsPending({ count: badge })
                       }
-                      className="h-10 font-normal transition-all"
+                      className={`${railButton} font-normal`}
                     >
                       <span className="relative flex shrink-0 items-center justify-center">
                         <item.icon
@@ -480,7 +524,7 @@ function AuthLayoutContent({
                 <SidebarSeparator className="my-2" />
                 <SidebarGroup className="py-0">
                   <SidebarGroupLabel>{t.nav.administration}</SidebarGroupLabel>
-                  <SidebarMenu className="px-2 py-1">
+                  <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
                     {adminMenuItems.map(item => {
                       const isActive = location.pathname === item.path;
                       return (
@@ -489,7 +533,7 @@ function AuthLayoutContent({
                             isActive={isActive}
                             onClick={() => go(item.path)}
                             tooltip={t.nav[item.label]}
-                            className="h-10 font-normal transition-all"
+                            className={`${railButton} font-normal`}
                           >
                             <item.icon
                               className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
@@ -505,8 +549,8 @@ function AuthLayoutContent({
             )}
           </SidebarContent>
 
-          <SidebarFooter className="p-3">
-            <SidebarMenu>
+          <SidebarFooter className="p-3 group-data-[collapsible=icon]:px-0">
+            <SidebarMenu className="group-data-[collapsible=icon]:items-center">
               <SidebarMenuItem>
                 <SidebarMenuButton
                   isActive={location.pathname === RELEASE_NOTES_PATH}
@@ -516,7 +560,7 @@ function AuthLayoutContent({
                       ? t.nav.releaseNotesUnread({ count: unreadCount })
                       : t.nav.releaseNotes
                   }
-                  className="h-10 font-normal transition-all"
+                  className={`${railButton} font-normal`}
                 >
                   <span className="relative flex shrink-0 items-center justify-center">
                     <Sparkles
@@ -548,7 +592,7 @@ function AuthLayoutContent({
                   isActive={location.pathname === SETTINGS_PATH}
                   onClick={() => go(SETTINGS_PATH)}
                   tooltip={t.nav.settings}
-                  className="h-10 font-normal transition-all"
+                  className={`${railButton} font-normal`}
                 >
                   <Settings
                     className={`h-4 w-4 ${
@@ -643,8 +687,11 @@ function AuthLayoutContent({
       </div>
 
       <SidebarInset className="min-w-0">
-        {/* Kopfzeile nur auf schmalen Geräten – per CSS statt per Hook, damit
-            beim ersten Rendern nichts springt. */}
+        {/* Ab dem Tablet: Bereich, Lager, Kennung und die häufigsten
+            Handgriffe – per CSS ausgeblendet, nicht per Hook, damit beim
+            ersten Rendern nichts springt. */}
+        <TopBar />
+        {/* Kopfzeile nur auf schmalen Geräten – ebenfalls per CSS. */}
         <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:hidden">
           <SidebarTrigger className="size-10 rounded-lg" />
           <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
@@ -691,7 +738,11 @@ function AuthLayoutContent({
           einzelner Ausreisser die ganze Seite verschiebbar macht.
         */}
         <main className="min-w-0 flex-1 overflow-x-clip">
-          <div className="mx-auto w-full max-w-7xl p-4 pb-[calc(3rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-10">
+          <div
+            className={`mx-auto w-full p-4 pb-[calc(3rem+env(safe-area-inset-bottom))] sm:p-6 md:pb-10 ${
+              fullWidth ? "max-w-none" : "max-w-7xl"
+            }`}
+          >
             {children}
           </div>
         </main>

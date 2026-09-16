@@ -6,21 +6,24 @@
 
 @theme {
   /*
-    Schriftstack wie unter Tailwind v3. Der v4-Standard hat `ui-sans-serif`
-    und `system-ui` vorne herausgenommen und beginnt bei `-apple-system`.
-    Auf macOS, Windows und Android landet man dadurch bei derselben Schrift
-    wie bisher; auf Linux fällt v4 an der Desktop-Schrift vorbei bis auf
-    „Noto Sans“ bzw. Arial durch. Ohne diese Zeilen verschieben sich sämtliche
-    Textmaße – im Vorher-Nachher-Vergleich wichen bis zu 20 % der Bildpunkte
-    einer Seite ab und Textseiten wurden merklich kürzer; mit ihnen bleiben
-    unter 0,15 % übrig.
+    Zwei Schriften, beide selbst gehostet (`@fontsource-variable/*`, importiert
+    in `main.tsx`): Manrope für Text, JetBrains Mono für alles, was eine Zahl
+    ist – Kennungen, Gramm, Prozent, Beträge, Daten. Ein Schriftdienst käme
+    nicht in Frage: `api/app.ts` setzt `font-src self`, und die Schrift
+    gehört ohnehin zur Anwendung, nicht zu einem Dritten.
 
-    Wer lieber dem v4-Standard folgt, kann den Block ersatzlos streichen.
+    Die Rückfallliste ist die von Tailwind v3, nicht die von v4 – auf Linux
+    fällt v4 an der Desktop-Schrift vorbei bis auf Arial durch; hier zählt sie
+    nur noch, bis die Schriftdatei da ist.
   */
   --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "Manrope Variable", ui-sans-serif, system-ui, -apple-system,
+    BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+    "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
 
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
@@ -58,6 +61,9 @@
   --color-sidebar-border: hsl(var(--sidebar-border));
   --color-sidebar-ring: hsl(var(--sidebar-ring));
 
+  /* Die eine Linienfarbe der Verlaufskurve – siehe `HistoryChart` */
+  --color-series: hsl(var(--series));
+
   --radius-xl: calc(var(--radius) + 4px);
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
@@ -67,6 +73,8 @@
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
   --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  /* Der Füllring der Spule zeichnet sich beim Erscheinen – siehe `Spool.tsx` */
+  --animate-spool-draw: spool-draw 1s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
   @keyframes accordion-down {
     from {
@@ -82,6 +90,11 @@
     }
     to {
       height: 0;
+    }
+  }
+  @keyframes spool-draw {
+    from {
+      stroke-dashoffset: var(--spool-len, 0);
     }
   }
   @keyframes caret-blink {
@@ -103,69 +116,78 @@
 }
 
 @layer base {
+  /*
+    Die Palette der Neugestaltung 3.0 („Spulen-Cockpit“): kühle Grautöne mit
+    einem Hauch Blau, dunkel zuerst entworfen und hell als Gegenstück. Die
+    Werte stehen als HSL-Tripel, damit `hsl(var(--x) / 0.5)` weiter geht.
+    `--series` ist die eine Linienfarbe der Verlaufskurve.
+  */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 220 18% 97%;
+    --foreground: 223 14% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 223 14% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
+    --popover-foreground: 223 14% 10%;
+    --primary: 223 14% 10%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
+    --secondary: 225 15% 95%;
+    --secondary-foreground: 223 14% 10%;
+    --muted: 225 15% 95%;
+    --muted-foreground: 220 9% 46%;
+    --accent: 225 15% 95%;
+    --accent-foreground: 223 14% 10%;
     /* Dunkleres Rot als der shadcn-Standard: mit weißer Schrift bzw. auf
        weißem Grund erreicht es so den AA-Kontrast. */
     --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
+    --border: 225 19% 92%;
+    --input: 225 19% 92%;
+    --ring: 223 14% 10%;
+    --series: 198 63% 50%;
+    /* 12 px: Knöpfe und Felder bekommen `md` (10 px), Kacheln `xl` (16 px). */
+    --radius: 0.75rem;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 9% 46%;
+    --sidebar-primary: 223 14% 10%;
     --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 225 15% 95%;
+    --sidebar-accent-foreground: 223 14% 10%;
+    --sidebar-border: 225 19% 92%;
+    --sidebar-ring: 223 14% 10%;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 216 12% 8%;
+    --foreground: 210 16% 93%;
     /* Karten und Popover liegen bewusst etwas über dem Hintergrund – die App
-       ist kartenlastig, ohne Abstufung verschwimmt alles zu einer Fläche. */
-    --card: 240 8% 7.5%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 8% 8.5%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 4% 16%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 4% 16%;
-    --muted-foreground: 240 5% 68%;
-    --accent: 240 4% 18%;
-    --accent-foreground: 0 0% 98%;
+       ist kachellastig, ohne Abstufung verschwimmt alles zu einer Fläche. */
+    --card: 218 13% 12%;
+    --card-foreground: 210 16% 93%;
+    --popover: 216 14% 14%;
+    --popover-foreground: 210 16% 93%;
+    --primary: 210 16% 93%;
+    --primary-foreground: 216 12% 8%;
+    --secondary: 215 14% 17%;
+    --secondary-foreground: 210 16% 93%;
+    --muted: 215 14% 17%;
+    --muted-foreground: 218 11% 59%;
+    --accent: 215 14% 17%;
+    --accent-foreground: 210 16% 93%;
     --destructive: 0 70% 45%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 4% 20%;
-    --input: 240 4% 22%;
-    --ring: 240 5% 70%;
-    --sidebar-background: 240 8% 6%;
-    --sidebar-foreground: 240 5% 90%;
-    --sidebar-primary: 0 0% 98%;
-    --sidebar-primary-foreground: 240 5.9% 10%;
-    --sidebar-accent: 240 4% 16%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 4% 18%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 215 14% 17%;
+    --input: 215 13% 19%;
+    --ring: 218 11% 59%;
+    --series: 197 73% 67%;
+    --sidebar-background: 214 14% 10%;
+    --sidebar-foreground: 218 11% 59%;
+    --sidebar-primary: 210 16% 93%;
+    --sidebar-primary-foreground: 216 12% 8%;
+    --sidebar-accent: 215 14% 17%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 216 13% 15%;
+    --sidebar-ring: 218 11% 59%;
   }
 }
 

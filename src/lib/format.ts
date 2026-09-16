@@ -21,3 +21,15 @@ export function fillLevelTextColor(percent: number | null): string {
   if (percent <= 25) return "text-orange-600 dark:text-orange-400";
   return "text-foreground";
 }
+
+/**
+ * Strichfarbe für die Spule und andere SVG-Bögen – dieselbe Skala wie
+ * `fillLevelColor`, nur als `stroke-*` statt `bg-*`.
+ */
+export function fillLevelStroke(percent: number | null): string {
+  if (percent == null) return "stroke-muted-foreground/40";
+  if (percent <= 10) return "stroke-red-500";
+  if (percent <= 25) return "stroke-orange-500";
+  if (percent <= 50) return "stroke-yellow-500";
+  return "stroke-emerald-500";
+}

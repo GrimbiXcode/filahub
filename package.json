@@ -1,7 +1,7 @@
 {
   "name": "filahub",
   "private": true,
-  "version": "2.9.2",
+  "version": "3.0.0",
   "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
@@ -21,6 +21,8 @@
     "db:seed": "tsx db/seed.ts"
   },
   "dependencies": {
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@fontsource-variable/manrope": "^5.3.0",
     "@hono/node-server": "^2.1.0",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-accordion": "^1.2.20",

@@ -345,6 +345,26 @@ export const de = {
     columnsReset: "Standard wiederherstellen",
     remaining: (vars: { amount: string }) => `${vars.amount} übrig`,
     sortBy: (vars: { label: string }) => `Nach ${vars.label} sortieren`,
+    // Seit 3.0: Regal, Kacheln und Detail daneben
+    shelfView: "Regal",
+    listView: "Liste",
+    viewLabel: "Ansicht",
+    summary: (vars: { count: number; remaining: string; low: number }) =>
+      `${vars.count} Materialien · ${vars.remaining} übrig · ${vars.low} knapp`,
+    groupCount: (vars: { count: number }) => `${vars.count} Materialien`,
+    groupTare: (vars: { amount: string }) => `Tara ${vars.amount}`,
+    tileRemainingTitle: "Restmenge",
+    tileLowTitle: "Knapp",
+    tileLowSub: (vars: { percent: number }) => `unter ${vars.percent} %`,
+    tileLowOf: (vars: { count: number; total: number }) =>
+      `${vars.count} von ${vars.total}`,
+    tileValueTitle: "Restwert",
+    tileInBoxTitle: "In Drybox",
+    moreMaterials: (vars: { count: number }) => `+ ${vars.count} weitere`,
+    noSelection: "Ein Material im Regal antippen, um es hier zu sehen.",
+    details: "Details",
+    weighNamed: (vars: { name: string }) => `${vars.name} wiegen`,
+    selectNamed: (vars: { name: string }) => `${vars.name} auswählen`,
   },
 
   materialDetail: {
@@ -381,6 +401,17 @@ export const de = {
       `${vars.when} · ${vars.amount} brutto`,
     remainingAfter: (vars: { amount: string }) => `${vars.amount} übrig danach`,
     noHistory: "Noch keine Wägungen oder Verbräuche erfasst.",
+    // Seit 3.0: Verlaufskurve und Tendenz
+    chartTitle: "Verlauf",
+    trendPerWeek: (vars: { amount: string }) =>
+      `Tendenz −${vars.amount} / Woche`,
+    trendReach: (vars: { weeks: number }) =>
+      `reicht so noch ≈ ${vars.weeks} Wochen`,
+    trendLong: "reicht so noch über zwei Jahre",
+    trendNone: "Tendenz: noch zu wenige Einträge",
+    trendFlat: "Tendenz: kein Verbrauch im Zeitraum",
+    purchasedOn: (vars: { date: string }) => `gekauft ${vars.date}`,
+    fullHistory: "Ganzer Verlauf",
     deleteMaterial: "Material löschen",
     deleteMaterialTitle: "Material löschen?",
     deleteMaterialDescription: (vars: { name: string }) =>

@@ -673,3 +673,84 @@ export function materialHistory(input: {
   });
   return entries.reverse();
 }
+
+// ---------------------------------------------------------------------------
+// Tendenz und Reichweite
+// ---------------------------------------------------------------------------
+
+export type ConsumptionTrend = {
+  /** Verbrauch in Gramm je Woche über das betrachtete Fenster; 0 = kein Verbrauch */
+  gramsPerWeek: number;
+  /**
+   * Wochen, bis bei gleichem Tempo nichts mehr übrig ist. `null`, wenn es kein
+   * Tempo gibt – nichts verbraucht oder sogar mehr da als vorher.
+   */
+  weeksLeft: number | null;
+};
+
+/** Über wie viele Tage die Tendenz gerechnet wird, wenn nichts anderes gesagt ist. */
+export const TREND_WINDOW_DAYS = 90;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Tendenz aus dem Verlauf: Gramm je Woche und Reichweite bei gleichem Tempo.
+ *
+ * Gerechnet wird über **zwei Punkte**, nicht über eine Regression: den
+ * jüngsten Eintrag und den ältesten innerhalb des Fensters. Wer in den letzten
+ * neunzig Tagen nur einmal gewogen hat, bekommt den letzten Eintrag davor als
+ * Bezug – sonst hieße „selten wiegen“ „keine Tendenz“, und genau dann wäre sie
+ * am nützlichsten. Zwei Punkte am selben Tag ergeben keine Aussage, auch nicht
+ * eine falsche: dann `null`.
+ *
+ * Eine Wägung, die **mehr** meldet als der Bezug (neue Rolle, korrigierte Tara),
+ * ist kein negativer Verbrauch, sondern kein Verbrauch – Tempo 0, Reichweite
+ * unbekannt. Die Zahl ist eine Schätzung fürs Auge und geht nirgends in eine
+ * Rechnung ein; die Restmenge selbst kommt weiterhin aus `remainingAmount`.
+ *
+ * `history` ist die Liste aus `materialHistory`: neueste zuerst, mit
+ * `remainingAfter` je Eintrag.
+ */
+export function consumptionTrend(input: {
+  history: readonly Pick<MaterialHistoryEntry, "at" | "remainingAfter">[];
+  now?: Date;
+  windowDays?: number;
+}): ConsumptionTrend | null {
+  const { history } = input;
+  if (history.length < 2) return null;
+  const windowDays = input.windowDays ?? TREND_WINDOW_DAYS;
+  const now = input.now ?? new Date();
+  const cutoff = now.getTime() - windowDays * DAY_MS;
+
+  const newest = history[0];
+  /*
+    Der älteste Eintrag im Fenster; liegt nur der jüngste darin, der erste
+    davor. `history` ist neueste zuerst, deshalb läuft die Suche vorwärts und
+    merkt sich den letzten Treffer im Fenster.
+  */
+  let reference = newest;
+  let leftWindow = false;
+  for (let i = 1; i < history.length; i++) {
+    const entry = history[i];
+    if (entry.at.getTime() >= cutoff) {
+      reference = entry;
+    } else {
+      if (reference === newest) reference = entry;
+      leftWindow = true;
+      break;
+    }
+  }
+  if (reference === newest && !leftWindow) return null;
+
+  const spanDays = (newest.at.getTime() - reference.at.getTime()) / DAY_MS;
+  if (!(spanDays >= 1)) return null;
+
+  const consumed = reference.remainingAfter - newest.remainingAfter;
+  if (consumed <= 0) return { gramsPerWeek: 0, weeksLeft: null };
+
+  const gramsPerWeek = (consumed / spanDays) * 7;
+  return {
+    gramsPerWeek,
+    weeksLeft: newest.remainingAfter / gramsPerWeek,
+  };
+}
