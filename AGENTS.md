@@ -968,7 +968,8 @@ Datenbank.
 - Runner: Vitest, Umgebung `node`, konfiguriert in `vitest.config.ts`.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
-  `materialStats`, `materialUnits`, `materialType`, `consumption`, `format`,
+  `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
+  `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
   – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
