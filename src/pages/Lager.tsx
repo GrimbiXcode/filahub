@@ -61,6 +61,7 @@ import { kindHint, kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import type { LagerItem } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import { formKeys } from "@/lib/formKeyboard";
 
 /** Symbol je Materialart – rein zur Wiedererkennung in der Liste. */
 const KIND_ICONS: Record<MaterialKind, typeof Package> = {
@@ -313,7 +314,7 @@ export default function LagerPage() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
-          <form onSubmit={submit}>
+          <form onSubmit={submit} {...formKeys}>
             <DialogHeader>
               <DialogTitle>
                 {editing ? t.lager.editLager : t.lager.newLager}

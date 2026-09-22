@@ -54,6 +54,7 @@ import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { ContainerTypeItem } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import { formKeys } from "@/lib/formKeyboard";
 
 export default function ContainerTypes() {
   const utils = trpc.useUtils();
@@ -428,7 +429,7 @@ export default function ContainerTypes() {
               {t.containerTypes.dialogDescription}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4">
+          <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="s-name">{t.common.nameRequiredLabel}</Label>
               <Input

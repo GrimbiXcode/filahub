@@ -37,6 +37,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { setActiveLagerId, useActiveLagerId } from "@/lib/activeLager";
 import { useFormat } from "@/lib/formatContext";
+import {
+  formKeys,
+  submitShortcut,
+  SUBMIT_KEYSHORTCUTS,
+} from "@/lib/formKeyboard";
 import { useT } from "@/lib/i18nContext";
 import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
@@ -406,7 +411,11 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               : t.materialForm.createDescription}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+        <form
+          onSubmit={handleSubmit}
+          {...formKeys}
+          className="flex min-h-0 flex-1 flex-col"
+        >
           {/*
             `items-start`: Ohne das zieht jede Zelle sich auf die Höhe der
             höchsten ihrer Zeile, und weil die Zellen selbst Raster sind,
@@ -751,16 +760,24 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               />
             </div>
           </div>
-          <DialogFooter className="border-t bg-background p-4 sm:p-6 sm:py-4">
+          <DialogFooter className="border-t bg-background p-4 sm:items-center sm:p-6 sm:py-4">
+            {/* Ohne Tastatur nutzlos – auf dem Telefon ausgeblendet */}
+            <span className="mr-auto hidden text-xs text-muted-foreground sm:inline">
+              {t.common.submitShortcut({ keys: submitShortcut(t) })}
+            </span>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={saving}
             >
-              Abbrechen
+              {t.common.cancel}
             </Button>
-            <Button type="submit" disabled={saving}>
+            <Button
+              type="submit"
+              disabled={saving}
+              aria-keyshortcuts={SUBMIT_KEYSHORTCUTS}
+            >
               {saving
                 ? t.common.saving
                 : isEdit

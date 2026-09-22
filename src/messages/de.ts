@@ -28,6 +28,7 @@ export const de = {
     loading: "Laden …",
     search: "Suchen …",
     ctrlKey: "Strg",
+    submitShortcut: (vars: { keys: string }) => `${vars.keys} speichert`,
     actions: "Aktionen",
     name: "Name",
     notes: "Notizen",

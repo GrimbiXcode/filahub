@@ -19,6 +19,7 @@ export const en: Messages = {
     loading: "Loading …",
     search: "Search …",
     ctrlKey: "Ctrl",
+    submitShortcut: (vars: { keys: string }) => `${vars.keys} saves`,
     actions: "Actions",
     name: "Name",
     notes: "Notes",

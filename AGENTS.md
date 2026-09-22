@@ -54,6 +54,8 @@ src/            React-Frontend
                 appearance.ts (Katalog-Hook, Auflösung und Feld-Beschriftung),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
+                formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
+                Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),

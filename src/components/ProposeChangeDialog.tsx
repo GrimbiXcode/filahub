@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { PresetVariantNode } from "@/types";
+import { formKeys } from "@/lib/formKeyboard";
 
 type Props = {
   variant: PresetVariantNode | null;
@@ -117,7 +118,7 @@ export function ProposeChangeDialog({
             })}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="pc-tare">{t.proposeChange.tareLabel}</Label>
             <Input
