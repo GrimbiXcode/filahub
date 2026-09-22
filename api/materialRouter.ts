@@ -2,6 +2,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { importManyInputSchema } from "@contracts/import";
 import {
+  identifierInputSchema,
+  identifierTakenMessage,
+  nextIdentifiers,
+} from "@contracts/identifierTemplate";
+import {
   WEIGHING_CORRECTION_MINUTES,
   mayDeleteConsumption,
   mayDeleteWeighing,
@@ -24,6 +29,7 @@ import {
   addWeighing,
   countConsumptionsForMaterial,
   countWeighingsForMaterial,
+  IDENTIFIER_TAKEN,
   createMaterial,
   deleteConsumption,
   deleteMaterial,
@@ -31,6 +37,7 @@ import {
   findConsumption,
   findLatestConsumptionId,
   findLatestWeighingId,
+  findIdentifiersInScope,
   findMaterialInScope,
   findMaterialTypesInScope,
   findMaterialsInScope,
@@ -42,7 +49,11 @@ import {
   storageBoxInScope,
   updateMaterial,
 } from "./queries/filament";
-import { countMaterialsInLager, lagerInScope } from "./queries/lager";
+import {
+  countMaterialsInLager,
+  findLagerInScopeById,
+  lagerInScope,
+} from "./queries/lager";
 
 const dateString = z
   .string()
@@ -54,7 +65,8 @@ const materialInput = z.object({
   /** Pflicht: Ein Material liegt immer in genau einem Lager. */
   lagerId: z.number().int().positive("Bitte ein Lager wählen"),
   name: z.string().min(1, "Name ist erforderlich"),
-  identifier: z.string().max(50).nullable().optional(),
+  /** Getrimmt, leer = `null`; je Lager eindeutig (siehe `withIdentifierConflict`) */
+  identifier: identifierInputSchema.optional(),
   /**
    * Freitext, aber case-insensitiv: Die gespeicherte Schreibweise legt
    * `canonicalMaterialType` fest, siehe `knownMaterialTypes` unten. `trim()`
@@ -152,6 +164,31 @@ async function validateForeignKeys(
  */
 async function knownMaterialTypes(scope: Scope): Promise<string[]> {
   return [...COMMON_MATERIAL_TYPES, ...(await findMaterialTypesInScope(scope))];
+}
+
+/**
+ * Übersetzt die doppelte Kennung (`IDENTIFIER_TAKEN` aus dem Unique-Index) in
+ * ein `CONFLICT` mit einer Meldung, die das Formular unter dem Feld zeigt.
+ * Ohne das wäre es ein INTERNAL_SERVER_ERROR mit der rohen Postgres-Meldung.
+ *
+ * Geprüft wird bewusst **nur** über den Index und nicht vorher per Abfrage:
+ * Eine Vorabprüfung ließe zwei gleichzeitige Anfragen beide durch.
+ */
+async function withIdentifierConflict<T>(
+  identifier: string | null | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof Error && error.message === IDENTIFIER_TAKEN) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: identifierTakenMessage(identifier ?? ""),
+      });
+    }
+    throw error;
+  }
 }
 
 export const materialRouter = createRouter({
@@ -260,20 +297,23 @@ export const materialRouter = createRouter({
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
-      const id = await createMaterial(
-        scope,
-        {
-          ...data,
-          materialType: canonicalMaterialType(
-            data.materialType,
-            await knownMaterialTypes(scope)
-          ),
-          identifier: data.identifier ?? undefined,
-          manufacturer: data.manufacturer ?? undefined,
-          color: data.color ?? undefined,
-          notes: data.notes ?? undefined,
-        },
-        initialGrossWeight
+      const materialType = canonicalMaterialType(
+        data.materialType,
+        await knownMaterialTypes(scope)
+      );
+      const id = await withIdentifierConflict(data.identifier, () =>
+        createMaterial(
+          scope,
+          {
+            ...data,
+            materialType,
+            identifier: data.identifier ?? undefined,
+            manufacturer: data.manufacturer ?? undefined,
+            color: data.color ?? undefined,
+            notes: data.notes ?? undefined,
+          },
+          initialGrossWeight
+        )
       );
       return { id };
     }),
@@ -321,7 +361,15 @@ export const materialRouter = createRouter({
               await knownMaterialTypes(scope)
             )
           : undefined;
-      await updateMaterial(scope, id, { ...data, materialType });
+      /*
+        Die Kennung kann auch dann kollidieren, wenn sie gar nicht mitgeschickt
+        wurde: Wer ein Material in ein anderes Lager verschiebt, nimmt seine
+        Kennung dorthin mit. Die Meldung nennt deshalb die effektive.
+      */
+      await withIdentifierConflict(
+        data.identifier !== undefined ? data.identifier : existing.identifier,
+        () => updateMaterial(scope, id, { ...data, materialType })
+      );
       return { ok: true };
     }),
 
@@ -398,6 +446,21 @@ export const materialRouter = createRouter({
         sonst stünden „Wood“ und „wood“ aus derselben Tabelle nebeneinander.
       */
       const known = await knownMaterialTypes(scope);
+      /*
+        Die Kennungsvorlage des Ziellagers gilt auch hier: Jedes importierte
+        Material bekommt die nächste freie Nummer, gezählt wie im Formular über
+        den ganzen Bereich (`contracts/identifierTemplate.ts`). Vorab für den
+        ganzen Stapel, damit sich die Positionen nicht gegenseitig dieselbe
+        Nummer geben.
+      */
+      const lager = await findLagerInScopeById(scope, input.lagerId);
+      const identifiers = lager?.identifierTemplate
+        ? nextIdentifiers(
+            lager.identifierTemplate,
+            await findIdentifiersInScope(scope),
+            gesamt
+          )
+        : [];
       for (const item of input.items) {
         const materialType = canonicalMaterialType(item.typ, known);
         if (!known.includes(materialType)) known.push(materialType);
@@ -407,16 +470,20 @@ export const materialRouter = createRouter({
           .filter(Boolean)
           .join(" ");
         for (let i = 0; i < item.anzahl; i++) {
-          await createMaterial(scope, {
-            lagerId: input.lagerId,
-            name,
-            materialType,
-            manufacturer: item.hersteller || undefined,
-            color: item.farbe || undefined,
-            priceCents: item.priceCents ?? undefined,
-            purchaseDate: input.purchaseDate ?? undefined,
-            nominalWeight: item.nenngewicht,
-          });
+          const identifier = identifiers[created];
+          await withIdentifierConflict(identifier, () =>
+            createMaterial(scope, {
+              lagerId: input.lagerId,
+              identifier,
+              name,
+              materialType,
+              manufacturer: item.hersteller || undefined,
+              color: item.farbe || undefined,
+              priceCents: item.priceCents ?? undefined,
+              purchaseDate: input.purchaseDate ?? undefined,
+              nominalWeight: item.nenngewicht,
+            })
+          );
           created++;
         }
       }

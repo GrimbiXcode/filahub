@@ -119,3 +119,53 @@ export const identifierTemplateSchema = z
     "Die Vorlage braucht genau einen Platzhalter {n}, z. B. „ID: {n}“ oder „F{nn}“"
   )
   .nullable();
+
+/**
+ * Mehrere Kennungen am Stück, für den Import: Jede vergebene gilt für die
+ * nächste als belegt. `[]` bei ungültiger Vorlage.
+ */
+export function nextIdentifiers(
+  template: string,
+  existing: readonly (string | null)[],
+  count: number
+): string[] {
+  if (!parseIdentifierTemplate(template)) return [];
+  const taken = [...existing];
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const next = nextIdentifier(template, taken);
+    if (next == null) break;
+    result.push(next);
+    taken.push(next);
+  }
+  return result;
+}
+
+/**
+ * Vergleichsform einer Kennung: ohne Leerraum am Rand, klein geschrieben.
+ *
+ * **Je Lager darf jede Vergleichsform nur einmal vorkommen** – erzwungen vom
+ * Index `materials_identifier_per_lager_unique` auf `lower("identifier")`.
+ * Groß-/Kleinschreibung zählt nicht, weil die Kennungssuche sie auch nicht
+ * unterscheidet: „F01" und „f01" wären auf dem Etikett dasselbe und in der
+ * Suche nicht auseinanderzuhalten. Den Rand schneidet schon die Eingabe ab
+ * (`identifierInputSchema`), deshalb reicht im Index `lower`.
+ */
+export function normalizeIdentifier(identifier: string): string {
+  return identifier.trim().toLowerCase();
+}
+
+/**
+ * Kennung als Eingabe am Material: getrimmt, leer wird `null`. Ohne das Trimmen
+ * wären „F01" und „F01 " im Index zwei verschiedene Kennungen.
+ */
+export const identifierInputSchema = z
+  .string()
+  .max(50)
+  .transform(value => value.trim() || null)
+  .nullable();
+
+/** Meldung bei doppelter Kennung – `CONFLICT` steht bei Material nur hierfür */
+export function identifierTakenMessage(identifier: string): string {
+  return `Die Kennung „${identifier}“ gibt es in diesem Lager schon.`;
+}

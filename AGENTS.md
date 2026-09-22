@@ -257,23 +257,48 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
 
-## Kennungsvorlage je Lager
+## Kennungen: eindeutig je Lager, Vorlage je Lager
+
+**Eine Kennung kommt je Lager nur einmal vor** (seit 3.1.0), ohne Rücksicht auf
+Groß-/Kleinschreibung – dieselbe Vergleichsform wie in der Kennungssuche
+(`normalizeIdentifier`). Erzwungen vom partiellen Unique-Index
+`materials_identifier_per_lager_unique` auf (`lagerId`, `lower("identifier")`);
+den Rand schneidet die Eingabe ab (`identifierInputSchema`), leer wird `NULL`.
+
+- **Die Datenbank ist die Prüfung.** `withIdentifierConflict`
+  (`api/materialRouter.ts`) übersetzt den verletzten Index in ein `CONFLICT` –
+  in allen drei Schreibpfaden, auch beim Verschieben in ein anderes Lager, das
+  die Kennung mitnimmt. `CONFLICT` kommt beim Material nur von dort; das
+  Formular zeigt es deshalb am Feld statt als Meldung. Vorher prüft das
+  Formular selbst gegen die geladene Liste, damit der Fehler schon beim Tippen
+  dasteht; eine Vorabfrage auf dem Server gibt es bewusst nicht, sie ließe zwei
+  gleichzeitige Anfragen durch.
+- **Die Migration `0021_identifier_unique.sql` ist von Hand ergänzt.** Vor dem
+  Index trimmt sie den Altbestand und hängt an spätere Dubletten „ (2)“,
+  „ (3)“ … an (das älteste Material behält die Kennung; gelöscht wird nichts,
+  weil die Kennung auf einem Etikett stehen kann). Geprüft in
+  `api/lager.integration.test.ts` an einem Altbestand am Router vorbei.
 
 Seit 3.1.0 kann ein Lager eine **Kennungsvorlage** tragen
 (`lager.identifierTemplate`, z. B. „ID: {n}" oder „F{nn}"). Regeln und
 Rechnung stehen an genau einer Stelle: `contracts/identifierTemplate.ts`,
 getestet in `api/identifierTemplate.test.ts`.
 
-- **Vorbelegung, keine Regel.** Das Materialformular trägt beim Anlegen die
+- **Vorbelegung im Formular.** Das Materialformular trägt beim Anlegen die
   nächste freie Kennung ein – abgeleitet wie die Bezeichnung, solange das Feld
   unberührt ist; wer es anfasst oder leert, behält seinen Wert. Gespeichert
-  wird am Material weiterhin der fertige Text in `materials.identifier`. Der
-  Server vergibt nichts und prüft keine Eindeutigkeit – zwei gleichzeitig
-  geöffnete Formulare schlagen dieselbe Nummer vor. Das ist hinnehmbar, weil
-  die Kennung schon vorher nicht eindeutig erzwungen war.
-- **Gerechnet wird im Browser** aus `material.list`, derselben vollständigen
-  Liste, auf der die Kennungssuche arbeitet. Eine eigene Abfrage brächte eine
-  Runde zur Datenbank und denselben Stand.
+  wird am Material weiterhin der fertige Text in `materials.identifier`.
+  **Ein Lagerwechsel erzeugt sie neu**, auch über eine eigene Eingabe hinweg,
+  wenn das neue Lager eine Vorlage hat; beim Bearbeiten bringt die Rückkehr
+  ins ursprüngliche Lager die ursprüngliche Kennung zurück. Zwei gleichzeitig
+  geöffnete Formulare schlagen dieselbe Nummer vor; das zweite scheitert am
+  Index, lädt die Liste neu und trägt die nächste ein.
+- **Der Import vergibt selbst** (`importMany`): Jedes importierte Material
+  bekommt die nächste freie Nummer, für den ganzen Stapel vorab berechnet
+  (`nextIdentifiers`). Die Import-Seite zeigt denselben Bereich als Vorschau.
+- **Im Formular wird im Browser gerechnet** aus `material.list`, derselben
+  vollständigen Liste, auf der die Kennungssuche arbeitet. Eine eigene Abfrage
+  brächte eine Runde zur Datenbank und denselben Stand.
 - **Kleinste freie Nummer ab 1, über alle Lager des Bereichs.** Lücken
   gelöschter Materialien werden wieder vergeben. Bereichsweit, weil die
   Kennungssuche bereichsweit sucht – zwei Lager mit derselben Vorlage

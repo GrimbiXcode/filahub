@@ -576,6 +576,10 @@ export const de = {
     texturePlaceholder: "z. B. Matt, Silk, Glänzend",
     identifier: "Kennung",
     identifierPlaceholder: "z. B. F01 – zum Beschriften & Suchen",
+    identifierTaken: (vars: { identifier: string }) =>
+      `„${vars.identifier}“ gibt es in diesem Lager schon – bitte eine andere Kennung wählen`,
+    identifierTakenMeanwhile: (vars: { identifier: string }) =>
+      `„${vars.identifier}“ wurde inzwischen vergeben – die nächste freie Kennung ist eingetragen. Bitte noch einmal speichern.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Nächste freie nach der Vorlage „${vars.template}“ – frei änderbar`,
     nameLabel: "Bezeichnung *",
@@ -706,6 +710,8 @@ export const de = {
     step3Description:
       "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl wird ein eigenes Material angelegt.",
     targetLagerLabel: "Ziel-Lager",
+    identifiersFromTemplate: (vars: { template: string; range: string }) =>
+      `Kennungen nach der Vorlage „${vars.template}“: ${vars.range}`,
     targetLagerHint:
       "Alle Positionen landen in diesem Lager. Materialart und Filamentstärke kommen von dort.",
     purchaseDateLabel: "Kaufdatum (optional)",

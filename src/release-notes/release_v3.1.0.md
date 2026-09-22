@@ -17,6 +17,21 @@ field empty.
 With a template in place you can also look a material up by its number alone:
 typing `4` into the identifier field at the top finds `ID: 4`.
 
+If you pick a different store in the form, the identifier is made again from
+that store's template. Importing materials uses the template too: every
+imported material gets the next free identifier, and the import page shows
+which ones before you start.
+
+## Each identifier only once per store
+
+An identifier can now only be used once within a store – `F01` and `f01` count
+as the same. If you type one that is already taken, the form tells you right
+under the field instead of saving. Another store may use the same identifier.
+
+If your stores already contained the same identifier more than once, the
+oldest material keeps it and the others get a number added, for example
+`F01 (2)`. Nothing is removed.
+
 ## Suggestion lists scroll again
 
 In the material form, the suggestion lists under fields like finish or

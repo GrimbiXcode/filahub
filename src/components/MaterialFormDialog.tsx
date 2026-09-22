@@ -8,7 +8,10 @@ import {
   resolveDensity,
 } from "@contracts/materials";
 import { resolveAppearance } from "@contracts/appearance";
-import { nextIdentifier } from "@contracts/identifierTemplate";
+import {
+  nextIdentifier,
+  normalizeIdentifier,
+} from "@contracts/identifierTemplate";
 import {
   decodeContainerRef,
   encodeContainerRef,
@@ -114,6 +117,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const [nameTouched, setNameTouched] = useState(false);
   /** Dasselbe für die Kennung aus der Lagervorlage – beim Bearbeiten nie */
   const [identifierTouched, setIdentifierTouched] = useState(false);
+  /**
+   * Was der Server als doppelt abgelehnt hat (Lager + Vergleichsform). Die
+   * Meldung steht, solange beides gleich bleibt – wer die Kennung oder das
+   * Lager ändert, sieht sie verschwinden, ohne dass etwas zurückgesetzt wird.
+   */
+  const [rejectedIdentifier, setRejectedIdentifier] = useState<string | null>(
+    null
+  );
 
   /**
    * Formular beim Öffnen befüllen – und nur dann. Bewusst während des
@@ -130,6 +141,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     if (formKey !== null) {
       setNameTouched(!!material?.name);
       setIdentifierTouched(!!material);
+      setRejectedIdentifier(null);
       setIdentifier(material?.identifier ?? "");
       setName(material?.name ?? "");
       setMaterialType(material?.materialType ?? "");
@@ -286,20 +298,71 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     Liste des Bereichs, nicht nur über das Lager (`contracts/identifierTemplate.ts`).
   */
   const template = selectedLager?.identifierTemplate ?? null;
+  // Das Material selbst zählt nicht mit: Beim Umziehen in ein anderes Lager
+  // soll es seine eigene alte Nummer nicht blockieren.
+  const otherMaterials = useMemo(
+    () => (allMaterials ?? []).filter(m => m.id !== material?.id),
+    [allMaterials, material?.id]
+  );
   const suggestedIdentifier = useMemo(
     () =>
       template
         ? nextIdentifier(
             template,
-            (allMaterials ?? []).map(m => m.identifier)
+            otherMaterials.map(m => m.identifier)
           )
         : null,
-    [template, allMaterials]
+    [template, otherMaterials]
   );
   const identifierFromTemplate = !identifierTouched && !!suggestedIdentifier;
   const effectiveIdentifier = identifierFromTemplate
     ? suggestedIdentifier
     : identifier;
+
+  /*
+    Kennungen sind je Lager eindeutig (Index `materials_identifier_per_lager_unique`).
+    Das Formular prüft das schon beim Tippen gegen die geladene Liste, damit der
+    Fehler am Feld steht und nicht erst nach dem Speichern als Meldung. Was
+    die Liste nicht kennen kann – ein Material, das jemand anderes eben
+    angelegt hat –, meldet der Server als `CONFLICT` (`rejectedIdentifier`).
+  */
+  const identifierKey = effectiveIdentifier.trim()
+    ? `${effectiveLagerId}:${normalizeIdentifier(effectiveIdentifier)}`
+    : null;
+  const identifierTaken =
+    identifierKey != null &&
+    (identifierKey === rejectedIdentifier ||
+      otherMaterials.some(
+        m =>
+          String(m.lagerId) === effectiveLagerId &&
+          m.identifier != null &&
+          normalizeIdentifier(m.identifier) ===
+            normalizeIdentifier(effectiveIdentifier)
+      ));
+
+  /**
+   * Lager wechseln – und die Kennung mitnehmen, wo es eine Vorlage gibt: Hat
+   * das neue Lager eine, wird die Kennung neu erzeugt, auch wenn sie von Hand
+   * eingetragen war. Die alte gehört zum Schema des alten Lagers. Ohne Vorlage
+   * bleibt stehen, was im Feld steht. Beim Bearbeiten bringt die Rückkehr ins
+   * ursprüngliche Lager die ursprüngliche Kennung zurück.
+   */
+  const changeLager = (value: string) => {
+    setLagerId(value);
+    if (material && value === String(material.lagerId)) {
+      setIdentifier(material.identifier ?? "");
+      setIdentifierTouched(true);
+      return;
+    }
+    const target = lagerList?.find(l => String(l.id) === value);
+    if (target?.identifierTemplate) {
+      setIdentifierTouched(false);
+    } else if (identifierFromTemplate) {
+      // Die vorgeschlagene Kennung bleibt als eingetragene stehen
+      setIdentifier(effectiveIdentifier);
+      setIdentifierTouched(true);
+    }
+  };
 
   /** Leergewicht des gewählten Gebindes – eigene Art oder Preset-Variante */
   const selectedContainerTare = useMemo(() => {
@@ -335,6 +398,33 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     if (Number.isInteger(target) && target > 0) setActiveLagerId(target);
   };
 
+  /** `CONFLICT` kommt beim Material nur von der doppelten Kennung */
+  const onSaveError = (e: {
+    message: string;
+    data?: { code?: string } | null;
+  }) => {
+    if (e.data?.code === "CONFLICT") {
+      setRejectedIdentifier(identifierKey);
+      /*
+        Kam die Kennung aus der Vorlage, zählt die neu geladene Liste gleich
+        weiter, und das Feld zeigt die nächste Nummer – ohne diesen Hinweis
+        sähe der Benutzer nur, dass sich die Zahl von selbst geändert hat.
+      */
+      if (identifierFromTemplate)
+        toast.info(
+          t.materialForm.identifierTakenMeanwhile({
+            identifier: effectiveIdentifier,
+          })
+        );
+      // Die Liste ist offenbar veraltet – neu laden, damit auch die Vorlage
+      // die belegte Nummer überspringt.
+      utils.material.list.invalidate();
+      document.getElementById("m-identifier")?.focus();
+      return;
+    }
+    toast.error(e.message);
+  };
+
   const createMutation = trpc.material.create.useMutation({
     onSuccess: () => {
       toast.success(t.materialForm.created);
@@ -342,7 +432,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       followLager();
       onOpenChange(false);
     },
-    onError: e => toast.error(e.message),
+    onError: onSaveError,
   });
   const updateMutation = trpc.material.update.useMutation({
     onSuccess: () => {
@@ -351,7 +441,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       followLager();
       onOpenChange(false);
     },
-    onError: e => toast.error(e.message),
+    onError: onSaveError,
   });
 
   const saving = createMutation.isPending || updateMutation.isPending;
@@ -367,6 +457,11 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     const lager = Number(effectiveLagerId);
     if (!Number.isInteger(lager) || lager <= 0)
       return toast.error(t.lager.noLagerDescription);
+    if (identifierTaken) {
+      // Die Meldung steht schon am Feld; dorthin, wo sie behoben wird.
+      document.getElementById("m-identifier")?.focus();
+      return;
+    }
     /*
       Leer lassen ist erlaubt (dann greift die Vorgabe der Materialart); ein
       eingetragener Unsinn nicht – sonst stünde eine Meter-Angabe daneben, die
@@ -467,7 +562,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
             */}
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="m-lager">{t.materialForm.lagerLabel}</Label>
-              <Select value={effectiveLagerId} onValueChange={setLagerId}>
+              <Select value={effectiveLagerId} onValueChange={changeLager}>
                 {/* Über die ganze Feldbreite wie die Eingabefelder daneben:
                     Die Vorgabe von shadcn ist `w-fit`, die Auswahl fiele je
                     nach Lagername mal schmal, mal breit aus – und mit `min-w-0`
@@ -624,17 +719,29 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 placeholder={t.materialForm.identifierPlaceholder}
                 maxLength={50}
                 className="font-mono"
+                aria-invalid={identifierTaken || undefined}
                 aria-describedby={
-                  identifierFromTemplate ? "m-identifier-hint" : undefined
+                  identifierTaken || identifierFromTemplate
+                    ? "m-identifier-hint"
+                    : undefined
                 }
               />
-              {identifierFromTemplate && template && (
-                <p
-                  id="m-identifier-hint"
-                  className="text-xs text-muted-foreground"
-                >
-                  {t.materialForm.identifierFromTemplate({ template })}
+              {identifierTaken ? (
+                <p id="m-identifier-hint" className="text-xs text-destructive">
+                  {t.materialForm.identifierTaken({
+                    identifier: effectiveIdentifier.trim(),
+                  })}
                 </p>
+              ) : (
+                identifierFromTemplate &&
+                template && (
+                  <p
+                    id="m-identifier-hint"
+                    className="text-xs text-muted-foreground"
+                  >
+                    {t.materialForm.identifierFromTemplate({ template })}
+                  </p>
+                )
               )}
             </div>
             <div className="grid gap-2 sm:col-span-2">

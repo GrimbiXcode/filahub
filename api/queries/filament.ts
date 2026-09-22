@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   buildVariantDisplayName,
   resolveName,
@@ -476,6 +476,25 @@ export async function findMaterialTypesInScope(
   return rows.map(row => row.materialType);
 }
 
+/**
+ * Fehler des Unique-Index über die Kennung je Lager. Wie `LAGER_NAME_TAKEN`
+ * (`api/queries/lager.ts`) am **Namen des Constraints** erkannt, nicht am
+ * Meldungstext; der Router macht daraus ein `CONFLICT` mit lesbarer Meldung.
+ */
+export const IDENTIFIER_TAKEN = "IDENTIFIER_TAKEN";
+const IDENTIFIER_INDEX = "materials_identifier_per_lager_unique";
+
+function rethrowIdentifierTaken(error: unknown): never {
+  const constraint = (error as { cause?: { constraint?: string } })?.cause
+    ?.constraint;
+  if (
+    constraint === IDENTIFIER_INDEX ||
+    (error instanceof Error && error.message.includes(IDENTIFIER_INDEX))
+  )
+    throw new Error(IDENTIFIER_TAKEN, { cause: error });
+  throw error;
+}
+
 export async function createMaterial(
   scope: Scope,
   data: {
@@ -508,7 +527,8 @@ export async function createMaterial(
       fremde `lagerId` mitschickt.
     */
     .values({ ...data, ...scopeOwner(scope) })
-    .returning({ id: materials.id });
+    .returning({ id: materials.id })
+    .catch(rethrowIdentifierTaken);
   if (initialGrossWeight != null) {
     await db
       .insert(weighings)
@@ -542,7 +562,17 @@ export async function updateMaterial(
   await getDb()
     .update(materials)
     .set(data)
-    .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+    .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+    .catch(rethrowIdentifierTaken);
+}
+
+/** Alle vergebenen Kennungen des Bereichs – für die Vorlage beim Import */
+export async function findIdentifiersInScope(scope: Scope): Promise<string[]> {
+  const rows = await getDb()
+    .select({ identifier: materials.identifier })
+    .from(materials)
+    .where(and(scopeWhere(materials, scope), isNotNull(materials.identifier)));
+  return rows.flatMap(row => (row.identifier ? [row.identifier] : []));
 }
 
 /**

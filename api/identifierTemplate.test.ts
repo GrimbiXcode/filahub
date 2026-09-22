@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   formatIdentifier,
   identifierNumber,
+  identifierInputSchema,
   identifierTemplateSchema,
   nextIdentifier,
+  nextIdentifiers,
+  normalizeIdentifier,
   parseIdentifierTemplate,
 } from "@contracts/identifierTemplate";
 
@@ -99,5 +102,31 @@ describe("identifierTemplateSchema", () => {
     expect(
       identifierTemplateSchema.safeParse(`${"x".repeat(40)}{n}`).success
     ).toBe(false);
+  });
+});
+
+describe("nextIdentifiers", () => {
+  it("vergibt mehrere am Stück und füllt Lücken zuerst", () => {
+    expect(nextIdentifiers("ID: {n}", ["ID: 2"], 3)).toEqual([
+      "ID: 1",
+      "ID: 3",
+      "ID: 4",
+    ]);
+  });
+
+  it("liefert bei ungültiger Vorlage nichts", () => {
+    expect(nextIdentifiers("ID", [], 2)).toEqual([]);
+  });
+});
+
+describe("Kennung als Eingabe", () => {
+  it("vergleicht ohne Rand und Großschreibung", () => {
+    expect(normalizeIdentifier(" F01 ")).toBe(normalizeIdentifier("f01"));
+  });
+
+  it("trimmt und macht aus leer null", () => {
+    expect(identifierInputSchema.parse(" F01 ")).toBe("F01");
+    expect(identifierInputSchema.parse("   ")).toBeNull();
+    expect(identifierInputSchema.parse(null)).toBeNull();
   });
 });

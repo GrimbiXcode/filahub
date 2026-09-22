@@ -738,3 +738,158 @@ describe("Migration 0009 – Backfill", () => {
     expect(result.rows[0].nullable).toBe("NO");
   });
 });
+
+describe("Kennung je Lager eindeutig", () => {
+  async function material(lagerId: number, identifier: string | null) {
+    return callerFor(anna).material.create({
+      ...PERSONAL,
+      lagerId,
+      name: "PLA",
+      materialType: "PLA",
+      nominalWeight: 1000,
+      identifier,
+    });
+  }
+
+  it("lehnt eine doppelte Kennung im selben Lager ab – auch anders geschrieben", async () => {
+    const lager = await callerFor(anna).lager.create(filamentLager());
+    await material(lager!.id, "F01");
+    await expect(material(lager!.id, "F01")).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("F01"),
+    });
+    await expect(material(lager!.id, " f01 ")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+  });
+
+  it("erlaubt dieselbe Kennung in einem anderen Lager und mehrere ohne Kennung", async () => {
+    const a = await callerFor(anna).lager.create(filamentLager("A"));
+    const b = await callerFor(anna).lager.create(filamentLager("B"));
+    await material(a!.id, "F01");
+    await expect(material(b!.id, "F01")).resolves.toBeDefined();
+    await material(a!.id, null);
+    await expect(material(a!.id, "  ")).resolves.toBeDefined();
+  });
+
+  it("lehnt das Verschieben in ein Lager ab, in dem die Kennung vergeben ist", async () => {
+    const a = await callerFor(anna).lager.create(filamentLager("A"));
+    const b = await callerFor(anna).lager.create(filamentLager("B"));
+    await material(a!.id, "F01");
+    const { id } = await material(b!.id, "F01");
+    await expect(
+      callerFor(anna).material.update({ ...PERSONAL, id, lagerId: a!.id })
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
+
+  it("vergibt beim Import die Kennungen nach der Vorlage", async () => {
+    const lager = await callerFor(anna).lager.create({
+      ...filamentLager(),
+      identifierTemplate: "ID: {n}",
+    });
+    await material(lager!.id, "ID: 2");
+    await callerFor(anna).material.importMany({
+      ...PERSONAL,
+      lagerId: lager!.id,
+      items: [
+        { typ: "PLA", nenngewicht: 1000, anzahl: 2 },
+        { typ: "PETG", nenngewicht: 1000, anzahl: 1 },
+      ],
+    });
+    const identifiers = (
+      await callerFor(anna).material.list({ ...PERSONAL, lagerId: lager!.id })
+    )
+      .map(m => m.identifier)
+      .sort();
+    expect(identifiers).toEqual(["ID: 1", "ID: 2", "ID: 3", "ID: 4"]);
+  });
+
+  it("importiert ohne Vorlage ohne Kennung", async () => {
+    const lager = await callerFor(anna).lager.create(filamentLager());
+    await callerFor(anna).material.importMany({
+      ...PERSONAL,
+      lagerId: lager!.id,
+      items: [{ typ: "PLA", nenngewicht: 1000, anzahl: 2 }],
+    });
+    const list = await callerFor(anna).material.list({
+      ...PERSONAL,
+      lagerId: lager!.id,
+    });
+    expect(list.map(m => m.identifier)).toEqual([null, null]);
+  });
+});
+
+describe("Migration 0021 – Dubletten", () => {
+  /**
+   * Wie beim Backfill von 0019: Der Altbestand entsteht am Router vorbei, und
+   * dafür muss der Index erst weg – mit ihm ließen sich die Dubletten gar
+   * nicht anlegen. Die Datei legt ihn am Ende wieder an.
+   */
+  const MIGRATION = new URL(
+    "../db/migrations/0021_identifier_unique.sql",
+    import.meta.url
+  );
+
+  async function applyMigration() {
+    const { readFile } = await import("node:fs/promises");
+    await db().execute(sql.raw(await readFile(MIGRATION, "utf8")));
+  }
+
+  it("hängt an spätere Dubletten einen Zusatz und trimmt", async () => {
+    const a = await callerFor(anna).lager.create(filamentLager("A"));
+    const b = await callerFor(anna).lager.create(filamentLager("B"));
+    await db().execute(sql`DROP INDEX "materials_identifier_per_lager_unique"`);
+    const legacy: [number, string | null][] = [
+      [a!.id, "F01"],
+      [a!.id, "f01 "],
+      [a!.id, "F01"],
+      [a!.id, "   "],
+      [b!.id, "F01"],
+      [a!.id, "x".repeat(50)],
+      [a!.id, "X".repeat(50)],
+    ];
+    for (const [lagerId, identifier] of legacy) {
+      await db().insert(schema.materials).values({
+        userId: anna.id,
+        lagerId,
+        name: "Altbestand",
+        materialType: "PLA",
+        nominalWeight: 1000,
+        identifier,
+      });
+    }
+
+    await applyMigration();
+    const stored = async () =>
+      (
+        await db()
+          .select({ identifier: schema.materials.identifier })
+          .from(schema.materials)
+          .orderBy(schema.materials.id)
+      ).map(row => row.identifier);
+    const expected = [
+      "F01",
+      "f01 (2)",
+      "F01 (3)",
+      null,
+      "F01",
+      "x".repeat(50),
+      `${"X".repeat(46)} (2)`,
+    ];
+    expect(await stored()).toEqual(expected);
+
+    // Der Index steht wieder, und ein zweiter Lauf ändert nichts.
+    await expect(
+      db().insert(schema.materials).values({
+        userId: anna.id,
+        lagerId: a!.id,
+        name: "Neu",
+        materialType: "PLA",
+        nominalWeight: 1000,
+        identifier: "F01",
+      })
+    ).rejects.toThrow();
+    await applyMigration();
+    expect(await stored()).toEqual(expected);
+  });
+});

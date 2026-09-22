@@ -559,6 +559,10 @@ export const en: Messages = {
     texturePlaceholder: "e.g. matte, silk, glossy",
     identifier: "Identifier",
     identifierPlaceholder: "e.g. F01 – for labels & search",
+    identifierTaken: (vars: { identifier: string }) =>
+      `“${vars.identifier}” is already used in this store – please pick another identifier`,
+    identifierTakenMeanwhile: (vars: { identifier: string }) =>
+      `“${vars.identifier}” was taken in the meantime – the next free identifier is filled in. Please save again.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Next free one from the template “${vars.template}” – change it if you like`,
     nameLabel: "Name *",
@@ -688,6 +692,8 @@ export const en: Messages = {
     step3Description:
       "Correct anything that is off and delete broken lines. One material is created per line and per unit.",
     targetLagerLabel: "Target store",
+    identifiersFromTemplate: (vars: { template: string; range: string }) =>
+      `Identifiers from the template “${vars.template}”: ${vars.range}`,
     targetLagerHint:
       "Every position lands in this store. Material kind and filament diameter come from it.",
     purchaseDateLabel: "Purchase date (optional)",
