@@ -552,9 +552,13 @@ export const en: Messages = {
     editDescription:
       "Adjust the material's properties. The remaining quantity comes from the weigh-ins.",
     materialTypeLabel: "Material type *",
+    materialTypePlaceholder: "e.g. PLA, PETG, ABS",
+    manufacturerPlaceholder: "e.g. Prusament, eSun",
+    colorPlaceholder: "e.g. black",
     textureLabel: "Finish",
     texturePlaceholder: "e.g. matte, silk, glossy",
     identifier: "Identifier",
+    identifierPlaceholder: "e.g. F01 – for labels & search",
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
     priceLabel: (vars: { symbol: string }) => `Price (${vars.symbol})`,

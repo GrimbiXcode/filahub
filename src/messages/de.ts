@@ -569,9 +569,13 @@ export const de = {
     editDescription:
       "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet.",
     materialTypeLabel: "Materialart *",
+    materialTypePlaceholder: "z. B. PLA, PETG, ABS",
+    manufacturerPlaceholder: "z. B. Prusament, eSun",
+    colorPlaceholder: "z. B. Schwarz",
     textureLabel: "Oberfläche",
     texturePlaceholder: "z. B. Matt, Silk, Glänzend",
     identifier: "Kennung",
+    identifierPlaceholder: "z. B. F01 – zum Beschriften & Suchen",
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
     priceLabel: (vars: { symbol: string }) => `Preis (${vars.symbol})`,

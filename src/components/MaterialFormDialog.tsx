@@ -479,7 +479,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 value={materialType}
                 onChange={setMaterialType}
                 suggestions={typeSuggestions}
-                placeholder="z. B. PLA, PETG, ABS"
+                placeholder={t.materialForm.materialTypePlaceholder}
                 /*
                   Beim Verlassen die bekannte Schreibweise einsetzen: Wer „pla“
                   tippt, sieht „PLA“ im Feld, bevor er speichert. Als
@@ -503,7 +503,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 value={manufacturer}
                 onChange={setManufacturer}
                 suggestions={manufacturerSuggestions}
-                placeholder="z. B. Prusament, eSun"
+                placeholder={t.materialForm.manufacturerPlaceholder}
               />
             </div>
             <div className="grid gap-2">
@@ -515,7 +515,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                     value={color}
                     onChange={setColor}
                     suggestions={colorSuggestions}
-                    placeholder="z. B. Schwarz"
+                    placeholder={t.materialForm.colorPlaceholder}
                   />
                 </div>
                 <AppearanceSwatch
@@ -591,7 +591,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 id="m-identifier"
                 value={identifier}
                 onChange={e => setIdentifier(e.target.value)}
-                placeholder="z. B. F01 – zum Beschriften & Suchen"
+                placeholder={t.materialForm.identifierPlaceholder}
                 maxLength={50}
               />
             </div>
