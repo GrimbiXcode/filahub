@@ -559,6 +559,8 @@ export const en: Messages = {
     texturePlaceholder: "e.g. matte, silk, glossy",
     identifier: "Identifier",
     identifierPlaceholder: "e.g. F01 – for labels & search",
+    identifierFromTemplate: (vars: { template: string }) =>
+      `Next free one from the template “${vars.template}” – change it if you like`,
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
     priceLabel: (vars: { symbol: string }) => `Price (${vars.symbol})`,
@@ -1065,6 +1067,13 @@ export const en: Messages = {
     diameterLabel: "Filament diameter *",
     diameterHint:
       "Applies to everything in this store. If you keep both diameters, create two stores.",
+    identifierTemplateLabel: "Identifier template (optional)",
+    identifierTemplatePlaceholder: "e.g. ID: {n} or F{nn}",
+    identifierTemplateHint:
+      "{n} becomes the next free number, {nn} pads to two digits (F01). New materials get the identifier filled in.",
+    identifierTemplateExample: (vars: { first: string; second: string }) =>
+      `Becomes ${vars.first}, ${vars.second} …`,
+    identifierTemplateInvalid: "Use exactly one {n} placeholder",
 
     kindFilament: "Filament",
     kindPowder: "Powder",

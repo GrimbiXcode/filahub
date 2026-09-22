@@ -7,6 +7,7 @@ import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 import { useT } from "@/lib/i18nContext";
 import { useQuickActions } from "@/lib/quickActions";
 import { trpc } from "@/lib/trpc";
+import { identifierNumber } from "@contracts/identifierTemplate";
 import { roleAllows } from "@contracts/organizations";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,10 @@ import { cn } from "@/lib/utils";
  * Gebinde in der Hand abliest, weiß nicht, welches Lager gerade gewählt ist –
  * und „nicht gefunden“ für etwas, das man in der Hand hält, ist die schlechteste
  * Antwort. Erst exakt, dann als Teiltreffer, aber nur bei genau einem Treffer.
+ *
+ * Dazwischen die **Nummer nach Lagervorlage**: Hat ein Lager die Vorlage
+ * „ID: {n}“, findet „4“ das Material „ID: 4“. Als Teiltreffer wäre „4“
+ * mehrdeutig – es steckt auch in „ID: 14“ und „ID: 40“.
  *
  * Bis 3.0 stand das Feld auf der Übersicht; seit der Kopfzeile ist es auf jeder
  * Seite da, weil die Waage nicht danach fragt, welche Seite offen ist. Ab
@@ -39,6 +44,9 @@ export function IdentifierLookup({
     { ...scope },
     { enabled: roleAllows(role, "weigher") }
   );
+  const { data: lagerList } = trpc.lager.list.useQuery(scope, {
+    enabled: roleAllows(role, "weigher"),
+  });
 
   if (!roleAllows(role, "weigher")) return null;
 
@@ -48,13 +56,28 @@ export function IdentifierLookup({
     if (!q) return;
     const list = allMaterials ?? [];
     const exact = list.find(m => m.identifier?.toLowerCase() === q);
+    const templates = new Map(
+      (lagerList ?? []).map(l => [l.id, l.identifierTemplate])
+    );
+    const byNumber = /^\d+$/.test(q)
+      ? list.filter(m => {
+          const template = templates.get(m.lagerId);
+          return (
+            !!template &&
+            !!m.identifier &&
+            identifierNumber(template, m.identifier) === Number(q)
+          );
+        })
+      : [];
     const candidates = exact
       ? [exact]
-      : list.filter(
-          m =>
-            m.identifier?.toLowerCase().includes(q) ||
-            m.name.toLowerCase().includes(q)
-        );
+      : byNumber.length > 0
+        ? byNumber
+        : list.filter(
+            m =>
+              m.identifier?.toLowerCase().includes(q) ||
+              m.name.toLowerCase().includes(q)
+          );
     if (candidates.length === 1) {
       setValue("");
       openWeighing(candidates[0]);

@@ -99,6 +99,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten,
                 Vergleichsform und Schreibweise der Materialart-Bezeichnung),
+                identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
+                nächste freie Nummer),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -254,6 +256,34 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
+
+## Kennungsvorlage je Lager
+
+Seit 3.1.0 kann ein Lager eine **Kennungsvorlage** tragen
+(`lager.identifierTemplate`, z. B. „ID: {n}" oder „F{nn}"). Regeln und
+Rechnung stehen an genau einer Stelle: `contracts/identifierTemplate.ts`,
+getestet in `api/identifierTemplate.test.ts`.
+
+- **Vorbelegung, keine Regel.** Das Materialformular trägt beim Anlegen die
+  nächste freie Kennung ein – abgeleitet wie die Bezeichnung, solange das Feld
+  unberührt ist; wer es anfasst oder leert, behält seinen Wert. Gespeichert
+  wird am Material weiterhin der fertige Text in `materials.identifier`. Der
+  Server vergibt nichts und prüft keine Eindeutigkeit – zwei gleichzeitig
+  geöffnete Formulare schlagen dieselbe Nummer vor. Das ist hinnehmbar, weil
+  die Kennung schon vorher nicht eindeutig erzwungen war.
+- **Gerechnet wird im Browser** aus `material.list`, derselben vollständigen
+  Liste, auf der die Kennungssuche arbeitet. Eine eigene Abfrage brächte eine
+  Runde zur Datenbank und denselben Stand.
+- **Kleinste freie Nummer ab 1, über alle Lager des Bereichs.** Lücken
+  gelöschter Materialien werden wieder vergeben. Bereichsweit, weil die
+  Kennungssuche bereichsweit sucht – zwei Lager mit derselben Vorlage
+  vergäben sonst beide „ID: 1".
+- **Die Kennungssuche kennt die Nummer.** Eine reine Zahl findet das Material,
+  dessen Kennung nach der Vorlage seines Lagers diese Nummer trägt („4" →
+  „ID: 4"); als Teiltreffer wäre „4" in „ID: 14" und „ID: 40" mehrdeutig.
+- Freunde sehen die Vorlage nicht: `api/queries/friends.ts` liest vom Lager nur
+  Materialart und Stärke. Der Datenexport nimmt die Spalte mit, weil er das
+  Lager ganz ausgibt (additiv, Exportversion unverändert).
 
 ## Verbräuche (Abbuchen ohne Waage)
 
@@ -971,6 +1001,7 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
+  `identifierTemplate`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank

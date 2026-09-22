@@ -1,0 +1,1 @@
+ALTER TABLE "lager" ADD COLUMN "identifierTemplate" varchar(40);

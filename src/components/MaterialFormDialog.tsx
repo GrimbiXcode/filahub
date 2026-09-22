@@ -8,6 +8,7 @@ import {
   resolveDensity,
 } from "@contracts/materials";
 import { resolveAppearance } from "@contracts/appearance";
+import { nextIdentifier } from "@contracts/identifierTemplate";
 import {
   decodeContainerRef,
   encodeContainerRef,
@@ -111,6 +112,8 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const [notes, setNotes] = useState("");
   /** Sobald der Benutzer die Bezeichnung manuell anfasst, nicht mehr auto-befüllen */
   const [nameTouched, setNameTouched] = useState(false);
+  /** Dasselbe für die Kennung aus der Lagervorlage – beim Bearbeiten nie */
+  const [identifierTouched, setIdentifierTouched] = useState(false);
 
   /**
    * Formular beim Öffnen befüllen – und nur dann. Bewusst während des
@@ -126,6 +129,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     setAppliedFormKey(formKey);
     if (formKey !== null) {
       setNameTouched(!!material?.name);
+      setIdentifierTouched(!!material);
       setIdentifier(material?.identifier ?? "");
       setName(material?.name ?? "");
       setMaterialType(material?.materialType ?? "");
@@ -274,6 +278,29 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     [lagerList, effectiveLagerId]
   );
 
+  /*
+    Die nächste freie Kennung nach der Vorlage des gewählten Lagers – wie die
+    Bezeichnung abgeleitet, solange das Feld unberührt ist. So zieht sie beim
+    Lagerwechsel mit, und nach dem Anlegen kommt mit der neu geladenen
+    Materialliste von selbst die nächste Nummer. Gezählt wird über die ganze
+    Liste des Bereichs, nicht nur über das Lager (`contracts/identifierTemplate.ts`).
+  */
+  const template = selectedLager?.identifierTemplate ?? null;
+  const suggestedIdentifier = useMemo(
+    () =>
+      template
+        ? nextIdentifier(
+            template,
+            (allMaterials ?? []).map(m => m.identifier)
+          )
+        : null,
+    [template, allMaterials]
+  );
+  const identifierFromTemplate = !identifierTouched && !!suggestedIdentifier;
+  const effectiveIdentifier = identifierFromTemplate
+    ? suggestedIdentifier
+    : identifier;
+
   /** Leergewicht des gewählten Gebindes – eigene Art oder Preset-Variante */
   const selectedContainerTare = useMemo(() => {
     const ref = decodeContainerRef(containerRef);
@@ -356,7 +383,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     const base = {
       lagerId: lager,
       name: finalName,
-      identifier: identifier.trim() || null,
+      identifier: effectiveIdentifier.trim() || null,
       materialType: canonicalType,
       manufacturer: manufacturer.trim() || null,
       color: color.trim() || null,
@@ -589,11 +616,26 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               <Label htmlFor="m-identifier">{t.materialForm.identifier}</Label>
               <Input
                 id="m-identifier"
-                value={identifier}
-                onChange={e => setIdentifier(e.target.value)}
+                value={effectiveIdentifier}
+                onChange={e => {
+                  setIdentifier(e.target.value);
+                  setIdentifierTouched(true);
+                }}
                 placeholder={t.materialForm.identifierPlaceholder}
                 maxLength={50}
+                className="font-mono"
+                aria-describedby={
+                  identifierFromTemplate ? "m-identifier-hint" : undefined
+                }
               />
+              {identifierFromTemplate && template && (
+                <p
+                  id="m-identifier-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  {t.materialForm.identifierFromTemplate({ template })}
+                </p>
+              )}
             </div>
             <div className="grid gap-2 sm:col-span-2">
               <Label htmlFor="m-name">{t.materialForm.nameLabel}</Label>

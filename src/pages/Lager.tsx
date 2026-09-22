@@ -62,6 +62,11 @@ import { trpc } from "@/lib/trpc";
 import type { LagerItem } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 import { formKeys } from "@/lib/formKeyboard";
+import {
+  IDENTIFIER_TEMPLATE_MAX_LENGTH,
+  formatIdentifier,
+  parseIdentifierTemplate,
+} from "@contracts/identifierTemplate";
 
 /** Symbol je Materialart – rein zur Wiedererkennung in der Liste. */
 const KIND_ICONS: Record<MaterialKind, typeof Package> = {
@@ -95,6 +100,7 @@ export default function LagerPage() {
     Stärke landen, die der Server ablehnen würde.
   */
   const [diameter, setDiameter] = useState<FilamentDiameterUm>(1750);
+  const [identifierTemplate, setIdentifierTemplate] = useState("");
   const [notes, setNotes] = useState("");
 
   const openDialog = (item: LagerItem | null) => {
@@ -104,6 +110,7 @@ export default function LagerPage() {
     // Bestehende Werte kommen aus der Datenbank als `number`; alles außer den
     // beiden gängigen Stärken kann dort nicht stehen (siehe Migration/Prüfung).
     setDiameter(item?.filamentDiameterUm === 2850 ? 2850 : 1750);
+    setIdentifierTemplate(item?.identifierTemplate ?? "");
     setNotes(item?.notes ?? "");
     setDialogOpen(true);
   };
@@ -145,6 +152,10 @@ export default function LagerPage() {
       toast.error(t.common.nameRequired);
       return;
     }
+    if (templateInvalid) {
+      toast.error(t.lager.identifierTemplateInvalid);
+      return;
+    }
     /*
       Die Stärke gehört nur zu Filament. Andernfalls `null` – der Server prüft
       dasselbe noch einmal (`lagerConfigIsValid`), aber das Formular soll gar
@@ -154,6 +165,7 @@ export default function LagerPage() {
       name: trimmed,
       materialKind: kind,
       filamentDiameterUm: kind === "filament" ? diameter : null,
+      identifierTemplate: identifierTemplate.trim() || null,
       notes: notes.trim() || null,
     };
     if (editing)
@@ -173,6 +185,16 @@ export default function LagerPage() {
       : MAX_LAGER_PER_ORGANIZATION;
   const limitReached = list.length >= limit;
   const pending = createMutation.isPending || updateMutation.isPending;
+  // Leer ist erlaubt (keine Vorlage); sonst genau ein Platzhalter.
+  const templateInvalid =
+    !!identifierTemplate.trim() &&
+    parseIdentifierTemplate(identifierTemplate) == null;
+  const templatePreview = identifierTemplate.trim()
+    ? t.lager.identifierTemplateExample({
+        first: formatIdentifier(identifierTemplate.trim(), 1) ?? "",
+        second: formatIdentifier(identifierTemplate.trim(), 2) ?? "",
+      })
+    : null;
 
   return (
     <AuthLayout>
@@ -258,6 +280,15 @@ export default function LagerPage() {
                           {item.filamentDiameterUm != null && (
                             <Badge variant="outline">
                               {formatDiameter(item.filamentDiameterUm)}
+                            </Badge>
+                          )}
+                          {item.identifierTemplate && (
+                            <Badge
+                              variant="outline"
+                              className="font-mono"
+                              title={t.lager.identifierTemplateLabel}
+                            >
+                              {item.identifierTemplate}
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
@@ -386,6 +417,40 @@ export default function LagerPage() {
                   </p>
                 </div>
               )}
+
+              <div className="grid gap-2">
+                <Label htmlFor="lager-template">
+                  {t.lager.identifierTemplateLabel}
+                </Label>
+                <Input
+                  id="lager-template"
+                  value={identifierTemplate}
+                  onChange={e => setIdentifierTemplate(e.target.value)}
+                  placeholder={t.lager.identifierTemplatePlaceholder}
+                  maxLength={IDENTIFIER_TEMPLATE_MAX_LENGTH}
+                  aria-invalid={templateInvalid || undefined}
+                  aria-describedby="lager-template-hint"
+                  className="font-mono"
+                  autoComplete="off"
+                />
+                <p
+                  id="lager-template-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  {t.lager.identifierTemplateHint}
+                </p>
+                {templateInvalid ? (
+                  <p className="text-xs text-destructive">
+                    {t.lager.identifierTemplateInvalid}
+                  </p>
+                ) : (
+                  templatePreview && (
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {templatePreview}
+                    </p>
+                  )
+                )}
+              </div>
 
               <div className="grid gap-2">
                 <Label htmlFor="lager-notes">{t.common.notesOptional}</Label>

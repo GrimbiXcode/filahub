@@ -6,6 +6,7 @@ import {
   lagerConfigIsValid,
   materialKindSchema,
 } from "@contracts/materials";
+import { identifierTemplateSchema } from "@contracts/identifierTemplate";
 import { MAX_LAGER_PER_ORGANIZATION } from "@contracts/organizations";
 import { createRouter, authedQuery } from "./middleware";
 import { resolveScope, scopeInput, type Scope } from "./scope";
@@ -34,6 +35,7 @@ const lagerInput = z.object({
   name: z.string().trim().min(1, "Name ist erforderlich").max(255),
   materialKind: materialKindSchema,
   filamentDiameterUm: filamentDiameterSchema.nullable().optional(),
+  identifierTemplate: identifierTemplateSchema.optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 
@@ -159,6 +161,7 @@ export const lagerRouter = createRouter({
         createLager(scope, {
           ...data,
           filamentDiameterUm: data.filamentDiameterUm ?? null,
+          identifierTemplate: data.identifierTemplate ?? null,
         })
       );
     }),

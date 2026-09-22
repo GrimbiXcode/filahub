@@ -576,6 +576,8 @@ export const de = {
     texturePlaceholder: "z. B. Matt, Silk, Glänzend",
     identifier: "Kennung",
     identifierPlaceholder: "z. B. F01 – zum Beschriften & Suchen",
+    identifierFromTemplate: (vars: { template: string }) =>
+      `Nächste freie nach der Vorlage „${vars.template}“ – frei änderbar`,
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
     priceLabel: (vars: { symbol: string }) => `Preis (${vars.symbol})`,
@@ -1099,6 +1101,13 @@ export const de = {
     diameterLabel: "Filamentstärke *",
     diameterHint:
       "Gilt für alles in diesem Lager. Wer beide Stärken führt, legt zwei Lager an.",
+    identifierTemplateLabel: "Kennungsvorlage (optional)",
+    identifierTemplatePlaceholder: "z. B. ID: {n} oder F{nn}",
+    identifierTemplateHint:
+      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Materialien bekommen die Kennung vorab eingetragen.",
+    identifierTemplateExample: (vars: { first: string; second: string }) =>
+      `Wird zu ${vars.first}, ${vars.second} …`,
+    identifierTemplateInvalid: "Genau einen Platzhalter {n} verwenden",
 
     kindFilament: "Filament",
     kindPowder: "Pulver",

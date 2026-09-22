@@ -83,6 +83,7 @@ export async function createLager(
     name: string;
     materialKind: MaterialKind;
     filamentDiameterUm?: number | null;
+    identifierTemplate?: string | null;
     notes?: string | null;
   }
 ) {
@@ -109,6 +110,7 @@ export async function updateLager(
     name: string;
     materialKind: MaterialKind;
     filamentDiameterUm: number | null;
+    identifierTemplate: string | null;
     notes: string | null;
   }>
 ) {

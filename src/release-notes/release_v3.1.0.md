@@ -1,7 +1,21 @@
 ---
 date: 2026-09-22
-title: Smoother typing in the material form
+title: Automatic identifiers and smoother forms
 ---
+
+## Identifiers that count themselves
+
+A store can now have an **identifier template**, for example `ID: {n}` or
+`F{nn}`. Set it when you create or edit a store under “Stores”.
+
+When you add a material to that store, the form fills in the next free
+identifier for you – `ID: 1`, `ID: 2` and so on, or `F01`, `F02` with `{nn}`.
+It picks the lowest number that is not taken yet, so the number of a deleted
+material becomes free again. You can still type something else or leave the
+field empty.
+
+With a template in place you can also look a material up by its number alone:
+typing `4` into the identifier field at the top finds `ID: 4`.
 
 ## Suggestion lists scroll again
 

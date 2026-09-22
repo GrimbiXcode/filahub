@@ -241,6 +241,13 @@ export const lager = pgTable(
      * wäre die schlechtere Wahl.
      */
     filamentDiameterUm: integer("filamentDiameterUm"),
+    /**
+     * Kennungsvorlage, z. B. „ID: {n}" oder „F{nn}" – `NULL` = keine. Aus ihr
+     * schlägt das Materialformular beim Anlegen die nächste freie Kennung vor;
+     * gespeichert wird am Material weiterhin der fertige Text. Regeln und
+     * Begründung in `contracts/identifierTemplate.ts`.
+     */
+    identifierTemplate: varchar("identifierTemplate", { length: 40 }),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")

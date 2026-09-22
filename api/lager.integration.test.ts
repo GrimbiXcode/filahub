@@ -136,6 +136,43 @@ describe("Lager anlegen und ändern", () => {
    * Beim Wechsel der Materialart fällt die Stärke weg – sonst bliebe an einem
    * Harzlager eine Filamentangabe stehen.
    */
+  it("speichert die Kennungsvorlage und entfernt sie mit einem leeren Feld", async () => {
+    const created = await callerFor(anna).lager.create({
+      ...filamentLager(),
+      identifierTemplate: "  ID: {n} ",
+    });
+    expect(created?.identifierTemplate).toBe("ID: {n}");
+
+    const cleared = await callerFor(anna).lager.update({
+      ...PERSONAL,
+      id: created!.id,
+      identifierTemplate: "",
+    });
+    expect(cleared?.identifierTemplate).toBeNull();
+  });
+
+  it("lässt eine Teilaktualisierung die Kennungsvorlage stehen", async () => {
+    const created = await callerFor(anna).lager.create({
+      ...filamentLager(),
+      identifierTemplate: "F{nn}",
+    });
+    const renamed = await callerFor(anna).lager.update({
+      ...PERSONAL,
+      id: created!.id,
+      name: "Umbenannt",
+    });
+    expect(renamed?.identifierTemplate).toBe("F{nn}");
+  });
+
+  it("lehnt eine Vorlage ohne Platzhalter ab", async () => {
+    await expect(
+      callerFor(anna).lager.create({
+        ...filamentLager(),
+        identifierTemplate: "ID",
+      })
+    ).rejects.toThrow(/Platzhalter/);
+  });
+
   it("räumt die Stärke beim Wechsel auf Harz ab", async () => {
     const created = await callerFor(anna).lager.create(filamentLager());
     const updated = await callerFor(anna).lager.update({
