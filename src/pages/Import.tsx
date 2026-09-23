@@ -48,6 +48,7 @@ import type { Messages } from "@/messages/de";
 import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import { nextIdentifiers } from "@contracts/identifierTemplate";
 
 /** Editierbare Tabellenzeile: alle Werte als Text, Validierung live. */
 type ImportZeile = {
@@ -115,6 +116,8 @@ export default function Import() {
 
   const { data: lagerList } = trpc.lager.list.useQuery(scope);
   const aktivesLager = useActiveLagerId(lagerList);
+  // Nur für die Vorschau der Kennungen – vergeben werden sie auf dem Server.
+  const { data: allMaterials } = trpc.material.list.useQuery({ ...scope });
   /*
     Abgeglichen gegen die geladene Liste, nicht bloß gelesen – dieselbe
     Versöhnung, die `useActiveLagerId` für das aktive Lager macht: Wer den
@@ -212,6 +215,22 @@ export default function Import() {
     const n = Number(z.anzahl);
     return summe + (Number.isInteger(n) && n > 0 ? n : 0);
   }, 0);
+  /*
+    Hat das Ziellager eine Kennungsvorlage, vergibt der Server die nächsten
+    freien Nummern (`importMany`). Die Vorschau rechnet dasselbe mit derselben
+    Funktion, damit niemand überrascht ist, wo „ID: 7“ herkommt.
+  */
+  const vorlage =
+    (lagerList ?? []).find(l => l.id === gewaehltesLager)?.identifierTemplate ??
+    null;
+  const kennungen =
+    vorlage && gesamtAnzahl > 0
+      ? nextIdentifiers(
+          vorlage,
+          (allMaterials ?? []).map(m => m.identifier),
+          gesamtAnzahl
+        )
+      : [];
   const importierbar =
     zeilen != null &&
     zeilen.length > 0 &&
@@ -384,6 +403,17 @@ export default function Import() {
                     <p className="text-xs text-muted-foreground">
                       {t.import.targetLagerHint}
                     </p>
+                    {vorlage && kennungen.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {t.import.identifiersFromTemplate({
+                          template: vorlage,
+                          range:
+                            kennungen.length === 1
+                              ? kennungen[0]
+                              : `${kennungen[0]} … ${kennungen[kennungen.length - 1]}`,
+                        })}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex min-w-0 max-w-56 flex-col gap-1.5">

@@ -54,6 +54,8 @@ src/            React-Frontend
                 appearance.ts (Katalog-Hook, Auflösung und Feld-Beschriftung),
                 theme.ts (Farbschema-Konstanten + useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
+                formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
+                Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
@@ -97,6 +99,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
                 materials.ts (Materialarten, Gebindeformen, Dichte, Zweiteinheiten,
                 Vergleichsform und Schreibweise der Materialart-Bezeichnung),
+                identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
+                nächste freie Nummer),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -252,6 +256,59 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
+
+## Kennungen: eindeutig je Lager, Vorlage je Lager
+
+**Eine Kennung kommt je Lager nur einmal vor** (seit 3.1.0), ohne Rücksicht auf
+Groß-/Kleinschreibung – dieselbe Vergleichsform wie in der Kennungssuche
+(`normalizeIdentifier`). Erzwungen vom partiellen Unique-Index
+`materials_identifier_per_lager_unique` auf (`lagerId`, `lower("identifier")`);
+den Rand schneidet die Eingabe ab (`identifierInputSchema`), leer wird `NULL`.
+
+- **Die Datenbank ist die Prüfung.** `withIdentifierConflict`
+  (`api/materialRouter.ts`) übersetzt den verletzten Index in ein `CONFLICT` –
+  in allen drei Schreibpfaden, auch beim Verschieben in ein anderes Lager, das
+  die Kennung mitnimmt. `CONFLICT` kommt beim Material nur von dort; das
+  Formular zeigt es deshalb am Feld statt als Meldung. Vorher prüft das
+  Formular selbst gegen die geladene Liste, damit der Fehler schon beim Tippen
+  dasteht; eine Vorabfrage auf dem Server gibt es bewusst nicht, sie ließe zwei
+  gleichzeitige Anfragen durch.
+- **Die Migration `0021_identifier_unique.sql` ist von Hand ergänzt.** Vor dem
+  Index trimmt sie den Altbestand und hängt an spätere Dubletten „ (2)“,
+  „ (3)“ … an (das älteste Material behält die Kennung; gelöscht wird nichts,
+  weil die Kennung auf einem Etikett stehen kann). Geprüft in
+  `api/lager.integration.test.ts` an einem Altbestand am Router vorbei.
+
+Seit 3.1.0 kann ein Lager eine **Kennungsvorlage** tragen
+(`lager.identifierTemplate`, z. B. „ID: {n}" oder „F{nn}"). Regeln und
+Rechnung stehen an genau einer Stelle: `contracts/identifierTemplate.ts`,
+getestet in `api/identifierTemplate.test.ts`.
+
+- **Vorbelegung im Formular.** Das Materialformular trägt beim Anlegen die
+  nächste freie Kennung ein – abgeleitet wie die Bezeichnung, solange das Feld
+  unberührt ist; wer es anfasst oder leert, behält seinen Wert. Gespeichert
+  wird am Material weiterhin der fertige Text in `materials.identifier`.
+  **Ein Lagerwechsel erzeugt sie neu**, auch über eine eigene Eingabe hinweg,
+  wenn das neue Lager eine Vorlage hat; beim Bearbeiten bringt die Rückkehr
+  ins ursprüngliche Lager die ursprüngliche Kennung zurück. Zwei gleichzeitig
+  geöffnete Formulare schlagen dieselbe Nummer vor; das zweite scheitert am
+  Index, lädt die Liste neu und trägt die nächste ein.
+- **Der Import vergibt selbst** (`importMany`): Jedes importierte Material
+  bekommt die nächste freie Nummer, für den ganzen Stapel vorab berechnet
+  (`nextIdentifiers`). Die Import-Seite zeigt denselben Bereich als Vorschau.
+- **Im Formular wird im Browser gerechnet** aus `material.list`, derselben
+  vollständigen Liste, auf der die Kennungssuche arbeitet. Eine eigene Abfrage
+  brächte eine Runde zur Datenbank und denselben Stand.
+- **Kleinste freie Nummer ab 1, über alle Lager des Bereichs.** Lücken
+  gelöschter Materialien werden wieder vergeben. Bereichsweit, weil die
+  Kennungssuche bereichsweit sucht – zwei Lager mit derselben Vorlage
+  vergäben sonst beide „ID: 1".
+- **Die Kennungssuche kennt die Nummer.** Eine reine Zahl findet das Material,
+  dessen Kennung nach der Vorlage seines Lagers diese Nummer trägt („4" →
+  „ID: 4"); als Teiltreffer wäre „4" in „ID: 14" und „ID: 40" mehrdeutig.
+- Freunde sehen die Vorlage nicht: `api/queries/friends.ts` liest vom Lager nur
+  Materialart und Stärke. Der Datenexport nimmt die Spalte mit, weil er das
+  Lager ganz ausgibt (additiv, Exportversion unverändert).
 
 ## Verbräuche (Abbuchen ohne Waage)
 
@@ -969,6 +1026,7 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
+  `identifierTemplate`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank

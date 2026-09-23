@@ -45,6 +45,7 @@ import { useTextureKindLabel } from "@/lib/appearance";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { CustomColorItem, CustomTextureItem } from "@/types";
+import { formKeys } from "@/lib/formKeyboard";
 
 /**
  * Eigene Farben und Oberflächen verwalten.
@@ -317,7 +318,7 @@ export default function Appearance() {
             </DialogTitle>
             <DialogDescription>{t.appearance.nameHint}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitColor} className="grid gap-4">
+          <form onSubmit={submitColor} {...formKeys} className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="a-color-name">{t.appearance.nameLabel}</Label>
               <Input
@@ -387,7 +388,7 @@ export default function Appearance() {
             </DialogTitle>
             <DialogDescription>{t.appearance.kindHint}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitTexture} className="grid gap-4">
+          <form onSubmit={submitTexture} {...formKeys} className="grid gap-4">
             <div className="grid gap-2">
               <Label htmlFor="a-texture-name">{t.appearance.nameLabel}</Label>
               <Input

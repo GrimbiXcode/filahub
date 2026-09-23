@@ -100,6 +100,7 @@ import { useT, type TextKey } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { Messages } from "@/messages/de";
 import { THEMES, useAppTheme, type Theme } from "@/lib/theme";
+import { isMac } from "@/lib/formKeyboard";
 import {
   setActiveOrganizationId,
   useActiveScope,
@@ -152,14 +153,7 @@ const DEFAULT_WIDTH = 280;
 const MIN_WIDTH = 200;
 const MAX_WIDTH = 480;
 
-/**
- * Tastenkürzel beschriften – auf dem Mac ⌘, sonst die Steuerungstaste. Die
- * heißt je nach Sprache anders, deshalb kommt sie aus dem Katalog statt aus
- * einer Konstante.
- */
-const isMac =
-  typeof navigator !== "undefined" &&
-  /Mac|iPod|iPhone|iPad/.test(navigator.userAgent);
+/** Tastenkürzel beschriften – auf dem Mac ⌘, sonst die Steuerungstaste */
 function searchShortcut(t: Messages): string {
   return isMac ? "⌘K" : `${t.common.ctrlKey} K`;
 }

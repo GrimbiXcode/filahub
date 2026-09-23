@@ -141,6 +141,20 @@
       "when": 1789501757471,
       "tag": "0019_material_type_case",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790110647836,
+      "tag": "0020_lager_identifier_template",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790111654725,
+      "tag": "0021_identifier_unique",
+      "breakpoints": true
     }
   ]
 }

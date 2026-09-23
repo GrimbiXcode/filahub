@@ -241,6 +241,13 @@ export const lager = pgTable(
      * wäre die schlechtere Wahl.
      */
     filamentDiameterUm: integer("filamentDiameterUm"),
+    /**
+     * Kennungsvorlage, z. B. „ID: {n}" oder „F{nn}" – `NULL` = keine. Aus ihr
+     * schlägt das Materialformular beim Anlegen die nächste freie Kennung vor;
+     * gespeichert wird am Material weiterhin der fertige Text. Regeln und
+     * Begründung in `contracts/identifierTemplate.ts`.
+     */
+    identifierTemplate: varchar("identifierTemplate", { length: 40 }),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
@@ -479,7 +486,10 @@ export const materials = pgTable(
      */
     lagerId: bigint("lagerId", { mode: "number" }).notNull(),
     name: varchar("name", { length: 255 }).notNull(),
-    /** Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“) */
+    /**
+     * Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“).
+     * Je Lager eindeutig, siehe `materials_identifier_per_lager_unique`.
+     */
     identifier: varchar("identifier", { length: 50 }),
     /**
      * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
@@ -548,6 +558,16 @@ export const materials = pgTable(
       Full Scan über den gesamten Bestand aller Benutzer.
     */
     index("materials_lager_idx").on(t.lagerId),
+    /*
+      Seit 3.1.0: Eine Kennung kommt je Lager nur einmal vor, ohne Rücksicht
+      auf Groß-/Kleinschreibung (`normalizeIdentifier` in
+      `contracts/identifierTemplate.ts`). Partiell, weil viele Materialien
+      keine Kennung haben. Den Altbestand hat `0021_identifier_unique.sql`
+      vorher bereinigt.
+    */
+    uniqueIndex("materials_identifier_per_lager_unique")
+      .on(t.lagerId, sql`lower(${t.identifier})`)
+      .where(sql`"identifier" IS NOT NULL`),
   ]
 );
 

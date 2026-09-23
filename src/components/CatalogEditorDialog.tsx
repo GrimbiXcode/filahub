@@ -36,6 +36,7 @@ import type {
   PresetVariantNode,
   PresetVersionNode,
 } from "@/types";
+import { formKeys } from "@/lib/formKeyboard";
 
 /**
  * Was der Dialog gerade bearbeitet. Ohne den jeweiligen Knoten wird ein neuer
@@ -342,7 +343,7 @@ export function CatalogEditorDialog({
           </DialogTitle>
           <DialogDescription>{t.catalogEditor.description}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
           {target.level !== "variant" && (
             <div className="grid gap-2">
               <Label htmlFor="ce-name">

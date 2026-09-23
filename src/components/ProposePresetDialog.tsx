@@ -31,6 +31,7 @@ import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { ContainerTypeItem } from "@/types";
+import { formKeys } from "@/lib/formKeyboard";
 
 type Props = {
   containerType: ContainerTypeItem | null;
@@ -119,7 +120,7 @@ export function ProposePresetDialog({
             {t.proposePreset.descriptionSuffix}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
           <div className="grid gap-2">
             <Label htmlFor="pp-manufacturer">
               {t.proposePreset.manufacturerLabel}

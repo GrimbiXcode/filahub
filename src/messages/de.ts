@@ -28,6 +28,7 @@ export const de = {
     loading: "Laden …",
     search: "Suchen …",
     ctrlKey: "Strg",
+    submitShortcut: (vars: { keys: string }) => `${vars.keys} speichert`,
     actions: "Aktionen",
     name: "Name",
     notes: "Notizen",
@@ -568,9 +569,19 @@ export const de = {
     editDescription:
       "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet.",
     materialTypeLabel: "Materialart *",
+    materialTypePlaceholder: "z. B. PLA, PETG, ABS",
+    manufacturerPlaceholder: "z. B. Prusament, eSun",
+    colorPlaceholder: "z. B. Schwarz",
     textureLabel: "Oberfläche",
     texturePlaceholder: "z. B. Matt, Silk, Glänzend",
     identifier: "Kennung",
+    identifierPlaceholder: "z. B. F01 – zum Beschriften & Suchen",
+    identifierTaken: (vars: { identifier: string }) =>
+      `„${vars.identifier}“ gibt es in diesem Lager schon – bitte eine andere Kennung wählen`,
+    identifierTakenMeanwhile: (vars: { identifier: string }) =>
+      `„${vars.identifier}“ wurde inzwischen vergeben – die nächste freie Kennung ist eingetragen. Bitte noch einmal speichern.`,
+    identifierFromTemplate: (vars: { template: string }) =>
+      `Nächste freie nach der Vorlage „${vars.template}“ – frei änderbar`,
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
     priceLabel: (vars: { symbol: string }) => `Preis (${vars.symbol})`,
@@ -699,6 +710,8 @@ export const de = {
     step3Description:
       "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl wird ein eigenes Material angelegt.",
     targetLagerLabel: "Ziel-Lager",
+    identifiersFromTemplate: (vars: { template: string; range: string }) =>
+      `Kennungen nach der Vorlage „${vars.template}“: ${vars.range}`,
     targetLagerHint:
       "Alle Positionen landen in diesem Lager. Materialart und Filamentstärke kommen von dort.",
     purchaseDateLabel: "Kaufdatum (optional)",
@@ -1094,6 +1107,13 @@ export const de = {
     diameterLabel: "Filamentstärke *",
     diameterHint:
       "Gilt für alles in diesem Lager. Wer beide Stärken führt, legt zwei Lager an.",
+    identifierTemplateLabel: "Kennungsvorlage (optional)",
+    identifierTemplatePlaceholder: "z. B. ID: {n} oder F{nn}",
+    identifierTemplateHint:
+      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Materialien bekommen die Kennung vorab eingetragen.",
+    identifierTemplateExample: (vars: { first: string; second: string }) =>
+      `Wird zu ${vars.first}, ${vars.second} …`,
+    identifierTemplateInvalid: "Genau einen Platzhalter {n} verwenden",
 
     kindFilament: "Filament",
     kindPowder: "Pulver",

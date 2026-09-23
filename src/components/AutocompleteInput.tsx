@@ -1,4 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Check, ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -36,11 +43,19 @@ type Props = {
  * Portal, dreht bei wenig Platz nach oben und liegt über dem Dialog; dieselbe
  * Grundlage benutzt der Gebindewähler.
  *
- * **Bedienbar ohne Maus.** Pfeil ab öffnet die Liste und geht hinein, Pfeil auf
- * und ab wählen, Enter übernimmt den hervorgehobenen Vorschlag, Esc schließt
- * nur die Liste und Tab geht zum nächsten Feld. Enter ohne Hervorhebung bleibt
- * das Absenden des Formulars – wer den getippten Wert behalten will, tippt ihn
- * und drückt Enter, ohne die Liste zu benutzen. Die Auszeichnung ist die eines
+ * **In einem Dialog hängt das Portal im Dialog selbst.** Radix sperrt bei
+ * offenem Dialog das Scrollen überall außerhalb seines Inhalts – auch in einer
+ * Liste, die in einem Portal am Ende von `<body>` liegt. Mausrad und Wischen
+ * liefen darum ins Leere, die Vorschläge hinter dem sechsten waren nicht zu
+ * erreichen. Im Dialog-Element gilt die Liste als Teil des Dialogs.
+ *
+ * **Bedienbar ohne Maus.** Beim Tippen ist der erste Treffer hervorgehoben
+ * (Treffer am Wortanfang zuerst), Enter übernimmt ihn: „ma" + Enter ergibt
+ * „Matt". Pfeil auf und ab wählen einen anderen, Esc schließt nur die Liste
+ * und Tab geht zum nächsten Feld. Wer einen neuen Wert behalten will, der
+ * einem Vorschlag ähnelt, schließt die Liste mit Esc. Enter ohne
+ * Hervorhebung reicht das Formular weiter – dort springt es zum nächsten Feld
+ * (siehe `formKeys`). Die Auszeichnung ist die eines
  * Kombinationsfelds (`combobox` + `listbox`), damit Screenreader den
  * hervorgehobenen Vorschlag vorlesen, ohne dass der Fokus das Feld verlässt.
  */
@@ -57,6 +72,12 @@ export function AutocompleteInput({
   /** -1 = kein Vorschlag hervorgehoben */
   const [activeIndex, setActiveIndex] = useState(-1);
   const anchorRef = useRef<HTMLDivElement>(null);
+  /** Der umgebende Dialog, falls es einen gibt – dorthin zeichnet das Portal */
+  const [dialog, setDialog] = useState<HTMLElement | null>(null);
+  const anchor = useCallback((node: HTMLDivElement | null) => {
+    anchorRef.current = node;
+    setDialog(node?.closest<HTMLElement>("[role=dialog]") ?? null);
+  }, []);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
   const optionId = (index: number) => `${listId}-${index}`;
@@ -64,7 +85,14 @@ export function AutocompleteInput({
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();
     const list = q
-      ? suggestions.filter(s => s.toLowerCase().includes(q))
+      ? [
+          // Treffer am Wortanfang zuerst: Wer „ma" tippt, meint eher „Matt"
+          // als „Glänzend matt".
+          ...suggestions.filter(s => s.toLowerCase().startsWith(q)),
+          ...suggestions.filter(
+            s => !s.toLowerCase().startsWith(q) && s.toLowerCase().includes(q)
+          ),
+        ]
       : suggestions;
     return list.slice(0, 8);
   }, [suggestions, value]);
@@ -119,7 +147,7 @@ export function AutocompleteInput({
       onOpenChange={next => (next ? setOpen(true) : close())}
     >
       <PopoverAnchor asChild>
-        <div ref={anchorRef} className="relative">
+        <div ref={anchor} className="relative">
           <Input
             id={id}
             ref={inputRef}
@@ -136,8 +164,9 @@ export function AutocompleteInput({
             onChange={e => {
               onChange(e.target.value);
               setOpen(true);
-              // Nach einer Änderung passt die alte Hervorhebung nicht mehr.
-              setActiveIndex(-1);
+              // Den besten Treffer vormerken, damit Enter ihn übernimmt. Ein
+              // leeres Feld merkt nichts vor – Enter geht dann weiter.
+              setActiveIndex(e.target.value.trim() ? 0 : -1);
             }}
             /*
               Beim Antippen und Anklicken aufklappen, aber nicht beim
@@ -198,6 +227,7 @@ export function AutocompleteInput({
         </div>
       </PopoverAnchor>
       <PopoverContent
+        container={dialog ?? undefined}
         align="start"
         sideOffset={4}
         className="max-h-56 w-(--radix-popover-trigger-width) overflow-auto p-0"

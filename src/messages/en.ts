@@ -19,6 +19,7 @@ export const en: Messages = {
     loading: "Loading …",
     search: "Search …",
     ctrlKey: "Ctrl",
+    submitShortcut: (vars: { keys: string }) => `${vars.keys} saves`,
     actions: "Actions",
     name: "Name",
     notes: "Notes",
@@ -551,9 +552,19 @@ export const en: Messages = {
     editDescription:
       "Adjust the material's properties. The remaining quantity comes from the weigh-ins.",
     materialTypeLabel: "Material type *",
+    materialTypePlaceholder: "e.g. PLA, PETG, ABS",
+    manufacturerPlaceholder: "e.g. Prusament, eSun",
+    colorPlaceholder: "e.g. black",
     textureLabel: "Finish",
     texturePlaceholder: "e.g. matte, silk, glossy",
     identifier: "Identifier",
+    identifierPlaceholder: "e.g. F01 – for labels & search",
+    identifierTaken: (vars: { identifier: string }) =>
+      `“${vars.identifier}” is already used in this store – please pick another identifier`,
+    identifierTakenMeanwhile: (vars: { identifier: string }) =>
+      `“${vars.identifier}” was taken in the meantime – the next free identifier is filled in. Please save again.`,
+    identifierFromTemplate: (vars: { template: string }) =>
+      `Next free one from the template “${vars.template}” – change it if you like`,
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
     priceLabel: (vars: { symbol: string }) => `Price (${vars.symbol})`,
@@ -681,6 +692,8 @@ export const en: Messages = {
     step3Description:
       "Correct anything that is off and delete broken lines. One material is created per line and per unit.",
     targetLagerLabel: "Target store",
+    identifiersFromTemplate: (vars: { template: string; range: string }) =>
+      `Identifiers from the template “${vars.template}”: ${vars.range}`,
     targetLagerHint:
       "Every position lands in this store. Material kind and filament diameter come from it.",
     purchaseDateLabel: "Purchase date (optional)",
@@ -1060,6 +1073,13 @@ export const en: Messages = {
     diameterLabel: "Filament diameter *",
     diameterHint:
       "Applies to everything in this store. If you keep both diameters, create two stores.",
+    identifierTemplateLabel: "Identifier template (optional)",
+    identifierTemplatePlaceholder: "e.g. ID: {n} or F{nn}",
+    identifierTemplateHint:
+      "{n} becomes the next free number, {nn} pads to two digits (F01). New materials get the identifier filled in.",
+    identifierTemplateExample: (vars: { first: string; second: string }) =>
+      `Becomes ${vars.first}, ${vars.second} …`,
+    identifierTemplateInvalid: "Use exactly one {n} placeholder",
 
     kindFilament: "Filament",
     kindPowder: "Powder",
