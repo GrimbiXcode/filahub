@@ -303,8 +303,7 @@ export const de = {
     removeFilter: (vars: { label: string }) =>
       `Filter „${vars.label}“ entfernen`,
     filterSearch: (vars: { query: string }) => `Suche: „${vars.query}“`,
-    filterLowStock: (vars: { percent: number }) =>
-      `≤ ${vars.percent} % Restbestand`,
+    filterLowStock: "Knapper Bestand",
     materialType: "Materialart",
     allMaterialTypes: "Alle Materialarten",
     texture: "Oberfläche",
@@ -316,8 +315,7 @@ export const de = {
     sorting: "Sortierung",
     sortAsc: "Aufsteigend sortiert",
     sortDesc: "Absteigend sortiert",
-    onlyLowStock: (vars: { percent: number }) =>
-      `Nur niedriger Bestand (≤ ${vars.percent} %)`,
+    onlyLowStock: "Nur Materialien mit knappem Bestand",
     sortIdentifier: "Kennung",
     sortName: "Bezeichnung",
     sortPercent: "Füllstand",
@@ -354,9 +352,17 @@ export const de = {
       `${vars.count} Materialien · ${vars.remaining} übrig · ${vars.low} knapp`,
     groupCount: (vars: { count: number }) => `${vars.count} Materialien`,
     groupTare: (vars: { amount: string }) => `Tara ${vars.amount}`,
+    mergeHint: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Zwei Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam."
+        : `${vars.count} Gruppen von Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam.`,
+    mergeHintAction: "Ansehen",
+    shelfGroupingLabel: "Regal gruppieren",
+    shelfGroupByBox: "Nach Drybox",
+    shelfGroupByProduct: "Nach Material",
     tileRemainingTitle: "Restmenge",
     tileLowTitle: "Knapp",
-    tileLowSub: (vars: { percent: number }) => `unter ${vars.percent} %`,
+    tileLowSub: "unter der Warnschwelle",
     tileLowOf: (vars: { count: number; total: number }) =>
       `${vars.count} von ${vars.total}`,
     tileValueTitle: "Restwert",
@@ -368,6 +374,53 @@ export const de = {
     selectNamed: (vars: { name: string }) => `${vars.name} auswählen`,
   },
 
+  /**
+   * Material (Produkt) über den Gebinden, seit 4.0.0. „Material“ meint hier
+   * das Produkt, „Gebinde“/„Rolle“ das einzelne Stück.
+   */
+  product: {
+    notFound: "Material nicht gefunden",
+    editTitle: "Material bearbeiten",
+    spoolsTitle: "Rollen",
+    gebindeTitle: "Gebinde",
+    otherSpools: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Rolle von diesem Material"
+        : `${vars.count} Rollen von diesem Material`,
+    otherGebinde: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Gebinde von diesem Material"
+        : `${vars.count} Gebinde von diesem Material`,
+    toMaterial: "Zum Material",
+    thisOne: "dieses",
+    stockOk: "Bestand, ausreichend",
+    stockLow: "Bestand, knapp",
+    thresholdLager: (vars: { amount: string }) =>
+      `Warnschwelle ${vars.amount} (Lager)`,
+    thresholdDefault: (vars: { amount: string }) =>
+      `Warnschwelle ${vars.amount} (Vorgabe)`,
+    addSpool: "Weitere Rolle anlegen",
+    addGebinde: "Weiteres Gebinde anlegen",
+    densityDefault: "Vorgabe der Materialart",
+    mergeTitle: "Zusammenführen",
+    mergeHint:
+      "Zwei Einträge, die dasselbe Material sind? Beim Zusammenführen wandern alle Gebinde des anderen hierher, und das andere verschwindet. Name, Farbe und die übrigen Angaben bleiben die von diesem hier.",
+    mergeSuggestions: "Sieht aus wie dasselbe Material",
+    mergeOther: "Anderes Material",
+    mergeChoose: "Material wählen",
+    mergeHere: "Hierher zusammenführen",
+    mergeConfirmTitle: "Materialien zusammenführen?",
+    mergeConfirmDescription: (vars: {
+      source: string;
+      target: string;
+      count: number;
+    }) =>
+      `${vars.count === 1 ? "Das Gebinde" : `Die ${vars.count} Gebinde`} von „${vars.source}“ ${vars.count === 1 ? "wandert" : "wandern"} zu „${vars.target}“; „${vars.source}“ wird danach gelöscht. Rückgängig machen lässt sich das nur von Hand.`,
+    merged: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Gebinde übernommen"
+        : `${vars.count} Gebinde übernommen`,
+  },
   materialDetail: {
     notFound: "Material nicht gefunden",
     toOverview: "Zur Übersicht",
@@ -582,6 +635,15 @@ export const de = {
       `„${vars.identifier}“ wurde inzwischen vergeben – die nächste freie Kennung ist eingetragen. Bitte noch einmal speichern.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Nächste freie nach der Vorlage „${vars.template}“ – frei änderbar`,
+    addGebindeTitle: "Weiteres Gebinde anlegen",
+    addGebindeDescription:
+      "Eine weitere Rolle, Flasche oder ein weiterer Beutel eines Materials, das du schon führst. Name, Materialart, Hersteller und Farbe kommen vom Material.",
+    productLabel: "Material",
+    productNew: "Neues Material anlegen",
+    productGebindeCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
+    productSharedHint: (vars: { count: number }) =>
+      `Name, Materialart, Hersteller, Farbe, Oberfläche und Dichte gehören dem Material – Änderungen gelten für alle ${vars.count} Gebinde.`,
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
     priceLabel: (vars: { symbol: string }) => `Preis (${vars.symbol})`,
@@ -1107,6 +1169,13 @@ export const de = {
     diameterLabel: "Filamentstärke *",
     diameterHint:
       "Gilt für alles in diesem Lager. Wer beide Stärken führt, legt zwei Lager an.",
+    lowStockLabel: "Warnen unter (g, optional)",
+    lowStockPlaceholder: (vars: { percent: number }) =>
+      `leer = ${vars.percent} % der größten Rolle`,
+    lowStockHint:
+      "Ein Material gilt als knapp, wenn alle seine Gebinde zusammen – auch die in anderen Lagern – höchstens so viel enthalten. Liegt es in mehreren Lagern, gilt die höchste Schwelle.",
+    lowStockBadge: (vars: { amount: string }) => `Warnen < ${vars.amount}`,
+    lowStockInvalid: "Die Warnschwelle ist eine ganze Zahl in Gramm ab 0.",
     identifierTemplateLabel: "Kennungsvorlage (optional)",
     identifierTemplatePlaceholder: "z. B. ID: {n} oder F{nn}",
     identifierTemplateHint:

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { skipToken } from "@tanstack/react-query";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import {
   Archive,
   ArrowDownUp,
   Boxes,
   ChevronDown,
   ChevronUp,
+  Combine,
   Columns3,
   LayoutGrid,
   List,
@@ -25,7 +26,7 @@ import {
   type MaterialColumn,
 } from "@contracts/materialColumns";
 import { roleAllows } from "@contracts/organizations";
-import { normalizeMaterialType } from "@contracts/materials";
+import { mergeCandidates, normalizeMaterialType } from "@contracts/materials";
 import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
@@ -34,8 +35,8 @@ import { MaterialPanel } from "@/components/MaterialPanel";
 import { MaterialShelf } from "@/components/MaterialShelf";
 import { PageHeader } from "@/components/PageHeader";
 import { Spool } from "@/components/Spool";
-import { LOW_STOCK_PERCENT, StockTiles } from "@/components/StockTiles";
-import { LAGER_PATH } from "@/const";
+import { StockTiles } from "@/components/StockTiles";
+import { LAGER_PATH, gebindePath, materialPath } from "@/const";
 import { useQuickActions } from "@/lib/quickActions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -84,7 +85,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDebounced } from "@/hooks/useDebounced";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useActiveLagerId } from "@/lib/activeLager";
-import { groupByStorageBox } from "@/lib/shelf";
+import { groupByProduct, groupByStorageBox } from "@/lib/shelf";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -122,6 +123,14 @@ type SortDir = "asc" | "desc";
  */
 type View = "shelf" | "list";
 const VIEW_KEY = "home-view";
+
+/**
+ * Wonach das Regal Bretter bildet: nach Drybox (bis 3.1.0 die einzige Art)
+ * oder nach Material – dann stehen die Rollen eines Materials nebeneinander.
+ * Wie die Ansicht eine Frage des Geräts, also im Browser gespeichert.
+ */
+type ShelfGrouping = "box" | "product";
+const SHELF_GROUPING_KEY = "home-shelf-grouping";
 
 /** Vergleich für die gewählte Sortierspalte; leere Werte immer ans Ende. */
 function compareBy(
@@ -220,6 +229,22 @@ export default function Home() {
   */
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const hasPanel = useMediaQuery("(min-width: 1280px)");
+  const [shelfGrouping, setShelfGrouping] = useState<ShelfGrouping>(() => {
+    try {
+      return localStorage.getItem(SHELF_GROUPING_KEY) === "product"
+        ? "product"
+        : "box";
+    } catch {
+      return "box";
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHELF_GROUPING_KEY, shelfGrouping);
+    } catch {
+      /* Ohne Speicher gilt die Wahl für diese Seite – das reicht. */
+    }
+  }, [shelfGrouping]);
 
   /*
     Spaltenauswahl. Sie blendet **zusätzlich** aus: Was hier an bleibt, kann
@@ -350,11 +375,8 @@ export default function Home() {
         m.storageBoxId !== Number(boxFilter)
       )
         return false;
-      if (
-        onlyLowStock &&
-        (m.remainingPercent == null || m.remainingPercent > LOW_STOCK_PERCENT)
-      )
-        return false;
+      // Knapp ist das Material über alle Gebinde und Lager (`productStock`)
+      if (onlyLowStock && !m.stock.low) return false;
       return true;
     });
   }, [
@@ -373,8 +395,11 @@ export default function Home() {
   }, [filtered, sortKey, sortDir]);
 
   const groups = useMemo(
-    () => groupByStorageBox(sorted, t.home.noBox),
-    [sorted, t]
+    () =>
+      shelfGrouping === "product"
+        ? groupByProduct(sorted)
+        : groupByStorageBox(sorted, t.home.noBox),
+    [sorted, t, shelfGrouping]
   );
 
   /*
@@ -387,7 +412,7 @@ export default function Home() {
   );
   const pick = (m: MaterialOverview) => {
     if (hasPanel && view === "shelf") setSelectedId(m.id);
-    else navigate(`/material/${m.id}`);
+    else navigate(gebindePath(m.id));
   };
 
   const stats = useMemo(() => {
@@ -399,11 +424,23 @@ export default function Home() {
         s + Math.round((m.priceCents * m.remainingWeight) / m.nominalWeight)
       );
     }, 0);
-    const lowStock = list.filter(
-      m => m.remainingPercent != null && m.remainingPercent <= LOW_STOCK_PERCENT
-    ).length;
+    /*
+      Gezählt werden Materialien, nicht Gebinde: Zwei knappe Rollen desselben
+      Materials sind **eine** Warnung.
+    */
+    const products = new Set(list.map(m => m.productId));
+    const lowStock = new Set(
+      list.filter(m => m.stock.low).map(m => m.productId)
+    ).size;
     const inBox = list.filter(m => m.storageBoxId != null).length;
-    return { count: list.length, totalRemaining, totalValue, lowStock, inBox };
+    return {
+      count: list.length,
+      products: products.size,
+      totalRemaining,
+      totalValue,
+      lowStock,
+      inBox,
+    };
   }, [materials]);
 
   /** Aktive Filter als entfernbare Merkzettel über der Liste */
@@ -445,7 +482,7 @@ export default function Home() {
   if (onlyLowStock)
     activeFilters.push({
       key: "low",
-      label: t.home.filterLowStock({ percent: LOW_STOCK_PERCENT }),
+      label: t.home.filterLowStock,
       clear: () => setOnlyLowStock(false),
     });
 
@@ -577,7 +614,7 @@ export default function Home() {
       </div>
       <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
         <Label htmlFor="low-stock" className="font-normal">
-          {t.home.onlyLowStock({ percent: LOW_STOCK_PERCENT })}
+          {t.home.onlyLowStock}
         </Label>
         <Switch
           id="low-stock"
@@ -613,6 +650,8 @@ export default function Home() {
           onToggleLowStock={() => setOnlyLowStock(v => !v)}
           onPick={pick}
         />
+
+        {roleAllows(role, "editor") && <MergeHint />}
 
         <div className="flex items-start gap-6">
           <div className="flex min-w-0 flex-1 flex-col gap-4">
@@ -905,7 +944,7 @@ export default function Home() {
                       key={material.id}
                       material={material}
                       appearance={appearanceFor(material)}
-                      onOpen={() => navigate(`/material/${material.id}`)}
+                      onOpen={() => navigate(gebindePath(material.id))}
                       onWeigh={
                         roleAllows(role, "weigher")
                           ? () => openWeighing(material)
@@ -921,6 +960,26 @@ export default function Home() {
                 </div>
 
                 <div className="hidden md:block">
+                  {view === "shelf" && (
+                    <ToggleGroup
+                      type="single"
+                      size="sm"
+                      variant="outline"
+                      value={shelfGrouping}
+                      onValueChange={value =>
+                        value && setShelfGrouping(value as ShelfGrouping)
+                      }
+                      aria-label={t.home.shelfGroupingLabel}
+                      className="mb-4"
+                    >
+                      <ToggleGroupItem value="box" className="px-3 text-xs">
+                        {t.home.shelfGroupByBox}
+                      </ToggleGroupItem>
+                      <ToggleGroupItem value="product" className="px-3 text-xs">
+                        {t.home.shelfGroupByProduct}
+                      </ToggleGroupItem>
+                    </ToggleGroup>
+                  )}
                   {view === "shelf" ? (
                     <MaterialShelf
                       groups={groups}
@@ -1013,7 +1072,7 @@ export default function Home() {
                               <TableRow
                                 key={m.id}
                                 className="cursor-pointer"
-                                onClick={() => navigate(`/material/${m.id}`)}
+                                onClick={() => navigate(gebindePath(m.id))}
                               >
                                 {showsColumn("identifier") && (
                                   <TableCell>
@@ -1172,6 +1231,15 @@ export default function Home() {
                 roleAllows(role, "weigher")
                   ? m => openConsumption(m)
                   : undefined
+              }
+              /*
+                Ein Gebinde desselben Materials: im Regal wählen, wenn es hier
+                steht, sonst – anderes Lager, weggefiltert – zu seiner Seite.
+              */
+              onPickGebinde={gebindeId =>
+                sorted.some(m => m.id === gebindeId)
+                  ? setSelectedId(gebindeId)
+                  : navigate(gebindePath(gebindeId))
               }
             />
           )}
@@ -1384,6 +1452,33 @@ function MaterialCard({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Hinweis auf Materialien, die wie dasselbe aussehen (`mergeCandidates`).
+ *
+ * Die Migration 0022 hat den Altbestand bewusst konservativ zusammengelegt;
+ * was sie nicht zusammengelegt hat, soll ein Mensch entscheiden. Ohne diesen
+ * Hinweis fände niemand die Zusammenführen-Karte auf der Material-Seite.
+ * Wer ihn nicht will, führt zusammen – dann verschwindet er von selbst.
+ */
+function MergeHint() {
+  const t = useT();
+  const scope = useActiveScope();
+  const { data: products } = trpc.product.list.useQuery(scope);
+  const groups = useMemo(() => mergeCandidates(products ?? []), [products]);
+  if (groups.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm">
+      <Combine aria-hidden="true" className="size-4 text-muted-foreground" />
+      <span className="min-w-0 flex-1 text-muted-foreground">
+        {t.home.mergeHint({ count: groups.length })}
+      </span>
+      <Button asChild size="sm" variant="outline">
+        <Link to={materialPath(groups[0][0])}>{t.home.mergeHintAction}</Link>
+      </Button>
     </div>
   );
 }

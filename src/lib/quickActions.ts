@@ -16,6 +16,12 @@ export type QuickActionsState = {
    */
   formMounted: boolean;
   editing: MaterialOverview | null;
+  /**
+   * Beim Anlegen: das Material, zu dem ein weiteres Gebinde kommt („Weitere
+   * Rolle anlegen“). `null` = ein neues Material. Beim Bearbeiten ohne
+   * Bedeutung – dort gilt das Material des Gebindes.
+   */
+  formProductId: number | null;
   weighingFor: MaterialOverview | null;
   /** Material, von dem gerade ein Verbrauch abgebucht wird (seit 2.9.0) */
   consumptionFor: MaterialOverview | null;
@@ -42,6 +48,7 @@ let state: QuickActionsState = {
   formOpen: false,
   formMounted: false,
   editing: null,
+  formProductId: null,
   weighingFor: null,
   consumptionFor: null,
   loanFor: null,
@@ -88,6 +95,16 @@ export const quickActions = {
       formOpen: true,
       formMounted: true,
       editing: material ?? null,
+      formProductId: null,
+    });
+  },
+  /** Ein weiteres Gebinde (Rolle, Flasche …) zu einem bestehenden Material anlegen */
+  openAddGebinde(productId: number) {
+    setQuickActionsState({
+      formOpen: true,
+      formMounted: true,
+      editing: null,
+      formProductId: productId,
     });
   },
   /** Wägedialog für ein bestimmtes Material öffnen */

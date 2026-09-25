@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Routes, Route } from "react-router";
+import { Navigate, Outlet, Routes, Route, useParams } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import {
   ADMIN_ABUSE_PATH,
@@ -13,6 +13,9 @@ import {
   ORGANIZATIONS_PATH,
   LEGACY_CONTAINER_TYPES_PATH,
   LEGACY_DRYBOXES_PATH,
+  LEGACY_GEBINDE_PATH,
+  MATERIALS_PATH,
+  gebindePath,
   LEGAL_PATHS,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
@@ -32,6 +35,7 @@ import Home from "./pages/Home";
 import LagerPage from "./pages/Lager";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
+import ProductDetail from "./pages/ProductDetail";
 import ContainerTypes from "./pages/ContainerTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Legal from "./pages/Legal";
@@ -64,6 +68,22 @@ function ProtectedRoutes() {
   return isBlocked ? <Blocked /> : <Outlet />;
 }
 
+/**
+ * `/material/:id` → `/materialien/gebinde/:id`. Bis 3.1.0 lag dort die
+ * Detailseite eines Gebindes; ein `<Navigate>` mit festem Ziel kennt die ID
+ * nicht, daher diese kleine Weiche.
+ */
+function LegacyGebindeRedirect() {
+  const { id } = useParams();
+  const numeric = Number(id);
+  return (
+    <Navigate
+      to={Number.isInteger(numeric) && numeric > 0 ? gebindePath(numeric) : "/"}
+      replace
+    />
+  );
+}
+
 export default function App() {
   const isMobile = useIsMobile();
   // Lädt die Oberfläche neu, sobald der Server eine andere Version
@@ -77,7 +97,16 @@ export default function App() {
         <Route element={<ProtectedRoutes />}>
           <Route path="/" element={<Home />} />
           <Route path="/import" element={<Import />} />
-          <Route path="/material/:id" element={<MaterialDetail />} />
+          <Route
+            path={`${MATERIALS_PATH}/gebinde/:id`}
+            element={<MaterialDetail />}
+          />
+          <Route path={`${MATERIALS_PATH}/:id`} element={<ProductDetail />} />
+          {/* Bis 3.1.0 lag die Detailseite eines Gebindes hier. */}
+          <Route
+            path={LEGACY_GEBINDE_PATH}
+            element={<LegacyGebindeRedirect />}
+          />
           <Route path={CONTAINER_TYPES_PATH} element={<ContainerTypes />} />
           <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />
           <Route path={APPEARANCE_PATH} element={<Appearance />} />

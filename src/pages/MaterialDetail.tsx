@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/table";
 import { fillLevelTextColor } from "@/lib/format";
 import { HistoryChart } from "@/components/HistoryChart";
+import { ProductGebindeList } from "@/components/ProductGebindeList";
 import { describeTrend } from "@/lib/trend";
 import { Spool } from "@/components/Spool";
 import { useFormat } from "@/lib/formatContext";
@@ -393,6 +394,16 @@ export default function MaterialDetail() {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Die übrigen Gebinde desselben Materials, samt Bestand und Schwelle */}
+        <Card>
+          <CardContent>
+            <ProductGebindeList
+              productId={material.productId}
+              currentId={material.id}
+            />
           </CardContent>
         </Card>
 

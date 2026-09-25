@@ -1,8 +1,10 @@
 import { ArrowUpRight, Printer, Scale } from "lucide-react";
 import { useNavigate } from "react-router";
+import { gebindePath } from "@/const";
 import type { ResolvedAppearance } from "@contracts/appearance";
 import { consumptionTrend, materialHistory } from "@contracts/materials";
 import { HistoryChart } from "@/components/HistoryChart";
+import { ProductGebindeList } from "@/components/ProductGebindeList";
 import { Spool } from "@/components/Spool";
 import { TileLabel } from "@/components/StockTiles";
 import { Button } from "@/components/ui/button";
@@ -33,6 +35,7 @@ export function MaterialPanel({
   appearance,
   onWeigh,
   onConsume,
+  onPickGebinde,
   className,
 }: {
   material: MaterialOverview | null;
@@ -40,6 +43,8 @@ export function MaterialPanel({
   /** Fehlen unterhalb der Stufe `weigher` – dann entfallen die Knöpfe. */
   onWeigh?: (m: MaterialOverview) => void;
   onConsume?: (m: MaterialOverview) => void;
+  /** Ein anderes Gebinde desselben Materials gewählt */
+  onPickGebinde?: (gebindeId: number) => void;
   className?: string;
 }) {
   const t = useT();
@@ -58,6 +63,7 @@ export function MaterialPanel({
           appearance={appearance}
           onWeigh={onWeigh}
           onConsume={onConsume}
+          onPickGebinde={onPickGebinde}
         />
       ) : (
         <p className="py-10 text-center text-sm text-muted-foreground">
@@ -73,11 +79,13 @@ function PanelContent({
   appearance,
   onWeigh,
   onConsume,
+  onPickGebinde,
 }: {
   material: MaterialOverview;
   appearance: ResolvedAppearance & { label: string };
   onWeigh?: (m: MaterialOverview) => void;
   onConsume?: (m: MaterialOverview) => void;
+  onPickGebinde?: (gebindeId: number) => void;
 }) {
   const t = useT();
   const navigate = useNavigate();
@@ -213,7 +221,7 @@ function PanelContent({
         <Button
           variant="ghost"
           className="col-span-2 h-9 text-muted-foreground"
-          onClick={() => navigate(`/material/${material.id}`)}
+          onClick={() => navigate(gebindePath(material.id))}
         >
           {t.home.details} <ArrowUpRight className="ml-1 h-4 w-4" />
         </Button>
@@ -266,13 +274,26 @@ function PanelContent({
             <button
               type="button"
               className="self-start text-xs font-semibold text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-              onClick={() => navigate(`/material/${material.id}`)}
+              onClick={() => navigate(gebindePath(material.id))}
             >
               {t.materialDetail.fullHistory}
             </button>
           )}
         </div>
       )}
+
+      {/*
+        Die übrigen Gebinde desselben Materials, über alle Lager – der Grund,
+        warum die fast leere Rolle hier nicht warnt, wenn eine volle danebenliegt.
+      */}
+      <div className="border-t pt-3">
+        <ProductGebindeList
+          productId={material.productId}
+          currentId={material.id}
+          compact
+          onPick={onPickGebinde}
+        />
+      </div>
     </>
   );
 }

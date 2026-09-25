@@ -289,7 +289,7 @@ export const en: Messages = {
     removeFilter: (vars: { label: string }) =>
       `Remove the “${vars.label}” filter`,
     filterSearch: (vars: { query: string }) => `Search: “${vars.query}”`,
-    filterLowStock: (vars: { percent: number }) => `≤ ${vars.percent} % left`,
+    filterLowStock: "Running low",
     materialType: "Material type",
     allMaterialTypes: "All material types",
     texture: "Finish",
@@ -301,8 +301,7 @@ export const en: Messages = {
     sorting: "Sort by",
     sortAsc: "Sorted ascending",
     sortDesc: "Sorted descending",
-    onlyLowStock: (vars: { percent: number }) =>
-      `Running low only (≤ ${vars.percent} %)`,
+    onlyLowStock: "Only materials running low",
     sortIdentifier: "Identifier",
     sortName: "Name",
     sortPercent: "Fill level",
@@ -339,9 +338,17 @@ export const en: Messages = {
       `${vars.count} materials · ${vars.remaining} left · ${vars.low} running low`,
     groupCount: (vars: { count: number }) => `${vars.count} materials`,
     groupTare: (vars: { amount: string }) => `tare ${vars.amount}`,
+    mergeHint: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Two materials look like the same one. Merged, their stock counts together."
+        : `${vars.count} groups of materials look like the same one. Merged, their stock counts together.`,
+    mergeHintAction: "Take a look",
+    shelfGroupingLabel: "Group the shelf",
+    shelfGroupByBox: "By drybox",
+    shelfGroupByProduct: "By material",
     tileRemainingTitle: "Remaining",
     tileLowTitle: "Running low",
-    tileLowSub: (vars: { percent: number }) => `under ${vars.percent} %`,
+    tileLowSub: "below the warning threshold",
     tileLowOf: (vars: { count: number; total: number }) =>
       `${vars.count} of ${vars.total}`,
     tileValueTitle: "Remaining value",
@@ -353,6 +360,50 @@ export const en: Messages = {
     selectNamed: (vars: { name: string }) => `Select ${vars.name}`,
   },
 
+  /**
+   * Material (the product) above its containers, since 4.0.0.
+   */
+  product: {
+    notFound: "Material not found",
+    editTitle: "Edit material",
+    spoolsTitle: "Spools",
+    gebindeTitle: "Containers",
+    otherSpools: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 spool of this material"
+        : `${vars.count} spools of this material`,
+    otherGebinde: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 container of this material"
+        : `${vars.count} containers of this material`,
+    toMaterial: "Go to material",
+    thisOne: "this one",
+    stockOk: "in stock, enough",
+    stockLow: "in stock, running low",
+    thresholdLager: (vars: { amount: string }) =>
+      `warning below ${vars.amount} (store)`,
+    thresholdDefault: (vars: { amount: string }) =>
+      `warning below ${vars.amount} (default)`,
+    addSpool: "Add another spool",
+    addGebinde: "Add another container",
+    densityDefault: "Default for the material type",
+    mergeTitle: "Merge",
+    mergeHint:
+      "Two entries that are really the same material? Merging moves every container of the other one here and removes the other. Name, colour and the other details stay the ones from this material.",
+    mergeSuggestions: "Looks like the same material",
+    mergeOther: "Other material",
+    mergeChoose: "Choose a material",
+    mergeHere: "Merge into this one",
+    mergeConfirmTitle: "Merge materials?",
+    mergeConfirmDescription: (vars: {
+      source: string;
+      target: string;
+      count: number;
+    }) =>
+      `${vars.count === 1 ? "The container" : `The ${vars.count} containers`} of “${vars.source}” will move to “${vars.target}”, and “${vars.source}” is deleted afterwards. This can only be undone by hand.`,
+    merged: (vars: { count: number }) =>
+      vars.count === 1 ? "1 container moved" : `${vars.count} containers moved`,
+  },
   materialDetail: {
     notFound: "Material not found",
     toOverview: "Back to the overview",
@@ -565,6 +616,15 @@ export const en: Messages = {
       `“${vars.identifier}” was taken in the meantime – the next free identifier is filled in. Please save again.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Next free one from the template “${vars.template}” – change it if you like`,
+    addGebindeTitle: "Add another container",
+    addGebindeDescription:
+      "Another spool, bottle or bag of a material you already keep. Name, type, manufacturer and colour come from the material.",
+    productLabel: "Material",
+    productNew: "Create a new material",
+    productGebindeCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
+    productSharedHint: (vars: { count: number }) =>
+      `Name, type, manufacturer, colour, finish and density belong to the material – changes apply to all ${vars.count} containers.`,
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
     priceLabel: (vars: { symbol: string }) => `Price (${vars.symbol})`,
@@ -1073,6 +1133,14 @@ export const en: Messages = {
     diameterLabel: "Filament diameter *",
     diameterHint:
       "Applies to everything in this store. If you keep both diameters, create two stores.",
+    lowStockLabel: "Warn below (g, optional)",
+    lowStockPlaceholder: (vars: { percent: number }) =>
+      `empty = ${vars.percent} % of the largest spool`,
+    lowStockHint:
+      "A material counts as running low when all of its containers together – including those in other stores – hold at most this much. If it sits in several stores, the highest threshold applies.",
+    lowStockBadge: (vars: { amount: string }) => `warn < ${vars.amount}`,
+    lowStockInvalid:
+      "The warning threshold is a whole number of grams, 0 or more.",
     identifierTemplateLabel: "Identifier template (optional)",
     identifierTemplatePlaceholder: "e.g. ID: {n} or F{nn}",
     identifierTemplateHint:

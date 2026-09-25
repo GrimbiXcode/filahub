@@ -46,6 +46,7 @@ import {
   LOGIN_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
+  MATERIALS_PATH,
 } from "@/const";
 import {
   Archive,
@@ -166,7 +167,7 @@ function titleForPath(pathname: string, t: Messages): string {
   if (item) return t.nav[item.label] as string;
   if (pathname === RELEASE_NOTES_PATH) return t.nav.releaseNotes;
   if (pathname === SETTINGS_PATH) return t.nav.settings;
-  if (pathname.startsWith("/material/")) return t.nav.material;
+  if (pathname.startsWith(`${MATERIALS_PATH}/`)) return t.nav.material;
   // Eine einzelne Organisation trägt ihren Namen erst nach dem Laden – die
   // Kopfzeile nennt bis dahin den Bereich.
   if (pathname.startsWith(`${ORGANIZATIONS_PATH}/`)) return t.nav.organizations;

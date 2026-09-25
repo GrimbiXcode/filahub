@@ -52,6 +52,7 @@ import {
   ORGANIZATIONS_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
+  gebindePath,
 } from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounced } from "@/hooks/useDebounced";
@@ -97,6 +98,7 @@ export function QuickActionsHost() {
           open={current.formOpen}
           onOpenChange={open => setQuickActionsState({ formOpen: open })}
           material={current.editing}
+          productId={current.formProductId}
         />
       )}
       <WeighingDialog
@@ -234,7 +236,7 @@ function CommandPalette({
         run(() => {
           if (mode === "weigh") quickActions.openWeighing(material);
           else if (mode === "consume") quickActions.openConsumption(material);
-          else navigate(`/material/${material.id}`);
+          else navigate(gebindePath(material.id));
         })
       }
     >

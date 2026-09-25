@@ -59,9 +59,16 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   /** Wenn gesetzt: Bearbeiten-Modus */
   material?: MaterialOverview | null;
+  /**
+   * Beim Anlegen: ein weiteres Gebinde zu diesem Material („Weitere Rolle
+   * anlegen“). Fehlt es, entsteht ein neues Material.
+   */
+  productId?: number | null;
 };
 
 const NONE = "__none__";
+/** Wert der Materialauswahl für „ein neues Material anlegen“ */
+const NEW_PRODUCT = "new";
 
 /** Übliche Netto-Füllmengen einer Spule in Gramm */
 const COMMON_NOMINAL_WEIGHTS = [250, 500, 750, 1000] as const;
@@ -74,7 +81,12 @@ function buildAutoName(manufacturer: string, type: string, color: string) {
     .join(" ");
 }
 
-export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
+export function MaterialFormDialog({
+  open,
+  onOpenChange,
+  material,
+  productId: initialProductId,
+}: Props) {
   const isEdit = !!material;
   const utils = trpc.useUtils();
   const {
@@ -93,7 +105,15 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     ...scope,
   });
   const { data: lagerList } = trpc.lager.list.useQuery(scope);
+  const { data: products } = trpc.product.list.useQuery(scope);
   const activeLagerId = useActiveLagerId(lagerList);
+
+  /**
+   * Das Material, zu dem das Gebinde gehört – `null` = ein neues anlegen (nur
+   * beim Anlegen). Beim Bearbeiten steht hier zuerst das eigene; wer ein
+   * anderes wählt, ordnet das Gebinde um.
+   */
+  const [productId, setProductId] = useState<number | null>(null);
 
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
@@ -134,11 +154,14 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
    * Der Schlüssel hängt an der ID, nicht am `material`-Objekt: Sonst würde
    * jedes Neuladen der Materialliste die laufende Eingabe überschreiben.
    */
-  const formKey = open ? String(material?.id ?? "neu") : null;
+  const formKey = open
+    ? `${material?.id ?? "neu"}:${initialProductId ?? ""}`
+    : null;
   const [appliedFormKey, setAppliedFormKey] = useState<string | null>(null);
   if (formKey !== appliedFormKey) {
     setAppliedFormKey(formKey);
     if (formKey !== null) {
+      setProductId(material?.productId ?? initialProductId ?? null);
       setNameTouched(!!material?.name);
       setIdentifierTouched(!!material);
       setRejectedIdentifier(null);
@@ -279,15 +302,52 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   */
   const chosenIsKnown =
     lagerId !== "" && (lagerList ?? []).some(l => String(l.id) === lagerId);
+  /*
+    Bei „Weitere Rolle anlegen“ liegt das Material womöglich in einem anderen
+    Lager als dem aktiven. Dann gilt dessen Lager als Vorgabe – das aktive
+    hätte vielleicht eine andere Materialart, und das Speichern scheiterte.
+  */
+  const productHomeLagerId = !isEdit
+    ? (allMaterials ?? []).find(m => m.productId === initialProductId)?.lagerId
+    : undefined;
   const effectiveLagerId = chosenIsKnown
     ? lagerId
-    : activeLagerId != null
-      ? String(activeLagerId)
-      : "";
+    : productHomeLagerId != null && productId === initialProductId
+      ? String(productHomeLagerId)
+      : activeLagerId != null
+        ? String(activeLagerId)
+        : "";
 
   const selectedLager = useMemo(
     () => lagerList?.find(l => String(l.id) === effectiveLagerId) ?? null,
     [lagerList, effectiveLagerId]
+  );
+
+  /*
+    Material und Gebinde (seit 4.0.0). Name, Materialart, Hersteller, Farbe,
+    Oberfläche und Dichte gehören dem **Material** und gelten für alle seine
+    Gebinde. Das Formular zeigt die Felder deshalb nur, wo sie auch dieses
+    Material ändern: beim Anlegen eines neuen und beim Bearbeiten des eigenen.
+    Wer ein anderes Material wählt, sieht nur dessen Zusammenfassung.
+  */
+  const chosenProduct = products?.find(p => p.id === productId) ?? null;
+  const editsOwnProduct = isEdit
+    ? productId === material?.productId
+    : productId == null;
+  /**
+   * Passt ein Material in das gewählte Lager? Alle Gebinde eines Materials
+   * liegen in Lagern gleicher Art und Stärke – der Server prüft dasselbe
+   * (`assertProductFitsLager`). Das eigene Material beim Bearbeiten passt
+   * immer, wenn dies sein einziges Gebinde ist.
+   */
+  const productFits = (p: NonNullable<typeof products>[number]) =>
+    !selectedLager ||
+    p.kind == null ||
+    (isEdit && p.id === material?.productId && p.gebindeCount <= 1) ||
+    (p.kind === selectedLager.materialKind &&
+      (p.diameterUm ?? null) === (selectedLager.filamentDiameterUm ?? null));
+  const productOptions = (products ?? []).filter(
+    p => p.id === productId || productFits(p)
   );
 
   /*
@@ -379,6 +439,7 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
   const totalTare = selectedContainerTare + (selectedBox?.tareWeight ?? 0);
 
   const invalidate = () => {
+    utils.product.invalidate();
     utils.material.list.invalidate();
     utils.material.byId.invalidate();
     utils.material.recentWeighings.invalidate();
@@ -450,8 +511,10 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     e.preventDefault();
     const nominal = parseInt(nominalWeight, 10);
     const finalName = effectiveName.trim() || autoName;
-    if (!finalName) return toast.error(t.materialForm.nameRequired);
-    if (!canonicalType) return toast.error(t.materialForm.typeRequired);
+    if (editsOwnProduct && !finalName)
+      return toast.error(t.materialForm.nameRequired);
+    if (editsOwnProduct && !canonicalType)
+      return toast.error(t.materialForm.typeRequired);
     if (!Number.isFinite(nominal) || nominal <= 0)
       return toast.error(t.materialForm.nominalRequired);
     const lager = Number(effectiveLagerId);
@@ -469,21 +532,16 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
     */
     const densityValue = density.trim() ? parseInt(density, 10) : null;
     if (
+      editsOwnProduct &&
       densityValue != null &&
       (!Number.isFinite(densityValue) || densityValue <= 0)
     )
       return toast.error(t.lager.densityLabel);
 
     const containerSelection = decodeContainerRef(containerRef);
-    const base = {
+    const gebinde = {
       lagerId: lager,
-      name: finalName,
       identifier: effectiveIdentifier.trim() || null,
-      materialType: canonicalType,
-      manufacturer: manufacturer.trim() || null,
-      color: color.trim() || null,
-      texture: texture.trim() || null,
-      densityGramsPerLiter: densityValue,
       priceCents: parseMoney(price),
       purchaseDate: purchaseDate || null,
       nominalWeight: nominal,
@@ -495,9 +553,28 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       storageBoxId: storageBoxId === NONE ? null : Number(storageBoxId),
       notes: notes.trim() || null,
     };
+    /*
+      Die Felder des Materials gehen nur mit, wenn sie dieses Material ändern
+      sollen – sonst die ID des gewählten. Beides zugleich lehnt der Server ab.
+    */
+    const productPart = editsOwnProduct
+      ? {
+          name: finalName,
+          materialType: canonicalType,
+          manufacturer: manufacturer.trim() || null,
+          color: color.trim() || null,
+          texture: texture.trim() || null,
+          densityGramsPerLiter: densityValue,
+        }
+      : { productId: productId ?? undefined };
 
     if (isEdit && material) {
-      updateMutation.mutate({ ...scope, id: material.id, ...base });
+      updateMutation.mutate({
+        ...scope,
+        id: material.id,
+        ...gebinde,
+        ...productPart,
+      });
     } else {
       const initial = initialGrossWeight.trim()
         ? parseInt(initialGrossWeight, 10)
@@ -506,11 +583,26 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
         return toast.error(t.materialForm.initialInvalid);
       createMutation.mutate({
         ...scope,
-        ...base,
+        ...gebinde,
+        ...productPart,
         initialGrossWeight: initial,
       });
     }
   };
+
+  /** Anzahl Gebinde des eigenen Materials – für den Hinweis beim Bearbeiten */
+  const ownGebindeCount =
+    products?.find(p => p.id === material?.productId)?.gebindeCount ?? 1;
+  /** Materialart und Hersteller für Gebindewahl und Dichte-Vorgabe */
+  const effectiveType = editsOwnProduct
+    ? materialType
+    : (chosenProduct?.materialType ?? "");
+  const effectiveManufacturer = editsOwnProduct
+    ? manufacturer
+    : (chosenProduct?.manufacturer ?? "");
+  const chosenAppearance = chosenProduct
+    ? resolveAppearance(chosenProduct.color, chosenProduct.texture, catalog)
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -525,12 +617,18 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
       >
         <DialogHeader className="border-b p-4 sm:p-6">
           <DialogTitle>
-            {isEdit ? t.materialForm.editTitle : t.materialForm.createTitle}
+            {isEdit
+              ? t.materialForm.editTitle
+              : productId != null
+                ? t.materialForm.addGebindeTitle
+                : t.materialForm.createTitle}
           </DialogTitle>
           <DialogDescription>
             {isEdit
               ? t.materialForm.editDescription
-              : t.materialForm.createDescription}
+              : productId != null
+                ? t.materialForm.addGebindeDescription
+                : t.materialForm.createDescription}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -594,15 +692,96 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 </p>
               )}
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="m-type">{t.materialForm.materialTypeLabel}</Label>
-              <AutocompleteInput
-                id="m-type"
-                value={materialType}
-                onChange={setMaterialType}
-                suggestions={typeSuggestions}
-                placeholder={t.materialForm.materialTypePlaceholder}
-                /*
+            {/*
+              Das Material: neu oder ein bestehendes. Über die ganze Breite und
+              direkt unter dem Lager, weil beides zusammen entscheidet, was
+              darunter steht.
+            */}
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="m-product">{t.materialForm.productLabel}</Label>
+              <Select
+                value={productId == null ? NEW_PRODUCT : String(productId)}
+                onValueChange={value =>
+                  setProductId(value === NEW_PRODUCT ? null : Number(value))
+                }
+              >
+                <SelectTrigger id="m-product" className="w-full min-w-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {!isEdit && (
+                    <SelectItem value={NEW_PRODUCT}>
+                      {t.materialForm.productNew}
+                    </SelectItem>
+                  )}
+                  {productOptions.map(p => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.name}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        ·{" "}
+                        {t.materialForm.productGebindeCount({
+                          count: p.gebindeCount,
+                        })}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {editsOwnProduct
+                ? isEdit &&
+                  ownGebindeCount > 1 && (
+                    <p className="text-xs text-muted-foreground">
+                      {t.materialForm.productSharedHint({
+                        count: ownGebindeCount,
+                      })}
+                    </p>
+                  )
+                : chosenProduct && (
+                    <div className="flex min-w-0 items-center gap-3 rounded-md border bg-muted/40 p-2">
+                      {chosenAppearance && (
+                        <AppearanceSwatch
+                          hex={chosenAppearance.hex}
+                          kind={chosenAppearance.kind}
+                          label={swatchLabel(
+                            chosenProduct.color ?? "",
+                            chosenProduct.texture ?? "",
+                            chosenAppearance.hex
+                          )}
+                          size="md"
+                        />
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {chosenProduct.name}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {[
+                            chosenProduct.materialType,
+                            chosenProduct.manufacturer,
+                            chosenProduct.color,
+                            chosenProduct.texture,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+            </div>
+            {editsOwnProduct && (
+              <>
+                <div className="grid gap-2">
+                  <Label htmlFor="m-type">
+                    {t.materialForm.materialTypeLabel}
+                  </Label>
+                  <AutocompleteInput
+                    id="m-type"
+                    value={materialType}
+                    onChange={setMaterialType}
+                    suggestions={typeSuggestions}
+                    placeholder={t.materialForm.materialTypePlaceholder}
+                    /*
                   Beim Verlassen die bekannte Schreibweise einsetzen: Wer „pla“
                   tippt, sieht „PLA“ im Feld, bevor er speichert. Als
                   Funktionsaktualisierung, damit ein gerade angeklickter
@@ -611,50 +790,52 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   Oberfläche: Für die Materialart setzt der Server dieselbe
                   Regel durch, für die anderen drei gibt es keine.
                 */
-                onBlur={() =>
-                  setMaterialType(v =>
-                    canonicalMaterialType(v, typeSuggestions)
-                  )
-                }
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="m-manufacturer">{t.common.manufacturer}</Label>
-              <AutocompleteInput
-                id="m-manufacturer"
-                value={manufacturer}
-                onChange={setManufacturer}
-                suggestions={manufacturerSuggestions}
-                placeholder={t.materialForm.manufacturerPlaceholder}
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="m-color">{t.common.color}</Label>
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="min-w-0 flex-1">
-                  <AutocompleteInput
-                    id="m-color"
-                    value={color}
-                    onChange={setColor}
-                    suggestions={colorSuggestions}
-                    placeholder={t.materialForm.colorPlaceholder}
+                    onBlur={() =>
+                      setMaterialType(v =>
+                        canonicalMaterialType(v, typeSuggestions)
+                      )
+                    }
                   />
                 </div>
-                <AppearanceSwatch
-                  hex={appearance.hex}
-                  kind={appearance.kind}
-                  label={swatchLabel(color, texture, appearance.hex)}
-                  size="md"
-                />
-              </div>
-              {/*
+                <div className="grid gap-2">
+                  <Label htmlFor="m-manufacturer">
+                    {t.common.manufacturer}
+                  </Label>
+                  <AutocompleteInput
+                    id="m-manufacturer"
+                    value={manufacturer}
+                    onChange={setManufacturer}
+                    suggestions={manufacturerSuggestions}
+                    placeholder={t.materialForm.manufacturerPlaceholder}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="m-color">{t.common.color}</Label>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <AutocompleteInput
+                        id="m-color"
+                        value={color}
+                        onChange={setColor}
+                        suggestions={colorSuggestions}
+                        placeholder={t.materialForm.colorPlaceholder}
+                      />
+                    </div>
+                    <AppearanceSwatch
+                      hex={appearance.hex}
+                      kind={appearance.kind}
+                      label={swatchLabel(color, texture, appearance.hex)}
+                      size="md"
+                    />
+                  </div>
+                  {/*
                 Der Weg von „kenne ich nicht“ zu „hinterlegt“ – ohne den findet
                 die Verwaltungsseite niemand, und der Umweg über das Menü
                 verlöre den Formularstand. Deshalb hier und nicht als zweiter
                 Dialog über dem ersten.
               */}
-              {needsColorCode && (
-                /*
+                  {needsColorCode && (
+                    /*
                   Hinweis über die Breite, Farbwähler und Knopf darunter: In
                   einer Zeile nebeneinander braucht das mehr Platz, als eine
                   Spalte des Formulars hat – der Kasten schob sich dann über
@@ -662,51 +843,55 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                   und der Hinweistext darf umbrechen statt abgeschnitten zu
                   werden.
                 */
-                <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
-                  <span className="text-xs text-muted-foreground">
-                    {t.appearance.unknownColor}
-                  </span>
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <Input
-                      type="color"
-                      aria-label={t.appearance.hexLabel}
-                      value={newHex}
-                      onChange={e => setNewHex(e.target.value)}
-                      className="h-9 w-12 shrink-0 p-1"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="max-w-full"
-                      disabled={addColor.isPending}
-                      onClick={() =>
-                        addColor.mutate({
-                          ...scope,
-                          name: color.trim(),
-                          hex: newHex,
-                        })
-                      }
-                    >
-                      {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
-                      <span className="truncate">
-                        {t.appearance.addColorFor({ name: color.trim() })}
+                    <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
+                      <span className="text-xs text-muted-foreground">
+                        {t.appearance.unknownColor}
                       </span>
-                    </Button>
-                  </div>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <Input
+                          type="color"
+                          aria-label={t.appearance.hexLabel}
+                          value={newHex}
+                          onChange={e => setNewHex(e.target.value)}
+                          className="h-9 w-12 shrink-0 p-1"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="max-w-full"
+                          disabled={addColor.isPending}
+                          onClick={() =>
+                            addColor.mutate({
+                              ...scope,
+                              name: color.trim(),
+                              hex: newHex,
+                            })
+                          }
+                        >
+                          {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
+                          <span className="truncate">
+                            {t.appearance.addColorFor({ name: color.trim() })}
+                          </span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="m-texture">{t.materialForm.textureLabel}</Label>
-              <AutocompleteInput
-                id="m-texture"
-                value={texture}
-                onChange={setTexture}
-                suggestions={textureSuggestions}
-                placeholder={t.materialForm.texturePlaceholder}
-              />
-            </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="m-texture">
+                    {t.materialForm.textureLabel}
+                  </Label>
+                  <AutocompleteInput
+                    id="m-texture"
+                    value={texture}
+                    onChange={setTexture}
+                    suggestions={textureSuggestions}
+                    placeholder={t.materialForm.texturePlaceholder}
+                  />
+                </div>
+              </>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="m-identifier">{t.materialForm.identifier}</Label>
               <Input
@@ -744,18 +929,20 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 )
               )}
             </div>
-            <div className="grid gap-2 sm:col-span-2">
-              <Label htmlFor="m-name">{t.materialForm.nameLabel}</Label>
-              <Input
-                id="m-name"
-                value={effectiveName}
-                onChange={e => {
-                  setNameTouched(true);
-                  setName(e.target.value);
-                }}
-                placeholder={t.materialForm.namePlaceholder}
-              />
-            </div>
+            {editsOwnProduct && (
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="m-name">{t.materialForm.nameLabel}</Label>
+                <Input
+                  id="m-name"
+                  value={effectiveName}
+                  onChange={e => {
+                    setNameTouched(true);
+                    setName(e.target.value);
+                  }}
+                  placeholder={t.materialForm.namePlaceholder}
+                />
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="m-price">
                 {t.materialForm.priceLabel({ symbol: currencySymbol })}
@@ -813,28 +1000,30 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
               Dichte nur, wo sie etwas bewirkt: Beim Pulver gibt es keine
               Zweitanzeige, also wäre das Feld dort eine Angabe ohne Wirkung.
             */}
-            {selectedLager && selectedLager.materialKind !== "powder" && (
-              <div className="grid gap-2">
-                <Label htmlFor="m-density">{t.lager.densityLabel}</Label>
-                <Input
-                  id="m-density"
-                  type="number"
-                  inputMode="numeric"
-                  min={1}
-                  value={density}
-                  onChange={e => setDensity(e.target.value)}
-                  placeholder={String(
-                    resolveDensity({
-                      kind: selectedLager.materialKind,
-                      materialType,
-                    }) ?? ""
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  {t.lager.densityHint}
-                </p>
-              </div>
-            )}
+            {editsOwnProduct &&
+              selectedLager &&
+              selectedLager.materialKind !== "powder" && (
+                <div className="grid gap-2">
+                  <Label htmlFor="m-density">{t.lager.densityLabel}</Label>
+                  <Input
+                    id="m-density"
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={density}
+                    onChange={e => setDensity(e.target.value)}
+                    placeholder={String(
+                      resolveDensity({
+                        kind: selectedLager.materialKind,
+                        materialType,
+                      }) ?? ""
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t.lager.densityHint}
+                  </p>
+                </div>
+              )}
             <div className="grid gap-2">
               <Label>{t.materialForm.container}</Label>
               <ContainerPicker
@@ -842,12 +1031,12 @@ export function MaterialFormDialog({ open, onOpenChange, material }: Props) {
                 onChange={setContainerRef}
                 ownContainerTypes={containerTypes ?? []}
                 presets={presetOptions ?? []}
-                materialType={materialType}
+                materialType={effectiveType}
                 /*
                   Grenzt die Vorauswahl auf die Gebinde dieses Herstellers ein,
                   solange nicht gesucht wird – Einzelheiten in `ContainerPicker`.
                 */
-                manufacturer={manufacturer}
+                manufacturer={effectiveManufacturer}
                 /* Aus dem Lager, nicht aus dem Material – dort steht die Art. */
                 materialKind={selectedLager?.materialKind}
                 nominalWeight={parseInt(nominalWeight, 10) || null}

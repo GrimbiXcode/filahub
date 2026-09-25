@@ -19,11 +19,11 @@ import type { MaterialOverview } from "@/types";
  * `AppearanceSwatch`).
  */
 
-/** Ab wann ein Material als knapp gilt – dieselbe Grenze wie der Filter */
-export const LOW_STOCK_PERCENT = 25;
-
 export type StockStats = {
+  /** Anzahl Gebinde */
   count: number;
+  /** Anzahl Materialien – die Einheit, in der „knapp“ zählt */
+  products: number;
   totalRemaining: number;
   totalValue: number;
   lowStock: number;
@@ -55,11 +55,21 @@ export function StockTiles({
   const byWeight = [...materials].sort(
     (a, b) => b.remainingWeight - a.remainingWeight
   );
-  const low = materials
-    .filter(
-      m => m.remainingPercent != null && m.remainingPercent <= LOW_STOCK_PERCENT
-    )
-    .sort((a, b) => (a.remainingPercent ?? 0) - (b.remainingPercent ?? 0))
+  /*
+    Knapp ist seit 4.0.0 das **Material**, nicht die einzelne Rolle
+    (`productStock` in `contracts/materials.ts`). Je Material eine Spule – die
+    leerste seiner Gebinde, weil sie die ist, die man als Nächstes in der Hand
+    hält –, sortiert nach dem Bestand des Materials.
+  */
+  const lowByProduct = new Map<number, MaterialOverview>();
+  for (const m of materials) {
+    if (!m.stock.low) continue;
+    const seen = lowByProduct.get(m.productId);
+    if (!seen || m.remainingWeight < seen.remainingWeight)
+      lowByProduct.set(m.productId, m);
+  }
+  const low = [...lowByProduct.values()]
+    .sort((a, b) => a.stock.totalRemaining - b.stock.totalRemaining)
     .slice(0, 3);
 
   return (
@@ -134,8 +144,7 @@ export function StockTiles({
       <Tile className="gap-2 md:col-span-4">
         <div className="flex items-center gap-2">
           <TileLabel>
-            {t.home.tileLowTitle} ·{" "}
-            {t.home.tileLowSub({ percent: LOW_STOCK_PERCENT })}
+            {t.home.tileLowTitle} · {t.home.tileLowSub}
           </TileLabel>
           {/* Der Zähler ist zugleich der Schalter für „nur knappe“ – dieselbe
               Rolle, die bis 3.0 die Kennzahlkarte hatte. */}
@@ -151,7 +160,10 @@ export function StockTiles({
                 "bg-foreground text-background hover:bg-foreground"
             )}
           >
-            {t.home.tileLowOf({ count: stats.lowStock, total: stats.count })}
+            {t.home.tileLowOf({
+              count: stats.lowStock,
+              total: stats.products,
+            })}
           </button>
         </div>
         {low.length === 0 ? (
@@ -188,7 +200,7 @@ export function StockTiles({
                         fillLevelTextColor(m.remainingPercent)
                       )}
                     />
-                    {formatGrams(m.remainingWeight)}
+                    {formatGrams(m.stock.totalRemaining)}
                   </span>
                 </button>
               );

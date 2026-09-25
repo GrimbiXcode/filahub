@@ -23,6 +23,29 @@ export const FRIENDS_PATH = "/freunde";
 export const LAGER_PATH = "/lager";
 export const ORGANIZATIONS_PATH = "/organisationen";
 
+/**
+ * Material und Gebinde (seit 4.0.0). Die Oberfläche nennt das Produkt
+ * „Material“ und das einzelne Stück „Gebinde“ bzw. „Rolle“ – siehe
+ * `AGENTS.md`, „Material und Gebinde“.
+ *
+ * Das Gebinde liegt **unter** den Materialien und nicht unter `/gebinde`:
+ * Dort stehen seit 2.2.0 die Gebindearten, und `/gebinde/42` sähe aus wie
+ * die Gebindeart 42. Bis 3.1.0 lag die Detailseite eines Gebindes unter
+ * `/material/:id`; der alte Pfad leitet weiter, damit Lesezeichen gehen.
+ */
+export const MATERIALS_PATH = "/materialien";
+export const LEGACY_GEBINDE_PATH = "/material/:id";
+
+/** Ein Material (Produkt) mit allen seinen Gebinden */
+export function materialPath(productId: number): string {
+  return `${MATERIALS_PATH}/${productId}`;
+}
+
+/** Ein einzelnes Gebinde: Wägungen, Verbräuche, Verlauf */
+export function gebindePath(id: number): string {
+  return `${MATERIALS_PATH}/gebinde/${id}`;
+}
+
 /** Eine einzelne Organisation: Mitglieder, Rollen, Beitrittscode. */
 export function organizationPath(id: number): string {
   return `${ORGANIZATIONS_PATH}/${id}`;

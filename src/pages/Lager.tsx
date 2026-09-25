@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import {
   FILAMENT_DIAMETERS_UM,
   MATERIAL_KINDS,
+  LOW_STOCK_PERCENT,
   MAX_LAGER_PER_USER,
   type FilamentDiameterUm,
   type MaterialKind,
@@ -86,7 +87,7 @@ export default function LagerPage() {
   const scope = useActiveScope();
   const role = useScopeRole();
   const t = useT();
-  const { formatDiameter } = useFormat();
+  const { formatDiameter, formatGrams } = useFormat();
   const { data: lagerList, isLoading } = trpc.lager.list.useQuery(scope);
 
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -101,6 +102,8 @@ export default function LagerPage() {
   */
   const [diameter, setDiameter] = useState<FilamentDiameterUm>(1750);
   const [identifierTemplate, setIdentifierTemplate] = useState("");
+  /** Warnschwelle in Gramm; leer = Vorgabe (`productStock`) */
+  const [lowStock, setLowStock] = useState("");
   const [notes, setNotes] = useState("");
 
   const openDialog = (item: LagerItem | null) => {
@@ -111,6 +114,7 @@ export default function LagerPage() {
     // beiden gängigen Stärken kann dort nicht stehen (siehe Migration/Prüfung).
     setDiameter(item?.filamentDiameterUm === 2850 ? 2850 : 1750);
     setIdentifierTemplate(item?.identifierTemplate ?? "");
+    setLowStock(item?.lowStockGrams != null ? String(item.lowStockGrams) : "");
     setNotes(item?.notes ?? "");
     setDialogOpen(true);
   };
@@ -156,6 +160,14 @@ export default function LagerPage() {
       toast.error(t.lager.identifierTemplateInvalid);
       return;
     }
+    const lowStockGrams = lowStock.trim() ? Number(lowStock) : null;
+    if (
+      lowStockGrams != null &&
+      (!Number.isInteger(lowStockGrams) || lowStockGrams < 0)
+    ) {
+      toast.error(t.lager.lowStockInvalid);
+      return;
+    }
     /*
       Die Stärke gehört nur zu Filament. Andernfalls `null` – der Server prüft
       dasselbe noch einmal (`lagerConfigIsValid`), aber das Formular soll gar
@@ -166,6 +178,7 @@ export default function LagerPage() {
       materialKind: kind,
       filamentDiameterUm: kind === "filament" ? diameter : null,
       identifierTemplate: identifierTemplate.trim() || null,
+      lowStockGrams,
       notes: notes.trim() || null,
     };
     if (editing)
@@ -289,6 +302,17 @@ export default function LagerPage() {
                               title={t.lager.identifierTemplateLabel}
                             >
                               {item.identifierTemplate}
+                            </Badge>
+                          )}
+                          {item.lowStockGrams != null && (
+                            <Badge
+                              variant="outline"
+                              className="font-mono"
+                              title={t.lager.lowStockLabel}
+                            >
+                              {t.lager.lowStockBadge({
+                                amount: formatGrams(item.lowStockGrams),
+                              })}
                             </Badge>
                           )}
                           <span className="text-xs text-muted-foreground">
@@ -450,6 +474,35 @@ export default function LagerPage() {
                     </p>
                   )
                 )}
+              </div>
+
+              {/*
+                Warnschwelle je Lager (seit 4.0.0). Gilt für jedes Material,
+                das hier liegt – über alle seine Gebinde, auch die in anderen
+                Lagern; liegt es in mehreren, gilt die höchste Schwelle.
+              */}
+              <div className="grid gap-2">
+                <Label htmlFor="lager-low-stock">{t.lager.lowStockLabel}</Label>
+                <Input
+                  id="lager-low-stock"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={lowStock}
+                  onChange={e => setLowStock(e.target.value)}
+                  placeholder={t.lager.lowStockPlaceholder({
+                    percent: LOW_STOCK_PERCENT,
+                  })}
+                  aria-describedby="lager-low-stock-hint"
+                  className="font-mono"
+                />
+                <p
+                  id="lager-low-stock-hint"
+                  className="text-xs text-muted-foreground"
+                >
+                  {t.lager.lowStockHint}
+                </p>
               </div>
 
               <div className="grid gap-2">
