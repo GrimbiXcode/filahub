@@ -46,6 +46,15 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     where: eq(schema.lager.userId, userId),
   });
 
+  /*
+    Seit 4.0.0 zweigeteilt: die Materialien (Produkt – Name, Materialart,
+    Hersteller, Farbe …) und die Gebinde darunter, die weiter unter
+    `materials` stehen und über `productId` darauf zeigen.
+  */
+  const materialProducts = await db.query.materialProducts.findMany({
+    where: eq(schema.materialProducts.userId, userId),
+  });
+
   const materials = await db.query.materials.findMany({
     where: eq(schema.materials.userId, userId),
   });
@@ -288,6 +297,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     exportedAt: new Date().toISOString(),
     profile,
     lager,
+    materialProducts,
     materials,
     weighings,
     consumptions,
@@ -412,6 +422,10 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.materials)
       .where(eq(schema.materials.userId, userId));
+    // Die Materialien nach ihren Gebinden – dieselbe Reihenfolge wie beim Löschen eines Gebindes.
+    await tx
+      .delete(schema.materialProducts)
+      .where(eq(schema.materialProducts.userId, userId));
     /*
       Freigaben in **beiden** Richtungen, und zwar **vor** den Lagern: die
       erteilten (die Unterabfrage liest die Lagerzeilen, die es gleich nicht

@@ -4,6 +4,7 @@ import {
   MAX_LAGER_PER_USER,
   filamentDiameterSchema,
   lagerConfigIsValid,
+  lowStockGramsSchema,
   materialKindSchema,
 } from "@contracts/materials";
 import { identifierTemplateSchema } from "@contracts/identifierTemplate";
@@ -16,6 +17,7 @@ import {
   LAGER_NAME_TAKEN,
   countLagerInScope,
   countMaterialsByLager,
+  countProductsAlsoElsewhere,
   createLager,
   deleteLager,
   findLagerInScope,
@@ -36,6 +38,11 @@ const lagerInput = z.object({
   materialKind: materialKindSchema,
   filamentDiameterUm: filamentDiameterSchema.nullable().optional(),
   identifierTemplate: identifierTemplateSchema.optional(),
+  /**
+   * Warnschwelle in Gramm für jedes Material, das hier liegt; `null` =
+   * Vorgabe. Die Regel steht in `productStock` (`contracts/materials.ts`).
+   */
+  lowStockGrams: lowStockGramsSchema.optional(),
   notes: z.string().max(2000).nullable().optional(),
 });
 
@@ -162,6 +169,7 @@ export const lagerRouter = createRouter({
           ...data,
           filamentDiameterUm: data.filamentDiameterUm ?? null,
           identifierTemplate: data.identifierTemplate ?? null,
+          lowStockGrams: data.lowStockGrams ?? null,
         })
       );
     }),
@@ -199,6 +207,24 @@ export const lagerRouter = createRouter({
         materialKind: nextKind,
         filamentDiameterUm: diameter,
       });
+
+      /*
+        Alle Gebinde eines Materials liegen in Lagern gleicher Art und Stärke
+        (`assertProductFitsLager` in `api/materialRouter.ts`). Ein Lager, das
+        die Art wechselt, darf diese Regel nicht von der anderen Seite her
+        brechen – nur dann, wenn keines seiner Materialien auch woanders liegt.
+      */
+      if (
+        (nextKind !== existing.materialKind ||
+          (diameter ?? null) !== (existing.filamentDiameterUm ?? null)) &&
+        (await countProductsAlsoElsewhere(id)) > 0
+      ) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            "Materialart oder Stärke lassen sich nicht ändern, solange Materialien dieses Lagers auch Gebinde in anderen Lagern haben.",
+        });
+      }
 
       const updated = await withNameConflict(() =>
         updateLager(scope, id, {

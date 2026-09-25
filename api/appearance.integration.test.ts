@@ -243,10 +243,11 @@ describe("Löschen", () => {
       id: color!.id,
     });
 
+    // Die Farbe steht seit 4.0.0 am Material, nicht am Gebinde.
     const rows = await db()
       .select()
-      .from(schema.materials)
-      .where(eq(schema.materials.id, material.id));
+      .from(schema.materialProducts)
+      .where(eq(schema.materialProducts.id, material.productId));
     expect(rows).toHaveLength(1);
     expect(rows[0].color).toBe("Signalrot");
   });

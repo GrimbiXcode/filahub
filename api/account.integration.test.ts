@@ -18,7 +18,7 @@ import { upsertUser, findUserByUnionId } from "./queries/users";
 import { createProposal, closeProposal } from "./queries/presets";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { closeDb, resetSchema } from "./test/integration-db";
+import { closeDb, insertMaterial, resetSchema } from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -76,19 +76,16 @@ beforeEach(async () => {
       .insert(schema.storageBoxes)
       .values({ userId: user.id, name: "Drybox", tareWeight: 1200 })
       .returning();
-    const [material] = await db()
-      .insert(schema.materials)
-      .values({
-        userId: user.id,
-        lagerId: lager.id,
-        name: "PLA schwarz",
-        materialType: "PLA",
-        nominalWeight: 1000,
-        containerTypeId: containerType.id,
-        storageBoxId: box.id,
-        notes: "Freitext mit Personenbezug",
-      })
-      .returning();
+    const material = await insertMaterial({
+      userId: user.id,
+      lagerId: lager.id,
+      name: "PLA schwarz",
+      materialType: "PLA",
+      nominalWeight: 1000,
+      containerTypeId: containerType.id,
+      storageBoxId: box.id,
+      notes: "Freitext mit Personenbezug",
+    });
     await db()
       .insert(schema.weighings)
       .values({ materialId: material.id, grossWeight: 1340 });
@@ -156,6 +153,12 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "lager",
       "lager_shares",
       "loan_requests",
+      /*
+        Seit 4.0.0: das Material als Produkt über den Gebinden. Name, Farbe
+        und Notizen sind Angaben der Person; im Export unter
+        `materialProducts`.
+      */
+      "material_products",
       "materials",
       /*
         Seit 2.5.0. `organizations` selbst steht bewusst **nicht** dabei: Die
@@ -179,7 +182,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese fünfzehn plus vier, die den Personenbezug über eine andere Spalte
+      Diese sechzehn plus vier, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` und seit 2.9.0 `consumptions`
       (beide über das Material) sowie `loginCodes` (Telegram-ID). Ändert sich
       die linke Seite, muss die rechte nachziehen.
@@ -199,6 +202,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "lagerShares",
         "loanRequests",
         "loginCodes",
+        "materialProducts",
         "materials",
         "organizationMemberships",
         "organizationInvitations",
@@ -533,16 +537,13 @@ describe("Kontolöschung und Organisationen", () => {
         filamentDiameterUm: 1750,
       })
       .returning();
-    const [orgMaterial] = await db()
-      .insert(schema.materials)
-      .values({
-        organizationId: org.id,
-        lagerId: orgLager.id,
-        name: "Org-PLA",
-        materialType: "PLA",
-        nominalWeight: 1000,
-      })
-      .returning();
+    const orgMaterial = await insertMaterial({
+      organizationId: org.id,
+      lagerId: orgLager.id,
+      name: "Org-PLA",
+      materialType: "PLA",
+      nominalWeight: 1000,
+    });
     await db()
       .insert(schema.weighings)
       .values({ materialId: orgMaterial.id, grossWeight: 1200 });
@@ -594,7 +595,7 @@ describe("Kontolöschung und Organisationen", () => {
         materialKind: "resin",
       })
       .returning();
-    await db().insert(schema.materials).values({
+    await insertMaterial({
       organizationId: org.id,
       lagerId: orgLager.id,
       name: "Org-Harz",

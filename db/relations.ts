@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
   consumptions,
   lager,
+  materialProducts,
   materials,
   organizationMembers,
   organizations,
@@ -18,6 +19,7 @@ import {
 
 export const usersRelations = relations(users, ({ many }) => ({
   materials: many(materials),
+  materialProducts: many(materialProducts),
   containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   lager: many(lager),
@@ -53,6 +55,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   materials: many(materials),
+  materialProducts: many(materialProducts),
 }));
 
 export const organizationMembersRelations = relations(
@@ -105,11 +108,38 @@ export const storageBoxesRelations = relations(
   })
 );
 
+/*
+  Material (Produkt) und Gebinde – die Oberfläche nennt `materialProducts`
+  „Material“ und `materials` „Gebinde“, siehe den Kommentar in `db/schema.ts`.
+*/
+export const materialProductsRelations = relations(
+  materialProducts,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [materialProducts.userId],
+      references: [users.id],
+    }),
+    organization: one(organizations, {
+      fields: [materialProducts.organizationId],
+      references: [organizations.id],
+    }),
+    materials: many(materials),
+  })
+);
+
 export const materialsRelations = relations(materials, ({ one, many }) => ({
   user: one(users, { fields: [materials.userId], references: [users.id] }),
   organization: one(organizations, {
     fields: [materials.organizationId],
     references: [organizations.id],
+  }),
+  /*
+    Das Material, zu dem das Gebinde gehört: Name, Materialart, Hersteller,
+    Farbe, Oberfläche und Dichte stehen dort.
+  */
+  product: one(materialProducts, {
+    fields: [materials.productId],
+    references: [materialProducts.id],
   }),
   /*
     Wird mitgeladen, wo die Zweitanzeige gebraucht wird: Materialart und

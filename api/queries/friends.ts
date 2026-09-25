@@ -8,6 +8,7 @@ import {
   inArray,
   isNotNull,
   or,
+  sql,
 } from "drizzle-orm";
 import { randomInt } from "node:crypto";
 import {
@@ -37,6 +38,7 @@ import {
   lager,
   lagerShares,
   loanRequests,
+  materialProducts,
   materials,
   users,
   weighings,
@@ -355,15 +357,8 @@ const FRIEND_MATERIAL_COLUMNS = {
     Projektion handgeschrieben und ihre Schlüsselmenge festgenagelt.
   */
   lagerId: true,
-  name: true,
   identifier: true,
-  materialType: true,
-  manufacturer: true,
-  color: true,
-  texture: true,
   nominalWeight: true,
-  /* Die Dichte ebenso: geht in die Zweitanzeige ein, aber nicht hinaus. */
-  densityGramsPerLiter: true,
 } as const;
 
 /*
@@ -385,7 +380,34 @@ const FRIEND_MATERIAL_COLUMNS = {
 */
 const TARE_ONLY = { columns: { tareWeight: true } as const };
 
+/**
+ * Sortierung nach dem Namen des Materials, das am Gebinde hängt.
+ *
+ * Die Unterabfrage nennt Tabelle und Spalten **wörtlich**: Drizzles
+ * relationale Abfrage schreibt jede Spaltenreferenz im `orderBy` auf den
+ * Alias der Haupttabelle um, aus `material_products.name` würde
+ * `materials.name` – eine Spalte, die es seit 4.0.0 nicht mehr gibt.
+ */
+const PRODUCT_NAME = sql`(select mp."name" from "material_products" mp where mp."id" = ${materials.productId})`;
+
 const FRIEND_MATERIAL_WITH = {
+  /*
+    Seit 4.0.0 stehen Name, Materialart, Hersteller, Farbe und Oberfläche am
+    **Material** (`material_products`), nicht mehr am Gebinde. Geladen werden
+    genau diese Spalten und die Dichte – `notes` des Materials bleibt
+    ungeladen, aus demselben Grund wie der Lagername. Die Dichte geht in die
+    Zweitanzeige ein, aber nicht hinaus.
+  */
+  product: {
+    columns: {
+      name: true,
+      materialType: true,
+      manufacturer: true,
+      color: true,
+      texture: true,
+      densityGramsPerLiter: true,
+    } as const,
+  },
   containerType: TARE_ONLY,
   containerPresetVariant: TARE_ONLY,
   storageBox: TARE_ONLY,
@@ -428,14 +450,16 @@ export type FriendMaterialRow = {
   id: number;
   userId: number;
   lagerId: number;
-  name: string;
   identifier: string | null;
-  materialType: string;
-  manufacturer: string | null;
-  color: string | null;
-  texture: string | null;
   nominalWeight: number;
-  densityGramsPerLiter: number | null;
+  product: {
+    name: string;
+    materialType: string;
+    manufacturer: string | null;
+    color: string | null;
+    texture: string | null;
+    densityGramsPerLiter: number | null;
+  };
   containerType: { tareWeight: number } | null;
   containerPresetVariant: { tareWeight: number } | null;
   storageBox: { tareWeight: number } | null;
@@ -497,22 +521,23 @@ export function toFriendMaterial(
       last?.weighedAt ?? null,
       row.consumptions
     ),
-    materialType: row.materialType,
+    materialType: row.product.materialType,
     kind: row.lager?.materialKind,
-    densityGramsPerLiter: row.densityGramsPerLiter,
+    densityGramsPerLiter: row.product.densityGramsPerLiter,
     diameterUm: row.lager?.filamentDiameterUm,
   });
-  const appearance = resolveAppearance(row.color, row.texture, catalog);
+  const { product } = row;
+  const appearance = resolveAppearance(product.color, product.texture, catalog);
   return {
     id: row.id,
     ownerId: row.userId,
     ownerName,
-    name: row.name,
+    name: product.name,
     identifier: row.identifier,
-    materialType: row.materialType,
-    manufacturer: row.manufacturer,
-    color: row.color,
-    texture: row.texture,
+    materialType: product.materialType,
+    manufacturer: product.manufacturer,
+    color: product.color,
+    texture: product.texture,
     colorHex: appearance.hex,
     textureKind: appearance.kind,
     nominalWeight: row.nominalWeight,
@@ -570,17 +595,33 @@ export async function findFriendMaterialsForSearch(
       */
       inArray(materials.userId, [...names.keys()]),
       or(
-        ilike(materials.name, pattern),
         ilike(materials.identifier, pattern),
-        ilike(materials.materialType, pattern),
-        ilike(materials.manufacturer, pattern),
-        ilike(materials.color, pattern),
-        // Wer „mattes PETG“ sucht, sucht nach der Oberfläche – sie ist ein
-        // eigenes Feld, seit sie nicht mehr in der Materialart steckt.
-        ilike(materials.texture, pattern)
+        /*
+          Die übrigen Felder stehen seit 4.0.0 am Material. Die Unterabfrage
+          sucht **nur** darin; welche Gebinde dazu gehören, entscheiden weiter
+          die beiden Bedingungen oben (freigegebenes Lager, Besitzer).
+        */
+        inArray(
+          materials.productId,
+          getDb()
+            .select({ id: materialProducts.id })
+            .from(materialProducts)
+            .where(
+              or(
+                ilike(materialProducts.name, pattern),
+                ilike(materialProducts.materialType, pattern),
+                ilike(materialProducts.manufacturer, pattern),
+                ilike(materialProducts.color, pattern),
+                // Wer „mattes PETG“ sucht, sucht nach der Oberfläche – sie
+                // ist ein eigenes Feld, seit sie nicht mehr in der
+                // Materialart steckt.
+                ilike(materialProducts.texture, pattern)
+              )
+            )
+        )
       )
     ),
-    orderBy: [asc(materials.name), asc(materials.id)],
+    orderBy: [asc(PRODUCT_NAME), asc(materials.id)],
     limit,
   });
 
@@ -629,7 +670,7 @@ export async function findFriendInventory(
       eq(materials.userId, ownerId),
       inArray(materials.lagerId, lagerIds)
     ),
-    orderBy: [asc(materials.name), asc(materials.id)],
+    orderBy: [asc(PRODUCT_NAME), asc(materials.id)],
   });
   const catalog = (await findAppearanceCatalogsForUsers([ownerId])).get(
     ownerId

@@ -9,6 +9,7 @@ import { createRouter, publicQuery } from "./middleware";
 import { materialRouter } from "./materialRouter";
 import { organizationRouter } from "./organizationRouter";
 import { presetRouter } from "./presetRouter";
+import { productRouter } from "./productRouter";
 import { containerTypeRouter } from "./containerTypeRouter";
 import { storageBoxRouter } from "./storageBoxRouter";
 import { unblockRouter } from "./unblockRouter";
@@ -21,6 +22,11 @@ export const appRouter = createRouter({
   containerType: containerTypeRouter,
   storageBox: storageBoxRouter,
   material: materialRouter,
+  /*
+    Das Material als Produkt über den Gebinden (seit 4.0.0). `material` führt
+    die Gebinde – die Namen sind älter als die Unterscheidung.
+  */
+  product: productRouter,
   appearance: appearanceRouter,
   friend: friendRouter,
   organization: organizationRouter,

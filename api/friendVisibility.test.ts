@@ -91,28 +91,54 @@ describe("visibilityAllows", () => {
 /** Fester Zeitpunkt der Wägung in den Fixtures – Verbräuche liegen davor oder danach. */
 const WEIGHED_AT = new Date("2026-03-01T12:00:00Z");
 
+/** Die Felder, die seit 4.0.0 am Material stehen – in den Fixtures flach überschreibbar */
+type ProductOverrides = Partial<FriendMaterialRow["product"]>;
+
 function materialRow(
-  overrides: Partial<FriendMaterialRow> = {}
+  overrides: Partial<Omit<FriendMaterialRow, "product">> & ProductOverrides = {}
 ): FriendMaterialRow {
-  return {
-    id: 7,
-    userId: 1,
-    lagerId: 3,
+  const {
+    name,
+    materialType,
+    manufacturer,
+    color,
+    texture,
+    densityGramsPerLiter,
+    ...rest
+  } = overrides;
+  const product: FriendMaterialRow["product"] = {
     name: "PolyTerra PLA Schwarz",
-    identifier: "P01",
     materialType: "PLA",
     manufacturer: "Polymaker",
     color: "Schwarz",
     texture: null,
-    nominalWeight: 1000,
     densityGramsPerLiter: null,
+  };
+  const given: ProductOverrides = {
+    name,
+    materialType,
+    manufacturer,
+    color,
+    texture,
+    densityGramsPerLiter,
+  };
+  for (const key of Object.keys(given) as (keyof ProductOverrides)[]) {
+    if (key in overrides) Object.assign(product, { [key]: given[key] });
+  }
+  return {
+    id: 7,
+    userId: 1,
+    lagerId: 3,
+    identifier: "P01",
+    nominalWeight: 1000,
+    product,
     containerType: { tareWeight: 140 },
     containerPresetVariant: null,
     storageBox: null,
     lager: { materialKind: "filament", filamentDiameterUm: 1750 },
     weighings: [],
     consumptions: [],
-    ...overrides,
+    ...rest,
   };
 }
 

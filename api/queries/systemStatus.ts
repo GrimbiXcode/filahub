@@ -123,6 +123,7 @@ const COUNTED_TABLES = [
   "preset_container_variants",
   // Seit 2.2.0. Fehlte in der Auslieferung von 2.2.0 – nachgetragen in 2.3.0.
   "lager",
+  "material_products",
   "materials",
   "weighings",
   // Seit 2.9.0: Verbräuche, die Abbuchungen ohne Waage.

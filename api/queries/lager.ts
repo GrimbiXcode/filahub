@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, inArray, ne } from "drizzle-orm";
 import type { MaterialKind } from "@contracts/materials";
 import { lager, lagerShares, materials } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
@@ -84,6 +84,7 @@ export async function createLager(
     materialKind: MaterialKind;
     filamentDiameterUm?: number | null;
     identifierTemplate?: string | null;
+    lowStockGrams?: number | null;
     notes?: string | null;
   }
 ) {
@@ -111,6 +112,7 @@ export async function updateLager(
     materialKind: MaterialKind;
     filamentDiameterUm: number | null;
     identifierTemplate: string | null;
+    lowStockGrams: number | null;
     notes: string | null;
   }>
 ) {
@@ -280,4 +282,25 @@ export async function organizationOfLager(id: number): Promise<number | null> {
     .where(eq(lager.id, id))
     .limit(1);
   return rows.at(0)?.organizationId ?? null;
+}
+
+/**
+ * Wie viele Materialien mit einem Gebinde in diesem Lager auch Gebinde in
+ * einem **anderen** Lager haben. Solange es welche gibt, darf das Lager
+ * Materialart und Stärke nicht wechseln – sonst lägen die Gebinde eines
+ * Materials in Lagern verschiedener Art.
+ *
+ * Ohne Bereichsfilter: Der Aufrufer hat das Lager bereits im Bereich
+ * gefunden, und die Gebinde eines Materials liegen immer in seinem Bereich.
+ */
+export async function countProductsAlsoElsewhere(id: number): Promise<number> {
+  const here = getDb()
+    .select({ productId: materials.productId })
+    .from(materials)
+    .where(eq(materials.lagerId, id));
+  const rows = await getDb()
+    .selectDistinct({ productId: materials.productId })
+    .from(materials)
+    .where(and(inArray(materials.productId, here), ne(materials.lagerId, id)));
+  return rows.length;
 }

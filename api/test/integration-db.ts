@@ -1,8 +1,13 @@
 /** Hilfsfunktionen für die Integrationstests (nur mit `TEST_DATABASE_URL`). */
-import { sql } from "drizzle-orm";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { eq, sql } from "drizzle-orm";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { closePool, getDb, migrateDb } from "../queries/connection";
 import { resetRateLimits } from "../lib/rateLimit";
 import { appRouter } from "../router";
+import * as schema from "@db/schema";
 import type { User } from "@db/schema";
 import type { LanguageCode } from "@contracts/i18n";
 
@@ -74,4 +79,116 @@ export async function countRows(table: string) {
     sql`SELECT COUNT(*) AS c FROM ${sql.identifier(table)}`
   );
   return Number(result.rows[0].c);
+}
+
+/** Eine Materialzeile in der flachen Form bis 3.1.0 – Material und Gebinde in einem */
+export type FlatMaterialValues = Omit<
+  typeof schema.materials.$inferInsert,
+  "productId"
+> &
+  Pick<
+    typeof schema.materialProducts.$inferInsert,
+    | "name"
+    | "materialType"
+    | "manufacturer"
+    | "color"
+    | "texture"
+    | "densityGramsPerLiter"
+  >;
+
+/**
+ * Legt Gebinde am Router vorbei an, je eines mit eigenem Material.
+ *
+ * Seit 4.0.0 stehen Name, Materialart, Hersteller, Farbe, Oberfläche und
+ * Dichte am Material (`material_products`). Die Tests, die Bestand direkt in
+ * die Datenbank schreiben, tun das weiter in der flachen Form; dieser Helfer
+ * teilt sie auf. Liefert die Gebindezeilen in Eingabereihenfolge.
+ */
+export async function insertMaterials(rows: FlatMaterialValues[]) {
+  if (rows.length === 0) return [];
+  const db = getDb();
+  const products = await db
+    .insert(schema.materialProducts)
+    .values(
+      rows.map(row => ({
+        userId: row.userId ?? null,
+        organizationId: row.organizationId ?? null,
+        name: row.name,
+        materialType: row.materialType,
+        manufacturer: row.manufacturer,
+        color: row.color,
+        texture: row.texture,
+        densityGramsPerLiter: row.densityGramsPerLiter,
+      }))
+    )
+    .returning({ id: schema.materialProducts.id });
+  return db
+    .insert(schema.materials)
+    .values(
+      rows.map((row, i) => {
+        const {
+          name: _name,
+          materialType: _type,
+          manufacturer: _manufacturer,
+          color: _color,
+          texture: _texture,
+          densityGramsPerLiter: _density,
+          ...gebinde
+        } = row;
+        return { ...gebinde, productId: products[i].id };
+      })
+    )
+    .returning();
+}
+
+/** Wie `insertMaterials`, für ein einzelnes Gebinde */
+export async function insertMaterial(row: FlatMaterialValues) {
+  const [material] = await insertMaterials([row]);
+  return material;
+}
+
+/**
+ * Leert die Testdatenbank und spielt die Migrationen nur **bis vor**
+ * `beforeIdx` ein – für Tests, die einen Backfill an einem Altbestand prüfen,
+ * dessen Spalten eine spätere Migration gelöscht hat (seit 4.0.0 etwa
+ * `materials.materialType`). Über eine Kopie des Migrationsordners mit
+ * gekürztem Journal; der eigentliche Ordner bleibt unberührt.
+ *
+ * Danach steht die Datenbank auf einem alten Stand – der nächste Test muss
+ * `resetSchema()` aufrufen, bevor er den Router benutzt.
+ */
+export async function migrateUntil(beforeIdx: number) {
+  const db = getDb();
+  await db.execute(sql`DROP SCHEMA IF EXISTS public CASCADE`);
+  await db.execute(sql`DROP SCHEMA IF EXISTS drizzle CASCADE`);
+  await db.execute(sql`CREATE SCHEMA public`);
+  const folder = await mkdtemp(join(tmpdir(), "filahub-migrations-"));
+  try {
+    await cp("db/migrations", folder, { recursive: true });
+    const journalPath = join(folder, "meta", "_journal.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8")) as {
+      entries: { idx: number }[];
+    };
+    journal.entries = journal.entries.filter(entry => entry.idx < beforeIdx);
+    await writeFile(journalPath, JSON.stringify(journal));
+    await migrate(db, { migrationsFolder: folder });
+  } finally {
+    await rm(folder, { recursive: true, force: true });
+  }
+}
+
+/** Ändert das Material, zu dem ein Gebinde gehört – am Router vorbei. */
+export async function setProductOf(
+  materialId: number,
+  values: Partial<typeof schema.materialProducts.$inferInsert>
+) {
+  const db = getDb();
+  const [row] = await db
+    .select({ productId: schema.materials.productId })
+    .from(schema.materials)
+    .where(eq(schema.materials.id, materialId));
+  await db
+    .update(schema.materialProducts)
+    .set(values)
+    .where(eq(schema.materialProducts.id, row.productId));
 }

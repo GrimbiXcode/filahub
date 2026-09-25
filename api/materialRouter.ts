@@ -20,6 +20,7 @@ import {
 import {
   COMMON_MATERIAL_TYPES,
   canonicalMaterialType,
+  productKey,
 } from "@contracts/materials";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { assertWithinLimit } from "./lib/quota";
@@ -39,7 +40,6 @@ import {
   findLatestWeighingId,
   findIdentifiersInScope,
   findMaterialInScope,
-  findMaterialTypesInScope,
   findMaterialsInScope,
   findRecentWeighings,
   findWeighing,
@@ -54,6 +54,13 @@ import {
   findLagerInScopeById,
   lagerInScope,
 } from "./queries/lager";
+import {
+  findMaterialTypesInScope,
+  findProductLagerKinds,
+  findProductRowInScope,
+  findProductsInScope,
+  type ProductData,
+} from "./queries/products";
 
 const dateString = z
   .string()
@@ -61,12 +68,12 @@ const dateString = z
   .nullable()
   .optional();
 
-const materialInput = z.object({
-  /** Pflicht: Ein Material liegt immer in genau einem Lager. */
-  lagerId: z.number().int().positive("Bitte ein Lager wählen"),
+/**
+ * Die Felder des **Materials** (seit 4.0.0 `material_products`): Sie gelten
+ * für alle Gebinde des Materials. Exportiert für `product.update`.
+ */
+export const productFields = {
   name: z.string().min(1, "Name ist erforderlich"),
-  /** Getrimmt, leer = `null`; je Lager eindeutig (siehe `withIdentifierConflict`) */
-  identifier: identifierInputSchema.optional(),
   /**
    * Freitext, aber case-insensitiv: Die gespeicherte Schreibweise legt
    * `canonicalMaterialType` fest, siehe `knownMaterialTypes` unten. `trim()`
@@ -77,9 +84,6 @@ const materialInput = z.object({
   color: z.string().nullable().optional(),
   /** Oberfläche als Freitext („Matt", „Silk") – Vorschläge im Formular */
   texture: z.string().max(100).nullable().optional(),
-  priceCents: z.number().int().min(0).nullable().optional(),
-  purchaseDate: dateString,
-  nominalWeight: z.number().int().positive("Nennmenge muss > 0 sein"),
   /**
    * Dichte in Gramm je Liter, nur für die Zweitanzeige. Die Obergrenze ist
    * großzügig: Metallpulver liegt weit über Kunststoff.
@@ -91,11 +95,86 @@ const materialInput = z.object({
     .max(25000, "Dichte ist unplausibel hoch")
     .nullable()
     .optional(),
+};
+
+/** Die Felder des **Gebindes** – der einzelnen Rolle, Flasche, des Beutels */
+const gebindeInput = z.object({
+  /** Pflicht: Ein Gebinde liegt immer in genau einem Lager. */
+  lagerId: z.number().int().positive("Bitte ein Lager wählen"),
+  /** Getrimmt, leer = `null`; je Lager eindeutig (siehe `withIdentifierConflict`) */
+  identifier: identifierInputSchema.optional(),
+  priceCents: z.number().int().min(0).nullable().optional(),
+  purchaseDate: dateString,
+  nominalWeight: z.number().int().positive("Nennmenge muss > 0 sein"),
   containerTypeId: z.number().int().positive().nullable().optional(),
   containerPresetVariantId: z.number().int().positive().nullable().optional(),
   storageBoxId: z.number().int().positive().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
+
+/**
+ * Anlegen und Ändern nehmen die Felder des Materials **flach** neben denen
+ * des Gebindes – so, wie das Formular sie zeigt. Welche davon mitgeschickt
+ * wurden, entscheidet `pickProductData`.
+ */
+const productFieldsPartial = z.object(productFields).partial();
+
+/** Die mitgeschickten Felder des Materials, oder `null`, wenn keines dabei ist. */
+function pickProductData(
+  input: z.infer<typeof productFieldsPartial>
+): Partial<ProductData> | null {
+  const data: Partial<ProductData> = {};
+  for (const key of Object.keys(productFields) as (keyof ProductData &
+    keyof typeof productFields)[]) {
+    if (input[key] !== undefined)
+      (data as Record<string, unknown>)[key] = input[key];
+  }
+  return Object.keys(data).length > 0 ? data : null;
+}
+
+/**
+ * Prüft, ob ein Material in dieses Lager passt: Alle Gebinde eines Materials
+ * liegen in Lagern **gleicher** Materialart und Filamentstärke – eine
+ * 2,85-mm-Rolle ist ein anderes Produkt als eine 1,75-mm-Rolle.
+ *
+ * Die einzige Konsistenzregel zwischen Gebinde und Lager. Geprüft gegen die
+ * **übrigen** Gebinde des Materials (`exceptMaterialId` ist das, das gerade
+ * verschoben wird) – das letzte darf also überallhin.
+ */
+async function assertProductFitsLager(
+  scope: Scope,
+  productId: number,
+  lagerId: number,
+  exceptMaterialId?: number
+) {
+  const target = await findLagerInScopeById(scope, lagerId);
+  if (!target) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiges Lager" });
+  }
+  const others = await findProductLagerKinds(productId, exceptMaterialId);
+  const conflict = others.some(
+    o =>
+      o.kind !== target.materialKind ||
+      (o.diameterUm ?? null) !== (target.filamentDiameterUm ?? null)
+  );
+  if (conflict) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Dieses Material liegt schon in einem Lager mit anderer Materialart oder Filamentstärke. Bitte ein passendes Lager wählen oder ein eigenes Material anlegen.",
+    });
+  }
+}
+
+/** Das Material muss zum Bereich gehören – sonst wie nicht vorhanden. */
+async function assertProductInScope(scope: Scope, productId: number) {
+  if (!(await findProductRowInScope(scope, productId))) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Ungültiges Material",
+    });
+  }
+}
 
 /**
  * Einzige Stelle, an der die Gebindeauswahl geprüft wird: entweder eine eigene
@@ -114,9 +193,9 @@ async function validateForeignKeys(
     Das Lager zuerst: Ohne gültiges Lager hat das Material keinen Ort, und die
     Materialart – die über Felder und Zweitanzeige entscheidet – wäre unbekannt.
 
-    Eine Konsistenzprüfung zwischen Material und Lager gibt es bewusst nicht:
-    Materialart und Filamentstärke stehen **nur** am Lager, es kann also nichts
-    auseinanderlaufen. Genau das ist der Gewinn dieser Modellierung.
+    Materialart und Filamentstärke stehen **nur** am Lager. Seit 4.0.0 gibt
+    es eine Konsistenzregel dazu – alle Gebinde eines Materials liegen in
+    Lagern gleicher Art und Stärke –, geprüft in `assertProductFitsLager`.
   */
   if (lagerId != null && !(await lagerInScope(scope, lagerId))) {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Ungültiges Lager" });
@@ -268,72 +347,119 @@ export const materialRouter = createRouter({
       })
     )
     .input(
-      materialInput.extend({
+      gebindeInput.merge(productFieldsPartial).extend({
+        /**
+         * Ein weiteres Gebinde zu einem **bestehenden** Material. Fehlt es,
+         * entsteht aus den Materialfeldern ein neues Material – beides
+         * zugleich ist ein Fehler.
+         */
+        productId: z.number().int().positive().optional(),
         /** Optionale Erstwägung (Bruttogewicht inkl. Gebinde/Box) beim Kauf */
         initialGrossWeight: z.number().int().positive().nullable().optional(),
         ...scopeInput.shape,
       })
     )
     .mutation(async ({ ctx, input }) => {
-      const { initialGrossWeight, organizationId, ...data } = input;
+      const { initialGrossWeight, organizationId, productId, ...rest } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      const productData = pickProductData(rest);
+      const gebinde = gebindeInput.parse(rest);
       await validateForeignKeys(
         scope,
-        data.containerTypeId,
-        data.containerPresetVariantId,
-        data.storageBoxId,
-        data.lagerId
+        gebinde.containerTypeId,
+        gebinde.containerPresetVariantId,
+        gebinde.storageBoxId,
+        gebinde.lagerId
       );
       /*
         Erst nach `validateForeignKeys`: Das Lager muss zum Bereich gehören,
         bevor seine Belegung gezählt wird – sonst verriete die Meldung „Lager
         ist voll“ die Existenz eines fremden Lagers.
+
+        Eine eigene Obergrenze für Materialien braucht es nicht: Ein Material
+        existiert nur mit Gebinde, die Grenze der Gebinde begrenzt es mit.
       */
       assertWithinLimit({
-        current: await countMaterialsInLager(data.lagerId),
+        current: await countMaterialsInLager(gebinde.lagerId),
         max: MAX_MATERIALS_PER_LAGER,
         quota: "materials_per_lager",
-        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Materialien. Bitte Verbrauchtes löschen oder ein weiteres Lager anlegen.`,
+        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Gebinde. Bitte Verbrauchtes löschen oder ein weiteres Lager anlegen.`,
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
-      const materialType = canonicalMaterialType(
-        data.materialType,
-        await knownMaterialTypes(scope)
+      let product: number | ProductData;
+      if (productId != null) {
+        if (productData) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Bitte entweder ein bestehendes Material wählen oder ein neues anlegen.",
+          });
+        }
+        await assertProductInScope(scope, productId);
+        await assertProductFitsLager(scope, productId, gebinde.lagerId);
+        product = productId;
+      } else {
+        const parsed = z.object(productFields).safeParse(productData ?? {});
+        if (!parsed.success) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              parsed.error.issues[0]?.message ?? "Material ist unvollständig",
+          });
+        }
+        product = {
+          ...parsed.data,
+          materialType: canonicalMaterialType(
+            parsed.data.materialType,
+            await knownMaterialTypes(scope)
+          ),
+        };
+      }
+      const created = await withIdentifierConflict(gebinde.identifier, () =>
+        createMaterial(scope, gebinde, product, initialGrossWeight)
       );
-      const id = await withIdentifierConflict(data.identifier, () =>
-        createMaterial(
-          scope,
-          {
-            ...data,
-            materialType,
-            identifier: data.identifier ?? undefined,
-            manufacturer: data.manufacturer ?? undefined,
-            color: data.color ?? undefined,
-            notes: data.notes ?? undefined,
-          },
-          initialGrossWeight
-        )
-      );
-      return { id };
+      return created;
     }),
 
   update: authedQuery
     .input(
-      materialInput
+      gebindeInput
         .partial()
-        .extend({ id: z.number().int().positive(), ...scopeInput.shape })
+        .merge(productFieldsPartial)
+        .extend({
+          id: z.number().int().positive(),
+          /** Das Gebinde einem anderen Material zuordnen */
+          productId: z.number().int().positive().optional(),
+          ...scopeInput.shape,
+        })
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, organizationId, ...data } = input;
+      const { id, organizationId, productId, ...rest } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
       const existing = await findMaterialInScope(scope, id);
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Material nicht gefunden",
+          message: "Gebinde nicht gefunden",
         });
       }
+      const productData = pickProductData(rest);
+      const data = gebindeInput.partial().parse(rest);
+      const reassign = productId != null && productId !== existing.productId;
+      /*
+        Materialfelder ändern das Material, zu dem das Gebinde **gehört** – und
+        damit alle seine Gebinde. Zusammen mit einer neuen Zuordnung wäre
+        unklar, welches gemeint ist.
+      */
+      if (reassign && productData) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Bitte das Material entweder wechseln oder ändern, nicht beides zugleich.",
+        });
+      }
+      if (reassign) await assertProductInScope(scope, productId);
       // Effektiven Zustand nach dem Patch prüfen, nicht nur die gesendeten Felder
       const nextContainerTypeId =
         data.containerTypeId !== undefined
@@ -350,25 +476,44 @@ export const materialRouter = createRouter({
         data.storageBoxId,
         data.lagerId
       );
+      if (
+        reassign ||
+        (data.lagerId != null && data.lagerId !== existing.lagerId)
+      ) {
+        await assertProductFitsLager(
+          scope,
+          reassign ? productId : existing.productId,
+          data.lagerId ?? existing.lagerId,
+          id
+        );
+      }
       /*
         Nur wenn das Feld mitgeschickt wurde – `undefined` heißt „nicht
         ändern“ (siehe `hasChanges`), und dabei bleibt es.
       */
-      const materialType =
-        data.materialType !== undefined
-          ? canonicalMaterialType(
-              data.materialType,
-              await knownMaterialTypes(scope)
-            )
-          : undefined;
+      if (productData?.materialType !== undefined) {
+        productData.materialType = canonicalMaterialType(
+          productData.materialType,
+          await knownMaterialTypes(scope)
+        );
+      }
       /*
         Die Kennung kann auch dann kollidieren, wenn sie gar nicht mitgeschickt
-        wurde: Wer ein Material in ein anderes Lager verschiebt, nimmt seine
+        wurde: Wer ein Gebinde in ein anderes Lager verschiebt, nimmt seine
         Kennung dorthin mit. Die Meldung nennt deshalb die effektive.
       */
       await withIdentifierConflict(
         data.identifier !== undefined ? data.identifier : existing.identifier,
-        () => updateMaterial(scope, id, { ...data, materialType })
+        () =>
+          updateMaterial(
+            scope,
+            id,
+            reassign ? { ...data, productId } : data,
+            productData
+              ? { productId: existing.productId, data: productData }
+              : null,
+            existing.productId
+          )
       );
       return { ok: true };
     }),
@@ -448,7 +593,7 @@ export const materialRouter = createRouter({
       const known = await knownMaterialTypes(scope);
       /*
         Die Kennungsvorlage des Ziellagers gilt auch hier: Jedes importierte
-        Material bekommt die nächste freie Nummer, gezählt wie im Formular über
+        Gebinde bekommt die nächste freie Nummer, gezählt wie im Formular über
         den ganzen Bereich (`contracts/identifierTemplate.ts`). Vorab für den
         ganzen Stapel, damit sich die Positionen nicht gegenseitig dieselbe
         Nummer geben.
@@ -461,6 +606,17 @@ export const materialRouter = createRouter({
             gesamt
           )
         : [];
+      /*
+        Material je Position: ein bestehendes mit demselben Vergleichsschlüssel
+        (`productKey` – dieselbe Regel wie die Migration 0022), sonst ein neues.
+        Die `anzahl` Gebinde einer Position gehören immer zu **einem** Material,
+        auch ohne Schlüssel – „dreimal dasselbe“ steht ja da.
+      */
+      const byKey = new Map<string, number>();
+      for (const p of await findProductsInScope(scope)) {
+        const key = productKey(p);
+        if (key != null && !byKey.has(key)) byKey.set(key, p.id);
+      }
       for (const item of input.items) {
         const materialType = canonicalMaterialType(item.typ, known);
         if (!known.includes(materialType)) known.push(materialType);
@@ -469,21 +625,37 @@ export const materialRouter = createRouter({
           .map(s => s?.trim())
           .filter(Boolean)
           .join(" ");
+        const key = productKey({
+          kind: lager?.materialKind ?? null,
+          diameterUm: lager?.filamentDiameterUm ?? null,
+          materialType,
+          manufacturer: item.hersteller || null,
+          color: item.farbe || null,
+          texture: null,
+        });
+        let productId = key != null ? byKey.get(key) : undefined;
         for (let i = 0; i < item.anzahl; i++) {
           const identifier = identifiers[created];
-          await withIdentifierConflict(identifier, () =>
-            createMaterial(scope, {
-              lagerId: input.lagerId,
-              identifier,
-              name,
-              materialType,
-              manufacturer: item.hersteller || undefined,
-              color: item.farbe || undefined,
-              priceCents: item.priceCents ?? undefined,
-              purchaseDate: input.purchaseDate ?? undefined,
-              nominalWeight: item.nenngewicht,
-            })
+          const result = await withIdentifierConflict(identifier, () =>
+            createMaterial(
+              scope,
+              {
+                lagerId: input.lagerId,
+                identifier,
+                priceCents: item.priceCents ?? undefined,
+                purchaseDate: input.purchaseDate ?? undefined,
+                nominalWeight: item.nenngewicht,
+              },
+              productId ?? {
+                name,
+                materialType,
+                manufacturer: item.hersteller || undefined,
+                color: item.farbe || undefined,
+              }
+            )
           );
+          productId = result.productId;
+          if (key != null) byKey.set(key, productId);
           created++;
         }
       }

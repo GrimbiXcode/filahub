@@ -67,6 +67,7 @@ describe("Migrationen", () => {
     for (const table of [
       "users",
       "lager",
+      "material_products",
       "materials",
       "weighings",
       "consumptions",
@@ -853,10 +854,9 @@ describe("Postgres-Eigenheiten", () => {
     await expect(
       db().insert(schema.materials).values({
         userId: admin.id,
-        // Beliebige ID – geprüft wird der int-Überlauf, nicht die Zuordnung.
+        // Beliebige IDs – geprüft wird der int-Überlauf, nicht die Zuordnung.
         lagerId: 1,
-        name: "Überlauf",
-        materialType: "PLA",
+        productId: 1,
         nominalWeight: 2_147_483_648,
       })
     ).rejects.toThrow();

@@ -248,6 +248,14 @@ export const lager = pgTable(
      * Begründung in `contracts/identifierTemplate.ts`.
      */
     identifierTemplate: varchar("identifierTemplate", { length: 40 }),
+    /**
+     * Warnschwelle in Gramm für jedes Material, das (auch) hier liegt –
+     * `NULL` = Vorgabe (`LOW_STOCK_PERCENT` der größten Nennmenge). Liegt ein
+     * Material in mehreren Lagern, gilt die höchste gesetzte Schwelle. Die
+     * Regel steht an genau einer Stelle: `productStock`
+     * (`contracts/materials.ts`).
+     */
+    lowStockGrams: integer("lowStockGrams"),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
@@ -461,6 +469,88 @@ export type CustomTexture = typeof customTextures.$inferSelect;
 export type InsertCustomTexture = typeof customTextures.$inferInsert;
 
 /** 3D-Druckmaterial (Gebinde in einem Lager) */
+/**
+ * Das **Material** als Produkt („Polymaker PolyTerra PLA, Charcoal Black“) –
+ * seit 4.0.0 die Ebene über den Gebinden.
+ *
+ * Achtung, Namen: In der Oberfläche heißt **diese** Tabelle „Material“, die
+ * Tabelle `materials` darunter dagegen „Gebinde“ bzw. „Rolle“. `materials`
+ * wurde nicht umbenannt – das hätte eine Handmigration über alle Indizes und
+ * Constraints gekostet, ohne dass ein Benutzer etwas davon hat. Die
+ * Abbildung steht in `AGENTS.md` unter „Material und Gebinde“.
+ *
+ * Was hier steht, gilt für **alle** Gebinde des Materials; eine Kopie am
+ * Gebinde gibt es nicht (eine zweite Wahrheit liefe auseinander). Die
+ * Lesepfade flachen die Felder für die Gebindezeile wieder auf
+ * (`withProductFields` in `api/queries/filament.ts`).
+ *
+ * **Ein Material existiert nur, solange es ein Gebinde hat.** Wer das letzte
+ * löscht oder einem anderen Material zuordnet, löscht das Material mit
+ * (`api/queries/products.ts`). Materialart und Stärke kennt das Material
+ * deshalb immer über seine Gebinde – sie stehen am Lager, nicht hier.
+ */
+export const materialProducts = pgTable(
+  "material_products",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Eigentümer bzw. Organisation – genau eines von beiden, siehe `ownerXor` */
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    /**
+     * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
+     * Verglichen wird über `normalizeMaterialType`, und je Bereich steht je
+     * Vergleichsform nur eine Schreibweise. Die legt `canonicalMaterialType`
+     * (`contracts/materials.ts`) in jedem Schreibpfad fest; den Altbestand
+     * hat `0019_material_type_case.sql` zusammengeführt (#36).
+     */
+    materialType: varchar("materialType", { length: 100 }).notNull(),
+    manufacturer: varchar("manufacturer", { length: 255 }),
+    color: varchar("color", { length: 100 }),
+    /**
+     * Oberfläche als Freitext („Matt", „Silk", „Glänzend").
+     *
+     * Freitext und kein Enum, aus demselben Grund wie `materialType`: Der
+     * Hersteller, der sich „Sparkle" ausdenkt, muss eintragbar bleiben.
+     * Vorschläge liefert `COMMON_TEXTURES` (`contracts/materials.ts`).
+     *
+     * Bis 2.1.0 landete das in `materialType` („PLA Silk"). Das hatte einen
+     * sichtbaren Preis: Der Materialart-Filter vergleicht exakt, also waren
+     * „PLA" und „PLA Silk" zwei Einträge, die sich nie fanden.
+     */
+    texture: varchar("texture", { length: 100 }),
+    /**
+     * Dichte in Gramm je Liter. `NULL` = Vorgabe benutzen, siehe
+     * `resolveDensity` (`contracts/materials.ts`).
+     *
+     * Ausschließlich für die Zweitanzeige (Meter beim Filament, Liter beim
+     * Harz). Geht **nie** in die Restmengenrechnung ein – die bleibt bei
+     * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
+     */
+    densityGramsPerLiter: integer("densityGramsPerLiter"),
+    /** Notizen zum Material; das Gebinde hat eigene */
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    ownerXor("material_products_owner_xor"),
+    index("material_products_user_idx").on(t.userId),
+    index("material_products_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type MaterialProduct = typeof materialProducts.$inferSelect;
+export type InsertMaterialProduct = typeof materialProducts.$inferInsert;
+
+/**
+ * Das **Gebinde** – die einzelne Rolle, Flasche, der Beutel im Lager, mit
+ * Kennung, Wägungen und Verbräuchen. Der Tabellenname stammt aus der Zeit vor
+ * 4.0.0, als Produkt und Stück eine Zeile waren; siehe `materialProducts`.
+ */
 export const materials = pgTable(
   "materials",
   {
@@ -485,49 +575,26 @@ export const materials = pgTable(
      * ein Rückschritt.
      */
     lagerId: bigint("lagerId", { mode: "number" }).notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
+    /**
+     * Das Material, zu dem dieses Gebinde gehört – Pflicht seit 4.0.0. Name,
+     * Materialart, Hersteller, Farbe, Oberfläche und Dichte stehen **dort**.
+     * Den Altbestand hat `0022_material_products.sql` zugeordnet.
+     */
+    productId: bigint("productId", { mode: "number" }).notNull(),
     /**
      * Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“).
      * Je Lager eindeutig, siehe `materials_identifier_per_lager_unique`.
      */
     identifier: varchar("identifier", { length: 50 }),
-    /**
-     * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
-     * Verglichen wird über `normalizeMaterialType`, und je Bereich steht je
-     * Vergleichsform nur eine Schreibweise. Die legt `canonicalMaterialType`
-     * (`contracts/materials.ts`) in jedem Schreibpfad fest; den Altbestand
-     * hat `0019_material_type_case.sql` zusammengeführt (#36).
-     */
-    materialType: varchar("materialType", { length: 100 }).notNull(),
-    manufacturer: varchar("manufacturer", { length: 255 }),
-    color: varchar("color", { length: 100 }),
-    /**
-     * Oberfläche als Freitext („Matt", „Silk", „Glänzend").
-     *
-     * Freitext und kein Enum, aus demselben Grund wie `materialType`: Der
-     * Hersteller, der sich „Sparkle" ausdenkt, muss eintragbar bleiben.
-     * Vorschläge liefert `COMMON_TEXTURES` (`contracts/materials.ts`).
-     *
-     * Bis 2.1.0 landete das in `materialType` („PLA Silk"). Das hatte einen
-     * sichtbaren Preis: Der Materialart-Filter vergleicht exakt, also waren
-     * „PLA" und „PLA Silk" zwei Einträge, die sich nie fanden.
-     */
-    texture: varchar("texture", { length: 100 }),
     /** Preis in Cent (z. B. 2499 = 24,99 €) */
     priceCents: integer("priceCents"),
     /** Kaufdatum als ISO-String YYYY-MM-DD */
     purchaseDate: date("purchaseDate", { mode: "string" }),
-    /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
-    nominalWeight: integer("nominalWeight").notNull(),
     /**
-     * Dichte in Gramm je Liter. `NULL` = Vorgabe benutzen, siehe
-     * `resolveDensity` (`contracts/materials.ts`).
-     *
-     * Ausschließlich für die Zweitanzeige (Meter beim Filament, Liter beim
-     * Harz). Geht **nie** in die Restmengenrechnung ein – die bleibt bei
-     * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
+     * Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000). Am Gebinde, nicht
+     * am Material: 1-kg-Rolle und 250-g-Probe desselben Materials gibt es.
      */
-    densityGramsPerLiter: integer("densityGramsPerLiter"),
+    nominalWeight: integer("nominalWeight").notNull(),
     /** Gewählte eigene Gebindeart (Leergewicht) */
     containerTypeId: bigint("containerTypeId", { mode: "number" }),
     /**
@@ -558,6 +625,8 @@ export const materials = pgTable(
       Full Scan über den gesamten Bestand aller Benutzer.
     */
     index("materials_lager_idx").on(t.lagerId),
+    /* „Weitere Gebinde dieses Materials“ und der Bestand je Material */
+    index("materials_product_idx").on(t.productId),
     /*
       Seit 3.1.0: Eine Kennung kommt je Lager nur einmal vor, ohne Rücksicht
       auf Groß-/Kleinschreibung (`normalizeIdentifier` in

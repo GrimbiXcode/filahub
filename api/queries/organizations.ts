@@ -10,6 +10,7 @@ import {
 import {
   consumptions,
   lager,
+  materialProducts,
   materials,
   containerTypes,
   customColors,
@@ -166,6 +167,10 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(materials)
     .where(eq(materials.organizationId, organizationId));
+  // Die Materialien nach ihren Gebinden
+  await tx
+    .delete(materialProducts)
+    .where(eq(materialProducts.organizationId, organizationId));
   /*
     Lager, Gebindearten und Dryboxen **nach** dem Material: Es zeigt auf alle
     drei. Freigaben (`lager_shares`) gibt es hier nicht – ein Lager einer
