@@ -2,7 +2,6 @@ import type { ReactNode } from "react";
 import { TriangleAlert } from "lucide-react";
 import type { ResolvedAppearance } from "@contracts/appearance";
 import { Spool } from "@/components/Spool";
-import { fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
@@ -193,12 +192,11 @@ export function StockTiles({
                     {m.identifier ?? "–"}
                   </span>
                   <span className="flex items-center gap-1 whitespace-nowrap font-mono text-[11px] font-semibold tabular-nums">
+                    {/* Die Zahl ist der Bestand des Materials – die Farbe
+                        einer einzelnen Rolle passte nicht dazu. */}
                     <TriangleAlert
                       aria-hidden="true"
-                      className={cn(
-                        "size-3",
-                        fillLevelTextColor(m.remainingPercent)
-                      )}
+                      className="size-3 text-destructive"
                     />
                     {formatGrams(m.stock.totalRemaining)}
                   </span>

@@ -122,6 +122,7 @@ export default function LagerPage() {
   const invalidate = () => {
     utils.lager.list.invalidate();
     utils.material.list.invalidate();
+    utils.product.invalidate();
   };
 
   const createMutation = trpc.lager.create.useMutation({

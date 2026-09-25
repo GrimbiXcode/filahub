@@ -133,6 +133,7 @@ export default function ContainerTypes() {
   const invalidate = () => {
     utils.containerType.list.invalidate();
     utils.material.list.invalidate();
+    utils.product.invalidate();
     utils.material.byId.invalidate();
   };
 

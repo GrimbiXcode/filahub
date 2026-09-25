@@ -61,6 +61,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
     onSuccess: () => {
       toast.success(t.weighing.saved);
       utils.material.list.invalidate();
+      utils.product.invalidate();
       utils.material.byId.invalidate();
       utils.material.recentWeighings.invalidate();
       onOpenChange(false);

@@ -68,6 +68,7 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
     onSuccess: () => {
       toast.success(t.consumption.saved);
       utils.material.list.invalidate();
+      utils.product.invalidate();
       utils.material.byId.invalidate();
       onOpenChange(false);
     },

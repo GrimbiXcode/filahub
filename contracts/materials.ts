@@ -875,7 +875,7 @@ export function productStock(
 
 /** Freitext zum Vergleichen: getrimmt, Leerraum zusammengefasst, klein. */
 function compareForm(value: string | null | undefined): string {
-  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+  return tidyMaterialType(value ?? "").toLowerCase();
 }
 
 /**

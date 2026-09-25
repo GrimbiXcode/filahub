@@ -44,8 +44,10 @@ import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 import { hasChanges } from "./patch";
 import {
+  PRODUCT_GONE,
   deleteProductIfEmpty,
   insertProduct,
+  lockProductInScope,
   updateProduct,
   type ProductData,
 } from "./products";
@@ -449,25 +451,37 @@ async function loadGebindeOverviews(
     with: GEBINDE_WITH,
     orderBy: (t, { desc: d }) => [d(t.createdAt), d(t.id)],
   });
-  return rows.map(row => {
+  /*
+    Ein Gebinde ohne Material dürfte es nicht geben (`lockProductInScope`).
+    Gäbe es doch eines, soll es die Liste nicht für den ganzen Bereich
+    abstürzen lassen – es fehlt dann in der Übersicht, statt alles zu blockieren.
+  */
+  return rows.flatMap(row => {
+    if (!row.product) {
+      console.error(`Gebinde ${row.id} ohne Material ${row.productId}`);
+      return [];
+    }
     const sorted = [...row.weighings].sort(
       (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id
     );
     const last = sorted[0] ?? null;
     const { weighings: _omit, consumptions: _omitToo, ...rest } = row;
-    return computeMaterialStats(
-      {
-        ...rest,
-        containerType: normalizeRelation(row.containerType),
-        storageBox: normalizeRelation(row.storageBox),
-        containerPresetVariant: normalizeRelation(row.containerPresetVariant),
-        lager: normalizeRelation(row.lager),
-      },
-      last,
-      row.weighings.length,
-      language,
-      consumedSince(last?.weighedAt ?? null, row.consumptions)
-    );
+    return [
+      computeMaterialStats(
+        {
+          ...rest,
+          product: row.product,
+          containerType: normalizeRelation(row.containerType),
+          storageBox: normalizeRelation(row.storageBox),
+          containerPresetVariant: normalizeRelation(row.containerPresetVariant),
+          lager: normalizeRelation(row.lager),
+        },
+        last,
+        row.weighings.length,
+        language,
+        consumedSince(last?.weighedAt ?? null, row.consumptions)
+      ),
+    ];
   });
 }
 
@@ -576,7 +590,8 @@ export async function findMaterialInScope(
       },
     },
   });
-  if (!row) return null;
+  if (!row?.product) return null;
+  const product = row.product;
   const last = row.weighings[0] ?? null;
   const { weighings: list, consumptions: consumed, ...rest } = row;
   const { stock } = await findGebindeOfProduct(scope, row.productId, language);
@@ -584,6 +599,7 @@ export async function findMaterialInScope(
     ...computeMaterialStats(
       {
         ...rest,
+        product,
         containerType: normalizeRelation(row.containerType),
         storageBox: normalizeRelation(row.storageBox),
         containerPresetVariant: normalizeRelation(row.containerPresetVariant),
@@ -595,7 +611,7 @@ export async function findMaterialInScope(
       consumedSince(last?.weighedAt ?? null, consumed)
     ),
     /** Notizen des Materials – die Gebindezeile hat ihre eigenen */
-    productNotes: row.product.notes,
+    productNotes: product.notes,
     stock,
     weighings: list,
     consumptions: consumed,
@@ -650,6 +666,11 @@ export async function createMaterial(
 ): Promise<{ id: number; productId: number }> {
   return getDb()
     .transaction(async tx => {
+      if (
+        typeof product === "number" &&
+        !(await lockProductInScope(tx, scope, product))
+      )
+        throw new Error(PRODUCT_GONE);
       const productId =
         typeof product === "number"
           ? product
@@ -692,6 +713,12 @@ export async function updateMaterial(
 ) {
   await getDb()
     .transaction(async tx => {
+      if (
+        data.productId != null &&
+        data.productId !== previousProductId &&
+        !(await lockProductInScope(tx, scope, data.productId))
+      )
+        throw new Error(PRODUCT_GONE);
       if (productPatch) {
         await updateProduct(
           tx,
@@ -950,4 +977,15 @@ export async function findRecentWeighings(scope: Scope, limit = 10) {
     with: { material: true },
   });
   return rows;
+}
+
+/**
+ * Die blanke Gebindezeile im Bereich, ohne Relationen und Rechnung – für
+ * Schreibpfade, die nur Lager, Material und Kennung des Bestands brauchen.
+ * `findMaterialInScope` lädt dafür alle Gebinde des Materials samt Wägungen.
+ */
+export function findMaterialRowInScope(scope: Scope, id: number) {
+  return getDb().query.materials.findFirst({
+    where: and(eq(materials.id, id), scopeWhere(materials, scope)),
+  });
 }

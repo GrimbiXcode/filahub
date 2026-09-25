@@ -480,6 +480,7 @@ export function MaterialFormDialog({
       // Die Liste ist offenbar veraltet – neu laden, damit auch die Vorlage
       // die belegte Nummer überspringt.
       utils.material.list.invalidate();
+      utils.product.invalidate();
       document.getElementById("m-identifier")?.focus();
       return;
     }
@@ -561,15 +562,31 @@ export function MaterialFormDialog({
       Die Felder des Materials gehen nur mit, wenn sie dieses Material ändern
       sollen – sonst die ID des gewählten. Beides zugleich lehnt der Server ab.
     */
+    const productFields = {
+      name: finalName,
+      materialType: canonicalType,
+      manufacturer: manufacturer.trim() || null,
+      color: color.trim() || null,
+      texture: texture.trim() || null,
+      densityGramsPerLiter: densityValue,
+    };
+    /*
+      Beim Bearbeiten nur, was sich gegenüber dem geöffneten Stand geändert
+      hat: Die Felder gehören dem Material und damit allen seinen Gebinden.
+      Schickte das Formular sie immer mit, schriebe eine reine Preisänderung
+      den alten Namen zurück, den jemand anderes inzwischen geändert hat.
+    */
+    const changedProductFields =
+      isEdit && material
+        ? Object.fromEntries(
+            Object.entries(productFields).filter(
+              ([key, value]) =>
+                value !== (material[key as keyof typeof productFields] ?? null)
+            )
+          )
+        : productFields;
     const productPart = editsOwnProduct
-      ? {
-          name: finalName,
-          materialType: canonicalType,
-          manufacturer: manufacturer.trim() || null,
-          color: color.trim() || null,
-          texture: texture.trim() || null,
-          densityGramsPerLiter: densityValue,
-        }
+      ? changedProductFields
       : { productId: productId ?? undefined };
 
     if (isEdit && material) {

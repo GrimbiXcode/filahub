@@ -580,3 +580,24 @@ grünem `check`/`lint`/`test`:
 | 3   | Dateiablage                    | Verzeichnis auf einem Volume, Verweis in der Datenbank                                                   |
 | 4   | Druckeinstellungen für Freunde | Vorerst nicht sichtbar; eigene Tabelle und eigener Freundespfad sind vorgesehen                          |
 | 5   | Warnschwelle                   | Gramm, **je Lager** konfigurierbar; über mehrere Lager gilt die höchste, ohne Angabe die heutige Vorgabe |
+
+## Protokoll: Reviews und Entscheidungen
+
+Der Auftrag lautete, alle Phasen nacheinander umzusetzen, Rückfragen selbst zu
+entscheiden und die Entscheidung zu dokumentieren. Das geschieht hier, je
+Phase: was das Review zwischen den Phasen gefunden hat und was daraus wurde.
+
+### Review nach Phase 1
+
+| Befund                                                                                                  | Entscheidung                                                                                                                                                                 |
+| ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Wiegen, Abbuchen, Löschen, Lager- und Importänderungen ließen `product.*` veraltet stehen               | **Behoben**: Jede Stelle, die `material.list` neu lädt, lädt auch `product.*` neu.                                                                                           |
+| Wettlauf: Gebinde für ein Material, dessen letztes Gebinde gleichzeitig gelöscht wird → verwaiste Zeile | **Behoben**: `lockProductInScope` (`FOR UPDATE`) beim Anlegen, Umordnen, Zusammenführen und Leerlöschen; der Lesepfad überspringt ein verwaistes Gebinde statt abzustürzen.  |
+| Bearbeiten eines Gebindes schrieb alle Materialfelder zurück und überschrieb fremde Änderungen          | **Behoben**: Das Formular schickt beim Bearbeiten nur geänderte Materialfelder.                                                                                              |
+| `material.update` lud alle Gebinde des Materials nur zur Existenzprüfung                                | **Behoben**: `findMaterialRowInScope` für Schreibpfade.                                                                                                                      |
+| Freundessuche durchsuchte `material_products` der ganzen Instanz                                        | **Behoben**: Unterabfrage auf die Besitzer eingegrenzt.                                                                                                                      |
+| Knapp-Kachel: Farbe der einzelnen Rolle neben dem Bestand des Materials                                 | **Behoben**: Warnsymbol immer in der Warnfarbe.                                                                                                                              |
+| Hinweis „sieht gleich aus“ ließ sich nicht ausblenden                                                   | **Behoben**: ausblendbar je Bereich; erscheint wieder, sobald eine neue Gruppe dazukommt.                                                                                    |
+| `compareForm` doppelte `tidyMaterialType`                                                               | **Behoben**.                                                                                                                                                                 |
+| Panel lädt je gewählter Rolle `product.byId`                                                            | **Belassen**: Die Rollen in anderen Lagern stehen nicht in `material.list`; eine eigene leichte Abfrage wäre eine zweite Wahrheit für den Bestand. Grundlast 600/min reicht. |
+| Herleitung von Art und Stärke doppelt (`findProductsInScope`, `product.byId`)                           | **Belassen**: zwei Zeilen über verschiedene Eingaben; eine Hilfsfunktion gewönne nichts.                                                                                     |

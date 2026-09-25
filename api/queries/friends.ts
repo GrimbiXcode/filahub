@@ -607,15 +607,19 @@ export async function findFriendMaterialsForSearch(
             .select({ id: materialProducts.id })
             .from(materialProducts)
             .where(
-              or(
-                ilike(materialProducts.name, pattern),
-                ilike(materialProducts.materialType, pattern),
-                ilike(materialProducts.manufacturer, pattern),
-                ilike(materialProducts.color, pattern),
-                // Wer „mattes PETG“ sucht, sucht nach der Oberfläche – sie
-                // ist ein eigenes Feld, seit sie nicht mehr in der
-                // Materialart steckt.
-                ilike(materialProducts.texture, pattern)
+              and(
+                // Nur die Materialien der Freunde, nicht die der ganzen Instanz
+                inArray(materialProducts.userId, [...names.keys()]),
+                or(
+                  ilike(materialProducts.name, pattern),
+                  ilike(materialProducts.materialType, pattern),
+                  ilike(materialProducts.manufacturer, pattern),
+                  ilike(materialProducts.color, pattern),
+                  // Wer „mattes PETG“ sucht, sucht nach der Oberfläche – sie
+                  // ist ein eigenes Feld, seit sie nicht mehr in der
+                  // Materialart steckt.
+                  ilike(materialProducts.texture, pattern)
+                )
               )
             )
         )

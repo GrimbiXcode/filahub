@@ -1469,7 +1469,29 @@ function MergeHint() {
   const scope = useActiveScope();
   const { data: products } = trpc.product.list.useQuery(scope);
   const groups = useMemo(() => mergeCandidates(products ?? []), [products]);
-  if (groups.length === 0) return null;
+  /*
+    Ausblendbar, weil zwei gleich aussehende Materialien Absicht sein können
+    (etwa zwei Chargen). Gemerkt wird, **welche** Gruppen ausgeblendet wurden:
+    Kommt eine neue hinzu, erscheint der Hinweis wieder.
+  */
+  const signature = groups.map(ids => ids.join(",")).join(";");
+  const storageKey = `merge-hint-dismissed:${scope.organizationId ?? "personal"}`;
+  const [dismissed, setDismissed] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(storageKey);
+    } catch {
+      return null;
+    }
+  });
+  const dismiss = () => {
+    setDismissed(signature);
+    try {
+      localStorage.setItem(storageKey, signature);
+    } catch {
+      /* Ohne Speicher gilt das Ausblenden für diese Seite. */
+    }
+  };
+  if (groups.length === 0 || dismissed === signature) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-xl border border-dashed px-4 py-3 text-sm">
       <Combine aria-hidden="true" className="size-4 text-muted-foreground" />
@@ -1478,6 +1500,9 @@ function MergeHint() {
       </span>
       <Button asChild size="sm" variant="outline">
         <Link to={materialPath(groups[0][0])}>{t.home.mergeHintAction}</Link>
+      </Button>
+      <Button size="sm" variant="ghost" onClick={dismiss}>
+        {t.home.mergeHintDismiss}
       </Button>
     </div>
   );

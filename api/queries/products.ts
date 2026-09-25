@@ -144,16 +144,50 @@ export async function updateProduct(
     );
 }
 
+/** Fehlerkennung: Das Material gibt es (im Bereich) nicht mehr. */
+export const PRODUCT_GONE = "PRODUCT_GONE";
+
+/**
+ * Sperrt die Zeile eines Materials bis zum Ende der Transaktion und sagt, ob
+ * es sie im Bereich gibt.
+ *
+ * **Die Klammer um die Regel „ein Material existiert nur mit Gebinde“ unter
+ * Gleichzeitigkeit.** Ohne sie konnte ein Gebinde für ein Material entstehen,
+ * dessen letztes Gebinde eine zweite Anfrage im selben Moment löschte: Das
+ * `NOT EXISTS` in `deleteProductIfEmpty` sieht ein noch nicht bestätigtes
+ * Gebinde nicht, und danach zeigte das neue Gebinde auf ein gelöschtes
+ * Material – Fremdschlüssel gibt es keine. Wer ein Gebinde an ein Material
+ * hängt, und wer ein Material leer löscht, nimmt deshalb zuerst diese Sperre;
+ * der Zweite wartet und sieht dann den Stand des Ersten.
+ */
+export async function lockProductInScope(
+  executor: Executor,
+  scope: Scope,
+  id: number
+): Promise<boolean> {
+  const rows = await executor
+    .select({ id: materialProducts.id })
+    .from(materialProducts)
+    .where(
+      and(eq(materialProducts.id, id), scopeWhere(materialProducts, scope))
+    )
+    .for("update");
+  return rows.length > 0;
+}
+
 /**
  * Löscht ein Material, wenn kein Gebinde mehr darauf zeigt – die Klammer um
  * die Regel „ein Material existiert nur mit Gebinde“. In derselben
- * Transaktion aufrufen wie den Schritt, der das letzte Gebinde nimmt.
+ * Transaktion aufrufen wie den Schritt, der das letzte Gebinde nimmt; die
+ * Sperre davor ordnet es gegen ein gleichzeitiges Anlegen (siehe
+ * `lockProductInScope`).
  */
 export async function deleteProductIfEmpty(
   executor: Executor,
   scope: Scope,
   id: number
 ) {
+  if (!(await lockProductInScope(executor, scope, id))) return;
   await executor
     .delete(materialProducts)
     .where(
@@ -207,6 +241,12 @@ export async function mergeProducts(
   targetId: number
 ): Promise<number> {
   return getDb().transaction(async tx => {
+    // Beide sperren, in fester Reihenfolge – sonst verklemmen sich zwei
+    // gegenläufige Zusammenführungen.
+    for (const id of [sourceId, targetId].sort((a, b) => a - b)) {
+      if (!(await lockProductInScope(tx, scope, id)))
+        throw new Error(PRODUCT_GONE);
+    }
     const moved = await tx
       .update(materials)
       .set({ productId: targetId })

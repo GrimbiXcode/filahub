@@ -357,6 +357,7 @@ export const de = {
         ? "Zwei Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam."
         : `${vars.count} Gruppen von Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam.`,
     mergeHintAction: "Ansehen",
+    mergeHintDismiss: "Ausblenden",
     shelfGroupingLabel: "Regal gruppieren",
     shelfGroupByBox: "Nach Drybox",
     shelfGroupByProduct: "Nach Material",

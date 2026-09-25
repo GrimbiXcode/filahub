@@ -40,6 +40,7 @@ import {
   findLatestWeighingId,
   findIdentifiersInScope,
   findMaterialInScope,
+  findMaterialRowInScope,
   findMaterialsInScope,
   findRecentWeighings,
   findWeighing,
@@ -55,6 +56,7 @@ import {
   lagerInScope,
 } from "./queries/lager";
 import {
+  PRODUCT_GONE,
   findMaterialTypesInScope,
   findProductLagerKinds,
   findProductRowInScope,
@@ -260,6 +262,17 @@ async function withIdentifierConflict<T>(
   try {
     return await run();
   } catch (error) {
+    /*
+      Das Material ist zwischen Prüfung und Schreiben verschwunden – eine
+      zweite Anfrage hat sein letztes Gebinde gelöscht oder es
+      zusammengeführt (`lockProductInScope`).
+    */
+    if (error instanceof Error && error.message === PRODUCT_GONE) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Das Material gibt es nicht mehr. Bitte die Seite neu laden.",
+      });
+    }
     if (error instanceof Error && error.message === IDENTIFIER_TAKEN) {
       throw new TRPCError({
         code: "CONFLICT",
@@ -437,7 +450,7 @@ export const materialRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, organizationId, productId, ...rest } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
-      const existing = await findMaterialInScope(scope, id);
+      const existing = await findMaterialRowInScope(scope, id);
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",

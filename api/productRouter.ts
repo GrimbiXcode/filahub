@@ -9,6 +9,7 @@ import { resolveScope, scopeInput } from "./scope";
 import { productFields } from "./materialRouter";
 import { findGebindeOfProduct } from "./queries/filament";
 import {
+  PRODUCT_GONE,
   findMaterialTypesInScope,
   findProductLagerKinds,
   findProductRowInScope,
@@ -144,10 +145,12 @@ export const productRouter = createRouter({
           message: "Material nicht gefunden",
         });
       }
-      const kinds = [
-        ...(await findProductLagerKinds(input.sourceId)),
-        ...(await findProductLagerKinds(input.targetId)),
-      ];
+      const kinds = (
+        await Promise.all([
+          findProductLagerKinds(input.sourceId),
+          findProductLagerKinds(input.targetId),
+        ])
+      ).flat();
       const distinct = new Set(
         kinds.map(k => `${k.kind}|${k.diameterUm ?? ""}`)
       );
@@ -158,7 +161,21 @@ export const productRouter = createRouter({
             "Die beiden Materialien liegen in Lagern mit verschiedener Materialart oder Filamentstärke und lassen sich nicht zusammenführen.",
         });
       }
-      const moved = await mergeProducts(scope, input.sourceId, input.targetId);
-      return { moved };
+      try {
+        const moved = await mergeProducts(
+          scope,
+          input.sourceId,
+          input.targetId
+        );
+        return { moved };
+      } catch (error) {
+        if (error instanceof Error && error.message === PRODUCT_GONE) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Material nicht gefunden",
+          });
+        }
+        throw error;
+      }
     }),
 });

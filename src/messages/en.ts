@@ -343,6 +343,7 @@ export const en: Messages = {
         ? "Two materials look like the same one. Merged, their stock counts together."
         : `${vars.count} groups of materials look like the same one. Merged, their stock counts together.`,
     mergeHintAction: "Take a look",
+    mergeHintDismiss: "Dismiss",
     shelfGroupingLabel: "Group the shelf",
     shelfGroupByBox: "By drybox",
     shelfGroupByProduct: "By material",

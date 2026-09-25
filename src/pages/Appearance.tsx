@@ -96,6 +96,7 @@ export default function Appearance() {
   const invalidate = () => {
     utils.appearance.list.invalidate();
     utils.material.list.invalidate();
+    utils.product.invalidate();
     utils.material.byId.invalidate();
   };
 
