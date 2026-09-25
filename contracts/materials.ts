@@ -435,6 +435,26 @@ export function secondaryAmount(input: {
   return { unit: "m", value: lengthMm / 1000 };
 }
 
+/**
+ * Füllstand in Prozent (0–100, gerundet), `null` ohne Nennmenge.
+ *
+ * Eigene Funktion, weil zwei Stellen dieselbe Rundung brauchen: der Füllstand
+ * eines Gebindes (`remainingAmount`) und die Vorgabe-Warnschwelle eines
+ * Materials (`productStock`). Nur mit derselben Rundung warnt ein Material mit
+ * genau einem Gebinde exakt so wie bis 3.1.0 das Gebinde selbst.
+ */
+export function fillPercent(
+  remainingWeight: number,
+  nominalWeight: number
+): number | null {
+  return nominalWeight > 0
+    ? Math.min(
+        100,
+        Math.max(0, Math.round((remainingWeight / nominalWeight) * 100))
+      )
+    : null;
+}
+
 /** Restmenge und Prozentwert, wie sie überall gerechnet werden. */
 export type RemainingAmount = {
   /** Gebindetara plus Drybox-Tara */
@@ -498,13 +518,7 @@ export function remainingAmount(input: {
     0,
     base - (input.consumedSinceWeighing ?? 0)
   );
-  const remainingPercent =
-    input.nominalWeight > 0
-      ? Math.min(
-          100,
-          Math.max(0, Math.round((remainingWeight / input.nominalWeight) * 100))
-        )
-      : null;
+  const remainingPercent = fillPercent(remainingWeight, input.nominalWeight);
   /*
     Ohne Materialart keine Zweitanzeige – und keine geratene. Das kann nur bei
     einem Material ohne Lager auftreten, also bei kaputtem Datenbestand.
@@ -753,4 +767,189 @@ export function consumptionTrend(input: {
     gramsPerWeek,
     weeksLeft: newest.remainingAfter / gramsPerWeek,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Material und Gebinde (seit 4.0.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Ab welchem Füllstand in Prozent ein Material als knapp gilt, wenn kein Lager
+ * eine eigene Schwelle in Gramm setzt (`lager.lowStockGrams`).
+ *
+ * Bis 3.1.0 galt der Wert je Gebinde und stand in
+ * `src/components/StockTiles.tsx`. Seit das Material die Gebinde bündelt, ist
+ * er die **Vorgabe** von `productStock` und steht deshalb hier.
+ */
+export const LOW_STOCK_PERCENT = 25;
+
+/** Höchstwert einer Warnschwelle in Gramm – 1 t ist kein Vorrat mehr, sondern ein Tippfehler. */
+export const MAX_LOW_STOCK_GRAMS = 1_000_000;
+
+/** Warnschwelle am Lager: ganze Gramm, `null` = Vorgabe */
+export const lowStockGramsSchema = z
+  .number()
+  .int()
+  .min(0, "Die Schwelle kann nicht negativ sein")
+  .max(MAX_LOW_STOCK_GRAMS, "Die Schwelle ist unplausibel hoch")
+  .nullable();
+
+/** Bestand eines Materials über alle seine Gebinde. */
+export type ProductStock = {
+  /** Summe der Restmengen aller Gebinde in Gramm, über alle Lager */
+  totalRemaining: number;
+  /** Anzahl der Gebinde */
+  count: number;
+  /**
+   * Die geltende Schwelle in Gramm – bei der Vorgabe nur zur Anzeige
+   * gerundet, entschieden wird dort über den Prozentwert. `null` ohne Gebinde.
+   */
+  threshold: number | null;
+  /** Woher die Schwelle kommt: ein Lager, die Vorgabe oder nichts */
+  thresholdSource: "lager" | "default" | null;
+  low: boolean;
+};
+
+/**
+ * Ob ein Material knapp ist – **die einzige Stelle, an der diese Regel steht.**
+ *
+ * - Bestand ist die Summe der Restmengen **aller** Gebinde, über alle Lager:
+ *   Wer die zweite Rolle im Keller hat, hat sie.
+ * - Setzt mindestens eines der Lager, in denen das Material liegt, eine
+ *   Schwelle in Gramm, gilt die **höchste**. Eine zu frühe Warnung kostet einen
+ *   Klick, eine zu späte einen abgebrochenen Druck.
+ * - Sonst gilt die Vorgabe: `LOW_STOCK_PERCENT` % der **größten** Nennmenge
+ *   unter den Gebinden, mit derselben Rundung wie der Füllstand
+ *   (`fillPercent`). Ein Material mit genau einem Gebinde warnt damit exakt
+ *   so wie bis 3.1.0 das Gebinde selbst; `api/productStock.test.ts` nagelt
+ *   diese Gleichheit fest.
+ *
+ * Der Füllstand je Gebinde (der Ring der Spule) bleibt davon unberührt – nur
+ * die **Warnung** rechnet je Material.
+ */
+export function productStock(
+  gebinde: readonly {
+    remainingWeight: number;
+    nominalWeight: number;
+    /** `lowStockGrams` des Lagers, in dem das Gebinde liegt */
+    lagerLowStockGrams: number | null | undefined;
+  }[]
+): ProductStock {
+  if (gebinde.length === 0) {
+    return {
+      totalRemaining: 0,
+      count: 0,
+      threshold: null,
+      thresholdSource: null,
+      low: false,
+    };
+  }
+  let totalRemaining = 0;
+  let maxNominal = 0;
+  let lagerThreshold: number | null = null;
+  for (const g of gebinde) {
+    totalRemaining += g.remainingWeight;
+    maxNominal = Math.max(maxNominal, g.nominalWeight);
+    if (g.lagerLowStockGrams != null) {
+      lagerThreshold = Math.max(lagerThreshold ?? 0, g.lagerLowStockGrams);
+    }
+  }
+  if (lagerThreshold != null) {
+    return {
+      totalRemaining,
+      count: gebinde.length,
+      threshold: lagerThreshold,
+      thresholdSource: "lager",
+      low: totalRemaining <= lagerThreshold,
+    };
+  }
+  const percent = fillPercent(totalRemaining, maxNominal);
+  return {
+    totalRemaining,
+    count: gebinde.length,
+    threshold: Math.round((maxNominal * LOW_STOCK_PERCENT) / 100),
+    thresholdSource: "default",
+    low: percent != null && percent <= LOW_STOCK_PERCENT,
+  };
+}
+
+/** Freitext zum Vergleichen: getrimmt, Leerraum zusammengefasst, klein. */
+function compareForm(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/**
+ * Die Merkmale, an denen zwei Materialien als **dasselbe Produkt** erkannt
+ * werden: Materialart und Stärke des Lagers, Materialart-Bezeichnung,
+ * Hersteller, Farbe, Oberfläche.
+ */
+export type ProductIdentity = {
+  kind: MaterialKind | null;
+  diameterUm: number | null;
+  materialType: string;
+  manufacturer: string | null;
+  color: string | null;
+  texture: string | null;
+};
+
+/**
+ * Vergleichsschlüssel eines Materials, oder `null`, wenn es zu vage ist.
+ *
+ * **Konservativ**: Ohne Hersteller **und** Farbe gibt es keinen Schlüssel –
+ * „PLA“ allein ist kein Produkt, und zwei fälschlich zusammengelegte Rollen
+ * sind schlimmer als zwei getrennte, weil die Warnung dann zu spät kommt.
+ *
+ * Dieselbe Regel steht als SQL in der Migration
+ * `0022_material_products.sql` (Stand 4.0.0); der Import (`importMany`) und
+ * die Vorschläge zum Zusammenführen (`mergeCandidates`) rufen diese Fassung.
+ */
+export function productKey(identity: ProductIdentity): string | null {
+  const manufacturer = compareForm(identity.manufacturer);
+  const color = compareForm(identity.color);
+  if (!manufacturer || !color || identity.kind == null) return null;
+  return [
+    identity.kind,
+    identity.diameterUm ?? "",
+    normalizeMaterialType(identity.materialType),
+    manufacturer,
+    color,
+    compareForm(identity.texture),
+  ].join("\u001f");
+}
+
+/**
+ * Materialien, die wie dasselbe Produkt aussehen – Vorschläge zum
+ * Zusammenführen, **nie** automatisch.
+ *
+ * Gleich ist, was denselben `productKey` hat; zusätzlich, bei leerem
+ * Hersteller oder leerer Farbe, derselbe Name bei gleicher Materialart,
+ * Stärke und Bezeichnung. Den zweiten Fall legt die Migration bewusst nicht
+ * zusammen, aber als Frage an den Menschen ist er gut.
+ *
+ * Liefert Gruppen mit mindestens zwei IDs, die älteste (kleinste ID) zuerst.
+ */
+export function mergeCandidates(
+  products: readonly (ProductIdentity & { id: number; name: string })[]
+): number[][] {
+  const groups = new Map<string, number[]>();
+  for (const p of products) {
+    const key =
+      productKey(p) ??
+      (p.kind != null && compareForm(p.name)
+        ? [
+            "name",
+            p.kind,
+            p.diameterUm ?? "",
+            normalizeMaterialType(p.materialType),
+            compareForm(p.name),
+          ].join("\u001f")
+        : null);
+    if (key == null) continue;
+    const list = groups.get(key);
+    if (list) list.push(p.id);
+    else groups.set(key, [p.id]);
+  }
+  return [...groups.values()]
+    .filter(ids => ids.length > 1)
+    .map(ids => [...ids].sort((a, b) => a - b));
 }
