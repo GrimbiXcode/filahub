@@ -1,7 +1,40 @@
 # Plan: Material und Gebinde, Druckeinstellungen, Druckhistorie
 
-Stand: 3.1.0. Die Grundsatzfragen sind entschieden (siehe
-„Entscheidungen“ am Ende). Umgesetzt ist noch nichts.
+Stand: 4.0.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
+Ende). **Phase 1 ist umgesetzt** (Version 4.0.0); die Abweichungen vom Entwurf
+stehen unter „Stand der Umsetzung“. Phasen 2–4 sind offen.
+
+## Stand der Umsetzung
+
+Phase 1 ist mit 4.0.0 umgesetzt. Abweichungen vom Entwurf weiter unten, jeweils
+mit Grund:
+
+- **Route des Gebindes:** `/materialien/gebinde/:id` statt `/gebinde/:id` –
+  unter `/gebinde` liegen seit 2.2.0 die Gebindearten, und `/gebinde/42` sähe
+  aus wie die Gebindeart 42. Die Pfade stehen in `src/const.ts`
+  (`materialPath`, `gebindePath`), nicht in `contracts/constants.ts`: Nur der
+  Client braucht sie.
+- **Ein Material existiert nur mit Gebinde.** Daraus folgt: kein
+  `product.create` und kein `product.delete` (ein Material entsteht mit dem
+  ersten Gebinde und verschwindet mit dem letzten) und keine eigene
+  `MAX_PRODUCTS_PER_SCOPE` – die Grenze der Gebinde begrenzt die Materialien
+  mit. Materialart und Stärke eines Materials sind damit immer bekannt.
+- **`archivedAt` ist verschoben** – an den Anfang von Phase 2. Erst die
+  Druckeinstellungen und die Druckhistorie hängen etwas am Material bzw.
+  Gebinde, das ein Löschen des letzten Gebindes nicht verlieren darf. Bis
+  dahin ist Löschen dasselbe wie bis 3.1.0.
+- **Die Lesesicht flacht auf.** `material.list` und `material.byId` liefern die
+  Felder des Materials weiter an der Gebindezeile, und `material.create` /
+  `material.update` nehmen sie flach statt als `product`-Objekt. Dadurch
+  blieben Suche, Filter, Freundesansicht und die meisten Tests unverändert.
+- **Der Bestand kommt vom Server mit** (`stock` je Gebindezeile), nicht aus
+  dem Browser: Die Übersicht lädt nur das gewählte Lager, der Bestand muss
+  aber die Gebinde in anderen Lagern mitzählen.
+- **Lager wechselt Art oder Stärke** nur, solange keines seiner Materialien auch
+  in einem anderen Lager liegt – die Gegenrichtung der Konsistenzregel, im
+  Entwurf nicht bedacht.
+
+Die Einzelheiten stehen in `AGENTS.md` unter „Material und Gebinde“.
 
 ## Ziel
 
@@ -84,7 +117,8 @@ Gebindeart/Preset, Drybox, `notes`, Wägungen, Verbräuche.
 Neu am Gebinde: `archivedAt` (nullable) – „aufgebraucht“. Mit Druckhistorie will
 man eine leere Rolle nicht mehr löschen, weil Drucke auf sie verweisen;
 archivierte Gebinde fallen aus Regal und Summen, bleiben aber in Historie und
-Suche.
+Suche. _(Umgesetzt wird das am Anfang von Phase 2, siehe „Stand der
+Umsetzung“.)_
 
 Neu am Lager: `lowStockGrams` (nullable) – die Warnschwelle, siehe
 „Warnung je Material“.
@@ -185,7 +219,8 @@ periodischer Lauf aussieht.
   Backfill finden oder anlegen. Die JSON-Schlüssel in `contracts/import.ts`
   bleiben deutsch und flach; die Aufteilung ist Sache des Servers.
 - `lager.update` nimmt `lowStockGrams` (≥ 0, ganze Gramm, `null` = Vorgabe).
-- Mengenobergrenze `MAX_PRODUCTS_PER_SCOPE` nach dem Muster in AGENTS.md.
+- ~~Mengenobergrenze `MAX_PRODUCTS_PER_SCOPE`~~ – entfällt, siehe „Stand der
+  Umsetzung“.
 
 ### Oberfläche
 
@@ -229,6 +264,12 @@ periodischer Lauf aussieht.
 ---
 
 ## Phase 2 – Druckeinstellungen am Material (Wunsch 3)
+
+**Zuerst `archivedAt` am Gebinde** (aus Phase 1 verschoben): Sobald am Material
+Druckeinstellungen hängen, darf das Löschen der letzten, leeren Rolle sie nicht
+mitnehmen. „Aufgebraucht“ statt „löschen“ hält das Material am Leben; ein
+Material ohne aktive Gebinde erscheint dann nicht im Regal, aber auf seiner
+Seite und in der Materialwahl des Formulars.
 
 Mit dem Material als Produkt ist „hersteller- und materialtypspezifisch“ kein
 Scope-Problem mehr, sondern genau die Ebene, an der die Einstellungen hängen.

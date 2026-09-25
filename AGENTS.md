@@ -7,7 +7,9 @@ Leergewicht (Tara), Wägungen und Verbräuche mit automatischer
 Restmengenberechnung,
 Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
-anfragen. Seit 2.5.0 kann ein Lager statt einer Person auch einer
+anfragen. Seit 4.0.0 bündelt ein **Material** (das Produkt) seine **Gebinde**
+(die einzelnen Rollen, Flaschen, Beutel) – Bestand und Warnung zählen je
+Material über alle Lager. Seit 2.5.0 kann ein Lager statt einer Person auch einer
 **Organisation** gehören – gemeinsamer Bestand mehrerer Personen mit vier
 Stufen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
 Benutzer).
@@ -26,7 +28,8 @@ Benutzer).
 
 ```
 src/            React-Frontend
-  pages/        Routen: Home, MaterialDetail, Lager, ContainerTypes, StorageBoxes,
+  pages/        Routen: Home, MaterialDetail (ein Gebinde), ProductDetail (ein
+                Material mit allen Gebinden), Lager, ContainerTypes, StorageBoxes,
                 Appearance (eigene Farben und Oberflächen),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
@@ -41,7 +44,8 @@ src/            React-Frontend
                 (Kacheln), MaterialShelf (Regal, Spulenkarten), MaterialPanel
                 (Detail neben dem Regal), Spool (Spule: Ring = Füllstand, Kern =
                 Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
-                (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch)
+                (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
+                ProductGebindeList (die Gebinde eines Materials samt Bestand)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -56,7 +60,7 @@ src/            React-Frontend
                 quickActions.ts (Store der Schnellaktionen),
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
-                shelf.ts (Regal: Gruppierung nach Drybox),
+                shelf.ts (Regal: Gruppierung nach Drybox oder Material),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, utils.ts (cn-Helfer)
@@ -66,8 +70,9 @@ src/            React-Frontend
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
-  router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
-                appearance, friend, organization, preset, admin, legal, unblock
+  router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
+                (die Gebinde), product (die Materialien), appearance, friend,
+                organization, preset, admin, legal, unblock
                 (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
@@ -82,6 +87,8 @@ api/            Hono/tRPC-Backend
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
+                products.ts (Materialien: Liste, Zusammenführen, Aufräumen
+                ohne Gebinde),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -183,8 +190,9 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   Kopie am Material wäre eine zweite Wahrheit; wer sie braucht, liest sie über
   `lagerId` – die Materialabfragen laden das Lager ohnehin mit. Folge: Ein
   Lagerwechsel verändert die Zweitanzeige eines Materials, und das ist richtig
-  so. Deshalb gibt es in `validateForeignKeys` auch **keine** Konsistenzregel
-  zwischen Material und Lager – es kann nichts auseinanderlaufen.
+  so. Seit 4.0.0 gibt es genau **eine** Konsistenzregel zwischen Gebinde und
+  Lager: Alle Gebinde eines Materials liegen in Lagern gleicher Art und Stärke
+  (siehe „Material und Gebinde“).
 - **`filamentDiameterUm` in Mikrometern** (1750/2850), nicht in Millimetern:
   1,75 mm ist als Integer-Millimeter nicht darstellbar, und ein Gleitkommawert
   für eine Größe, die in die Längenrechnung eingeht, wäre die schlechtere Wahl.
@@ -207,13 +215,13 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   („PLA Silk" trifft „PLA"), sonst nach Materialart. Die Priorität steht an
   genau einer Stelle: `resolveDensity`. Bei Pulver gibt es bewusst keinen Wert –
   Schüttdichte wäre geraten, und eine falsche Zahl ist schlimmer als keine.
-- **`materials.texture`** ist Freitext mit Vorschlagsliste (`COMMON_TEXTURES`),
+- **`material_products.texture`** (bis 3.1.0 `materials.texture`) ist Freitext mit Vorschlagsliste (`COMMON_TEXTURES`),
   kein Enum – aus demselben Grund wie `materialType`. Bis 2.1.0 wurde die
   Oberfläche in `materialType` geschmuggelt („PLA Silk"), was den
   Materialart-Filter zersplitterte: Er vergleicht exakt, also fanden sich „PLA"
   und „PLA Silk" gegenseitig nie.
 - **Die Materialart-Bezeichnung ist case-insensitiv** (seit 2.9.1, #36).
-  `materials.materialType` bleibt Freitext, aber „Pla“ und „PLA“ sind
+  `material_products.materialType` bleibt Freitext, aber „Pla“ und „PLA“ sind
   **dieselbe** Materialart: Verglichen wird über die Vergleichsform
   `normalizeMaterialType` (Leerraum bereinigt, Großbuchstaben), gespeichert
   wird die Schreibweise, die `canonicalMaterialType` liefert – die aus
@@ -256,6 +264,100 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
+
+## Material und Gebinde
+
+Seit 4.0.0. Bis 3.1.0 war eine Zeile in `materials` zugleich das Produkt
+(„Polymaker PolyTerra PLA, Charcoal Black“) und das Stück im Lager. Zwei Rollen
+desselben Materials wussten nichts voneinander, und die Warnung „knapp“
+meldete die fast leere Rolle, obwohl die volle daneben lag. Der Plan dazu steht
+in `docs/plan-material-gebinde-druckhistorie.md`.
+
+**Achtung, Namen – Oberfläche und Code laufen gegeneinander:**
+
+| Oberfläche DE / EN                        | Tabelle             | Router       | Typ               |
+| ----------------------------------------- | ------------------- | ------------ | ----------------- |
+| **Material** / material (das Produkt)     | `material_products` | `product.*`  | `MaterialProduct` |
+| **Gebinde**, **Rolle** / container, spool | `materials`         | `material.*` | `Material`        |
+
+`materials` wurde nicht umbenannt: Das hätte eine Handmigration über alle
+Indizes und Constraints gekostet (siehe unten „Umbenennungen“), ohne dass ein
+Benutzer etwas davon hat. Wo die Oberfläche eine Gebindeform kennt, sagt sie
+„Rolle“ (Filament), sonst „Gebinde“; ein Harzlager spricht nicht von Rollen.
+
+- **Was wo steht.** Name, Materialart, Hersteller, Farbe, Oberfläche, Dichte
+  und Notizen des Materials stehen **nur** am Material. Am Gebinde bleiben
+  Lager, Kennung, Preis, Kaufdatum, Nennmenge (1-kg-Rolle und 250-g-Probe
+  desselben Materials gibt es), Gebindeart, Drybox, eigene Notizen, Wägungen
+  und Verbräuche. Keine Kopie am Gebinde – eine zweite Wahrheit liefe
+  auseinander.
+- **Die Lesesicht flacht auf.** `computeMaterialStats` reicht die Felder des
+  Materials an der Gebindezeile weiter (`MaterialOverview.name` usw.), damit
+  Suche, Filter, Farbfeld, Kennungssuche und Freundesansicht ihre Form
+  behalten. Geschrieben wird immer das Material.
+- **Ein Material existiert nur, solange es ein Gebinde hat.** Wer das letzte
+  Gebinde löscht, einem anderen Material zuordnet oder das Material
+  zusammenführt, löscht es in derselben Transaktion mit
+  (`deleteProductIfEmpty` in `api/queries/products.ts`). Deshalb gibt es kein
+  `product.create`: Ein Material entsteht mit seinem ersten Gebinde
+  (`material.create` ohne `productId`). Und deshalb braucht es keine eigene
+  Mengenobergrenze – die der Gebinde begrenzt die Materialien mit.
+- **Anlegen und Ändern nehmen die Materialfelder flach.** `material.create`
+  nimmt **entweder** `productId` (weiteres Gebinde) **oder** die Felder eines
+  neuen Materials; beides zugleich ist `BAD_REQUEST`. `material.update` ändert
+  mit mitgeschickten Materialfeldern das Material – und damit **alle** seine
+  Gebinde –, mit `productId` ordnet es das Gebinde um; beides zugleich ist
+  ebenfalls `BAD_REQUEST`.
+- **Eine Konsistenzregel mit dem Lager.** Alle Gebinde eines Materials liegen in
+  Lagern gleicher Materialart und Filamentstärke – eine 2,85-mm-Rolle ist ein
+  anderes Produkt. Geprüft in `assertProductFitsLager` (`api/materialRouter.ts`)
+  gegen die **übrigen** Gebinde (das letzte darf überallhin), beim
+  Zusammenführen in `product.merge`, und von der Gegenseite in `lager.update`:
+  Ein Lager wechselt Art oder Stärke nur, solange keines seiner Materialien auch
+  woanders liegt (`countProductsAlsoElsewhere`).
+- **Knapp ist das Material, nicht die Rolle.** `productStock`
+  (`contracts/materials.ts`) summiert die Restmengen aller Gebinde über alle
+  Lager. Setzt eines der beteiligten Lager eine Schwelle in Gramm
+  (`lager.lowStockGrams`), gilt die **höchste**; sonst `LOW_STOCK_PERCENT` der
+  größten Nennmenge, mit derselben Rundung wie der Füllstand (`fillPercent`).
+  So warnt ein Material mit einem Gebinde exakt wie bis 3.1.0 –
+  `api/productStock.test.ts` prüft das über alle Grammwerte mehrerer
+  Nennmengen. Der Ring der Spule bleibt der Füllstand des Gebindes.
+- **Der Bestand kommt vom Server mit.** `material.list` hängt jeder Zeile
+  `stock` an. Mit `lagerId` lädt `findMaterialsInScope` dafür eine zweite
+  Runde: die Gebinde **derselben Materialien in anderen Lagern** – sonst
+  warnte die Übersicht eines Lagers, obwohl die volle Rolle im anderen liegt.
+- **Zusammenführen legt nie automatisch zusammen**, außer einmal im Backfill.
+  `productKey` (Materialart und Stärke des Lagers, Materialart-Bezeichnung,
+  Hersteller, Farbe, Oberfläche; nur mit Hersteller **und** Farbe) ist die
+  Vergleichsform für den Import und für `mergeCandidates`, die Vorschläge auf
+  Übersicht und Material-Seite. Zusätzlich schlägt `mergeCandidates` bei
+  fehlendem Hersteller gleiche Namen vor – nur als Frage an den Menschen.
+- **Die Migration `0022_material_products.sql` ist von Hand ergänzt.**
+  drizzle-kit erzeugt `ADD COLUMN … NOT NULL` und `DROP COLUMN`, aber keinen
+  Backfill. Sie legt je `productKey` ein Material an (Angaben vom ältesten
+  Gebinde), alles andere 1:1, und löscht die alten Spalten zuletzt. Weil sie
+  die Spalten löscht, aus denen sie liest, lässt sie sich nicht auf den
+  fertigen Stand ein zweites Mal anwenden; `api/materialProducts.integration.test.ts`
+  baut die Datenbank deshalb nur bis 0021 auf (`migrateUntil` in
+  `api/test/integration-db.ts`), legt Altbestand an und wendet 0022 an. Die
+  Tests der Migration `0019` laufen seither ebenso gegen den Stand vor 0019.
+- **Freunde** sehen dieselben Felder wie vorher; `FRIEND_MATERIAL_WITH` lädt sie
+  über das Material, und nur diese Spalten samt Dichte – `notes` des Materials
+  bleibt ungeladen. Die Suche läuft über eine Unterabfrage auf
+  `material_products`. Achtung beim Sortieren: Drizzles relationale Abfrage
+  schreibt jede Spaltenreferenz im `orderBy` auf den Alias der Haupttabelle
+  um, die Unterabfrage für den Namen nennt Tabelle und Spalte deshalb wörtlich.
+- **Oberfläche.** Die Seite eines Gebindes liegt unter
+  `/materialien/gebinde/:id` (`gebindePath`), die eines Materials unter
+  `/materialien/:id` (`materialPath`); `/material/:id` leitet um. Nicht unter
+  `/gebinde/`: Dort stehen seit 2.2.0 die Gebindearten.
+- **Export Version 5**: neuer Abschnitt `materialProducts`, und `materials`
+  verliert Felder – zum ersten Mal ändert sich die Form bestehender Zeilen.
+- **Registriert** ist `material_products` in `COUNTED_TABLES`, der
+  Tabellenliste in `api/postgres.integration.test.ts` und im Export; der
+  DSGVO-Wächter findet `userId` selbst. Gelöscht wird in beiden Kaskaden
+  (Konto, Organisation) **nach** den Gebinden.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -372,7 +474,7 @@ Seit 2.7.0 zeigt die Übersicht Farbe und Oberfläche nicht nur als Text, sonder
 als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
 (`src/components/AppearanceSwatch.tsx`, Spalte `appearance`).
 
-- **`materials.color` und `materials.texture` bleiben Freitext.** Es gibt keinen
+- **`material_products.color` und `.texture` bleiben Freitext** (bis 3.1.0 am Gebinde, in `materials`). Es gibt keinen
   Fremdschlüssel auf einen Katalog; die Auflösung Name → Farbcode passiert beim
   Anzeigen über die Vergleichsform (`normalizeAppearanceName`). Der Preis: Ein
   umbenannter Katalogeintrag zieht nichts nach. Der Gewinn: Ein gelöschter
@@ -483,8 +585,8 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   Freitext und kann einen Ort verraten – dieselbe Erwägung, die die Drybox
   ausschließt.
 - **`FriendMaterial` ist handgeschrieben**, nicht aus dem Schema abgeleitet, und
-  `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
-  eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
+  `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials`
+  oder `material_products` um eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
   nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
   `notes`, `purchaseDate`, alles zur Drybox, der Wägungs- und
   Verbrauchsverlauf, `lagerId` und
@@ -657,7 +759,7 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   Nach einer Umbenennung ist nichts nachzuziehen.
 - **Materialarten** (`preset_series_material_types`) und **Gebindeform**
   (`preset_container_versions.form`) sind weiche Sortierhinweise, **kein
-  Filter**: `materials.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),
+  Filter**: `material_products.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),
   und die Form ist eine Angabe des Benutzers. Hartes Filtern würde ein Gebinde
   verstecken, das jemand bewusst so angelegt hat.
 
@@ -1026,7 +1128,7 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`,
+  `identifierTemplate`, `productStock`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1056,7 +1158,8 @@ Datenbank.
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
   `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
-  `api/abuse.integration.test.ts` und `api/materialType.integration.test.ts`,
+  `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts` und
+  `api/materialProducts.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

@@ -179,7 +179,9 @@ Both of the awkward ones are built in and need no work from you:
 
 - **Access and portability** — users export everything under Settings → "Data
   and account". The format is JSON, machine-readable as Art. 20 requires, and
-  carries a `formatVersion` (4 since 2.4.1, when the sharing a user _received_
+  carries a `formatVersion` (5 since 4.0.0, when name, type, manufacturer,
+  colour, finish and density moved from each container in `materials` to the
+  new `materialProducts` section; 4 since 2.4.1, when the sharing a user _received_
   was compressed to one level per owner; 3 since 2.4.0, when the sharing levels
   moved out of the friendship rows into their own `lagerShares` section; 2 since
   2.3.0, when two section names changed). Note it is **not** the format the

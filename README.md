@@ -327,8 +327,9 @@ a generous baseline; creating material, weighing, logging consumption,
 importing, searching and
 sending catalogue suggestions carry tighter ones.
 
-**Upper bounds** (`contracts/limits.ts`). Per store: 1000 materials. Per
-material: 1000 weigh-ins and 1000 consumptions. Per scope (personal or
+**Upper bounds** (`contracts/limits.ts`). Per store: 1000 containers (spools,
+bottles …; a material exists only with at least one, so this bounds materials
+too). Per container: 1000 weigh-ins and 1000 consumptions. Per scope (personal or
 organization): 200 own colours,
 100 own finishes, 100 own container types, 100 dryboxes. Per account: 20 open
 catalogue suggestions and 50 per day. None of these is enforced by the database —
