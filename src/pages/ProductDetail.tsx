@@ -449,7 +449,7 @@ function ProductFormDialog({
 
   const update = trpc.product.update.useMutation({
     onSuccess: () => {
-      toast.success(t.materialForm.saved);
+      toast.success(t.product.saved);
       utils.product.invalidate();
       utils.material.list.invalidate();
       utils.material.byId.invalidate();

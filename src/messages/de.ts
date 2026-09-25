@@ -80,7 +80,7 @@ export const de = {
     settings: "Einstellungen",
     material: "Material",
     weigh: "Wiegen",
-    weighMaterial: "Material wiegen",
+    weighMaterial: "Gebinde wiegen",
     consume: "Verbrauch",
     consumeMaterial: "Verbrauch abbuchen",
     searchWithShortcut: (vars: { shortcut: string }) =>
@@ -147,21 +147,21 @@ export const de = {
   },
 
   quick: {
-    weighTitle: "Material wiegen",
-    weighDescription: "Material auswählen, das gewogen werden soll",
+    weighTitle: "Gebinde wiegen",
+    weighDescription: "Gebinde auswählen, das gewogen werden soll",
     consumeTitle: "Verbrauch abbuchen",
-    consumeDescription: "Material auswählen, von dem abgebucht werden soll",
+    consumeDescription: "Gebinde auswählen, von dem abgebucht werden soll",
     searchTitle: "Schnellsuche",
     searchDescription:
       "Materialien finden, Seiten öffnen und Aktionen ausführen",
-    weighPlaceholder: "Kennung oder Bezeichnung des Materials …",
-    consumePlaceholder: "Kennung oder Bezeichnung des Materials …",
+    weighPlaceholder: "Kennung oder Name des Materials …",
+    consumePlaceholder: "Kennung oder Name des Materials …",
     searchPlaceholder: "Suchen: Kennung, Material, Seite oder Aktion …",
-    groupWeigh: "Material zum Wiegen",
-    groupConsume: "Material zum Abbuchen",
+    groupWeigh: "Gebinde zum Wiegen",
+    groupConsume: "Gebinde zum Abbuchen",
     groupActions: "Aktionen",
     groupJumpTo: "Springe zu",
-    groupMaterials: "Materialien",
+    groupMaterials: "Gebinde",
     newMaterial: "Neues Material anlegen",
     remaining: (vars: { amount: string }) => `${vars.amount} übrig`,
     /** Suchbegriffe, unter denen ein Eintrag gefunden werden soll */
@@ -215,7 +215,7 @@ export const de = {
       "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
     dataAndAccount: "Daten und Konto",
     exportHint:
-      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
+      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Gebinde, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
     exportAction: "Daten herunterladen",
     exportPending: "Wird zusammengestellt …",
     exportDone: "Export heruntergeladen",
@@ -279,7 +279,7 @@ export const de = {
     lookupPlaceholder: "Kennung eingeben, z. B. F01",
     lookupAria: "Kennung für Schnellzugriff",
     lookupNotFound: (vars: { query: string }) =>
-      `Kein Material zu „${vars.query}“ gefunden`,
+      `Kein Gebinde zu „${vars.query}“ gefunden`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Mehrere Treffer für „${vars.query}“ – bitte die genaue Kennung eingeben`,
     statMaterials: "Materialien",
@@ -291,7 +291,7 @@ export const de = {
     statValue: "Restwert",
     statValueHint: "anteilig nach Restmenge",
     statInBox: "In Drybox",
-    statInBoxHint: "Materialien mit Drybox",
+    statInBoxHint: "Gebinde mit Drybox",
     searchAria: "Materialien durchsuchen",
     clearSearch: "Suche leeren",
     filters: "Filter",
@@ -327,7 +327,7 @@ export const de = {
     emptyFilteredHint: "Passe Suche oder Filter an.",
     emptyAction: "Erstes Material anlegen",
     countOf: (vars: { shown: number; total: number }) =>
-      `${vars.shown} von ${vars.total} Materialien`,
+      `${vars.shown} von ${vars.total} Gebinden`,
     colIdentifier: "Kennung",
     colAppearance: "Optik",
     colMaterial: "Material",
@@ -349,8 +349,8 @@ export const de = {
     listView: "Liste",
     viewLabel: "Ansicht",
     summary: (vars: { count: number; remaining: string; low: number }) =>
-      `${vars.count} Materialien · ${vars.remaining} übrig · ${vars.low} knapp`,
-    groupCount: (vars: { count: number }) => `${vars.count} Materialien`,
+      `${vars.count} Gebinde · ${vars.remaining} übrig · ${vars.low} knapp`,
+    groupCount: (vars: { count: number }) => `${vars.count} Gebinde`,
     groupTare: (vars: { amount: string }) => `Tara ${vars.amount}`,
     mergeHint: (vars: { count: number }) =>
       vars.count === 1
@@ -368,7 +368,7 @@ export const de = {
     tileValueTitle: "Restwert",
     tileInBoxTitle: "In Drybox",
     moreMaterials: (vars: { count: number }) => `+ ${vars.count} weitere`,
-    noSelection: "Ein Material im Regal antippen, um es hier zu sehen.",
+    noSelection: "Eine Rolle im Regal antippen, um sie hier zu sehen.",
     details: "Details",
     weighNamed: (vars: { name: string }) => `${vars.name} wiegen`,
     selectNamed: (vars: { name: string }) => `${vars.name} auswählen`,
@@ -391,6 +391,7 @@ export const de = {
       vars.count === 1
         ? "1 Gebinde von diesem Material"
         : `${vars.count} Gebinde von diesem Material`,
+    saved: "Material gespeichert",
     toMaterial: "Zum Material",
     thisOne: "dieses",
     stockOk: "Bestand, ausreichend",
@@ -466,11 +467,11 @@ export const de = {
     trendFlat: "Tendenz: kein Verbrauch im Zeitraum",
     purchasedOn: (vars: { date: string }) => `gekauft ${vars.date}`,
     fullHistory: "Ganzer Verlauf",
-    deleteMaterial: "Material löschen",
-    deleteMaterialTitle: "Material löschen?",
+    deleteMaterial: "Gebinde löschen",
+    deleteMaterialTitle: "Gebinde löschen?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `„${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht.`,
-    materialDeleted: "Material gelöscht",
+      `Dieses Gebinde von „${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht. War es das letzte Gebinde des Materials, verschwindet auch das Material.`,
+    materialDeleted: "Gebinde gelöscht",
     deleteWeighing: "Wägung löschen",
     deleteWeighingTitle: "Wägung löschen?",
     deleteWeighingDescription:
@@ -491,10 +492,10 @@ export const de = {
     firstBox: "Erste Drybox anlegen",
     emptyTitle: "Noch keine Dryboxen angelegt",
     emptyDescription:
-      "Wiege deine leere Drybox, trage das Leergewicht ein und weise sie einem Material zu – die App rechnet die Box-Tara automatisch heraus.",
+      "Wiege deine leere Drybox, trage das Leergewicht ein und weise sie einem Gebinde zu – die App rechnet die Box-Tara automatisch heraus.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} Tara`,
     assigned: (vars: { count: number }) =>
-      vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
     free: "frei",
     location: "Standort",
     occupancy: "Belegung",
@@ -502,7 +503,7 @@ export const de = {
     deleteBox: "Drybox löschen",
     deleteTitle: "Drybox löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Sie darf aktuell keinem Material zugewiesen sein.`,
+      `„${vars.name}“ wird gelöscht. Sie darf aktuell keinem Gebinde zugewiesen sein.`,
     namePlaceholder: "z. B. Drybox 1",
     locationPlaceholder: "z. B. Regal links, Werkstatt",
     tareLabel: "Leergewicht (g) *",
@@ -531,7 +532,7 @@ export const de = {
     editType: "Gebindeart bearbeiten",
     deleteTitle: "Gebindeart löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Materialien, die diese Gebindeart verwenden, müssen vorher umgehängt werden.`,
+      `„${vars.name}“ wird gelöscht. Gebinde dieser Art müssen vorher umgehängt werden.`,
     dialogDescription:
       "Name, Form und Leergewicht des leeren Gebindes. Das Leergewicht wird bei jeder Wägung abgezogen.",
     formLabel: "Form *",
@@ -616,11 +617,11 @@ export const de = {
 
   materialForm: {
     createTitle: "Neues Material",
-    editTitle: "Material bearbeiten",
+    editTitle: "Gebinde bearbeiten",
     createDescription:
       "Lege ein neues Material an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen.",
     editDescription:
-      "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet.",
+      "Angaben zu diesem Gebinde und seinem Material anpassen. Die Restmenge wird aus den Wägungen berechnet.",
     materialTypeLabel: "Materialart *",
     materialTypePlaceholder: "z. B. PLA, PETG, ABS",
     manufacturerPlaceholder: "z. B. Prusament, eSun",
@@ -674,7 +675,8 @@ export const de = {
       })`,
     notesPlaceholder: "Drucktemperatur, Besonderheiten …",
     created: "Material angelegt",
-    saved: "Material gespeichert",
+    gebindeCreated: "Gebinde angelegt",
+    saved: "Gebinde gespeichert",
     nameRequired:
       "Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)",
     typeRequired: "Bitte eine Materialart angeben",
@@ -770,7 +772,7 @@ export const de = {
       "Das ist kein gültiges JSON. Bitte die Ausgabe des LLM prüfen.",
     step3: "3. Prüfen und importieren",
     step3Description:
-      "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl wird ein eigenes Material angelegt.",
+      "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl entsteht ein Gebinde; die Gebinde einer Position gehören zu einem Material.",
     targetLagerLabel: "Ziel-Lager",
     identifiersFromTemplate: (vars: { template: string; range: string }) =>
       `Kennungen nach der Vorlage „${vars.template}“: ${vars.range}`,
@@ -790,7 +792,7 @@ export const de = {
     countLabel: "Anzahl",
     importing: "Importiere …",
     importCount: (vars: { count: number }) =>
-      `${vars.count} Materialien importieren`,
+      `${vars.count} Gebinde importieren`,
     fixErrors: "Bitte zuerst die markierten Fehler beheben.",
     errTypeMissing: "Typ fehlt",
     errNominal: "Nenngewicht ungültig",
@@ -874,7 +876,7 @@ export const de = {
     deleted: "Eintrag gelöscht",
     deleteTitle: "Eintrag löschen?",
     deleteDescription: (vars: { label: string }) =>
-      `„${vars.label}“ wird endgültig entfernt. Einträge mit Untereinträgen oder mit Materialien, die sie verwenden, lassen sich nicht löschen – deaktiviere sie in dem Fall stattdessen.`,
+      `„${vars.label}“ wird endgültig entfernt. Einträge mit Untereinträgen oder mit Gebinden, die sie verwenden, lassen sich nicht löschen – deaktiviere sie in dem Fall stattdessen.`,
   },
 
   adminProposals: {
@@ -1046,7 +1048,7 @@ export const de = {
   },
 
   weighing: {
-    title: "Material wiegen",
+    title: "Gebinde wiegen",
     description: (vars: { name: string; withBox: boolean }) =>
       `Wiege „${vars.name}“ komplett – inklusive Gebinde${
         vars.withBox ? " und Drybox" : ""
@@ -1179,7 +1181,7 @@ export const de = {
     identifierTemplateLabel: "Kennungsvorlage (optional)",
     identifierTemplatePlaceholder: "z. B. ID: {n} oder F{nn}",
     identifierTemplateHint:
-      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Materialien bekommen die Kennung vorab eingetragen.",
+      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Gebinde bekommen die Kennung vorab eingetragen.",
     identifierTemplateExample: (vars: { first: string; second: string }) =>
       `Wird zu ${vars.first}, ${vars.second} …`,
     identifierTemplateInvalid: "Genau einen Platzhalter {n} verwenden",
@@ -1195,13 +1197,13 @@ export const de = {
     deleteLager: "Lager löschen",
     deleteTitle: "Lager löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Es darf kein Material mehr enthalten.`,
+      `„${vars.name}“ wird gelöscht. Es darf kein Gebinde mehr enthalten.`,
     created: "Lager angelegt",
     saved: "Lager gespeichert",
     deleted: "Lager gelöscht",
 
     materialCount: (vars: { count: number }) =>
-      vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
     /*
       Nur die Anzahl, kein Name: Wer wem etwas freigibt, steht auf der
       Freundesseite. Hier zählt die Frage „geht dieses Lager überhaupt

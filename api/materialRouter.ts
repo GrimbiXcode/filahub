@@ -321,7 +321,7 @@ export const materialRouter = createRouter({
       if (!material)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Material nicht gefunden",
+          message: "Gebinde nicht gefunden",
         });
       return material;
     }),
@@ -529,7 +529,7 @@ export const materialRouter = createRouter({
       if (!(await materialInScope(scope, input.id))) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Material nicht gefunden",
+          message: "Gebinde nicht gefunden",
         });
       }
       await deleteMaterial(scope, input.id);
@@ -580,7 +580,7 @@ export const materialRouter = createRouter({
         max: MAX_MATERIALS_PER_LAGER,
         adding: gesamt,
         quota: "materials_per_lager",
-        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Materialien; der Import würde das überschreiten. Bitte in kleineren Schritten importieren oder ein weiteres Lager anlegen.`,
+        message: `Dieses Lager fasst ${MAX_MATERIALS_PER_LAGER} Gebinde; der Import würde das überschreiten. Bitte in kleineren Schritten importieren oder ein weiteres Lager anlegen.`,
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
@@ -692,14 +692,14 @@ export const materialRouter = createRouter({
       if (!(await materialInScope(scope, data.materialId))) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Material nicht gefunden",
+          message: "Gebinde nicht gefunden",
         });
       }
       assertWithinLimit({
         current: await countWeighingsForMaterial(data.materialId),
         max: MAX_WEIGHINGS_PER_MATERIAL,
         quota: "weighings_per_material",
-        message: `Für dieses Material sind bereits ${MAX_WEIGHINGS_PER_MATERIAL} Wägungen erfasst. Bitte alte Einträge entfernen.`,
+        message: `Für dieses Gebinde sind bereits ${MAX_WEIGHINGS_PER_MATERIAL} Wägungen erfasst. Bitte alte Einträge entfernen.`,
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
@@ -789,14 +789,14 @@ export const materialRouter = createRouter({
       if (!(await materialInScope(scope, data.materialId))) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Material nicht gefunden",
+          message: "Gebinde nicht gefunden",
         });
       }
       assertWithinLimit({
         current: await countConsumptionsForMaterial(data.materialId),
         max: MAX_CONSUMPTIONS_PER_MATERIAL,
         quota: "consumptions_per_material",
-        message: `Für dieses Material sind bereits ${MAX_CONSUMPTIONS_PER_MATERIAL} Verbräuche erfasst. Bitte alte Einträge entfernen.`,
+        message: `Für dieses Gebinde sind bereits ${MAX_CONSUMPTIONS_PER_MATERIAL} Verbräuche erfasst. Bitte alte Einträge entfernen.`,
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });

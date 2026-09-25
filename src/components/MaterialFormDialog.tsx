@@ -488,7 +488,11 @@ export function MaterialFormDialog({
 
   const createMutation = trpc.material.create.useMutation({
     onSuccess: () => {
-      toast.success(t.materialForm.created);
+      toast.success(
+        productId != null
+          ? t.materialForm.gebindeCreated
+          : t.materialForm.created
+      );
       invalidate();
       followLager();
       onOpenChange(false);

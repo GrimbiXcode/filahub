@@ -71,7 +71,7 @@ export const en: Messages = {
     settings: "Settings",
     material: "Material",
     weigh: "Weigh",
-    weighMaterial: "Weigh material",
+    weighMaterial: "Weigh a container",
     consume: "Log usage",
     consumeMaterial: "Log material usage",
     searchWithShortcut: (vars: { shortcut: string }) =>
@@ -135,20 +135,20 @@ export const en: Messages = {
   },
 
   quick: {
-    weighTitle: "Weigh material",
-    weighDescription: "Pick the material you want to weigh",
+    weighTitle: "Weigh a container",
+    weighDescription: "Pick the container you want to weigh",
     consumeTitle: "Log usage",
-    consumeDescription: "Pick the material a print used",
+    consumeDescription: "Pick the container a print used",
     searchTitle: "Quick search",
     searchDescription: "Find materials, open pages and run actions",
     weighPlaceholder: "Identifier or name of the material …",
     consumePlaceholder: "Identifier or name of the material …",
     searchPlaceholder: "Search: identifier, material, page or action …",
-    groupWeigh: "Material to weigh",
-    groupConsume: "Material to log usage for",
+    groupWeigh: "Containers to weigh",
+    groupConsume: "Containers to log usage for",
     groupActions: "Actions",
     groupJumpTo: "Jump to",
-    groupMaterials: "Materials",
+    groupMaterials: "Containers",
     newMaterial: "Add a material",
     remaining: (vars: { amount: string }) => `${vars.amount} left`,
     keywordsWeigh: "weigh weighing scale material",
@@ -201,7 +201,7 @@ export const en: Messages = {
       "Look for “Install app”, “Add to home screen” or “Add to dock” in your browser's menu. What the entry is called is up to the browser.",
     dataAndAccount: "Data and account",
     exportHint:
-      "Download everything stored for your account: profile, stores, materials, weigh-ins, container types, dryboxes, friendships, loan requests, hidden presets, submitted suggestions, pending login codes and the security log. A JSON file to read and keep — the importer on the import page expects a different, shorter format.",
+      "Download everything stored for your account: profile, stores, materials, containers, weigh-ins, container types, dryboxes, friendships, loan requests, hidden presets, submitted suggestions, pending login codes and the security log. A JSON file to read and keep — the importer on the import page expects a different, shorter format.",
     exportAction: "Download my data",
     exportPending: "Collecting …",
     exportDone: "Export downloaded",
@@ -266,7 +266,7 @@ export const en: Messages = {
     lookupPlaceholder: "Enter an identifier, e.g. F01",
     lookupAria: "Identifier for quick access",
     lookupNotFound: (vars: { query: string }) =>
-      `No material found for “${vars.query}”`,
+      `No container found for “${vars.query}”`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Several matches for “${vars.query}” – please enter the exact identifier`,
     statMaterials: "Materials",
@@ -277,7 +277,7 @@ export const en: Messages = {
     statValue: "Remaining value",
     statValueHint: "pro rata by remaining quantity",
     statInBox: "In a drybox",
-    statInBoxHint: "materials in a drybox",
+    statInBoxHint: "containers in a drybox",
     searchAria: "Search materials",
     clearSearch: "Clear the search",
     filters: "Filters",
@@ -314,7 +314,7 @@ export const en: Messages = {
     emptyFilteredHint: "Adjust the search or the filters.",
     emptyAction: "Add your first material",
     countOf: (vars: { shown: number; total: number }) =>
-      `${vars.shown} of ${vars.total} materials`,
+      `${vars.shown} of ${vars.total} containers`,
     colIdentifier: "Identifier",
     colAppearance: "Look",
     colMaterial: "Material",
@@ -335,8 +335,8 @@ export const en: Messages = {
     listView: "List",
     viewLabel: "View",
     summary: (vars: { count: number; remaining: string; low: number }) =>
-      `${vars.count} materials · ${vars.remaining} left · ${vars.low} running low`,
-    groupCount: (vars: { count: number }) => `${vars.count} materials`,
+      `${vars.count} containers · ${vars.remaining} left · ${vars.low} running low`,
+    groupCount: (vars: { count: number }) => `${vars.count} containers`,
     groupTare: (vars: { amount: string }) => `tare ${vars.amount}`,
     mergeHint: (vars: { count: number }) =>
       vars.count === 1
@@ -354,7 +354,7 @@ export const en: Messages = {
     tileValueTitle: "Remaining value",
     tileInBoxTitle: "In a drybox",
     moreMaterials: (vars: { count: number }) => `+ ${vars.count} more`,
-    noSelection: "Tap a material on the shelf to see it here.",
+    noSelection: "Tap a spool on the shelf to see it here.",
     details: "Details",
     weighNamed: (vars: { name: string }) => `Weigh ${vars.name}`,
     selectNamed: (vars: { name: string }) => `Select ${vars.name}`,
@@ -376,6 +376,7 @@ export const en: Messages = {
       vars.count === 1
         ? "1 container of this material"
         : `${vars.count} containers of this material`,
+    saved: "Material saved",
     toMaterial: "Go to material",
     thisOne: "this one",
     stockOk: "in stock, enough",
@@ -447,11 +448,11 @@ export const en: Messages = {
     trendFlat: "Trend: nothing used in this period",
     purchasedOn: (vars: { date: string }) => `bought ${vars.date}`,
     fullHistory: "Full history",
-    deleteMaterial: "Delete material",
-    deleteMaterialTitle: "Delete this material?",
+    deleteMaterial: "Delete container",
+    deleteMaterialTitle: "Delete this container?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `“${vars.name}” and every weigh-in and usage entry that belongs to it will be deleted for good.`,
-    materialDeleted: "Material deleted",
+      `This container of “${vars.name}” and every weigh-in and usage entry that belongs to it will be deleted for good. If it was the last container of the material, the material goes too.`,
+    materialDeleted: "Container deleted",
     deleteWeighing: "Delete weigh-in",
     deleteWeighingTitle: "Delete this weigh-in?",
     deleteWeighingDescription:
@@ -472,10 +473,10 @@ export const en: Messages = {
     firstBox: "Add your first drybox",
     emptyTitle: "No dryboxes yet",
     emptyDescription:
-      "Weigh your empty drybox, enter the empty weight and assign it to a material – filahub takes the box tare out of the result for you.",
+      "Weigh your empty drybox, enter the empty weight and assign it to a container – filahub takes the box tare out of the result for you.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} tare`,
     assigned: (vars: { count: number }) =>
-      vars.count === 1 ? "1 material" : `${vars.count} materials`,
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
     free: "free",
     location: "Location",
     occupancy: "In use",
@@ -483,7 +484,7 @@ export const en: Messages = {
     deleteBox: "Delete drybox",
     deleteTitle: "Delete this drybox?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. It must not be assigned to any material.`,
+      `“${vars.name}” will be deleted. It must not be assigned to any container.`,
     namePlaceholder: "e.g. Drybox 1",
     locationPlaceholder: "e.g. left shelf, workshop",
     tareLabel: "Empty weight (g) *",
@@ -512,7 +513,7 @@ export const en: Messages = {
     editType: "Edit container type",
     deleteTitle: "Delete this container type?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. Materials using it have to be moved to another type first.`,
+      `“${vars.name}” will be deleted. Containers of this type have to be moved to another type first.`,
     dialogDescription:
       "Name, form and empty weight of the container. The empty weight is subtracted from every weigh-in.",
     formLabel: "Form *",
@@ -597,11 +598,11 @@ export const en: Messages = {
 
   materialForm: {
     createTitle: "New material",
-    editTitle: "Edit material",
+    editTitle: "Edit container",
     createDescription:
       "Add a new material. The name is suggested from manufacturer, type and colour.",
     editDescription:
-      "Adjust the material's properties. The remaining quantity comes from the weigh-ins.",
+      "Adjust this container and its material. The remaining quantity comes from the weigh-ins.",
     materialTypeLabel: "Material type *",
     materialTypePlaceholder: "e.g. PLA, PETG, ABS",
     manufacturerPlaceholder: "e.g. Prusament, eSun",
@@ -655,7 +656,8 @@ export const en: Messages = {
       })`,
     notesPlaceholder: "Printing temperature, quirks …",
     created: "Material created",
-    saved: "Material saved",
+    gebindeCreated: "Container created",
+    saved: "Container saved",
     nameRequired:
       "Please enter a name (or fill in manufacturer / type / colour)",
     typeRequired: "Please enter a material type",
@@ -750,7 +752,7 @@ export const en: Messages = {
     invalidJson: "That is not valid JSON. Please check the LLM's output.",
     step3: "3. Review and import",
     step3Description:
-      "Correct anything that is off and delete broken lines. One material is created per line and per unit.",
+      "Correct anything that is off and delete broken lines. One container is created per line and per unit; the containers of one line share a material.",
     targetLagerLabel: "Target store",
     identifiersFromTemplate: (vars: { template: string; range: string }) =>
       `Identifiers from the template “${vars.template}”: ${vars.range}`,
@@ -768,7 +770,7 @@ export const en: Messages = {
     pricePlaceholder: "e.g. 29.99",
     countLabel: "Quantity",
     importing: "Importing …",
-    importCount: (vars: { count: number }) => `Import ${vars.count} materials`,
+    importCount: (vars: { count: number }) => `Import ${vars.count} containers`,
     fixErrors: "Please fix the highlighted errors first.",
     errTypeMissing: "type missing",
     errNominal: "invalid nominal weight",
@@ -852,7 +854,7 @@ export const en: Messages = {
     deleted: "Entry deleted",
     deleteTitle: "Delete this entry?",
     deleteDescription: (vars: { label: string }) =>
-      `“${vars.label}” will be removed for good. Entries that have sub-entries, or that materials still use, cannot be deleted – deactivate them instead.`,
+      `“${vars.label}” will be removed for good. Entries that have sub-entries, or that containers still use, cannot be deleted – deactivate them instead.`,
   },
 
   adminProposals: {
@@ -1012,7 +1014,7 @@ export const en: Messages = {
   },
 
   weighing: {
-    title: "Weigh material",
+    title: "Weigh a container",
     description: (vars: { name: string; withBox: boolean }) =>
       `Weigh “${vars.name}” as a whole – container${
         vars.withBox ? " and drybox" : ""
@@ -1144,7 +1146,7 @@ export const en: Messages = {
     identifierTemplateLabel: "Identifier template (optional)",
     identifierTemplatePlaceholder: "e.g. ID: {n} or F{nn}",
     identifierTemplateHint:
-      "{n} becomes the next free number, {nn} pads to two digits (F01). New materials get the identifier filled in.",
+      "{n} becomes the next free number, {nn} pads to two digits (F01). New containers get the identifier filled in.",
     identifierTemplateExample: (vars: { first: string; second: string }) =>
       `Becomes ${vars.first}, ${vars.second} …`,
     identifierTemplateInvalid: "Use exactly one {n} placeholder",
@@ -1160,13 +1162,13 @@ export const en: Messages = {
     deleteLager: "Delete store",
     deleteTitle: "Delete this store?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. It must not contain any material.`,
+      `“${vars.name}” will be deleted. It must not contain any container.`,
     created: "Store created",
     saved: "Store saved",
     deleted: "Store deleted",
 
     materialCount: (vars: { count: number }) =>
-      vars.count === 1 ? "1 material" : `${vars.count} materials`,
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
     sharedWith: (vars: { count: number }) =>
       vars.count === 1
         ? "shared with 1 friend"
