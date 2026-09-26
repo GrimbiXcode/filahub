@@ -1,4 +1,8 @@
-import { IMAGE_MAX_EDGE, THUMBNAIL_MAX_EDGE } from "@contracts/printFiles";
+import {
+  IMAGE_MAX_EDGE,
+  THUMBNAIL_MAX_EDGE,
+  stripJpegMetadata,
+} from "@contracts/printFiles";
 
 /**
  * Fotos vor dem Hochladen verkleinern und neu kodieren (seit 4.3.0).
@@ -43,10 +47,27 @@ async function encode(
     WebP stillschweigend PNG – dann lieber JPEG, das ist bei Fotos ein
     Zehntel so groß.
   */
-  let blob = await toBlob("image/webp");
-  if (!blob || blob.type !== "image/webp") blob = await toBlob("image/jpeg");
-  if (!blob) throw new Error("encode");
-  return { blob, width, height };
+  try {
+    let blob = await toBlob("image/webp");
+    if (!blob || blob.type !== "image/webp") blob = await toBlob("image/jpeg");
+    if (!blob) throw new Error("encode");
+    if (blob.type === "image/jpeg") {
+      /*
+        Safari schreibt beim Kodieren einen EXIF-Block mit Farbraum und Maßen
+        (keinen Ort) – der Server lehnt jedes Foto mit Metadaten ab. Also
+        heraus damit; die Bilddaten bleiben unverändert.
+      */
+      const clean = stripJpegMetadata(new Uint8Array(await blob.arrayBuffer()));
+      if (!clean) throw new Error("encode");
+      blob = new Blob([new Uint8Array(clean)], { type: "image/jpeg" });
+    }
+    return { blob, width, height };
+  } finally {
+    // Safari begrenzt den Speicher aller Canvas zusammen – sofort freigeben,
+    // sonst scheitert beim zehnten Foto eines Stapels das Öffnen.
+    canvas.width = 0;
+    canvas.height = 0;
+  }
 }
 
 export async function prepareImage(file: Blob): Promise<PreparedImage> {

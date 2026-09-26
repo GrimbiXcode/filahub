@@ -544,10 +544,15 @@ außerhalb der Datenbank liegen.
   gespeicherte Typ mit `nosniff`, 3MF immer als `attachment`.
 - **Fotos gehen nie unverändert hinaus.** `prepareImage`
   (`src/lib/imageUpload.ts`) verkleinert auf 2048 px und kodiert über ein
-  Canvas neu (WebP, sonst JPEG) – das entfernt EXIF samt GPS. Der Server lehnt
-  jedes Foto mit Metadaten ab (`hasMetadata`: EXIF, XMP, IPTC, Text-Chunks),
-  nicht nur GPS: Die Position kann auch in XMP stehen, und der eigene Client
-  erzeugt keine Metadaten. Maße liest der Server selbst.
+  Canvas neu (WebP, sonst JPEG) – das entfernt EXIF samt GPS. Safari schreibt
+  beim JPEG-Kodieren selbst einen EXIF-Block (ohne Ort); `stripJpegMetadata`
+  nimmt ihn heraus, ohne die Bilddaten anzufassen. Der Server lehnt jedes Foto
+  mit Metadaten ab (`hasMetadata`), nicht nur GPS: Die Position kann auch in
+  XMP stehen. Geprüft wird die **ganze** Datei – JPEG über alle Scans bis EOI
+  (EXIF darf zwischen zwei Scans eines progressiven JPEG stehen), APP2 nur mit
+  `ICC_PROFILE`, APP14 nur als `Adobe`, und alles hinter dem Bildende (EOI,
+  IEND, RIFF-Ende) zählt als Metadaten. Maße liest der Server selbst, höchstens
+  65 535 px je Kante.
 - **Der Name auf der Platte ist ein zufälliger Schlüssel** (128 Bit, geprüft
   gegen `^[0-9a-f]{32}$` vor jedem Zugriff), nie der hochgeladene Name. Der
   wird nur angezeigt (`sanitizeFileName`) und im `Content-Disposition`
@@ -569,11 +574,23 @@ außerhalb der Datenbank liegen.
 - **Grenzen** (`contracts/limits.ts`): 20 Dateien je Druck, Foto 10 MB,
   Vorschau 1 MB, 3MF 45 MB (unter dem Body-Limit von 50 MB samt Hülle),
   **1 GB Speicher je Bereich** als Summe über `sizeBytes + thumbnailBytes`.
-  Uploads 30/min, Abrufe 1200/min, Export 5/h je Benutzer.
+  Uploads 30/min, Vorschauen 1200/min, Originale 120/min, Export 5/h je
+  Benutzer. Dazu höchstens 8 gleichzeitige Uploads je Instanz und 2 je
+  Benutzer – ein Upload liegt bis zu 50 MB im Speicher, und die
+  Zugriffsbegrenzung zählt je Minute, nicht je Moment. Originale gehen als
+  Strom hinaus (`storage.open`), nicht über den Speicher. Die Grenzen je Druck
+  und je Bereich prüft `insertPrintFile` ein zweites Mal unter Sperre des
+  Drucks; parallele Uploads auf **verschiedene** Drucke können das Kontingent
+  des Bereichs knapp überschreiten (derselbe Vorbehalt wie überall).
+- **Ablehnungen tragen eine Kennung** (`code`: `has_metadata`,
+  `too_many_files`, `storage_full` …) neben dem deutschen Text; die Oberfläche
+  übersetzt sie (`t.prints.files.errors`).
 - **Export:** Das JSON nennt die Dateien (`printJobFiles`, ohne
   Speicherschlüssel, mit SHA-256; additiv, Version bleibt 5), die Dateien
   selbst kommen als ZIP (`/api/files/export`, `fflate`, ohne Kompression,
-  Datei für Datei gestreamt). Nur die eigenen, nicht die der Organisationen –
+  Datei für Datei gestreamt; eine in der Ablage fehlende Datei steht im
+  Verzeichnis mit `path: null`, der Export läuft weiter). Ohne ZIP64 höchstens
+  65 000 Dateien je Export. Nur die eigenen, nicht die der Organisationen –
   wie beim übrigen Bestand.
 - **Betrieb:** `/verwaltung/system` zeigt, ob die Ablage beschreibbar ist und
   wie viel belegt ist; der Start schreibt eine Fehlermeldung ins Log, wenn

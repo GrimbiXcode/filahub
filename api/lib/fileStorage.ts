@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import {
   access,
   mkdir,
+  open as fsOpen,
   readdir,
   readFile,
   rename,
@@ -11,6 +12,7 @@ import {
 } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
+import { Readable } from "node:stream";
 import { env } from "./env";
 
 /**
@@ -29,6 +31,14 @@ import { env } from "./env";
 export type FileStorage = {
   put(key: string, data: Uint8Array): Promise<void>;
   get(key: string): Promise<Uint8Array | null>;
+  /**
+   * Die Datei als Strom samt Größe – zum Ausliefern. Eine 3MF mit 45 MB
+   * ganz in den Speicher zu lesen, hieße: hundert gleichzeitige Abrufe, und
+   * der Prozess läuft voll.
+   */
+  open(
+    key: string
+  ): Promise<{ stream: ReadableStream<Uint8Array>; size: number } | null>;
   delete(key: string): Promise<void>;
   /** Alle Schlüssel samt Änderungszeit – für den Aufräumlauf */
   list(): Promise<{ key: string; modifiedAt: Date }[]>;
@@ -99,6 +109,20 @@ export function localFileStorage(dir: string): FileStorage {
       assertKey(key);
       try {
         return new Uint8Array(await readFile(pathFor(key)));
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+        throw error;
+      }
+    },
+    async open(key) {
+      assertKey(key);
+      try {
+        const handle = await fsOpen(pathFor(key), "r");
+        const { size } = await handle.stat();
+        const stream = Readable.toWeb(
+          handle.createReadStream()
+        ) as ReadableStream<Uint8Array>;
+        return { stream, size };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
         throw error;

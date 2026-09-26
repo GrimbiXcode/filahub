@@ -387,6 +387,9 @@ describe("Obergrenzen", () => {
       .where(eq(schema.printJobFiles.printJobId, jobId));
     const full = await upload(anna, other, { bytes: png(), name: "a.png" });
     expect(full.status).toBe(429);
+    expect(((await full.clone().json()) as { code: string }).code).toBe(
+      "storage_full"
+    );
     expect(((await full.json()) as { error: string }).error).toMatch(
       /Speicherplatz/
     );
@@ -395,6 +398,33 @@ describe("Obergrenzen", () => {
     expect(
       (await upload(bert, bertsJob, { bytes: png(), name: "b.png" })).status
     ).toBe(201);
+  });
+});
+
+describe("Gleichzeitige Uploads", () => {
+  it("hält die Grenze je Druck auch bei parallelen Uploads", async () => {
+    const jobId = await printFor(anna);
+    await db()
+      .insert(schema.printJobFiles)
+      .values(
+        Array.from({ length: MAX_FILES_PER_PRINT_JOB - 1 }, (_, i) => ({
+          printJobId: jobId,
+          kind: "image" as const,
+          originalName: `f${i}.png`,
+          mimeType: "image/png",
+          sizeBytes: 10,
+          sha256: "0".repeat(64),
+          storageKey: `${i}`.padStart(32, "0"),
+        }))
+      );
+    const results = await Promise.all([
+      upload(anna, jobId, { bytes: png(), name: "a.png" }),
+      upload(anna, jobId, { bytes: png(), name: "b.png" }),
+    ]);
+    expect(results.map(r => r.status).sort()).toEqual([201, 429]);
+    expect(await countRows("print_job_files")).toBe(MAX_FILES_PER_PRINT_JOB);
+    // Die abgewiesene Datei liegt nicht in der Ablage
+    expect(await storedFiles()).toHaveLength(1);
   });
 });
 
@@ -494,6 +524,19 @@ describe("Export", () => {
     );
     expect(manifest).toHaveLength(2);
     expect(manifest[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+
+    // Fehlt eine Datei in der Ablage, bricht der Export nicht ab und hängt nicht
+    const [first] = await db()
+      .select()
+      .from(schema.printJobFiles)
+      .where(eq(schema.printJobFiles.printJobId, jobId))
+      .orderBy(schema.printJobFiles.id);
+    await localFileStorage(dir).delete(first.storageKey);
+    const partial = await get(anna, "/api/files/export");
+    const rest = unzipSync(new Uint8Array(await partial.arrayBuffer()));
+    expect(Object.keys(rest)).toHaveLength(2);
+    const index = JSON.parse(new TextDecoder().decode(rest["dateien.json"]));
+    expect(index[0].path).toBeNull();
 
     // Das JSON nennt die Dateien, ohne Speicherschlüssel
     const json = (await callerFor(anna).account.export()) as {

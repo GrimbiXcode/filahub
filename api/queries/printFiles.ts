@@ -114,7 +114,15 @@ export type NewPrintFile = {
 export async function insertPrintFile(
   scope: Scope,
   printJobId: number,
-  data: NewPrintFile
+  data: NewPrintFile,
+  /**
+   * Prüft die Obergrenzen noch einmal, **unter** der Sperre des Drucks und
+   * mit den Zahlen dieser Transaktion (Dateien des Drucks, Speicher des
+   * Bereichs). Wirft, wenn eine überschritten ist. Uploads auf verschiedene
+   * Drucke desselben Bereichs sperren einander nicht – beim Speicher bleibt
+   * derselbe Vorbehalt wie bei allen Grenzen (`AGENTS.md`).
+   */
+  recheck?: (files: number, usedBytes: number) => void
 ): Promise<PrintFileView | null> {
   return getDb().transaction(async tx => {
     const [job] = await tx
@@ -123,6 +131,20 @@ export async function insertPrintFile(
       .where(and(eq(printJobs.id, printJobId), scopeWhere(printJobs, scope)))
       .for("update");
     if (!job) return null;
+    if (recheck) {
+      const [files] = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(printJobFiles)
+        .where(eq(printJobFiles.printJobId, printJobId));
+      const [used] = await tx
+        .select({
+          value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
+        })
+        .from(printJobFiles)
+        .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
+        .where(scopeWhere(printJobs, scope));
+      recheck(files?.value ?? 0, Number(used?.value ?? 0));
+    }
     const [row] = await tx
       .insert(printJobFiles)
       .values({ printJobId, ...data })
@@ -231,6 +253,7 @@ export async function deletePrintFile(
   id: number
 ): Promise<boolean> {
   const keys = await getDb().transaction(async tx => {
+    // Druck und Datei gemeinsam sperren – dieselbe Zeile wie beim Titelbild
     const [row] = await tx
       .select({ file: printJobFiles, coverFileId: printJobs.coverFileId })
       .from(printJobFiles)
@@ -274,24 +297,36 @@ export async function setPrintJobCover(
   printJobId: number,
   fileId: number
 ): Promise<boolean> {
-  const [file] = await getDb()
-    .select({ id: printJobFiles.id })
-    .from(printJobFiles)
-    .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
-    .where(
-      and(
-        eq(printJobFiles.id, fileId),
-        eq(printJobFiles.printJobId, printJobId),
-        eq(printJobFiles.kind, "image"),
-        scopeWhere(printJobs, scope)
+  /*
+    In einer Transaktion unter Sperre des Drucks – dieselbe, die
+    `deletePrintFile` über die Dateizeile hält. Sonst könnte das Foto zwischen
+    Prüfen und Setzen gelöscht werden, und das Titelbild zeigte ins Leere.
+  */
+  return getDb().transaction(async tx => {
+    const [job] = await tx
+      .select({ id: printJobs.id })
+      .from(printJobs)
+      .where(and(eq(printJobs.id, printJobId), scopeWhere(printJobs, scope)))
+      .for("update");
+    if (!job) return false;
+    const [file] = await tx
+      .select({ id: printJobFiles.id })
+      .from(printJobFiles)
+      .where(
+        and(
+          eq(printJobFiles.id, fileId),
+          eq(printJobFiles.printJobId, printJobId),
+          eq(printJobFiles.kind, "image")
+        )
       )
-    );
-  if (!file) return false;
-  await getDb()
-    .update(printJobs)
-    .set({ coverFileId: fileId })
-    .where(eq(printJobs.id, printJobId));
-  return true;
+      .for("share");
+    if (!file) return false;
+    await tx
+      .update(printJobs)
+      .set({ coverFileId: fileId })
+      .where(eq(printJobs.id, printJobId));
+    return true;
+  });
 }
 
 /**

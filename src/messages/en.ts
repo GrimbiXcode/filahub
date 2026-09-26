@@ -1223,6 +1223,24 @@ export const en: Messages = {
       photoAlt: (vars: { title: string; index: number }) =>
         `Photo ${vars.index} of “${vars.title}”`,
       modelLabel: "3MF project",
+      /** Server rejections, by `code` from `api/fileRoutes.ts` */
+      errors: {
+        unsupported_type:
+          "This file type is not accepted. Photos (JPEG, PNG, WebP) and 3MF projects are.",
+        has_metadata:
+          "The photo still carries metadata such as where it was taken and was not saved.",
+        invalid_thumbnail: "The photo's preview is invalid.",
+        too_large: "The file is too large.",
+        too_many_files: "A print holds at most 20 files.",
+        storage_full:
+          "The storage for files is full. Please delete old photos or projects.",
+        rate_limited: "Too many uploads. Please wait a moment.",
+        blocked: "Your account is blocked.",
+        forbidden: "You don't have the rights for that.",
+        not_found: "This print no longer exists.",
+        busy: "Too many uploads are running right now. Please try again shortly.",
+        save_failed: "The file could not be saved.",
+      },
     },
     form: {
       titleNew: "Log a print",

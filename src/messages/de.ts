@@ -1260,6 +1260,24 @@ export const de = {
       photoAlt: (vars: { title: string; index: number }) =>
         `Foto ${vars.index} zu „${vars.title}“`,
       modelLabel: "3MF-Projekt",
+      /** Ablehnungen des Servers, nach `code` aus `api/fileRoutes.ts` */
+      errors: {
+        unsupported_type:
+          "Dieser Dateityp wird nicht angenommen. Möglich sind Fotos (JPEG, PNG, WebP) und 3MF-Projekte.",
+        has_metadata:
+          "Das Foto enthält noch Metadaten wie den Aufnahmeort und wurde nicht gespeichert.",
+        invalid_thumbnail: "Die Vorschau des Fotos ist ungültig.",
+        too_large: "Die Datei ist zu groß.",
+        too_many_files: "Ein Druck trägt höchstens 20 Dateien.",
+        storage_full:
+          "Der Speicherplatz für Dateien ist aufgebraucht. Bitte alte Fotos oder Projekte löschen.",
+        rate_limited: "Zu viele Uploads. Bitte kurz warten.",
+        blocked: "Dein Konto ist gesperrt.",
+        forbidden: "Dafür reichen deine Rechte nicht.",
+        not_found: "Den Druck gibt es nicht (mehr).",
+        busy: "Gerade laufen zu viele Uploads. Bitte gleich noch einmal versuchen.",
+        save_failed: "Die Datei ließ sich nicht speichern.",
+      },
     },
     form: {
       titleNew: "Druck erfassen",

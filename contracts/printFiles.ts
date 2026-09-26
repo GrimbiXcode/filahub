@@ -60,63 +60,139 @@ const u32le = (b: Uint8Array, o: number) =>
 const ascii = (b: Uint8Array, o: number, n: number) =>
   String.fromCharCode(...b.subarray(o, o + n));
 
+function validDimensions(width: number, height: number): boolean {
+  return (
+    width > 0 &&
+    height > 0 &&
+    width <= MAX_IMAGE_DIMENSION &&
+    height <= MAX_IMAGE_DIMENSION
+  );
+}
+
 function startsWith(bytes: Uint8Array, prefix: readonly number[]): boolean {
   if (bytes.length < prefix.length) return false;
   return prefix.every((value, i) => bytes[i] === value);
 }
 
+/** Größte Kantenlänge, die angenommen wird – die Spalten sind `integer` */
+export const MAX_IMAGE_DIMENSION = 65_535;
+
+type JpegSegment = { marker: number; start: number; end: number };
+
 /**
- * JPEG: Segmente bis zum Bildbeginn (SOS) durchgehen, die Größe aus dem
- * SOF-Segment lesen. APP0 (JFIF), APP2 (Farbprofil) und APP14 (Adobe) sind
- * Darstellung; alle übrigen APP-Segmente (EXIF/XMP in APP1, IPTC in APP13 …)
- * und Kommentare zählen als Metadaten.
+ * Zerlegt ein JPEG in seine Segmente, bis zum Bildende (EOI). Die
+ * Bilddaten nach jedem SOS gehören zum SOS-Segment; ein progressives JPEG hat
+ * mehrere davon, und zwischen ihnen dürfen wieder Segmente stehen – auch
+ * EXIF. Deshalb geht der Lauf bis zum Ende und nicht nur bis zum ersten SOS.
+ * `null`, wenn die Datei kein vollständiges JPEG ist.
  */
-function readJpeg(bytes: Uint8Array): DetectedImage | null {
+function walkJpeg(
+  bytes: Uint8Array
+): { segments: JpegSegment[]; end: number } | null {
+  const segments: JpegSegment[] = [{ marker: 0xd8, start: 0, end: 2 }];
   let offset = 2;
-  let width = 0;
-  let height = 0;
-  let hasMetadata = false;
-  while (offset + 4 <= bytes.length) {
+  while (offset + 1 < bytes.length) {
     if (bytes[offset] !== 0xff) return null;
+    // Füllbytes vor einem Marker
+    while (offset + 1 < bytes.length && bytes[offset + 1] === 0xff) offset++;
+    if (offset + 1 >= bytes.length) return null;
     const marker = bytes[offset + 1];
-    // Füllbytes zwischen Segmenten
-    if (marker === 0xff) {
-      offset += 1;
-      continue;
+    if (marker === 0xd9) {
+      segments.push({ marker, start: offset, end: offset + 2 });
+      return { segments, end: offset + 2 };
     }
-    // Marker ohne Länge
-    if (
-      marker === 0xd8 ||
-      marker === 0x01 ||
-      (marker >= 0xd0 && marker <= 0xd7)
-    ) {
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) {
+      segments.push({ marker, start: offset, end: offset + 2 });
       offset += 2;
       continue;
     }
-    if (marker === 0xd9 || marker === 0xda) break;
+    if (offset + 4 > bytes.length) return null;
     const length = u16be(bytes, offset + 2);
-    if (length < 2 || offset + 2 + length > bytes.length) return null;
+    let end = offset + 2 + length;
+    if (length < 2 || end > bytes.length) return null;
+    if (marker === 0xda) {
+      // Bilddaten bis zum nächsten echten Marker (FF 00 und RST gehören dazu)
+      let i = end;
+      while (i + 1 < bytes.length) {
+        if (bytes[i] === 0xff) {
+          const next = bytes[i + 1];
+          if (next === 0x00 || (next >= 0xd0 && next <= 0xd7)) {
+            i += 2;
+            continue;
+          }
+          break;
+        }
+        i++;
+      }
+      if (i + 1 >= bytes.length) return null;
+      end = i;
+    }
+    segments.push({ marker, start: offset, end });
+    offset = end;
+  }
+  return null;
+}
+
+/**
+ * Ob ein JPEG-Segment Metadaten trägt. Erlaubt sind APP0 (JFIF), APP2 nur mit
+ * Farbprofil (`ICC_PROFILE`; dort kann sonst auch XMP stehen) und APP14 nur
+ * als `Adobe`-Farbangabe. Alle übrigen APP-Segmente – EXIF und XMP in APP1,
+ * IPTC in APP13 – und Kommentare zählen als Metadaten.
+ */
+function isJpegMetadata(bytes: Uint8Array, segment: JpegSegment): boolean {
+  const { marker, start } = segment;
+  if (marker === 0xfe) return true;
+  if (marker < 0xe0 || marker > 0xef) return false;
+  if (marker === 0xe0) return false;
+  if (marker === 0xe2) return ascii(bytes, start + 4, 12) !== "ICC_PROFILE\0";
+  if (marker === 0xee) return ascii(bytes, start + 4, 5) !== "Adobe";
+  return true;
+}
+
+function readJpeg(bytes: Uint8Array): DetectedImage | null {
+  const walked = walkJpeg(bytes);
+  if (!walked) return null;
+  let width = 0;
+  let height = 0;
+  // Alles nach dem Bildende – etwa ein zweites Bild samt EXIF (MPF) – zählt
+  let hasMetadata = walked.end < bytes.length;
+  for (const segment of walked.segments) {
+    const { marker, start } = segment;
     const isSof =
       marker >= 0xc0 &&
       marker <= 0xcf &&
       marker !== 0xc4 &&
       marker !== 0xc8 &&
       marker !== 0xcc;
-    if (isSof && length >= 7) {
-      height = u16be(bytes, offset + 5);
-      width = u16be(bytes, offset + 7);
+    if (isSof && width === 0 && segment.end - start >= 9) {
+      height = u16be(bytes, start + 5);
+      width = u16be(bytes, start + 7);
     }
-    const isApp = marker >= 0xe0 && marker <= 0xef;
-    if (
-      (isApp && marker !== 0xe0 && marker !== 0xe2 && marker !== 0xee) ||
-      marker === 0xfe
-    ) {
-      hasMetadata = true;
-    }
-    offset += 2 + length;
+    if (isJpegMetadata(bytes, segment)) hasMetadata = true;
   }
-  if (width <= 0 || height <= 0) return null;
+  if (!validDimensions(width, height)) return null;
   return { kind: "image", mimeType: "image/jpeg", width, height, hasMetadata };
+}
+
+/**
+ * Entfernt Metadaten aus einem JPEG: alle Segmente, die `isJpegMetadata`
+ * meldet, und alles nach dem Bildende. Die Bilddaten bleiben Byte für Byte.
+ *
+ * Gebraucht im Browser nach dem Neukodieren: Safari schreibt beim Kodieren
+ * aus einem Canvas einen EXIF-Block (Farbraum, Maße – keinen Ort), den der
+ * Server sonst ablehnte. `null`, wenn die Datei kein lesbares JPEG ist.
+ */
+export function stripJpegMetadata(bytes: Uint8Array): Uint8Array | null {
+  const walked = walkJpeg(bytes);
+  if (!walked) return null;
+  const kept = walked.segments.filter(s => !isJpegMetadata(bytes, s));
+  const out = new Uint8Array(kept.reduce((n, s) => n + s.end - s.start, 0));
+  let offset = 0;
+  for (const s of kept) {
+    out.set(bytes.subarray(s.start, s.end), offset);
+    offset += s.end - s.start;
+  }
+  return out;
 }
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -130,14 +206,21 @@ function readPng(bytes: Uint8Array): DetectedImage | null {
   const height = u32be(bytes, 20);
   let hasMetadata = false;
   let offset = 8;
+  let ended = false;
   while (offset + 12 <= bytes.length) {
     const length = u32be(bytes, offset);
     const type = ascii(bytes, offset + 4, 4);
     if (PNG_METADATA_CHUNKS.has(type)) hasMetadata = true;
-    if (type === "IEND") break;
     offset += 12 + length;
+    if (type === "IEND") {
+      ended = true;
+      break;
+    }
   }
-  if (width <= 0 || height <= 0) return null;
+  if (!ended) return null;
+  // Bytes nach dem Ende tragen nichts zum Bild bei – aber womöglich Text
+  if (offset < bytes.length) hasMetadata = true;
+  if (!validDimensions(width, height)) return null;
   return { kind: "image", mimeType: "image/png", width, height, hasMetadata };
 }
 
@@ -146,7 +229,11 @@ function readWebp(bytes: Uint8Array): DetectedImage | null {
   let height = 0;
   let hasMetadata = false;
   let offset = 12;
-  while (offset + 8 <= bytes.length) {
+  // Nur innerhalb des RIFF-Containers lesen; was dahinter steht, zählt
+  const riffEnd = 8 + u32le(bytes, 4);
+  if (riffEnd > bytes.length) return null;
+  if (riffEnd + (riffEnd % 2) < bytes.length) hasMetadata = true;
+  while (offset + 8 <= riffEnd) {
     const type = ascii(bytes, offset, 4);
     const size = u32le(bytes, offset + 4);
     const data = offset + 8;
@@ -177,7 +264,7 @@ function readWebp(bytes: Uint8Array): DetectedImage | null {
     }
     offset = data + size + (size % 2);
   }
-  if (width <= 0 || height <= 0) return null;
+  if (!validDimensions(width, height)) return null;
   return { kind: "image", mimeType: "image/webp", width, height, hasMetadata };
 }
 

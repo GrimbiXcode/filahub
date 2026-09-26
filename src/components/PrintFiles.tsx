@@ -13,7 +13,11 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
-import { MAX_3MF_BYTES, MAX_IMAGE_BYTES } from "@contracts/limits";
+import {
+  MAX_3MF_BYTES,
+  MAX_FILES_PER_PRINT_JOB,
+  MAX_IMAGE_BYTES,
+} from "@contracts/limits";
 import { roleAllows } from "@contracts/organizations";
 import {
   AlertDialog,
@@ -49,6 +53,19 @@ import type { PrintJobDetail } from "@/types";
 
 type PrintFile = PrintJobDetail["files"][number];
 
+/** Eine Datei, die gerade hochlädt; `key` trennt gleichnamige */
+type Pending = { key: number; name: string; model: boolean };
+let nextPendingKey = 1;
+
+/** Fehler beim Hochladen – `stopBatch`, wenn die übrigen genauso scheiterten */
+class UploadError extends Error {
+  readonly stopBatch: boolean;
+  constructor(message: string, stopBatch = false) {
+    super(message);
+    this.stopBatch = stopBatch;
+  }
+}
+
 /** Ob eine gewählte Datei nach 3MF aussieht – geprüft wird auf dem Server */
 function looksLike3mf(file: File): boolean {
   return /\.3mf$/i.test(file.name);
@@ -67,10 +84,15 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
   const scope = useActiveScope();
   const role = useScopeRole();
   const utils = trpc.useUtils();
-  const { formatBytes } = useFormat();
-  const [pending, setPending] = useState<string[]>([]);
+  const { formatBytes, formatNumber } = useFormat();
+  const [pending, setPending] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [viewing, setViewing] = useState<number | null>(null);
+  /*
+    Die ID des angezeigten Fotos, nicht seine Stelle: Löscht jemand anderes
+    währenddessen ein früheres Foto, zeigte die Stelle nach dem Neuladen auf
+    das nächste – und „Löschen“ träfe ein anderes als das angesehene.
+  */
+  const [viewingId, setViewingId] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<PrintFile | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
@@ -89,7 +111,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
     onSuccess: () => {
       toast.success(t.prints.files.deleted);
       setDeleting(null);
-      setViewing(null);
+      setViewingId(null);
       refresh();
     },
     onError: e => toast.error(e.message),
@@ -102,6 +124,14 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
     onError: e => toast.error(e.message),
   });
 
+  /** Meldung zu einer Ablehnung des Servers – aus dem Katalog, wo bekannt */
+  const serverMessage = (code: string | undefined, fallback: string) => {
+    const known = code
+      ? (t.prints.files.errors as Record<string, string | undefined>)[code]
+      : undefined;
+    return known ?? fallback;
+  };
+
   /** Eine Datei vorbereiten und hochladen; wirft mit lesbarer Meldung */
   const uploadOne = async (file: File) => {
     const form = new FormData();
@@ -110,10 +140,10 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
       try {
         prepared = await prepareImage(file);
       } catch {
-        throw new Error(t.prints.files.imageFailed({ name: file.name }));
+        throw new UploadError(t.prints.files.imageFailed({ name: file.name }));
       }
       if (prepared.file.size > MAX_IMAGE_BYTES)
-        throw new Error(
+        throw new UploadError(
           t.prints.files.tooLarge({
             name: file.name,
             max: formatBytes(MAX_IMAGE_BYTES),
@@ -126,7 +156,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
       form.append("thumbnail", new File([prepared.thumbnail], "vorschau"));
     } else if (looksLike3mf(file)) {
       if (file.size > MAX_3MF_BYTES)
-        throw new Error(
+        throw new UploadError(
           t.prints.files.tooLarge({
             name: file.name,
             max: formatBytes(MAX_3MF_BYTES),
@@ -134,7 +164,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
         );
       form.append("file", file);
     } else {
-      throw new Error(t.prints.files.unsupported({ name: file.name }));
+      throw new UploadError(t.prints.files.unsupported({ name: file.name }));
     }
     const response = await fetch(
       printFileUploadUrl(job.id, scope.organizationId),
@@ -143,43 +173,60 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as {
         error?: string;
+        code?: string;
       } | null;
-      throw new Error(body?.error ?? t.common.unknownError);
+      throw new UploadError(
+        serverMessage(body?.code, body?.error ?? t.common.unknownError),
+        // Voll, gesperrt, zu schnell: Die nächste Datei scheiterte genauso
+        [403, 404, 429].includes(response.status)
+      );
     }
   };
 
   const uploadAll = async (files: FileList | File[] | null) => {
-    const list = [...(files ?? [])];
+    let list = [...(files ?? [])];
     if (list.length === 0) return;
+    // Was über die Obergrenze je Druck ginge, gar nicht erst verkleinern
+    const room = MAX_FILES_PER_PRINT_JOB - job.files.length;
+    if (list.length > room) {
+      toast.error(t.prints.files.errors.too_many_files);
+      list = list.slice(0, Math.max(0, room));
+    }
     let done = 0;
     // Nacheinander: Die Obergrenze je Druck zählt der Server je Anfrage, und
     // ein Dutzend gleichzeitig verkleinerter Fotos brächte das Telefon ins
     // Schwitzen.
     for (const file of list) {
-      setPending(current => [...current, file.name]);
+      const entry: Pending = {
+        key: nextPendingKey++,
+        name: file.name,
+        model: !looksLikeImage(file),
+      };
+      setPending(current => [...current, entry]);
       try {
         await uploadOne(file);
         done++;
+        // Jedes Foto erscheint, sobald es da ist – nicht erst am Ende
+        refresh();
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : t.common.unknownError
         );
+        if (error instanceof UploadError && error.stopBatch) break;
       } finally {
-        setPending(current => {
-          const index = current.indexOf(file.name);
-          return index < 0
-            ? current
-            : [...current.slice(0, index), ...current.slice(index + 1)];
-        });
+        setPending(current => current.filter(p => p.key !== entry.key));
       }
     }
-    if (done > 0) {
-      toast.success(t.prints.files.uploaded({ count: done }));
-      refresh();
-    }
+    if (done > 0) toast.success(t.prints.files.uploaded({ count: done }));
   };
 
-  const viewed = viewing != null ? photos[viewing] : null;
+  const viewIndex =
+    viewingId != null ? photos.findIndex(p => p.id === viewingId) : -1;
+  const viewed = viewIndex >= 0 ? photos[viewIndex] : null;
+  const step = (delta: number) =>
+    setViewingId(
+      photos[(viewIndex + delta + photos.length) % photos.length]?.id ?? null
+    );
 
   return (
     <Card
@@ -236,7 +283,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
             <input
               ref={photoInput}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              accept="image/jpeg,image/png,image/webp"
               multiple
               hidden
               onChange={e => {
@@ -281,13 +328,13 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
           </p>
         )}
 
-        {(photos.length > 0 || pending.length > 0) && (
+        {(photos.length > 0 || pending.some(p => !p.model)) && (
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
             {photos.map((photo, index) => (
               <button
                 key={photo.id}
                 type="button"
-                onClick={() => setViewing(index)}
+                onClick={() => setViewingId(photo.id)}
                 className="group relative aspect-square overflow-hidden rounded-lg border bg-muted"
               >
                 <img
@@ -306,21 +353,39 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
                 )}
               </button>
             ))}
-            {pending.map((name, i) => (
-              <div
-                key={`${name}-${i}`}
-                className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-2 text-center text-[11px] text-muted-foreground"
-                title={t.prints.files.uploading({ name })}
-              >
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="line-clamp-2 break-all">{name}</span>
-              </div>
-            ))}
+            {pending
+              .filter(p => !p.model)
+              .map(p => (
+                <div
+                  key={p.key}
+                  role="status"
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed p-2 text-center text-[11px] text-muted-foreground"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  <span className="line-clamp-2 break-all">
+                    {t.prints.files.uploading({ name: p.name })}
+                  </span>
+                </div>
+              ))}
           </div>
         )}
 
-        {models.length > 0 && (
+        {(models.length > 0 || pending.some(p => p.model)) && (
           <ul className="flex flex-col divide-y rounded-lg border">
+            {pending
+              .filter(p => p.model)
+              .map(p => (
+                <li
+                  key={p.key}
+                  role="status"
+                  className="flex items-center gap-3 p-2 text-sm text-muted-foreground"
+                >
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  <span className="truncate">
+                    {t.prints.files.uploading({ name: p.name })}
+                  </span>
+                </li>
+              ))}
             {models.map(model => (
               <li key={model.id} className="flex items-center gap-3 p-2">
                 <Box className="h-5 w-5 shrink-0 text-muted-foreground" />
@@ -360,18 +425,25 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
 
       <Dialog
         open={viewed != null}
-        onOpenChange={open => !open && setViewing(null)}
+        onOpenChange={open => !open && setViewingId(null)}
       >
-        <DialogContent className="max-h-[95vh] gap-3 sm:max-w-4xl">
-          {viewed && viewing != null && (
+        <DialogContent
+          className="max-h-[95vh] gap-3 sm:max-w-4xl"
+          onKeyDown={e => {
+            if (photos.length < 2) return;
+            if (e.key === "ArrowRight") step(1);
+            else if (e.key === "ArrowLeft") step(-1);
+          }}
+        >
+          {viewed && (
             <>
               <DialogTitle className="truncate pr-8 text-base">
                 {job.title}
               </DialogTitle>
               <DialogDescription className="font-mono text-xs">
-                {viewing + 1} / {photos.length}
+                {formatNumber(viewIndex + 1)} / {formatNumber(photos.length)}
                 {viewed.width && viewed.height
-                  ? ` · ${viewed.width} × ${viewed.height}`
+                  ? ` · ${formatNumber(viewed.width)} × ${formatNumber(viewed.height)}`
                   : ""}
                 {` · ${formatBytes(viewed.sizeBytes)}`}
               </DialogDescription>
@@ -380,7 +452,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
                   src={printFileUrl(viewed.id)}
                   alt={t.prints.files.photoAlt({
                     title: job.title,
-                    index: viewing + 1,
+                    index: viewIndex + 1,
                   })}
                   className="max-h-[70vh] w-auto object-contain"
                 />
@@ -391,11 +463,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
                       size="icon"
                       className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full"
                       aria-label={t.prints.files.previous}
-                      onClick={() =>
-                        setViewing(
-                          (viewing - 1 + photos.length) % photos.length
-                        )
-                      }
+                      onClick={() => step(-1)}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
@@ -404,7 +472,7 @@ export function PrintFiles({ job }: { job: PrintJobDetail }) {
                       size="icon"
                       className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full"
                       aria-label={t.prints.files.next}
-                      onClick={() => setViewing((viewing + 1) % photos.length)}
+                      onClick={() => step(1)}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>

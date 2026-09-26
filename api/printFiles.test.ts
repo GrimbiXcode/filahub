@@ -3,6 +3,7 @@ import {
   contentDisposition,
   detectPrintFile,
   sanitizeFileName,
+  stripJpegMetadata,
   zipEntryNames,
 } from "@contracts/printFiles";
 import { mayDeleteWeighing } from "@contracts/organizations";
@@ -34,7 +35,11 @@ const le32 = (n: number) => [
   (n >>> 24) & 0xff,
 ];
 
-function jpeg(extraSegments: number[][] = []) {
+function jpeg(
+  extraSegments: number[][] = [],
+  /** Zwischen zwei Scans (progressiv) und nach dem Bildende */
+  more: { betweenScans?: number[][]; trailing?: number[] } = {}
+) {
   const app0 = [
     0xff,
     0xe0,
@@ -69,13 +74,20 @@ function jpeg(extraSegments: number[][] = []) {
     1,
   ];
   const sos = [0xff, 0xda, ...be16(8), 1, 1, 0, 0, 0x3f, 0];
+  const second = more.betweenScans
+    ? [...more.betweenScans.flat(), ...sos, 0x56, 0xff, 0x00, 0x78]
+    : [];
   return bytes(
     [0xff, 0xd8],
     app0,
     ...extraSegments,
     sof0,
     sos,
-    [0x12, 0x34, 0xff, 0xd9]
+    // Bilddaten samt maskiertem FF 00 und einem Neustart-Marker
+    [0x12, 0xff, 0x00, 0x34, 0xff, 0xd0, 0x9a],
+    second,
+    [0xff, 0xd9],
+    more.trailing ?? []
   );
 }
 
@@ -206,7 +218,14 @@ describe("detectPrintFile", () => {
     expect(detectPrintFile(jpeg([exif]))).toMatchObject({ hasMetadata: true });
     expect(detectPrintFile(jpeg([iptc]))).toMatchObject({ hasMetadata: true });
     // Farbprofil (APP2) ist Darstellung, keine Metadaten
-    const icc = [0xff, 0xe2, ...be16(4), 0, 0];
+    const icc = [
+      0xff,
+      0xe2,
+      ...be16(16),
+      ..."ICC_PROFILE\0".split("").map(c => c.charCodeAt(0)),
+      0,
+      0,
+    ];
     expect(detectPrintFile(jpeg([icc]))).toMatchObject({ hasMetadata: false });
   });
 
@@ -307,6 +326,85 @@ describe("detectPrintFile", () => {
     expect(detectPrintFile(bytes([0xff, 0xd8, 0xff]))).toBeNull();
     expect(detectPrintFile(bytes([0x50, 0x4b, 0x03, 0x04, 0, 0]))).toBeNull();
     expect(detectPrintFile(new Uint8Array())).toBeNull();
+  });
+});
+
+describe("Lücken der Metadatenprüfung (Review 4.3.0)", () => {
+  const exif = [
+    0xff,
+    0xe1,
+    ...be16(10),
+    ..."Exif\0\0".split("").map(c => c.charCodeAt(0)),
+    0,
+    0,
+  ];
+
+  it("findet EXIF zwischen zwei Scans und Bytes nach dem Bildende", () => {
+    expect(detectPrintFile(jpeg([], { betweenScans: [[]] }))).toMatchObject({
+      hasMetadata: false,
+    });
+    expect(detectPrintFile(jpeg([], { betweenScans: [exif] }))).toMatchObject({
+      hasMetadata: true,
+    });
+    // Ein zweites Bild samt EXIF hinter dem ersten (MPF)
+    expect(
+      detectPrintFile(jpeg([], { trailing: [...jpeg([exif])] }))
+    ).toMatchObject({ hasMetadata: true });
+  });
+
+  it("nimmt APP2 nur als Farbprofil", () => {
+    const xmpInApp2 = [
+      0xff,
+      0xe2,
+      ...be16(8),
+      ..."XMP\0\0\0".split("").map(c => c.charCodeAt(0)),
+    ];
+    expect(detectPrintFile(jpeg([xmpInApp2]))).toMatchObject({
+      hasMetadata: true,
+    });
+  });
+
+  it("findet Text hinter dem PNG- und dem WebP-Ende", () => {
+    const withTrailer = new Uint8Array([
+      ...png(),
+      ...pngChunk("tEXt", [0x41, 0, 0x42]),
+    ]);
+    expect(detectPrintFile(withTrailer)).toMatchObject({ hasMetadata: true });
+    const vp8 = riffChunk("VP8 ", [
+      0,
+      0,
+      0,
+      0x9d,
+      0x01,
+      0x2a,
+      ...le16(64),
+      ...le16(48),
+      0,
+      0,
+    ]);
+    const tail = new Uint8Array([...webp([vp8]), ...riffChunk("EXIF", [1, 2])]);
+    expect(detectPrintFile(tail)).toMatchObject({ hasMetadata: true });
+  });
+
+  it("lehnt Maße ab, die keine Spalte fasst", () => {
+    const huge = bytes(
+      [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+      pngChunk("IHDR", [...be32(2 ** 31), ...be32(10), 8, 6, 0, 0, 0]),
+      pngChunk("IEND", [])
+    );
+    expect(detectPrintFile(huge)).toBeNull();
+  });
+
+  it("entfernt Metadaten aus einem JPEG und lässt die Bilddaten stehen", () => {
+    const dirty = jpeg([exif], { betweenScans: [exif], trailing: [1, 2, 3] });
+    const clean = stripJpegMetadata(dirty)!;
+    expect(detectPrintFile(clean)).toMatchObject({
+      width: 800,
+      height: 600,
+      hasMetadata: false,
+    });
+    expect(clean).toEqual(jpeg([], { betweenScans: [[]] }));
+    expect(stripJpegMetadata(bytes("kein jpeg"))).toBeNull();
   });
 });
 
