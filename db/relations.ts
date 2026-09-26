@@ -2,7 +2,6 @@ import { relations } from "drizzle-orm";
 import {
   consumptions,
   lager,
-  materialPrintSettings,
   materialProducts,
   materials,
   organizationMembers,
@@ -125,20 +124,6 @@ export const materialProductsRelations = relations(
       references: [organizations.id],
     }),
     materials: many(materials),
-    printSettings: one(materialPrintSettings, {
-      fields: [materialProducts.id],
-      references: [materialPrintSettings.productId],
-    }),
-  })
-);
-
-export const materialPrintSettingsRelations = relations(
-  materialPrintSettings,
-  ({ one }) => ({
-    product: one(materialProducts, {
-      fields: [materialPrintSettings.productId],
-      references: [materialProducts.id],
-    }),
   })
 );
 

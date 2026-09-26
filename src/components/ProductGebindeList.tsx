@@ -165,7 +165,11 @@ export function ProductGebindeList({
           {formatGrams(stock.totalRemaining)}
         </span>
         <span className="text-muted-foreground">
-          {stock.low ? t.product.stockLow : t.product.stockOk}
+          {stock.usedUp
+            ? t.product.stockUsedUp
+            : stock.low
+              ? t.product.stockLow
+              : t.product.stockOk}
         </span>
         {stock.threshold != null && (
           <span className="ml-auto font-mono text-[11px] text-muted-foreground">

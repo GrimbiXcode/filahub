@@ -280,6 +280,8 @@ export const de = {
     lookupAria: "Kennung für Schnellzugriff",
     lookupNotFound: (vars: { query: string }) =>
       `Kein Gebinde zu „${vars.query}“ gefunden`,
+    lookupUsedUp: (vars: { identifier: string }) =>
+      `${vars.identifier} ist als aufgebraucht markiert – hier ist seine Seite.`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Mehrere Treffer für „${vars.query}“ – bitte die genaue Kennung eingeben`,
     statMaterials: "Materialien",
@@ -352,6 +354,10 @@ export const de = {
       `${vars.count} Gebinde · ${vars.remaining} übrig · ${vars.low} knapp`,
     groupCount: (vars: { count: number }) => `${vars.count} Gebinde`,
     groupTare: (vars: { amount: string }) => `Tara ${vars.amount}`,
+    outOfStock: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Ausgegangen – alle Rollen aufgebraucht:"
+        : `${vars.count} Materialien ausgegangen – alle Rollen aufgebraucht:`,
     mergeHint: (vars: { count: number }) =>
       vars.count === 1
         ? "Zwei Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam."
@@ -399,6 +405,7 @@ export const de = {
     thisOne: "dieses",
     stockOk: "Bestand, ausreichend",
     stockLow: "Bestand, knapp",
+    stockUsedUp: "ausgegangen – alle aufgebraucht",
     thresholdLager: (vars: { amount: string }) =>
       `Warnschwelle ${vars.amount} (Lager)`,
     thresholdDefault: (vars: { amount: string }) =>
@@ -437,6 +444,9 @@ export const de = {
     saved: "Druckeinstellungen gespeichert",
     invalid: (vars: { field: string }) =>
       `„${vars.field}“ ist ungültig oder liegt außerhalb des üblichen Bereichs.`,
+    rangeInvalid: (vars: { field: string }) =>
+      `„${vars.field}“ liegt unter dem Wert „von“.`,
+    hoursUnit: "h",
     enclosureRequired: "Braucht einen geschlossenen Bauraum",
     notesLabel: "Notizen (Markdown)",
     notesPlaceholder:

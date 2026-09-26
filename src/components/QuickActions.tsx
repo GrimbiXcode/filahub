@@ -188,10 +188,17 @@ function CommandPalette({
   const { data: allMaterials } = trpc.material.list.useQuery(scope, {
     enabled: open,
   });
-  // Aufgebrauchte Gebinde wiegt und bebucht niemand mehr (seit 4.1.0)
+  /*
+    Aufgebrauchte Gebinde wiegt und bebucht niemand mehr (seit 4.1.0) – zum
+    Ansehen bleiben sie in der Suche: Die Kennung ist weiter belegt, und wer
+    sie sucht, will den Verlauf sehen.
+  */
   const materials = useMemo(
-    () => allMaterials?.filter(m => m.archivedAt == null),
-    [allMaterials]
+    () =>
+      mode === "palette"
+        ? allMaterials
+        : allMaterials?.filter(m => m.archivedAt == null),
+    [allMaterials, mode]
   );
 
   /*

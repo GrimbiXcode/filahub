@@ -46,57 +46,53 @@ type Stored = {
 
 type Formatter = (field: PrintSettingField, value: number) => string;
 
-/** Einheit und Umrechnung je Feld – gespeichert wird immer ganzzahlig. */
+/**
+ * Einheit und Umrechnung je Feld – gespeichert wird immer ganzzahlig. Die
+ * Einheiten kommen aus dem Katalog (`t.printSettings.units`), dieselben, die
+ * der Dialog neben die Felder schreibt.
+ */
 function useValueFormatter(): Formatter {
   const { formatNumber } = useFormat();
+  const t = useT();
   return (field, value) => {
+    const unit = t.printSettings.units[field];
     switch (field) {
-      case "nozzleMinC":
-      case "nozzleMaxC":
-      case "bedMinC":
-      case "bedMaxC":
-      case "chamberC":
-      case "dryingC":
-        return `${formatNumber(value)} °C`;
-      case "fanPercent":
-      case "flowPercent":
-      case "refreshPercent":
-        return `${formatNumber(value)} %`;
-      case "speedMaxMmS":
-        return `${formatNumber(value)} mm/s`;
       case "retractionHundredthsMm":
-        return `${formatNumber(value / 100)} mm`;
+        return `${formatNumber(value / 100)} ${unit}`;
       case "dryingMinutes":
       case "postCureMinutes":
         return value >= 60 && value % 30 === 0
-          ? `${formatNumber(value / 60)} h`
-          : `${formatNumber(value)} min`;
+          ? `${formatNumber(value / 60)} ${t.printSettings.hoursUnit}`
+          : `${formatNumber(value)} ${unit}`;
       case "exposureMs":
       case "bottomExposureMs":
-        return `${formatNumber(value / 1000)} s`;
-      case "layerHeightUm":
-        return `${formatNumber(value)} µm`;
+        return `${formatNumber(value / 1000)} ${unit}`;
       case "bottomLayers":
         return formatNumber(value);
+      default:
+        return `${formatNumber(value)} ${unit}`;
     }
   };
 }
 
-/** „205–220 °C“, „60 °C“ oder nichts – für die Spannen von/bis */
-function range(
-  format: Formatter,
-  minField: PrintSettingField,
-  maxField: PrintSettingField,
-  min: number | undefined,
-  max: number | undefined
-): string | null {
-  if (min != null && max != null)
-    return min === max
-      ? format(minField, min)
-      : `${format(minField, min).replace(/ °C$/, "")}–${format(maxField, max)}`;
-  if (min != null) return format(minField, min);
-  if (max != null) return format(maxField, max);
-  return null;
+/** „205–220 °C“, „60 °C“ oder nichts – für die Temperaturspannen von/bis */
+function useRange() {
+  const { formatNumber } = useFormat();
+  const format = useValueFormatter();
+  return (
+    minField: PrintSettingField,
+    maxField: PrintSettingField,
+    min: number | undefined,
+    max: number | undefined
+  ): string | null => {
+    if (min != null && max != null)
+      return min === max
+        ? format(minField, min)
+        : `${formatNumber(min)}–${format(maxField, max)}`;
+    if (min != null) return format(minField, min);
+    if (max != null) return format(maxField, max);
+    return null;
+  };
 }
 
 /**
@@ -106,18 +102,18 @@ function range(
 export function PrintSettingsSummary({ stored }: { stored: Stored }) {
   const t = useT();
   const format = useValueFormatter();
+  const range = useRange();
   const s = stored?.settings;
   if (!s || !hasPrintSettings(s)) return null;
   const parts: string[] = [];
   if (s.kind === "filament") {
     const nozzle = range(
-      format,
       "nozzleMinC",
       "nozzleMaxC",
       s.nozzleMinC,
       s.nozzleMaxC
     );
-    const bed = range(format, "bedMinC", "bedMaxC", s.bedMinC, s.bedMaxC);
+    const bed = range("bedMinC", "bedMaxC", s.bedMinC, s.bedMaxC);
     if (nozzle) parts.push(`${t.printSettings.short.nozzle} ${nozzle}`);
     if (bed) parts.push(`${t.printSettings.short.bed} ${bed}`);
     if (s.dryingC != null)
@@ -318,10 +314,14 @@ function PrintSettingsDialog({
     if (!parsed.success) {
       const issue = parsed.error.issues[0];
       const field = issue?.path[0] as PrintSettingField | undefined;
+      if (!field || !(field in t.printSettings.fields))
+        return toast.error(t.printSettings.title);
+      const label = t.printSettings.fields[field];
+      // „bis“ unter „von“ (refine im Schema) – eigene Meldung, nicht „ungültig“
       return toast.error(
-        field && field in t.printSettings.fields
-          ? t.printSettings.invalid({ field: t.printSettings.fields[field] })
-          : (issue?.message ?? t.printSettings.title)
+        issue?.code === "custom"
+          ? t.printSettings.rangeInvalid({ field: label })
+          : t.printSettings.invalid({ field: label })
       );
     }
     save.mutate({

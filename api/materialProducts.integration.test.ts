@@ -861,4 +861,112 @@ describe("Material und Gebinde über den Router", () => {
     const after = await callerFor(bert).friend.inventory({ friendId: anna.id });
     expect(after.materials).toHaveLength(0);
   });
+
+  // Befunde aus dem Review von Phase 2
+  it("meldet ein Material mit nur aufgebrauchten Gebinden als ausgegangen", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: created.id,
+      archived: true,
+    });
+    const detail = await callerFor(anna).product.byId({
+      ...PERSONAL,
+      id: created.productId,
+    });
+    expect(detail.stock).toMatchObject({
+      count: 0,
+      usedUp: true,
+      low: true,
+      totalRemaining: 0,
+    });
+  });
+
+  it("lehnt Wiegen und Abbuchen auf aufgebrauchten Gebinden ab", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: created.id,
+      archived: true,
+    });
+    await expect(weigh(anna, created.id, 500)).rejects.toMatchObject({
+      code: "BAD_REQUEST",
+    });
+    await expect(
+      callerFor(anna).material.addConsumption({
+        ...PERSONAL,
+        materialId: created.id,
+        weight: 10,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("behält den ersten Zeitpunkt beim zweiten „aufgebraucht“", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    const archive = () =>
+      callerFor(anna).material.setArchived({
+        ...PERSONAL,
+        id: created.id,
+        archived: true,
+      });
+    await archive();
+    const first = (await callerFor(anna).material.list(PERSONAL))[0].archivedAt;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    await archive();
+    const second = (await callerFor(anna).material.list(PERSONAL))[0]
+      .archivedAt;
+    expect(second?.getTime()).toBe(first?.getTime());
+  });
+
+  it("nimmt beim Umordnen des letzten Gebindes die Druckeinstellungen mit", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await newMaterial(anna, lagerId);
+    const b = await newMaterial(anna, lagerId, { color: "Weiß" });
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id: a.productId,
+      settings: { kind: "filament", fanPercent: 40 },
+      notes: null,
+    });
+    await callerFor(anna).material.update({
+      ...PERSONAL,
+      id: a.id,
+      productId: b.productId,
+    });
+    const detail = await callerFor(anna).product.byId({
+      ...PERSONAL,
+      id: b.productId,
+    });
+    expect(detail.printSettings?.settings).toMatchObject({ fanPercent: 40 });
+  });
+
+  it("zeigt Druckeinstellungen einer anderen Art nicht mehr an", async () => {
+    const filament = await lagerFor(anna);
+    const harz = await lagerFor(anna, "Harz", { materialKind: "resin" });
+    const created = await newMaterial(anna, filament);
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id: created.productId,
+      settings: { kind: "filament", nozzleMinC: 210 },
+      notes: "Notiz bleibt",
+    });
+    // Das einzige Gebinde darf in ein Harzlager wandern
+    await callerFor(anna).material.update({
+      ...PERSONAL,
+      id: created.id,
+      lagerId: harz,
+    });
+    const detail = await callerFor(anna).product.byId({
+      ...PERSONAL,
+      id: created.productId,
+    });
+    expect(detail.kind).toBe("resin");
+    expect(detail.printSettings).toMatchObject({
+      settings: null,
+      notes: "Notiz bleibt",
+    });
+  });
 });

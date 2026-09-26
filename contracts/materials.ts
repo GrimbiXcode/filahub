@@ -798,8 +798,13 @@ export const lowStockGramsSchema = z
 export type ProductStock = {
   /** Summe der Restmengen aller Gebinde in Gramm, über alle Lager */
   totalRemaining: number;
-  /** Anzahl der Gebinde */
+  /** Anzahl der Gebinde in Gebrauch (aufgebrauchte zählen nicht) */
   count: number;
+  /**
+   * Alle Gebinde sind aufgebraucht (seit 4.1.0): Bestand 0, und das Material
+   * gilt als knapp – genau dann soll die Warnung „nachkaufen“ kommen.
+   */
+  usedUp: boolean;
   /**
    * Die geltende Schwelle in Gramm – bei der Vorgabe nur zur Anzeige
    * gerundet, entschieden wird dort über den Prozentwert. `null` ohne Gebinde.
@@ -828,22 +833,36 @@ export type ProductStock = {
  * die **Warnung** rechnet je Material.
  */
 export function productStock(
-  gebinde: readonly {
+  all: readonly {
     remainingWeight: number;
     nominalWeight: number;
     /** `lowStockGrams` des Lagers, in dem das Gebinde liegt */
     lagerLowStockGrams: number | null | undefined;
+    /** Aufgebraucht (seit 4.1.0) – zählt nicht zum Bestand */
+    archived?: boolean;
   }[]
 ): ProductStock {
-  if (gebinde.length === 0) {
+  if (all.length === 0) {
     return {
       totalRemaining: 0,
       count: 0,
+      usedUp: false,
       threshold: null,
       thresholdSource: null,
       low: false,
     };
   }
+  const active = all.filter(g => !g.archived);
+  /*
+    Sind alle aufgebraucht, ist der Bestand 0 – und das Material knapp. Die
+    Schwelle wird trotzdem aus den aufgebrauchten Gebinden hergeleitet (Lager
+    und Nennmenge), damit die Anzeige sagt, wogegen gewarnt wird.
+  */
+  const usedUp = active.length === 0;
+  const gebinde = usedUp
+    ? all.map(g => ({ ...g, remainingWeight: 0 }))
+    : active;
+  const count = active.length;
   let totalRemaining = 0;
   let maxNominal = 0;
   let lagerThreshold: number | null = null;
@@ -857,7 +876,8 @@ export function productStock(
   if (lagerThreshold != null) {
     return {
       totalRemaining,
-      count: gebinde.length,
+      count,
+      usedUp,
       threshold: lagerThreshold,
       thresholdSource: "lager",
       low: totalRemaining <= lagerThreshold,
@@ -866,10 +886,11 @@ export function productStock(
   const percent = fillPercent(totalRemaining, maxNominal);
   return {
     totalRemaining,
-    count: gebinde.length,
+    count,
+    usedUp,
     threshold: Math.round((maxNominal * LOW_STOCK_PERCENT) / 100),
     thresholdSource: "default",
-    low: percent != null && percent <= LOW_STOCK_PERCENT,
+    low: usedUp || (percent != null && percent <= LOW_STOCK_PERCENT),
   };
 }
 

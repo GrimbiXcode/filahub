@@ -6,6 +6,7 @@ import {
   inArray,
   isNotNull,
   ne,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import {
@@ -494,8 +495,6 @@ function stockByProduct(
 ): Map<number, ProductStock> {
   const groups = new Map<number, MaterialOverview[]>();
   for (const g of gebinde) {
-    // Aufgebrauchte Gebinde zählen nicht zum Bestand (seit 4.1.0)
-    if (g.archivedAt != null) continue;
     const list = groups.get(g.productId);
     if (list) list.push(g);
     else groups.set(g.productId, [g]);
@@ -509,6 +508,8 @@ function stockByProduct(
           remainingWeight: g.remainingWeight,
           nominalWeight: g.nominalWeight,
           lagerLowStockGrams: g.lager?.lowStockGrams,
+          // Aufgebrauchte zählen nicht zum Bestand (seit 4.1.0)
+          archived: g.archivedAt != null,
         }))
       )
     );
@@ -572,10 +573,6 @@ export async function findGebindeOfProduct(
     and(scopeWhere(materials, scope), eq(materials.productId, productId))!,
     language
   );
-  /*
-    Ein Material, dessen Gebinde alle aufgebraucht sind, hat keinen Eintrag in
-    der Karte – sein Bestand ist leer, nicht unbekannt.
-  */
   const stock = stockByProduct(list).get(productId) ?? productStock([]);
   return { gebinde: list.map(g => ({ ...g, stock })), stock };
 }
@@ -743,7 +740,14 @@ export async function updateMaterial(
           .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
       }
       if (data.productId != null && data.productId !== previousProductId) {
-        await deleteProductIfEmpty(tx, scope, previousProductId);
+        // War es das letzte Gebinde, nimmt das neue Material die
+        // Druckeinstellungen mit, sofern es keine eigenen hat.
+        await deleteProductIfEmpty(
+          tx,
+          scope,
+          previousProductId,
+          data.productId
+        );
       }
     })
     .catch(rethrowIdentifierTaken);
@@ -1010,7 +1014,15 @@ export async function setMaterialArchived(
 ): Promise<boolean> {
   const rows = await getDb()
     .update(materials)
-    .set({ archivedAt: archived ? new Date() : null })
+    /*
+      Ein zweiter Aufruf mit `archived: true` behält den ersten Zeitpunkt –
+      „aufgebraucht seit“ soll nicht durch einen Doppelklick wandern.
+    */
+    .set({
+      archivedAt: archived
+        ? sql`coalesce(${materials.archivedAt}, now())`
+        : null,
+    })
     .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
     .returning({ id: materials.id });
   return rows.length > 0;

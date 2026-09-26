@@ -284,6 +284,29 @@ async function withIdentifierConflict<T>(
   }
 }
 
+/**
+ * Das Gebinde gehört zum Bereich und ist nicht aufgebraucht – die Bedingung
+ * fürs Wiegen und Abbuchen. Aufgebraucht heißt stillgelegt (seit 4.1.0); die
+ * Oberfläche bietet es dort nicht an, aber eine offene zweite Sitzung sieht
+ * das erst nach dem Neuladen.
+ */
+async function assertGebindeInUse(scope: Scope, id: number) {
+  const row = await findMaterialRowInScope(scope, id);
+  if (!row) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Gebinde nicht gefunden",
+    });
+  }
+  if (row.archivedAt != null) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Dieses Gebinde ist als aufgebraucht markiert. Bitte zuerst wieder in Gebrauch nehmen.",
+    });
+  }
+}
+
 export const materialRouter = createRouter({
   /**
    * Materialien des Benutzers, auf Wunsch auf ein Lager eingeschränkt.
@@ -733,12 +756,7 @@ export const materialRouter = createRouter({
         Material anlegen oder löschen dürfen – genau dafür gibt es die Stufe.
       */
       const scope = await resolveScope(ctx.user.id, organizationId, "weigher");
-      if (!(await materialInScope(scope, data.materialId))) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Gebinde nicht gefunden",
-        });
-      }
+      await assertGebindeInUse(scope, data.materialId);
       assertWithinLimit({
         current: await countWeighingsForMaterial(data.materialId),
         max: MAX_WEIGHINGS_PER_MATERIAL,
@@ -830,12 +848,7 @@ export const materialRouter = createRouter({
       // `weigher`, aus demselben Grund wie bei `addWeighing`: Abbuchen ist
       // genau das, wofür die Stufe da ist.
       const scope = await resolveScope(ctx.user.id, organizationId, "weigher");
-      if (!(await materialInScope(scope, data.materialId))) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Gebinde nicht gefunden",
-        });
-      }
+      await assertGebindeInUse(scope, data.materialId);
       assertWithinLimit({
         current: await countConsumptionsForMaterial(data.materialId),
         max: MAX_CONSUMPTIONS_PER_MATERIAL,

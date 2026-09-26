@@ -57,6 +57,7 @@ describe("productStock", () => {
     expect(stock).toEqual({
       totalRemaining: 1080,
       count: 2,
+      usedUp: false,
       threshold: 250,
       thresholdSource: "default",
       low: false,
@@ -120,10 +121,60 @@ describe("productStock", () => {
     expect(productStock([])).toEqual({
       totalRemaining: 0,
       count: 0,
+      usedUp: false,
       threshold: null,
       thresholdSource: null,
       low: false,
     });
+  });
+});
+
+describe("productStock – aufgebraucht (4.1.0)", () => {
+  it("zählt aufgebrauchte Gebinde nicht mit", () => {
+    const stock = productStock([
+      { remainingWeight: 80, nominalWeight: 1000, lagerLowStockGrams: null },
+      {
+        remainingWeight: 900,
+        nominalWeight: 1000,
+        lagerLowStockGrams: null,
+        archived: true,
+      },
+    ]);
+    expect(stock).toMatchObject({
+      totalRemaining: 80,
+      count: 1,
+      usedUp: false,
+      low: true,
+    });
+  });
+
+  it("ist knapp, wenn alle aufgebraucht sind – mit der Schwelle von vorher", () => {
+    const stock = productStock([
+      {
+        remainingWeight: 300,
+        nominalWeight: 1000,
+        lagerLowStockGrams: 400,
+        archived: true,
+      },
+    ]);
+    expect(stock).toEqual({
+      totalRemaining: 0,
+      count: 0,
+      usedUp: true,
+      threshold: 400,
+      thresholdSource: "lager",
+      low: true,
+    });
+    expect(
+      productStock([
+        {
+          remainingWeight: 0,
+          nominalWeight: 1000,
+          lagerLowStockGrams: null,
+          archived: true,
+        },
+      ])
+    ).toMatchObject({ usedUp: true, threshold: 250, low: true });
   });
 });
 

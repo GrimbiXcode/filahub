@@ -31,7 +31,7 @@ import { hasChanges } from "./patch";
 /** Transaktion oder Datenbank – beide haben dieselben Abfragemethoden. */
 type Executor = Pick<
   ReturnType<typeof getDb>,
-  "select" | "insert" | "update" | "delete"
+  "select" | "selectDistinct" | "insert" | "update" | "delete"
 >;
 
 /** Was an einem Material eingegeben wird */
@@ -198,7 +198,13 @@ export async function lockProductInScope(
 export async function deleteProductIfEmpty(
   executor: Executor,
   scope: Scope,
-  id: number
+  id: number,
+  /**
+   * Wohin die Druckeinstellungen wandern, wenn das Material verschwindet –
+   * dasselbe Material, das seine Gebinde übernimmt (Umordnen, Zusammenführen).
+   * Sie wandern nur, wenn das Ziel keine eigenen hat; sonst gehen sie mit.
+   */
+  carryTo?: number
 ) {
   if (!(await lockProductInScope(executor, scope, id))) return;
   const deleted = await executor
@@ -216,12 +222,29 @@ export async function deleteProductIfEmpty(
       )
     )
     .returning({ id: materialProducts.id });
-  // Die Druckeinstellungen gehen mit dem Material (seit 4.1.0)
-  if (deleted.length > 0) {
+  // Die Druckeinstellungen gehen mit dem Material (seit 4.1.0) – oder wandern
+  if (deleted.length === 0) return;
+  if (carryTo != null && !(await hasPrintSettingsRow(executor, carryTo))) {
     await executor
-      .delete(materialPrintSettings)
+      .update(materialPrintSettings)
+      .set({ productId: carryTo })
       .where(eq(materialPrintSettings.productId, id));
+    return;
   }
+  await executor
+    .delete(materialPrintSettings)
+    .where(eq(materialPrintSettings.productId, id));
+}
+
+async function hasPrintSettingsRow(
+  executor: Executor,
+  productId: number
+): Promise<boolean> {
+  const rows = await executor
+    .select({ id: materialPrintSettings.productId })
+    .from(materialPrintSettings)
+    .where(eq(materialPrintSettings.productId, productId));
+  return rows.length > 0;
 }
 
 /**
@@ -231,9 +254,10 @@ export async function deleteProductIfEmpty(
  */
 export async function findProductLagerKinds(
   productId: number,
-  exceptMaterialId?: number
+  exceptMaterialId?: number,
+  executor: Executor = getDb()
 ): Promise<{ kind: MaterialKind; diameterUm: number | null }[]> {
-  const rows = await getDb()
+  const rows = await executor
     .selectDistinct({
       kind: lager.materialKind,
       diameterUm: lager.filamentDiameterUm,
@@ -269,22 +293,10 @@ export async function mergeProducts(
     }
     /*
       Druckeinstellungen: Die des Ziels bleiben. Hat das Ziel keine, wandern
-      die der Quelle mit – sonst gingen sie mit der Quelle verloren. Beide zu
-      mischen hieße, Werte zweier Materialien feldweise zu verschneiden.
+      die der Quelle mit (`carryTo` unten) – sonst gingen sie mit der Quelle
+      verloren. Beide zu mischen hieße, Werte zweier Materialien feldweise zu
+      verschneiden.
     */
-    const targetHasSettings =
-      (
-        await tx
-          .select({ id: materialPrintSettings.productId })
-          .from(materialPrintSettings)
-          .where(eq(materialPrintSettings.productId, targetId))
-      ).length > 0;
-    if (!targetHasSettings) {
-      await tx
-        .update(materialPrintSettings)
-        .set({ productId: targetId })
-        .where(eq(materialPrintSettings.productId, sourceId));
-    }
     const moved = await tx
       .update(materials)
       .set({ productId: targetId })
@@ -292,7 +304,7 @@ export async function mergeProducts(
         and(eq(materials.productId, sourceId), scopeWhere(materials, scope))
       )
       .returning({ id: materials.id });
-    await deleteProductIfEmpty(tx, scope, sourceId);
+    await deleteProductIfEmpty(tx, scope, sourceId, targetId);
     return moved.length;
   });
 }
@@ -331,14 +343,22 @@ export async function savePrintSettings(
   scope: Scope,
   productId: number,
   data: { settings: PrintSettings; notes: string | null } | null
-): Promise<boolean> {
+): Promise<"saved" | "gone" | "wrong_kind"> {
   return getDb().transaction(async tx => {
-    if (!(await lockProductInScope(tx, scope, productId))) return false;
+    if (!(await lockProductInScope(tx, scope, productId))) return "gone";
+    /*
+      Die Art unter der Sperre prüfen: Zwischen einer Vorabprüfung und dem
+      Schreiben könnte das letzte Gebinde in ein Lager anderer Art wandern.
+    */
+    if (data) {
+      const kinds = await findProductLagerKinds(productId, undefined, tx);
+      if (kinds.some(k => k.kind !== data.settings.kind)) return "wrong_kind";
+    }
     if (data == null) {
       await tx
         .delete(materialPrintSettings)
         .where(eq(materialPrintSettings.productId, productId));
-      return true;
+      return "saved";
     }
     const values = {
       schemaVersion: PRINT_SETTINGS_SCHEMA_VERSION,
@@ -352,6 +372,6 @@ export async function savePrintSettings(
         target: materialPrintSettings.productId,
         set: { ...values, updatedAt: new Date() },
       });
-    return true;
+    return "saved";
   });
 }

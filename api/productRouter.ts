@@ -72,20 +72,29 @@ export const productRouter = createRouter({
         message: "Material nicht gefunden",
       });
     }
-    const { gebinde, stock } = await findGebindeOfProduct(
-      scope,
-      input.id,
-      ctx.language
-    );
+    const [{ gebinde, stock }, printSettings] = await Promise.all([
+      findGebindeOfProduct(scope, input.id, ctx.language),
+      findPrintSettings(input.id),
+    ]);
     const first = gebinde.find(g => g.lager != null)?.lager ?? null;
+    const kind = first?.materialKind ?? null;
     return {
       ...product,
-      kind: first?.materialKind ?? null,
+      kind,
       diameterUm: first?.filamentDiameterUm ?? null,
       gebinde,
       stock,
-      /** Druckeinstellungen (seit 4.1.0), `null` = keine hinterlegt */
-      printSettings: await findPrintSettings(input.id),
+      /**
+       * Druckeinstellungen (seit 4.1.0), `null` = keine hinterlegt. Einstellungen
+       * einer anderen Art – das letzte Gebinde ist in ein Lager anderer Art
+       * gewandert, oder das Lager hat die Art gewechselt – gelten nicht mehr:
+       * Werte bleiben gespeichert, bis jemand neue einträgt, erscheinen aber
+       * nicht („Düse 215 °C“ an einem Harz wäre falsch).
+       */
+      printSettings:
+        printSettings?.settings && printSettings.settings.kind !== kind
+          ? { ...printSettings, settings: null }
+          : printSettings,
     };
   }),
 
@@ -141,42 +150,30 @@ export const productRouter = createRouter({
         input.organizationId,
         "editor"
       );
-      if (!(await findProductRowInScope(scope, input.id))) {
+      const notes = input.notes?.trim() || null;
+      const empty = !hasPrintSettings(input.settings, notes);
+      // Nur Notizen, keine Werte: die Art braucht es trotzdem für die Zeile
+      const settings =
+        input.settings ??
+        ({
+          kind: (await findProductLagerKinds(input.id))[0]?.kind ?? "filament",
+        } as const);
+      const result = await savePrintSettings(
+        scope,
+        input.id,
+        empty ? null : { settings, notes }
+      );
+      if (result === "gone") {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Material nicht gefunden",
         });
       }
-      const kinds = await findProductLagerKinds(input.id);
-      if (
-        input.settings &&
-        kinds.length > 0 &&
-        kinds.some(k => k.kind !== input.settings!.kind)
-      ) {
+      if (result === "wrong_kind") {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
             "Die Druckeinstellungen passen nicht zur Materialart des Lagers.",
-        });
-      }
-      const notes = input.notes?.trim() || null;
-      const empty = !hasPrintSettings(input.settings, notes);
-      const saved = await savePrintSettings(
-        scope,
-        input.id,
-        empty
-          ? null
-          : {
-              settings: input.settings ?? {
-                kind: kinds[0]?.kind ?? "filament",
-              },
-              notes,
-            }
-      );
-      if (!saved) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Material nicht gefunden",
         });
       }
       return { ok: true };

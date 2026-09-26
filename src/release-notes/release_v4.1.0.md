@@ -35,7 +35,13 @@ the others. When you try to delete a spool, filahub now offers to mark it as
 used up instead.
 
 Used-up spools no longer appear for friends you share a store with, and they
-are left out when you weigh or log usage.
+are left out when you weigh or log usage. The quick search still finds them,
+and typing a used-up spool's identifier opens its page.
 
-When you merge two materials, the print settings of the material you merge
-into are kept. If it has none, it takes over those of the other one.
+When every spool of a material is used up, the material counts as out of
+stock: its page says so, and the overview shows a warning with a link to it –
+that is the moment to buy more.
+
+When you merge two materials, or move a material's last spool to another
+material, the print settings of the material you move to are kept. If it has
+none, it takes over the others.

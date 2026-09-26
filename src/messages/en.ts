@@ -267,6 +267,8 @@ export const en: Messages = {
     lookupAria: "Identifier for quick access",
     lookupNotFound: (vars: { query: string }) =>
       `No container found for “${vars.query}”`,
+    lookupUsedUp: (vars: { identifier: string }) =>
+      `${vars.identifier} is marked as used up – here is its page.`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Several matches for “${vars.query}” – please enter the exact identifier`,
     statMaterials: "Materials",
@@ -338,6 +340,10 @@ export const en: Messages = {
       `${vars.count} containers · ${vars.remaining} left · ${vars.low} running low`,
     groupCount: (vars: { count: number }) => `${vars.count} containers`,
     groupTare: (vars: { amount: string }) => `tare ${vars.amount}`,
+    outOfStock: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Out of stock – every spool used up:"
+        : `${vars.count} materials out of stock – every spool used up:`,
     mergeHint: (vars: { count: number }) =>
       vars.count === 1
         ? "Two materials look like the same one. Merged, their stock counts together."
@@ -383,6 +389,7 @@ export const en: Messages = {
     thisOne: "this one",
     stockOk: "in stock, enough",
     stockLow: "in stock, running low",
+    stockUsedUp: "out of stock – all used up",
     thresholdLager: (vars: { amount: string }) =>
       `warning below ${vars.amount} (store)`,
     thresholdDefault: (vars: { amount: string }) =>
@@ -419,6 +426,9 @@ export const en: Messages = {
     saved: "Print settings saved",
     invalid: (vars: { field: string }) =>
       `“${vars.field}” is invalid or outside the usual range.`,
+    rangeInvalid: (vars: { field: string }) =>
+      `“${vars.field}” is lower than the “from” value.`,
+    hoursUnit: "h",
     enclosureRequired: "Needs an enclosed printer",
     notesLabel: "Notes (Markdown)",
     notesPlaceholder:

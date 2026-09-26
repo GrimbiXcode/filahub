@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { Scale } from "lucide-react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import { identifierNumber } from "@contracts/identifierTemplate";
 import { roleAllows } from "@contracts/organizations";
 import { cn } from "@/lib/utils";
+import { gebindePath } from "@/const";
 
 /**
  * Schnellzugriff: Kennung vom Gebinde ablesen, eintippen, wiegen.
@@ -39,6 +41,7 @@ export function IdentifierLookup({
   const scope = useActiveScope();
   const role = useScopeRole();
   const { openWeighing } = useQuickActions();
+  const navigate = useNavigate();
   const [value, setValue] = useState("");
   const { data: allMaterials } = trpc.material.list.useQuery(
     { ...scope },
@@ -54,7 +57,20 @@ export function IdentifierLookup({
     event.preventDefault();
     const q = value.trim().toLowerCase();
     if (!q) return;
-    // Aufgebrauchte Gebinde wiegt niemand mehr (seit 4.1.0)
+    /*
+      Aufgebrauchte Gebinde wiegt niemand mehr (seit 4.1.0). Ihre Kennung ist
+      aber weiter belegt – wer sie genau eintippt, landet auf ihrer Seite
+      statt bei „nicht gefunden“.
+    */
+    const usedUp = (allMaterials ?? []).find(
+      m => m.archivedAt != null && m.identifier?.toLowerCase() === q
+    );
+    if (usedUp) {
+      setValue("");
+      toast.info(t.home.lookupUsedUp({ identifier: usedUp.identifier ?? "" }));
+      navigate(gebindePath(usedUp.id));
+      return;
+    }
     const list = (allMaterials ?? []).filter(m => m.archivedAt == null);
     const exact = list.find(m => m.identifier?.toLowerCase() === q);
     const templates = new Map(

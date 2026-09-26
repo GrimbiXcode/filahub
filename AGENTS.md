@@ -373,9 +373,18 @@ Benutzer etwas davon hat. Wo die Oberfläche eine Gebindeform kennt, sagt sie
 statt Löschen für eine leere Rolle: Verlauf, Material und seine
 Druckeinstellungen bleiben.
 
-- **Zählt nicht zum Bestand** (`stockByProduct` überspringt es), steht nicht
-  im Regal, nicht in Wiegen/Abbuchen/Kennungssuche und geht **nicht an
-  Freunde** (alle drei Freundes-Lesepfade filtern `archivedAt IS NULL`).
+- **Zählt nicht zum Bestand** (`productStock` mit `archived`), steht nicht im
+  Regal, nicht in Wiegen/Abbuchen und geht **nicht an Freunde** (alle drei
+  Freundes-Lesepfade filtern `archivedAt IS NULL`). Wiegen und Abbuchen lehnt
+  auch der Server ab (`assertGebindeInUse`) – eine zweite Sitzung sieht die
+  Markierung erst nach dem Neuladen. Die Schnellsuche findet es weiter zum
+  Ansehen, die Kennungssuche führt auf seine Seite.
+- **Sind alle Gebinde aufgebraucht, ist das Material knapp** (`usedUp`,
+  Bestand 0, Schwelle aus den aufgebrauchten Gebinden). Weil es in keinem Regal
+  mehr steht, meldet es die Übersicht eigens (`OutOfStockHint` über
+  `product.list` → `activeCount`).
+- `archived: true` ein zweites Mal behält den ersten Zeitpunkt
+  (`coalesce`).
 - **`material.list` liefert es trotzdem mit**, mit `archivedAt`: Formular und
   Import berechnen die nächste freie Kennung aus dieser Liste, und die Kennung
   eines aufgebrauchten Gebindes bleibt belegt, bis es gelöscht wird (der
@@ -406,9 +415,14 @@ Primärschlüssel, `settings` jsonb, `notes` Markdown, `schemaVersion`).
 - **Gespeichertes, das nicht mehr zum Schema passt, wird `null`**
   (`parseStoredPrintSettings`) statt eines Fehlers – eine Seite, die an einer
   alten Zeile scheitert, wäre schlimmer als eine leere Karte.
-- **Zusammenführen:** Die Einstellungen des Ziels bleiben; hat es keine,
-  wandern die der Quelle mit. Feldweise zu mischen hieße, Werte zweier
-  Materialien zu verschneiden.
+- **Zusammenführen und Umordnen des letzten Gebindes:** Die Einstellungen des
+  Ziels bleiben; hat es keine, wandern die der Quelle mit (`carryTo` in
+  `deleteProductIfEmpty` – eine Stelle für beide Wege). Feldweise zu mischen
+  hieße, Werte zweier Materialien zu verschneiden.
+- **Die Art wird unter der Sperre geprüft** (`savePrintSettings`). Wandert das
+  letzte Gebinde danach in ein Lager anderer Art, liefert `product.byId` die
+  Werte nicht mehr aus (die Notizen schon) – „Düse 215 °C“ an einem Harz wäre
+  falsch. Gespeichert bleiben sie, bis jemand neue einträgt.
 - **Kaskaden:** mit dem Material (`deleteProductIfEmpty`), bei Konto- und
   Organisationslöschung vor den Materialien. Kein `userId` – der Besitz folgt
   aus dem Material, deshalb in der Ausnahmeliste des DSGVO-Wächters; im Export

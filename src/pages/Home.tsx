@@ -17,6 +17,7 @@ import {
   Scale,
   Search,
   SlidersHorizontal,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -660,6 +661,7 @@ export default function Home() {
           onPick={pick}
         />
 
+        <OutOfStockHint />
         {roleAllows(role, "editor") && <MergeHint />}
 
         <div className="flex items-start gap-6">
@@ -1513,6 +1515,42 @@ function MergeHint() {
       <Button size="sm" variant="ghost" onClick={dismiss}>
         {t.home.mergeHintDismiss}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Materialien, deren Gebinde alle aufgebraucht sind (seit 4.1.0).
+ *
+ * Sie stehen in keinem Regal mehr – ihr Bestand ist 0 –, und gerade sie soll
+ * man nachkaufen. Ohne diesen Hinweis verschwände ein ausgegangenes Material
+ * still aus der Übersicht, statt zu warnen. Über alle Lager des Bereichs, wie
+ * der Bestand.
+ */
+function OutOfStockHint() {
+  const t = useT();
+  const scope = useActiveScope();
+  const { data: products } = trpc.product.list.useQuery(scope);
+  const outOfStock = (products ?? []).filter(
+    p => p.gebindeCount > 0 && p.activeCount === 0
+  );
+  if (outOfStock.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
+      <TriangleAlert aria-hidden="true" className="size-4 text-destructive" />
+      <span className="text-muted-foreground">
+        {t.home.outOfStock({ count: outOfStock.length })}
+      </span>
+      {outOfStock.slice(0, 5).map(p => (
+        <Button key={p.id} asChild size="sm" variant="outline">
+          <Link to={materialPath(p.id)}>{p.name}</Link>
+        </Button>
+      ))}
+      {outOfStock.length > 5 && (
+        <span className="text-xs text-muted-foreground">
+          {t.home.moreMaterials({ count: outOfStock.length - 5 })}
+        </span>
+      )}
     </div>
   );
 }
