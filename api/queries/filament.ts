@@ -26,6 +26,7 @@ import {
 import {
   consumptions,
   materials,
+  printJobMaterials,
   type MaterialProduct,
   presetContainerVariants,
   containerTypes,
@@ -785,6 +786,14 @@ export async function deleteMaterial(scope: Scope, id: number) {
     await tx
       .delete(consumptions)
       .where(inArray(consumptions.materialId, scoped));
+    /*
+      Drucke bleiben, verlieren aber den Bezug auf das Gebinde und seine eben
+      gelöschten Verbräuche (4.2.0). Das Material nennen sie weiter.
+    */
+    await tx
+      .update(printJobMaterials)
+      .set({ materialId: null, consumptionId: null })
+      .where(inArray(printJobMaterials.materialId, scoped));
     const deleted = await tx
       .delete(materials)
       .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
@@ -897,7 +906,14 @@ export async function findConsumption(id: number) {
 }
 
 export async function deleteConsumption(id: number) {
-  await getDb().delete(consumptions).where(eq(consumptions.id, id));
+  await getDb().transaction(async tx => {
+    await tx.delete(consumptions).where(eq(consumptions.id, id));
+    // Ein Druck, der ihn gebucht hatte, bleibt – nur ohne Buchung (4.2.0)
+    await tx
+      .update(printJobMaterials)
+      .set({ consumptionId: null })
+      .where(eq(printJobMaterials.consumptionId, id));
+  });
 }
 
 /**

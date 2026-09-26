@@ -1,0 +1,554 @@
+import {
+  and,
+  count,
+  desc,
+  eq,
+  exists,
+  gte,
+  ilike,
+  inArray,
+  lt,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { normalizeMaterialType } from "@contracts/materials";
+import {
+  normalizeTags,
+  type PrintJobInput,
+  type PrintJobStatus,
+} from "@contracts/printJobs";
+import {
+  consumptions,
+  materialProducts,
+  materials,
+  printJobLinks,
+  printJobMaterials,
+  printJobs,
+} from "@db/schema";
+import { scopeOwner, scopeWhere, type Scope } from "../scope";
+import { getDb } from "./connection";
+import { lockProductInScope } from "./products";
+
+/**
+ * Druckhistorie (seit 4.2.0).
+ *
+ * **Der Verbrauch bleibt die einzige Wahrheit für die Restmenge.** Ein Druck
+ * mit Gebinde und Grammzahl bucht einen gewöhnlichen Verbrauch ab (dieselbe
+ * Tabelle wie `material.addConsumption`) und merkt sich dessen ID in
+ * `print_job_materials.consumptionId`. Es gibt keine zweite Restmengenrechnung
+ * über Drucke.
+ *
+ * Alle Schreibpfade laufen in **einer** Transaktion: Ein Druck ohne seine
+ * Verbräuche oder Verbräuche ohne ihren Druck wären zwei Wahrheiten.
+ */
+
+type Tx = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
+
+/** Fehlerkennungen der Schreibpfade – der Router übersetzt sie. */
+export const PRINT_JOB_NOT_FOUND = "PRINT_JOB_NOT_FOUND";
+export const PRINT_JOB_BAD_MATERIAL = "PRINT_JOB_BAD_MATERIAL";
+export const PRINT_JOB_USED_UP = "PRINT_JOB_USED_UP";
+
+/**
+ * Prüft die Materialzeilen gegen den Bereich und liefert je Material den
+ * Namen für den Schnappschuss. Unter Sperre der Materialien: Sonst könnte ein
+ * Material zwischen Prüfung und Schreiben mit seinem letzten Gebinde
+ * verschwinden (`lockProductInScope`).
+ */
+async function checkMaterialRows(
+  tx: Tx,
+  scope: Scope,
+  rows: PrintJobInput["materials"]
+): Promise<Map<number, string>> {
+  const names = new Map<number, string>();
+  const productIds = [...new Set(rows.map(r => r.productId))].sort(
+    (a, b) => a - b
+  );
+  for (const productId of productIds) {
+    if (!(await lockProductInScope(tx, scope, productId)))
+      throw new Error(PRINT_JOB_BAD_MATERIAL);
+  }
+  if (productIds.length > 0) {
+    const products = await tx
+      .select({ id: materialProducts.id, name: materialProducts.name })
+      .from(materialProducts)
+      .where(inArray(materialProducts.id, productIds));
+    for (const p of products) names.set(p.id, p.name);
+  }
+  const gebindeIds = rows.flatMap(r => (r.materialId ? [r.materialId] : []));
+  if (gebindeIds.length > 0) {
+    const gebinde = await tx
+      .select({
+        id: materials.id,
+        productId: materials.productId,
+        archivedAt: materials.archivedAt,
+      })
+      .from(materials)
+      .where(
+        and(inArray(materials.id, gebindeIds), scopeWhere(materials, scope))
+      );
+    const byId = new Map(gebinde.map(g => [g.id, g]));
+    for (const row of rows) {
+      if (!row.materialId) continue;
+      const g = byId.get(row.materialId);
+      // Das Gebinde muss zum Bereich **und** zum genannten Material gehören
+      if (!g || g.productId !== row.productId)
+        throw new Error(PRINT_JOB_BAD_MATERIAL);
+      if (g.archivedAt != null && row.grams > 0)
+        throw new Error(PRINT_JOB_USED_UP);
+    }
+  }
+  return names;
+}
+
+/** Schreibt Links und Materialzeilen samt Verbräuchen eines Drucks. */
+async function insertChildren(
+  tx: Tx,
+  printJobId: number,
+  input: PrintJobInput,
+  names: Map<number, string>
+) {
+  if (input.links.length > 0) {
+    await tx.insert(printJobLinks).values(
+      input.links.map((link, position) => ({
+        printJobId,
+        url: link.url,
+        label: link.label?.trim() || null,
+        position,
+      }))
+    );
+  }
+  let position = 0;
+  for (const row of input.materials) {
+    let consumptionId: number | null = null;
+    if (row.materialId && row.grams > 0) {
+      const [created] = await tx
+        .insert(consumptions)
+        .values({
+          materialId: row.materialId,
+          weight: row.grams,
+          consumedAt: input.printedAt,
+          note: input.title.slice(0, 500),
+        })
+        .returning({ id: consumptions.id });
+      consumptionId = created.id;
+    }
+    await tx.insert(printJobMaterials).values({
+      printJobId,
+      productId: row.productId,
+      productName: names.get(row.productId) ?? "",
+      materialId: row.materialId ?? null,
+      grams: row.grams,
+      consumptionId,
+      position: position++,
+    });
+  }
+}
+
+function jobColumns(input: PrintJobInput) {
+  return {
+    title: input.title,
+    printedAt: input.printedAt,
+    status: input.status,
+    durationMinutes: input.durationMinutes,
+    printer: input.printer?.trim() || null,
+    notes: input.notes?.trim() || null,
+    tags: normalizeTags(input.tags),
+  };
+}
+
+export async function createPrintJob(
+  scope: Scope,
+  input: PrintJobInput
+): Promise<number> {
+  return getDb().transaction(async tx => {
+    const names = await checkMaterialRows(tx, scope, input.materials);
+    const [{ id }] = await tx
+      .insert(printJobs)
+      .values({ ...jobColumns(input), ...scopeOwner(scope) })
+      .returning({ id: printJobs.id });
+    await insertChildren(tx, id, input, names);
+    return id;
+  });
+}
+
+/** Die Materialzeilen als vergleichbarer Schlüssel – unverändert heißt: nicht neu buchen. */
+function materialsKey(
+  rows: readonly {
+    productId: number | null;
+    materialId?: number | null;
+    grams: number;
+  }[]
+): string {
+  return JSON.stringify(
+    rows.map(r => [r.productId, r.materialId ?? null, r.grams])
+  );
+}
+
+/**
+ * Ändert einen Druck. Materialien und Zeitpunkt wirken auf den Bestand: Hat
+ * sich eines davon geändert, werden die alten Verbräuche zurückgenommen und
+ * neu gebucht – sonst bleiben sie unangetastet (auch ihre IDs, auf die die
+ * Korrekturregel der Verbräuche schaut).
+ */
+export async function updatePrintJob(
+  scope: Scope,
+  id: number,
+  input: PrintJobInput
+): Promise<void> {
+  await getDb().transaction(async tx => {
+    const [job] = await tx
+      .select({ id: printJobs.id, printedAt: printJobs.printedAt })
+      .from(printJobs)
+      .where(and(eq(printJobs.id, id), scopeWhere(printJobs, scope)))
+      .for("update");
+    if (!job) throw new Error(PRINT_JOB_NOT_FOUND);
+    const old = await tx
+      .select()
+      .from(printJobMaterials)
+      .where(eq(printJobMaterials.printJobId, id))
+      .orderBy(printJobMaterials.position);
+    const rebook =
+      materialsKey(old) !== materialsKey(input.materials) ||
+      job.printedAt.getTime() !== input.printedAt.getTime();
+    const names = rebook
+      ? await checkMaterialRows(tx, scope, input.materials)
+      : new Map<number, string>();
+
+    await tx
+      .update(printJobs)
+      .set(jobColumns(input))
+      .where(eq(printJobs.id, id));
+    await tx.delete(printJobLinks).where(eq(printJobLinks.printJobId, id));
+    if (rebook) {
+      const booked = old.flatMap(r =>
+        r.consumptionId ? [r.consumptionId] : []
+      );
+      if (booked.length > 0)
+        await tx.delete(consumptions).where(inArray(consumptions.id, booked));
+      await tx
+        .delete(printJobMaterials)
+        .where(eq(printJobMaterials.printJobId, id));
+      await insertChildren(tx, id, input, names);
+    } else {
+      await insertChildren(tx, id, { ...input, materials: [] }, names);
+    }
+  });
+}
+
+/**
+ * Löscht einen Druck. Mit `revertConsumptions` gehen die abgebuchten
+ * Verbräuche mit (die Restmenge steigt wieder), sonst bleiben sie stehen und
+ * verlieren nur ihren Bezug – der Druck war dann eben ein Eintrag zu viel,
+ * das Material ist trotzdem weg.
+ */
+export async function deletePrintJob(
+  scope: Scope,
+  id: number,
+  revertConsumptions: boolean
+): Promise<boolean> {
+  return getDb().transaction(async tx => {
+    const [job] = await tx
+      .select({ id: printJobs.id })
+      .from(printJobs)
+      .where(and(eq(printJobs.id, id), scopeWhere(printJobs, scope)))
+      .for("update");
+    if (!job) return false;
+    if (revertConsumptions) {
+      const rows = await tx
+        .select({ consumptionId: printJobMaterials.consumptionId })
+        .from(printJobMaterials)
+        .where(eq(printJobMaterials.printJobId, id));
+      const booked = rows.flatMap(r =>
+        r.consumptionId ? [r.consumptionId] : []
+      );
+      if (booked.length > 0)
+        await tx.delete(consumptions).where(inArray(consumptions.id, booked));
+    }
+    await tx.delete(printJobLinks).where(eq(printJobLinks.printJobId, id));
+    await tx
+      .delete(printJobMaterials)
+      .where(eq(printJobMaterials.printJobId, id));
+    await tx.delete(printJobs).where(eq(printJobs.id, id));
+    return true;
+  });
+}
+
+/** Die blanke Zeile im Bereich – für Rechteprüfungen */
+export function findPrintJobRowInScope(scope: Scope, id: number) {
+  return getDb().query.printJobs.findFirst({
+    where: and(eq(printJobs.id, id), scopeWhere(printJobs, scope)),
+  });
+}
+
+/** Der zuletzt erfasste Druck des Bereichs (höchste ID) – für `mayDeletePrintJob` */
+export async function findLatestPrintJobId(
+  scope: Scope
+): Promise<number | null> {
+  const rows = await getDb()
+    .select({ id: printJobs.id })
+    .from(printJobs)
+    .where(scopeWhere(printJobs, scope))
+    .orderBy(desc(printJobs.id))
+    .limit(1);
+  return rows.at(0)?.id ?? null;
+}
+
+/** Wie viele Drucke der Bereich hat – Grundlage der Obergrenze. */
+export async function countPrintJobsInScope(scope: Scope): Promise<number> {
+  const rows = await getDb()
+    .select({ value: count() })
+    .from(printJobs)
+    .where(scopeWhere(printJobs, scope));
+  return Number(rows.at(0)?.value ?? 0);
+}
+
+/** Drucker und Tags, die im Bereich vorkommen – Vorschläge und Filter */
+export async function findPrintJobFacets(
+  scope: Scope
+): Promise<{ printers: string[]; tags: string[] }> {
+  const db = getDb();
+  const [printerRows, tagRows] = await Promise.all([
+    db
+      .selectDistinct({ printer: printJobs.printer })
+      .from(printJobs)
+      .where(
+        and(scopeWhere(printJobs, scope), sql`${printJobs.printer} IS NOT NULL`)
+      )
+      .orderBy(printJobs.printer),
+    db.execute<{ tag: string }>(
+      sql`SELECT DISTINCT unnest(${printJobs.tags}) AS tag FROM ${printJobs} WHERE ${scopeWhere(printJobs, scope)} ORDER BY tag`
+    ),
+  ]);
+  return {
+    printers: printerRows.flatMap(r => (r.printer ? [r.printer] : [])),
+    tags: tagRows.rows.map(r => r.tag),
+  };
+}
+
+export type PrintJobFilters = {
+  query?: string;
+  productId?: number;
+  materialId?: number;
+  materialType?: string;
+  status?: PrintJobStatus;
+  printer?: string;
+  tag?: string;
+  from?: Date;
+  to?: Date;
+};
+
+function escapeLike(term: string): string {
+  return term.replace(/[\\%_]/g, char => `\\${char}`);
+}
+
+/** Die Bedingungen der Liste – jede als eigener Baustein, und-verknüpft */
+function filterConditions(scope: Scope, f: PrintJobFilters): SQL[] {
+  const db = getDb();
+  const conditions: SQL[] = [scopeWhere(printJobs, scope)];
+  const materialRows = (condition: SQL) =>
+    exists(
+      db
+        .select({ one: sql`1` })
+        .from(printJobMaterials)
+        .where(and(eq(printJobMaterials.printJobId, printJobs.id), condition))
+    );
+  const term = f.query?.trim();
+  if (term) {
+    const pattern = `%${escapeLike(term)}%`;
+    conditions.push(
+      or(
+        ilike(printJobs.title, pattern),
+        ilike(printJobs.notes, pattern),
+        sql`array_to_string(${printJobs.tags}, ' ') ILIKE ${pattern}`,
+        ilike(printJobs.printer, pattern),
+        exists(
+          db
+            .select({ one: sql`1` })
+            .from(printJobLinks)
+            .where(
+              and(
+                eq(printJobLinks.printJobId, printJobs.id),
+                or(
+                  ilike(printJobLinks.url, pattern),
+                  ilike(printJobLinks.label, pattern)
+                )
+              )
+            )
+        ),
+        materialRows(ilike(printJobMaterials.productName, pattern))
+      )!
+    );
+  }
+  if (f.productId != null)
+    conditions.push(materialRows(eq(printJobMaterials.productId, f.productId)));
+  if (f.materialId != null)
+    conditions.push(
+      materialRows(eq(printJobMaterials.materialId, f.materialId))
+    );
+  if (f.materialType?.trim()) {
+    const key = normalizeMaterialType(f.materialType);
+    conditions.push(
+      materialRows(
+        inArray(
+          printJobMaterials.productId,
+          db
+            .select({ id: materialProducts.id })
+            .from(materialProducts)
+            .where(
+              and(
+                scopeWhere(materialProducts, scope),
+                sql`upper(regexp_replace(btrim(${materialProducts.materialType}), '\\s+', ' ', 'g')) = ${key}`
+              )
+            )
+        )
+      )
+    );
+  }
+  if (f.status) conditions.push(eq(printJobs.status, f.status));
+  if (f.printer?.trim())
+    conditions.push(eq(printJobs.printer, f.printer.trim()));
+  if (f.tag?.trim()) {
+    const [tag] = normalizeTags([f.tag]);
+    if (tag) conditions.push(sql`${tag} = ANY(${printJobs.tags})`);
+  }
+  if (f.from) conditions.push(gte(printJobs.printedAt, f.from));
+  if (f.to) conditions.push(lte(printJobs.printedAt, f.to));
+  return conditions;
+}
+
+/** Materialien und Links zu einer Menge von Drucken, je Druck sortiert */
+async function loadChildren(ids: number[]) {
+  if (ids.length === 0)
+    return {
+      materialsByJob: new Map<number, PrintJobMaterialView[]>(),
+      linksByJob: new Map<number, (typeof printJobLinks.$inferSelect)[]>(),
+    };
+  const db = getDb();
+  const [materialRows, linkRows] = await Promise.all([
+    db
+      .select({
+        row: printJobMaterials,
+        product: {
+          id: materialProducts.id,
+          name: materialProducts.name,
+          color: materialProducts.color,
+          texture: materialProducts.texture,
+        },
+        gebinde: {
+          id: materials.id,
+          identifier: materials.identifier,
+          archivedAt: materials.archivedAt,
+        },
+      })
+      .from(printJobMaterials)
+      .leftJoin(
+        materialProducts,
+        eq(materialProducts.id, printJobMaterials.productId)
+      )
+      .leftJoin(materials, eq(materials.id, printJobMaterials.materialId))
+      .where(inArray(printJobMaterials.printJobId, ids))
+      .orderBy(printJobMaterials.position),
+    db
+      .select()
+      .from(printJobLinks)
+      .where(inArray(printJobLinks.printJobId, ids))
+      .orderBy(printJobLinks.position),
+  ]);
+  const materialsByJob = new Map<number, PrintJobMaterialView[]>();
+  for (const { row, product, gebinde } of materialRows) {
+    const view: PrintJobMaterialView = {
+      id: row.id,
+      productId: product?.id ?? null,
+      /** Der aktuelle Name, sonst der Schnappschuss */
+      name: product?.name ?? row.productName,
+      color: product?.color ?? null,
+      texture: product?.texture ?? null,
+      materialId: gebinde?.id ?? null,
+      identifier: gebinde?.identifier ?? null,
+      gebindeArchived: gebinde?.archivedAt != null,
+      grams: row.grams,
+      booked: row.consumptionId != null,
+    };
+    const list = materialsByJob.get(row.printJobId);
+    if (list) list.push(view);
+    else materialsByJob.set(row.printJobId, [view]);
+  }
+  const linksByJob = new Map<number, (typeof printJobLinks.$inferSelect)[]>();
+  for (const link of linkRows) {
+    const list = linksByJob.get(link.printJobId);
+    if (list) list.push(link);
+    else linksByJob.set(link.printJobId, [link]);
+  }
+  return { materialsByJob, linksByJob };
+}
+
+export type PrintJobMaterialView = {
+  id: number;
+  productId: number | null;
+  name: string;
+  color: string | null;
+  texture: string | null;
+  materialId: number | null;
+  identifier: string | null;
+  gebindeArchived: boolean;
+  grams: number;
+  /** Ob für diese Zeile ein Verbrauch gebucht ist */
+  booked: boolean;
+};
+
+/**
+ * Eine Seite der Druckhistorie, neueste zuerst. `cursor` ist der letzte
+ * Eintrag der vorigen Seite (`printedAt`, `id`).
+ */
+export async function listPrintJobs(
+  scope: Scope,
+  filters: PrintJobFilters,
+  cursor: { printedAt: Date; id: number } | null,
+  limit: number
+) {
+  const conditions = filterConditions(scope, filters);
+  if (cursor) {
+    conditions.push(
+      or(
+        lt(printJobs.printedAt, cursor.printedAt),
+        and(
+          eq(printJobs.printedAt, cursor.printedAt),
+          lt(printJobs.id, cursor.id)
+        )
+      )!
+    );
+  }
+  const rows = await getDb()
+    .select()
+    .from(printJobs)
+    .where(and(...conditions))
+    .orderBy(desc(printJobs.printedAt), desc(printJobs.id))
+    .limit(limit + 1);
+  const page = rows.slice(0, limit);
+  const { materialsByJob, linksByJob } = await loadChildren(
+    page.map(j => j.id)
+  );
+  return {
+    items: page.map(job => ({
+      ...job,
+      materials: materialsByJob.get(job.id) ?? [],
+      links: linksByJob.get(job.id) ?? [],
+    })),
+    hasMore: rows.length > limit,
+  };
+}
+
+/** Ein Druck mit Materialien und Links, oder `null` */
+export async function findPrintJobInScope(scope: Scope, id: number) {
+  const job = await findPrintJobRowInScope(scope, id);
+  if (!job) return null;
+  const { materialsByJob, linksByJob } = await loadChildren([id]);
+  return {
+    ...job,
+    materials: materialsByJob.get(id) ?? [],
+    links: linksByJob.get(id) ?? [],
+  };
+}

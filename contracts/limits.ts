@@ -68,6 +68,15 @@ export const MAX_CONTAINER_TYPES_PER_SCOPE = 100;
 /** Dryboxen je Bereich. */
 export const MAX_STORAGE_BOXES_PER_SCOPE = 100;
 
+/**
+ * Drucke je Bereich (seit 4.2.0).
+ *
+ * Zehn Drucke am Tag über mehr als fünf Jahre – jenseits jedes Heimlagers,
+ * und die Liste wird ohnehin seitenweise geladen. Die Grenze schneidet die
+ * Schleife ab, die sonst mit Verbräuchen die Tabelle füllte.
+ */
+export const MAX_PRINT_JOBS_PER_SCOPE = 20_000;
+
 // ---------------------------------------------------------------------------
 // Preset-Vorschläge
 // ---------------------------------------------------------------------------

@@ -129,6 +129,9 @@ const COUNTED_TABLES = [
   "weighings",
   // Seit 2.9.0: Verbräuche, die Abbuchungen ohne Waage.
   "consumptions",
+  "print_jobs",
+  "print_job_materials",
+  "print_job_links",
   "hidden_container_presets",
   "preset_proposals",
   /*

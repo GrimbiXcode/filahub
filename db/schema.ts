@@ -7,6 +7,7 @@ import {
 } from "@contracts/friends";
 import type { MaterialColumn } from "@contracts/materialColumns";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
+import { PRINT_JOB_STATUSES } from "@contracts/printJobs";
 import {
   ORGANIZATION_INVITATION_STATUSES,
   ORGANIZATION_ROLES,
@@ -731,6 +732,111 @@ export const consumptions = pgTable(
 
 export type Consumption = typeof consumptions.$inferSelect;
 export type InsertConsumption = typeof consumptions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Druckhistorie (seit 4.2.0)
+// ---------------------------------------------------------------------------
+
+export const printJobStatusEnum = pgEnum(
+  "print_job_status",
+  PRINT_JOB_STATUSES
+);
+
+/**
+ * Ein Druckauftrag: Titel, Zeitpunkt, Ergebnis, Drucker, Notizen, Tags – und
+ * über `print_job_materials` die Materialien samt Verbrauch.
+ *
+ * Eigentum wie überall (`ownerXor`). Kein `createdByUserId` an Org-Zeilen –
+ * dieselbe Grenze wie beim Bestand (siehe `AGENTS.md`, „Organisationen“).
+ */
+export const printJobs = pgTable(
+  "print_jobs",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    printedAt: tsColumn("printedAt").defaultNow().notNull(),
+    status: printJobStatusEnum("status").default("success").notNull(),
+    durationMinutes: integer("durationMinutes"),
+    /** Freitext mit Vorschlagsliste – wie `materialType` */
+    printer: varchar("printer", { length: 100 }),
+    /** Markdown */
+    notes: text("notes"),
+    /** Klein geschrieben und ohne Dubletten, siehe `normalizeTags` */
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    ownerXor("print_jobs_owner_xor"),
+    index("print_jobs_user_printed_idx").on(t.userId, t.printedAt),
+    index("print_jobs_organization_printed_idx").on(
+      t.organizationId,
+      t.printedAt
+    ),
+    index("print_jobs_tags_idx").using("gin", t.tags),
+  ]
+);
+
+export type PrintJob = typeof printJobs.$inferSelect;
+
+/**
+ * Die Materialien eines Drucks – einer kann mehrere nutzen (AMS, MMU).
+ *
+ * - `productName` ist ein **Schnappschuss**: Ein Material verschwindet mit
+ *   seinem letzten Gebinde, der Druck soll trotzdem lesbar bleiben.
+ *   `productId` wird dann `NULL`; beim Zusammenführen zieht es mit.
+ * - `materialId` (das Gebinde) ist optional – Gramm eines Materials ohne
+ *   feststehende Rolle, etwa für einen späteren Import aus dem Drucker (#41).
+ * - `consumptionId` zeigt auf den Verbrauch, den der Druck abgebucht hat. Der
+ *   Verbrauch bleibt die einzige Wahrheit für die Restmenge; `grams` hier ist
+ *   die Angabe des Drucks. Wird der Verbrauch gelöscht, wird die Spalte `NULL`.
+ *
+ * Kein Besitzer – er folgt aus dem Druck (Ausnahmeliste des DSGVO-Wächters).
+ */
+export const printJobMaterials = pgTable(
+  "print_job_materials",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    productId: bigint("productId", { mode: "number" }),
+    productName: varchar("productName", { length: 255 }).notNull(),
+    materialId: bigint("materialId", { mode: "number" }),
+    grams: integer("grams").notNull(),
+    consumptionId: bigint("consumptionId", { mode: "number" }),
+    position: integer("position").notNull(),
+  },
+  t => [
+    index("print_job_materials_job_idx").on(t.printJobId),
+    index("print_job_materials_product_idx").on(t.productId),
+    index("print_job_materials_material_idx").on(t.materialId),
+    index("print_job_materials_consumption_idx").on(t.consumptionId),
+  ]
+);
+
+export type PrintJobMaterial = typeof printJobMaterials.$inferSelect;
+
+/** Links zum Modell – nur `https://`, siehe `printJobLinkSchema` */
+export const printJobLinks = pgTable(
+  "print_job_links",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    url: varchar("url", { length: 2000 }).notNull(),
+    label: varchar("label", { length: 100 }),
+    position: integer("position").notNull(),
+  },
+  t => [index("print_job_links_job_idx").on(t.printJobId)]
+);
+
+export type PrintJobLink = typeof printJobLinks.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde

@@ -77,6 +77,13 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "materials",
   "weighings",
   /*
+    Druckhistorie (seit 4.2.0): Drucke mit Titel, Notizen, Tags, Drucker –
+    und ihre Materialzeilen und Links. Additiv, Version bleibt 5.
+  */
+  "printJobs",
+  "printJobMaterials",
+  "printJobLinks",
+  /*
     Verbräuche seit 2.9.0 – Abbuchungen in Gramm samt Notiz und Zeitpunkt.
     Personenbezug wie bei den Wägungen über das Material, deshalb in der
     handgepflegten Ausnahmeliste des Integrationstests.

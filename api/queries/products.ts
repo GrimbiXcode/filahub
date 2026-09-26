@@ -10,6 +10,7 @@ import {
   materialPrintSettings,
   materialProducts,
   materials,
+  printJobMaterials,
 } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
@@ -224,6 +225,14 @@ export async function deleteProductIfEmpty(
     .returning({ id: materialProducts.id });
   // Die Druckeinstellungen gehen mit dem Material (seit 4.1.0) – oder wandern
   if (deleted.length === 0) return;
+  /*
+    Drucke zeigen auf das Material, das die Gebinde übernimmt – oder auf
+    nichts; ihr Schnappschuss `productName` hält den Namen (seit 4.2.0).
+  */
+  await executor
+    .update(printJobMaterials)
+    .set({ productId: carryTo ?? null })
+    .where(eq(printJobMaterials.productId, id));
   if (carryTo != null && !(await hasPrintSettingsRow(executor, carryTo))) {
     await executor
       .update(materialPrintSettings)

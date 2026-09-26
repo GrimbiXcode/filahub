@@ -72,6 +72,9 @@ describe("Migrationen", () => {
       "materials",
       "weighings",
       "consumptions",
+      "print_jobs",
+      "print_job_materials",
+      "print_job_links",
       "container_types",
       "storage_boxes",
       "custom_colors",
@@ -135,6 +138,7 @@ describe("Migrationen", () => {
       "texture_kind",
       "organization_role",
       "organization_invitation_status",
+      "print_job_status",
     ]) {
       expect(names).toContain(type);
     }

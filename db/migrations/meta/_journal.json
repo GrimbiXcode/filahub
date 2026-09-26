@@ -169,6 +169,13 @@
       "when": 1790379557327,
       "tag": "0023_print_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790405060585,
+      "tag": "0024_print_jobs",
+      "breakpoints": true
     }
   ]
 }

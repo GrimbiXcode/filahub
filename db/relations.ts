@@ -4,6 +4,9 @@ import {
   lager,
   materialProducts,
   materials,
+  printJobLinks,
+  printJobMaterials,
+  printJobs,
   organizationMembers,
   organizations,
   presetManufacturers,
@@ -226,3 +229,37 @@ export const presetContainerVariantsRelations = relations(
     materials: many(materials),
   })
 );
+
+// ---------------------------------------------------------------------------
+// Druckhistorie (seit 4.2.0)
+// ---------------------------------------------------------------------------
+
+export const printJobsRelations = relations(printJobs, ({ many }) => ({
+  materials: many(printJobMaterials),
+  links: many(printJobLinks),
+}));
+
+export const printJobMaterialsRelations = relations(
+  printJobMaterials,
+  ({ one }) => ({
+    printJob: one(printJobs, {
+      fields: [printJobMaterials.printJobId],
+      references: [printJobs.id],
+    }),
+    product: one(materialProducts, {
+      fields: [printJobMaterials.productId],
+      references: [materialProducts.id],
+    }),
+    material: one(materials, {
+      fields: [printJobMaterials.materialId],
+      references: [materials.id],
+    }),
+  })
+);
+
+export const printJobLinksRelations = relations(printJobLinks, ({ one }) => ({
+  printJob: one(printJobs, {
+    fields: [printJobLinks.printJobId],
+    references: [printJobs.id],
+  }),
+}));

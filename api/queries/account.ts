@@ -67,6 +67,23 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     where: eq(schema.materials.userId, userId),
   });
 
+  /* Druckhistorie (seit 4.2.0): Drucke, ihre Materialzeilen und Links */
+  const printJobs = await db.query.printJobs.findMany({
+    where: eq(schema.printJobs.userId, userId),
+  });
+  const printJobIds = printJobs.map(j => j.id);
+  const [printJobMaterials, printJobLinks] =
+    printJobIds.length === 0
+      ? [[], []]
+      : await Promise.all([
+          db.query.printJobMaterials.findMany({
+            where: inArray(schema.printJobMaterials.printJobId, printJobIds),
+          }),
+          db.query.printJobLinks.findMany({
+            where: inArray(schema.printJobLinks.printJobId, printJobIds),
+          }),
+        ]);
+
   /*
     Wägungen hängen am Material, nicht am Benutzer. Ohne eigene Rollen gibt es
     auch keine Wägungen – die leere `inArray`-Liste würde Drizzle sonst zu
@@ -309,6 +326,9 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     materialPrintSettings,
     materials,
     weighings,
+    printJobs,
+    printJobMaterials,
+    printJobLinks,
     consumptions,
     containerTypes,
     storageBoxes,
@@ -414,6 +434,21 @@ export async function deleteUserAccount(
       .update(schema.presetProposals)
       .set({ sourceContainerTypeId: null })
       .where(eq(schema.presetProposals.userId, userId));
+
+    // 1b. Druckhistorie (seit 4.2.0) – vor den Verbräuchen, auf die sie zeigt
+    const ownPrintJobIds = tx
+      .select({ id: schema.printJobs.id })
+      .from(schema.printJobs)
+      .where(eq(schema.printJobs.userId, userId));
+    await tx
+      .delete(schema.printJobMaterials)
+      .where(inArray(schema.printJobMaterials.printJobId, ownPrintJobIds));
+    await tx
+      .delete(schema.printJobLinks)
+      .where(inArray(schema.printJobLinks.printJobId, ownPrintJobIds));
+    await tx
+      .delete(schema.printJobs)
+      .where(eq(schema.printJobs.userId, userId));
 
     // 2. Wägungen und Verbräuche der eigenen Rollen
     const ownMaterialIds = tx

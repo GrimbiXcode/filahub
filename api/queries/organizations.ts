@@ -13,6 +13,9 @@ import {
   materialPrintSettings,
   materialProducts,
   materials,
+  printJobLinks,
+  printJobMaterials,
+  printJobs,
   containerTypes,
   customColors,
   customTextures,
@@ -168,6 +171,20 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(materials)
     .where(eq(materials.organizationId, organizationId));
+  // Druckhistorie der Organisation (seit 4.2.0)
+  const orgPrintJobIds = tx
+    .select({ id: printJobs.id })
+    .from(printJobs)
+    .where(eq(printJobs.organizationId, organizationId));
+  await tx
+    .delete(printJobMaterials)
+    .where(inArray(printJobMaterials.printJobId, orgPrintJobIds));
+  await tx
+    .delete(printJobLinks)
+    .where(inArray(printJobLinks.printJobId, orgPrintJobIds));
+  await tx
+    .delete(printJobs)
+    .where(eq(printJobs.organizationId, organizationId));
   // Die Materialien nach ihren Gebinden, davor ihre Druckeinstellungen
   await tx
     .delete(materialPrintSettings)

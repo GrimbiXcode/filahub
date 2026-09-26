@@ -171,6 +171,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "organization_invitations",
       "organization_members",
       "preset_proposals",
+      // Seit 4.2.0: Druckhistorie, Besitz wie beim Bestand
+      "print_jobs",
       "storage_boxes",
       /*
         Seit 2.8.0. Der Antrag eines gesperrten Kontos auf Aufhebung der Sperre
@@ -182,10 +184,11 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese sechzehn plus fünf, die den Personenbezug über eine andere Spalte
+      Diese siebzehn plus sieben, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` und seit 2.9.0 `consumptions`
       (beide über das Gebinde), seit 4.1.0 `materialPrintSettings` (über das
-      Material) sowie `loginCodes` (Telegram-ID). Ändert sich
+      Material), seit 4.2.0 `printJobMaterials` und `printJobLinks` (über den
+      Druck) sowie `loginCodes` (Telegram-ID). Ändert sich
       die linke Seite, muss die rechte nachziehen.
 
       Vier waren es bis 2.3.0 – `audit_log` gehörte dazu, weil seine Spalten
@@ -216,6 +219,9 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "customTextures",
         "weighings",
         "consumptions",
+        "printJobs",
+        "printJobMaterials",
+        "printJobLinks",
         "unblockRequests",
       ].sort()
     );
