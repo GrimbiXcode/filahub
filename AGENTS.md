@@ -29,7 +29,8 @@ Benutzer).
 ```
 src/            React-Frontend
   pages/        Routen: Home, MaterialDetail (ein Gebinde), ProductDetail (ein
-                Material mit allen Gebinden), Lager, ContainerTypes, StorageBoxes,
+                Material mit allen Gebinden), PrintJobs und PrintJobDetail
+                (Druckhistorie), Lager, ContainerTypes, StorageBoxes,
                 Appearance (eigene Farben und Oberflächen),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
@@ -46,7 +47,8 @@ src/            React-Frontend
                 Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
                 (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
-                PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog)
+                PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
+                PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -73,8 +75,8 @@ api/            Hono/tRPC-Backend
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
                 (die Gebinde), product (die Materialien), appearance, friend,
-                organization, preset, admin, legal, unblock
-                (admin: preset, proposal, system, user, abuse)
+                organization, print (die Druckhistorie), preset, admin, legal,
+                unblock (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
   middleware.ts publicQuery / authedQuery / blockedQuery / adminQuery und
@@ -89,7 +91,8 @@ api/            Hono/tRPC-Backend
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
                 products.ts (Materialien: Liste, Zusammenführen, Aufräumen
-                ohne Gebinde),
+                ohne Gebinde), printJobs.ts (Druckhistorie: Schreibpfade samt
+                Verbrauchskopplung, Suche, Seiten),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -110,6 +113,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
                 nächste freie Nummer),
                 printSettings.ts (Druckeinstellungen je Materialart),
+                printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -430,6 +434,72 @@ Primärschlüssel, `settings` jsonb, `notes` Markdown, `schemaVersion`).
 - **Oberfläche:** `src/components/PrintSettings.tsx` – die kompakte Zeile
   (`PrintSettingsSummary`) in `ProductGebindeList`, die Karte samt Dialog auf
   der Material-Seite.
+
+## Druckhistorie (seit 4.2.0)
+
+Was gedruckt wurde, mit welchem Material, samt Links, Tags und Notizen.
+Tabellen `print_jobs` (`ownerXor` wie die übrigen Fachzeilen),
+`print_job_materials` und `print_job_links`; Router `print.*`
+(`api/printJobRouter.ts`), Abfragen in `api/queries/printJobs.ts`, Regeln
+ohne Datenbank in `contracts/printJobs.ts`.
+
+- **Der Verbrauch bleibt die einzige Wahrheit für die Restmenge.** Eine
+  Materialzeile mit Gebinde und Gramm bucht einen gewöhnlichen Verbrauch ab
+  (`consumptions`, Zeitpunkt = `printedAt`, Notiz = Titel) und merkt sich
+  dessen ID in `print_job_materials.consumptionId`. `consumptions` bekommt
+  keine Spalte, und es gibt keine zweite Restmengenrechnung über Drucke.
+  Anlegen, Ändern und Löschen laufen je in **einer** Transaktion.
+- **Ohne Gebinde wird nicht abgebucht.** `materialId` ist nullable: Ein Druck
+  darf Gramm eines Materials nennen, ohne dass feststeht, von welcher Rolle –
+  die Vorarbeit für den Import aus dem Drucker (#41).
+- **Ändern bucht nur um, wenn es muss.** Nur wenn sich Materialzeilen
+  (Material, Gebinde, Gramm) oder `printedAt` ändern, werden die alten
+  Verbräuche gelöscht und neu gebucht; sonst bleiben sie samt IDs stehen –
+  auf die höchste ID schaut die Korrekturregel der Verbräuche. Beim Umbuchen
+  darf ein inzwischen aufgebrauchtes Gebinde bleiben, von dem der Druck schon
+  abgebucht hatte (sonst ließe sich ein alter Druck nicht umdatieren); neu
+  hinzukommen darf es nicht (`PRINT_JOB_USED_UP`).
+- **Löschen fragt.** `print.delete` mit `revertConsumptions`: ja löscht die
+  verknüpften Verbräuche mit, nein lässt sie stehen. Ein einzeln gelöschter
+  Verbrauch setzt `consumptionId` auf NULL, der Druck bleibt.
+- **Schnappschuss des Materials.** `productId` und `productName` stehen am
+  Druck. Umordnen eines Gebindes zieht den Druck **nicht** nach; Zusammenführen
+  schon (`carryTo` in `deleteProductIfEmpty` setzt `productId` um). Verschwindet
+  das Material mit seinem letzten Gebinde, wird `productId` NULL und der Name
+  aus dem Schnappschuss angezeigt. Solche Zeilen kann das Formular nicht
+  mitschicken (das Schema verlangt ein Material); `updatePrintJob` lässt sie
+  deshalb stehen.
+- **Tags klein, Links nur `https://`.** `normalizeTags` (getrimmt, ohne „#“,
+  klein, ohne Dubletten) und `isHttpsUrl` – ein `javascript:`-Link wäre
+  Skript im eigenen Ursprung. Links öffnen mit `rel="noopener noreferrer"`.
+- **Suche serverseitig und seitenweise**, anders als die Gebindeliste: Die
+  Historie wächst ohne Grenze. `ILIKE` über Titel, Notizen, Tags, Drucker,
+  Links und Materialnamen, mindestens `PRINT_JOB_SEARCH_MIN_LENGTH` Zeichen,
+  `%`/`_` maskiert. Cursor `printedAt|id` über `printedAt desc, id desc`.
+  Volltext oder `pg_trgm` erst, wenn es langsam wird.
+- **Stufen:** `viewer` sieht und sucht, `weigher` erfasst (ein Druck bucht ab
+  wie ein Verbrauch), `editor` ändert (bucht um) und löscht jeden.
+  `mayDeletePrintJob` ist ein **Alias** von `mayDeleteWeighing` – `weigher`
+  löscht nur den zuletzt erfassten Druck des Bereichs in den ersten 15 Minuten.
+- **Freunde sehen keine Drucke**, auch keine Namen daraus; die
+  Freundes-Lesepfade kennen die Tabellen nicht.
+- **Grenzen:** `MAX_PRINT_JOBS_PER_SCOPE` (20 000), je Druck 16 Materialien,
+  10 Links, 20 Tags; `print.create` 60/min, `print.list` 240/min je Benutzer.
+  Die Verbrauchsobergrenze je Gebinde gilt auch für Drucke. Kein
+  Audit-Ereignis – Nutzung, nicht Sicherheit.
+- **Registriert** in `COUNTED_TABLES`, der Tabellenliste in
+  `api/postgres.integration.test.ts`, im Export (`printJobs`,
+  `printJobMaterials`, `printJobLinks`; additiv, Version bleibt 5) und in den
+  Kaskaden von Konto und Organisation. `print_jobs.userId` findet der
+  DSGVO-Wächter selbst; die beiden Untertabellen stehen in seiner
+  Ausnahmeliste (Personenbezug über den Druck).
+- **Oberfläche:** `/drucke` (`PrintJobs.tsx`, Filter in der Adresse, damit
+  „alle Drucke mit diesem Material“ ein Link ist – `printsForPath`),
+  `/drucke/:id` (`PrintJobDetail.tsx`), das Formular `PrintJobDialog` über
+  `quickActions.openPrintJobForm`/`editPrintJob`, „Letzte Drucke“
+  (`RecentPrints`) auf Material- und Gebindeseite, ein Link im Panel der
+  Übersicht, der Schalter „Als Druck speichern“ im `ConsumptionDialog` und
+  Treffer in der Schnellsuche.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -1201,7 +1271,7 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`, `productStock`, `printSettings`,
+  `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1231,8 +1301,9 @@ Datenbank.
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
   `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
-  `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts` und
-  `api/materialProducts.integration.test.ts`,
+  `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
+  `api/materialProducts.integration.test.ts` und
+  `api/printJobs.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

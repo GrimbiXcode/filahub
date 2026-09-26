@@ -15,6 +15,7 @@ import {
   LEGACY_DRYBOXES_PATH,
   LEGACY_GEBINDE_PATH,
   MATERIALS_PATH,
+  PRINTS_PATH,
   gebindePath,
   LEGAL_PATHS,
   RELEASE_NOTES_PATH,
@@ -36,6 +37,8 @@ import LagerPage from "./pages/Lager";
 import Import from "./pages/Import";
 import MaterialDetail from "./pages/MaterialDetail";
 import ProductDetail from "./pages/ProductDetail";
+import PrintJobDetail from "./pages/PrintJobDetail";
+import PrintJobs from "./pages/PrintJobs";
 import ContainerTypes from "./pages/ContainerTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Legal from "./pages/Legal";
@@ -107,6 +110,8 @@ export default function App() {
             path={LEGACY_GEBINDE_PATH}
             element={<LegacyGebindeRedirect />}
           />
+          <Route path={PRINTS_PATH} element={<PrintJobs />} />
+          <Route path={`${PRINTS_PATH}/:id`} element={<PrintJobDetail />} />
           <Route path={CONTAINER_TYPES_PATH} element={<ContainerTypes />} />
           <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />
           <Route path={APPEARANCE_PATH} element={<Appearance />} />

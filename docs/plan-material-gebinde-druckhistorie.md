@@ -1,8 +1,8 @@
 # Plan: Material und Gebinde, Druckeinstellungen, Druckhistorie
 
 Stand: 4.0.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
-Ende). **Phase 1 ist umgesetzt** (4.0.0), **Phase 2** (4.1.0); die Abweichungen vom
-Entwurf stehen unter „Stand der Umsetzung“.
+Ende). **Phase 1 ist umgesetzt** (4.0.0), **Phase 2** (4.1.0), **Phase 3**
+(4.2.0); die Abweichungen vom Entwurf stehen unter „Stand der Umsetzung“.
 
 ## Stand der Umsetzung
 
@@ -49,6 +49,34 @@ mit Grund:
 - **Eingabe in Slicer-Einheiten** (Rückzug in mm, Belichtung in s),
   gespeichert ganzzahlig (1/100 mm, ms).
 - **Keine Druckeinstellungen je Drucker** – wie im Entwurf ausgeklammert.
+
+**Phase 3 (4.2.0)** – Entscheidungen, die der Entwurf offenließ:
+
+- **`productId` am Druck ist nullable**, anders als im Entwurf („NOT NULL“),
+  dazu ein Namensschnappschuss `productName`. Grund: Ein Material verschwindet
+  mit seinem letzten Gebinde (Phase 1), der Druck soll bleiben. Der Entwurf
+  sah „ein Material mit Drucken lässt sich nur zusammenführen, nicht löschen“
+  vor – das hätte das Löschen des letzten Gebindes blockiert, sobald je damit
+  gedruckt wurde, und „aufgebraucht“ (Phase 2) ist ohnehin der bessere Weg.
+- **Zusammenführen zieht die Drucke mit** (`carryTo`), Umordnen eines
+  Gebindes nicht – wie im Entwurf.
+- **Tags werden klein gespeichert.** Stichworte wie Hashtags; „Vase“ und
+  „vase“ als zwei Tags hätten den Filter zerteilt.
+- **Filter nach Hersteller und Farbe entfallen** in `print.list`. Beides
+  liegt am Material; der Materialfilter und die Freitextsuche über den Namen
+  decken den Bedarf, zwei weitere Joins lohnen sich erst mit Nachfrage.
+  Dafür kam der Drucker in die Freitextsuche.
+- **Ändern bucht nur um, wenn Material, Gebinde, Gramm oder Datum sich
+  ändern.** Titel oder Notizen zu korrigieren soll die Verbräuche nicht neu
+  anlegen – ihre IDs zählen für die Korrekturregel.
+- **Löschen: „zurückbuchen“ ist vorausgewählt.** Ein gelöschter Druck ist
+  meistens ein Versehen, und bei einem alten Druck ändert das Zurückbuchen
+  nichts mehr: Verbräuche vor der jüngsten Wägung zählen ohnehin nicht.
+- **Im Panel der Übersicht nur ein Link** statt „Letzte Drucke“: Das Panel
+  wechselt mit jedem Klick ins Regal, eine Abfrage je Auswahl wäre Last ohne
+  Blick. Material- und Gebindeseite zeigen die Liste.
+- **Die Filter stehen in der Adresse** (`?material=`, `?gebinde=`, `?tag=` …),
+  damit „alle Drucke mit diesem Material“ ein gewöhnlicher Link ist.
 
 Die Einzelheiten stehen in `AGENTS.md` unter „Material und Gebinde“.
 

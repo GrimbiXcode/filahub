@@ -50,6 +50,7 @@ import {
 import { fillLevelTextColor } from "@/lib/format";
 import { HistoryChart } from "@/components/HistoryChart";
 import { ProductGebindeList } from "@/components/ProductGebindeList";
+import { RecentPrints } from "@/components/RecentPrints";
 import { describeTrend } from "@/lib/trend";
 import { Spool } from "@/components/Spool";
 import { useFormat } from "@/lib/formatContext";
@@ -459,6 +460,12 @@ export default function MaterialDetail() {
             />
           </CardContent>
         </Card>
+
+        <RecentPrints
+          productId={material.productId}
+          materialId={material.id}
+          canLog={!material.archivedAt}
+        />
 
         <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Stammdaten */}

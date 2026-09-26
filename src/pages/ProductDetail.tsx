@@ -16,6 +16,7 @@ import { AutocompleteInput } from "@/components/AutocompleteInput";
 import { PageHeader } from "@/components/PageHeader";
 import { PrintSettingsCard } from "@/components/PrintSettings";
 import { ProductGebindeList } from "@/components/ProductGebindeList";
+import { RecentPrints } from "@/components/RecentPrints";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -225,6 +226,8 @@ export default function ProductDetail() {
           kind={product.kind}
           stored={product.printSettings}
         />
+
+        <RecentPrints productId={product.id} />
 
         {canEdit && <MergeCard product={product} />}
       </div>

@@ -60,7 +60,14 @@ export const PRINT_JOB_USED_UP = "PRINT_JOB_USED_UP";
 async function checkMaterialRows(
   tx: Tx,
   scope: Scope,
-  rows: PrintJobInput["materials"]
+  rows: PrintJobInput["materials"],
+  /**
+   * Gebinde, von denen dieser Druck schon abgebucht hatte. Beim Umbuchen
+   * (anderes Datum, andere Grammzahl) darf ein inzwischen aufgebrauchtes
+   * Gebinde bleiben – sonst ließe sich ein alter Druck nicht mehr umdatieren,
+   * sobald seine Rolle leer ist. Neu hinzukommen darf es nicht.
+   */
+  previouslyBooked: ReadonlySet<number> = new Set()
 ): Promise<Map<number, string>> {
   const names = new Map<number, string>();
   const productIds = [...new Set(rows.map(r => r.productId))].sort(
@@ -96,7 +103,7 @@ async function checkMaterialRows(
       // Das Gebinde muss zum Bereich **und** zum genannten Material gehören
       if (!g || g.productId !== row.productId)
         throw new Error(PRINT_JOB_BAD_MATERIAL);
-      if (g.archivedAt != null && row.grams > 0)
+      if (g.archivedAt != null && row.grams > 0 && !previouslyBooked.has(g.id))
         throw new Error(PRINT_JOB_USED_UP);
     }
   }
@@ -108,7 +115,8 @@ async function insertChildren(
   tx: Tx,
   printJobId: number,
   input: PrintJobInput,
-  names: Map<number, string>
+  names: Map<number, string>,
+  firstPosition = 0
 ) {
   if (input.links.length > 0) {
     await tx.insert(printJobLinks).values(
@@ -120,7 +128,7 @@ async function insertChildren(
       }))
     );
   }
-  let position = 0;
+  let position = firstPosition;
   for (const row of input.materials) {
     let consumptionId: number | null = null;
     if (row.materialId && row.grams > 0) {
@@ -192,6 +200,11 @@ function materialsKey(
  * sich eines davon geändert, werden die alten Verbräuche zurückgenommen und
  * neu gebucht – sonst bleiben sie unangetastet (auch ihre IDs, auf die die
  * Korrekturregel der Verbräuche schaut).
+ *
+ * Zeilen, deren Material es nicht mehr gibt (`productId` NULL), kann die
+ * Eingabe nicht nennen – das Schema verlangt ein Material. Sie bleiben
+ * deshalb unberührt stehen, zählen nicht zum Vergleich und haben ohnehin
+ * keinen Verbrauch mehr (das Löschen des Gebindes hat ihn gelöst).
  */
 export async function updatePrintJob(
   scope: Scope,
@@ -205,16 +218,29 @@ export async function updatePrintJob(
       .where(and(eq(printJobs.id, id), scopeWhere(printJobs, scope)))
       .for("update");
     if (!job) throw new Error(PRINT_JOB_NOT_FOUND);
-    const old = await tx
+    const all = await tx
       .select()
       .from(printJobMaterials)
       .where(eq(printJobMaterials.printJobId, id))
       .orderBy(printJobMaterials.position);
+    const old = all.filter(r => r.productId != null);
+    const orphans = all.length - old.length;
     const rebook =
       materialsKey(old) !== materialsKey(input.materials) ||
       job.printedAt.getTime() !== input.printedAt.getTime();
     const names = rebook
-      ? await checkMaterialRows(tx, scope, input.materials)
+      ? await checkMaterialRows(
+          tx,
+          scope,
+          input.materials,
+          new Set(
+            old.flatMap(r =>
+              r.materialId != null && r.consumptionId != null
+                ? [r.materialId]
+                : []
+            )
+          )
+        )
       : new Map<number, string>();
 
     await tx
@@ -228,10 +254,22 @@ export async function updatePrintJob(
       );
       if (booked.length > 0)
         await tx.delete(consumptions).where(inArray(consumptions.id, booked));
-      await tx
-        .delete(printJobMaterials)
-        .where(eq(printJobMaterials.printJobId, id));
-      await insertChildren(tx, id, input, names);
+      if (old.length > 0)
+        await tx.delete(printJobMaterials).where(
+          inArray(
+            printJobMaterials.id,
+            old.map(r => r.id)
+          )
+        );
+      // Hinter den stehengebliebenen Zeilen weiterzählen
+      const maxPosition = Math.max(-1, ...all.map(r => r.position));
+      await insertChildren(
+        tx,
+        id,
+        input,
+        names,
+        orphans > 0 ? maxPosition + 1 : 0
+      );
     } else {
       await insertChildren(tx, id, { ...input, materials: [] }, names);
     }

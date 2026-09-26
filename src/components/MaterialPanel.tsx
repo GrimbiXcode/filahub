@@ -1,6 +1,6 @@
-import { ArrowUpRight, Printer, Scale } from "lucide-react";
+import { ArrowUpRight, History, Printer, Scale } from "lucide-react";
 import { useNavigate } from "react-router";
-import { gebindePath } from "@/const";
+import { gebindePath, printsForPath } from "@/const";
 import type { ResolvedAppearance } from "@contracts/appearance";
 import { consumptionTrend, materialHistory } from "@contracts/materials";
 import { HistoryChart } from "@/components/HistoryChart";
@@ -186,13 +186,13 @@ function PanelContent({
         </div>
       </div>
 
-      <p className="text-center text-xs text-muted-foreground">
+      <div className="text-center text-xs text-muted-foreground">
         {history == null ? (
           <Skeleton className="mx-auto h-3 w-48" />
         ) : (
           describeTrend(trend, t, formatGrams)
         )}
-      </p>
+      </div>
 
       <div className="grid grid-cols-3 gap-3 border-y py-3">
         <Stat label={t.materialDetail.consumed} value={formatGrams(consumed)} />
@@ -220,10 +220,21 @@ function PanelContent({
         )}
         <Button
           variant="ghost"
-          className="col-span-2 h-9 text-muted-foreground"
+          className="h-9 text-muted-foreground"
           onClick={() => navigate(gebindePath(material.id))}
         >
           {t.home.details} <ArrowUpRight className="ml-1 h-4 w-4" />
+        </Button>
+        {/* Nur ein Link und keine eigene Liste: Das Panel wechselt mit jedem
+            Klick ins Regal, eine Abfrage je Auswahl wäre Last ohne Blick. */}
+        <Button
+          variant="ghost"
+          className="h-9 text-muted-foreground"
+          onClick={() =>
+            navigate(printsForPath({ productId: material.productId }))
+          }
+        >
+          <History className="mr-1 h-4 w-4" /> {t.prints.panelLink}
         </Button>
       </div>
 

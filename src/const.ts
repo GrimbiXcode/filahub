@@ -46,6 +46,31 @@ export function gebindePath(id: number): string {
   return `${MATERIALS_PATH}/gebinde/${id}`;
 }
 
+/**
+ * Druckhistorie (seit 4.2.0). Die Liste nimmt ihre Filter aus der Adresse
+ * (`?material=`, `?gebinde=`, …), damit „Alle Drucke mit diesem Material“ ein
+ * gewöhnlicher Link ist und ein Lesezeichen die Filter behält.
+ */
+export const PRINTS_PATH = "/drucke";
+
+export function printJobPath(id: number): string {
+  return `${PRINTS_PATH}/${id}`;
+}
+
+/** Die Druckliste, gefiltert auf ein Material oder ein einzelnes Gebinde */
+export function printsForPath(filter: {
+  productId?: number;
+  materialId?: number;
+}): string {
+  const params = new URLSearchParams();
+  if (filter.productId != null)
+    params.set("material", String(filter.productId));
+  if (filter.materialId != null)
+    params.set("gebinde", String(filter.materialId));
+  const query = params.toString();
+  return query ? `${PRINTS_PATH}?${query}` : PRINTS_PATH;
+}
+
 /** Eine einzelne Organisation: Mitglieder, Rollen, Beitrittscode. */
 export function organizationPath(id: number): string {
   return `${ORGANIZATIONS_PATH}/${id}`;

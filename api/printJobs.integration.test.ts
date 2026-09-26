@@ -224,6 +224,86 @@ describe("Druck erfassen und Verbrauch", () => {
     });
   });
 
+  it("behält beim Bearbeiten Zeilen, deren Material gelöscht ist", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    const b = await spool(anna, lagerId, { color: "Rot" });
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        materials: [
+          { productId: a.productId, materialId: a.id, grams: 10 },
+          { productId: b.productId, materialId: b.id, grams: 20 },
+        ],
+      }),
+    });
+    await callerFor(anna).material.delete({ ...PERSONAL, id: a.id });
+    // Das Formular kann die verwaiste Zeile nicht mitschicken – und bucht um
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        materials: [{ productId: b.productId, materialId: b.id, grams: 25 }],
+      }),
+    });
+    const detail = await callerFor(anna).print.byId({ ...PERSONAL, id });
+    expect(detail.materials.map(m => [m.name, m.productId, m.grams])).toEqual([
+      ["PolyTerra Schwarz", null, 10],
+      ["PolyTerra Rot", b.productId, 25],
+    ]);
+    expect(await remaining(anna, b.id)).toBe(975);
+  });
+
+  it("lässt einen Druck umdatieren, dessen Rolle inzwischen aufgebraucht ist", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    const b = await spool(anna, lagerId, { color: "Rot" });
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        materials: [{ productId: a.productId, materialId: a.id, grams: 10 }],
+      }),
+    });
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: a.id,
+      archived: true,
+    });
+    const later = new Date("2026-09-02T10:00:00Z");
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        printedAt: later,
+        materials: [{ productId: a.productId, materialId: a.id, grams: 10 }],
+      }),
+    });
+    const [consumption] = await db()
+      .select()
+      .from(schema.consumptions)
+      .where(eq(schema.consumptions.materialId, a.id));
+    expect(consumption.consumedAt).toEqual(later);
+    // Neu hinzukommen darf das aufgebrauchte Gebinde aber nicht
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: b.id,
+      archived: true,
+    });
+    await expect(
+      callerFor(anna).print.update({
+        ...PERSONAL,
+        id,
+        ...job({
+          printedAt: later,
+          materials: [
+            { productId: a.productId, materialId: a.id, grams: 10 },
+            { productId: b.productId, materialId: b.id, grams: 5 },
+          ],
+        }),
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("zieht beim Zusammenführen mit", async () => {
     const lagerId = await lagerFor(anna);
     const a = await spool(anna, lagerId);
