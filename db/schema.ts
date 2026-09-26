@@ -8,6 +8,7 @@ import {
 import type { MaterialColumn } from "@contracts/materialColumns";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
 import { PRINT_JOB_STATUSES } from "@contracts/printJobs";
+import { PRINT_FILE_KINDS } from "@contracts/printFiles";
 import {
   ORGANIZATION_INVITATION_STATUSES,
   ORGANIZATION_ROLES,
@@ -768,6 +769,12 @@ export const printJobs = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::text[]`),
+    /**
+     * Titelbild (seit 4.3.0) – ein Foto aus `print_job_files`. Kein
+     * Fremdschlüssel wie überall; wer das Foto löscht, setzt die Spalte
+     * zurück (`deletePrintFile`).
+     */
+    coverFileId: bigint("coverFileId", { mode: "number" }),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
       .defaultNow()
@@ -837,6 +844,48 @@ export const printJobLinks = pgTable(
 );
 
 export type PrintJobLink = typeof printJobLinks.$inferSelect;
+
+export const printFileKindEnum = pgEnum("print_file_kind", PRINT_FILE_KINDS);
+
+/**
+ * Fotos und 3MF-Dateien zu einem Druck (seit 4.3.0). Die Datei selbst liegt
+ * in der Ablage (`api/lib/fileStorage.ts`) unter `storageKey`, einem
+ * zufälligen Schlüssel – nie unter dem hochgeladenen Namen.
+ *
+ * - `kind`, `mimeType`, `width`/`height` bestimmt der **Server** aus den
+ *   Bytes (`detectPrintFile`), nicht aus Endung oder Kopfzeile.
+ * - Fotos haben eine Vorschau (`thumbnailKey`); ihre Größe zählt mit zum
+ *   Speicherkontingent des Bereichs.
+ * - `sha256` macht den Export prüfbar: Das JSON nennt die Prüfsumme, das
+ *   ZIP daneben die Datei.
+ *
+ * Kein Besitzer – er folgt aus dem Druck (Ausnahmeliste des DSGVO-Wächters).
+ */
+export const printJobFiles = pgTable(
+  "print_job_files",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    kind: printFileKindEnum("kind").notNull(),
+    originalName: varchar("originalName", { length: 255 }).notNull(),
+    mimeType: varchar("mimeType", { length: 100 }).notNull(),
+    sizeBytes: integer("sizeBytes").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    storageKey: varchar("storageKey", { length: 32 }).notNull(),
+    thumbnailKey: varchar("thumbnailKey", { length: 32 }),
+    thumbnailBytes: integer("thumbnailBytes").default(0).notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    index("print_job_files_job_idx").on(t.printJobId),
+    uniqueIndex("print_job_files_storage_key_unique").on(t.storageKey),
+    uniqueIndex("print_job_files_thumbnail_key_unique").on(t.thumbnailKey),
+  ]
+);
+
+export type PrintJobFile = typeof printJobFiles.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde

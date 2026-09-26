@@ -84,6 +84,12 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "printJobMaterials",
   "printJobLinks",
   /*
+    Seit 4.3.0: Fotos und 3MF-Dateien als Verzeichnis (Name, Typ, Größe,
+    SHA-256); die Dateien selbst liefert der ZIP-Download daneben. Additiv,
+    Version bleibt 5.
+  */
+  "printJobFiles",
+  /*
     Verbräuche seit 2.9.0 – Abbuchungen in Gramm samt Notiz und Zeitpunkt.
     Personenbezug wie bei den Wägungen über das Material, deshalb in der
     handgepflegten Ausnahmeliste des Integrationstests.

@@ -13,6 +13,7 @@ import {
   mayDeletePrintJob,
   printJobInputSchema,
 } from "@contracts/printJobs";
+import { mayDeletePrintFile } from "@contracts/printFiles";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput, scopeRole } from "./scope";
@@ -31,6 +32,13 @@ import {
   updatePrintJob,
   type ConsumptionRoomCheck,
 } from "./queries/printJobs";
+import {
+  deletePrintFile,
+  findLatestFileIdOfJob,
+  findPrintFileInScope,
+  listPrintFiles,
+  setPrintJobCover,
+} from "./queries/printFiles";
 
 /**
  * Druckhistorie (seit 4.2.0) – Einzelheiten in `api/queries/printJobs.ts`
@@ -159,11 +167,21 @@ export const printJobRouter = createRouter({
           code: "NOT_FOUND",
           message: "Druck nicht gefunden",
         });
-      const latestId = await findLatestPrintJobId(scope);
+      const [latestId, files, latestFileId] = await Promise.all([
+        findLatestPrintJobId(scope),
+        listPrintFiles(job.id),
+        findLatestFileIdOfJob(job.id),
+      ]);
+      const role = scopeRole(scope);
       return {
         ...job,
         /** Ob der Aufrufer diesen Druck löschen darf (`mayDeletePrintJob`) */
-        canDelete: mayDeletePrintJob(scopeRole(scope), job, latestId ?? 0),
+        canDelete: mayDeletePrintJob(role, job, latestId ?? 0),
+        /** Fotos und 3MF (seit 4.3.0), je mit derselben Korrekturregel */
+        files: files.map(file => ({
+          ...file,
+          canDelete: mayDeletePrintFile(role, file, latestFileId ?? 0),
+        })),
       };
     }),
 
@@ -255,6 +273,60 @@ export const printJobRouter = createRouter({
         });
       }
       await deletePrintJob(scope, input.id, input.revertConsumptions);
+      return { ok: true };
+    }),
+
+  /**
+   * Eine Datei löschen (seit 4.3.0) – `editor` jede, `weigher` nur die zuletzt
+   * hochgeladene des Drucks und nur kurz danach (`mayDeletePrintFile`).
+   * Hochgeladen wird über `POST /api/files/print-jobs/:id` (`api/fileRoutes.ts`).
+   */
+  deleteFile: authedQuery
+    .input(z.object({ id: z.number().int().positive(), ...scopeInput.shape }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "weigher"
+      );
+      const file = await findPrintFileInScope(scope, input.id);
+      if (!file)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Datei nicht gefunden",
+        });
+      const latestId = await findLatestFileIdOfJob(file.printJobId);
+      if (!mayDeletePrintFile(scopeRole(scope), file, latestId ?? 0)) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message:
+            "Diese Datei kann nur löschen, wer Material bearbeiten darf – oder du direkt nach dem Hochladen.",
+        });
+      }
+      await deletePrintFile(scope, input.id);
+      return { ok: true };
+    }),
+
+  /** Titelbild setzen – nur ein Foto desselben Drucks */
+  setCover: authedQuery
+    .input(
+      z.object({
+        printJobId: z.number().int().positive(),
+        fileId: z.number().int().positive(),
+        ...scopeInput.shape,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "weigher"
+      );
+      if (!(await setPrintJobCover(scope, input.printJobId, input.fileId)))
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Foto nicht gefunden",
+        });
       return { ok: true };
     }),
 });

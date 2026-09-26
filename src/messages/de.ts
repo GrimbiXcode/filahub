@@ -219,6 +219,9 @@ export const de = {
     installHowUnknown:
       "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
     dataAndAccount: "Daten und Konto",
+    exportFilesHint:
+      "Fotos und 3MF-Dateien deiner Drucke gibt es als eigenes ZIP – das JSON nennt sie mit Prüfsumme.",
+    exportFilesAction: "Dateien herunterladen (ZIP)",
     exportHint:
       "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Gebinde, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
     exportAction: "Daten herunterladen",
@@ -1020,6 +1023,13 @@ export const de = {
     seedRevision: (vars: { revision: number; rows: string }) =>
       `Revision ${vars.revision} · ${vars.rows} Einträge aus dem Startkatalog`,
     source: "Quelle",
+    storage: "Dateiablage",
+    storageWritable: "Beschreibbar",
+    storageNotWritable: "Nicht beschreibbar",
+    storageDirectory: "Verzeichnis",
+    storageUsed: "Belegt",
+    storageUsedValue: (vars: { size: string; files: string }) =>
+      `${vars.size} in ${vars.files} Dateien`,
     tables: "Tabellen",
     colTable: "Tabelle",
   },
@@ -1217,6 +1227,40 @@ export const de = {
     printsWithMaterial: "Alle Drucke mit diesem Material",
     showAll: "Alle anzeigen",
     open: "Öffnen",
+    files: {
+      title: "Fotos und Dateien",
+      empty: "Noch keine Fotos oder 3MF-Dateien.",
+      addPhotos: "Fotos hinzufügen",
+      takePhoto: "Foto aufnehmen",
+      add3mf: "3MF hinzufügen",
+      dropHint:
+        "Fotos oder 3MF-Dateien hierher ziehen. Fotos werden verkleinert und ohne Standort und andere Metadaten gespeichert.",
+      uploading: (vars: { name: string }) => `Lädt hoch: ${vars.name}`,
+      uploaded: (vars: { count: number }) =>
+        vars.count === 1
+          ? "Datei hochgeladen"
+          : `${vars.count} Dateien hochgeladen`,
+      unsupported: (vars: { name: string }) =>
+        `„${vars.name}“ ist weder Foto noch 3MF-Datei`,
+      tooLarge: (vars: { name: string; max: string }) =>
+        `„${vars.name}“ ist größer als ${vars.max}`,
+      imageFailed: (vars: { name: string }) =>
+        `„${vars.name}“ ließ sich nicht als Foto öffnen`,
+      cover: "Titelbild",
+      setCover: "Als Titelbild",
+      coverSet: "Titelbild gesetzt",
+      download: "Herunterladen",
+      openOriginal: "Original öffnen",
+      deleteTitle: "Datei löschen?",
+      deleteDescription: (vars: { name: string }) =>
+        `„${vars.name}“ wird endgültig gelöscht.`,
+      deleted: "Datei gelöscht",
+      previous: "Vorheriges Foto",
+      next: "Nächstes Foto",
+      photoAlt: (vars: { title: string; index: number }) =>
+        `Foto ${vars.index} zu „${vars.title}“`,
+      modelLabel: "3MF-Projekt",
+    },
     form: {
       titleNew: "Druck erfassen",
       titleEdit: "Druck bearbeiten",

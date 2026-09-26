@@ -48,7 +48,8 @@ src/            React-Frontend
                 (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
-                PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie)
+                PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
+                PrintFiles (Fotos und 3MF eines Drucks)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -66,13 +67,15 @@ src/            React-Frontend
                 shelf.ts (Regal: Gruppierung nach Drybox oder Material),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
-                importPrompt.ts, utils.ts (cn-Helfer)
+                importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
+                entfernen), utils.ts (cn-Helfer)
   release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
                 **Englisch**, eigene AGENTS.md im Verzeichnis
   types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
+  fileRoutes.ts /api/files/* – Fotos und 3MF hochladen, ausliefern, exportieren
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
                 (die Gebinde), product (die Materialien), appearance, friend,
                 organization, print (die Druckhistorie), preset, admin, legal,
@@ -85,14 +88,16 @@ api/            Hono/tRPC-Backend
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts,
                 vite.ts (Static-Serving samt Cache-Kopfzeilen),
                 clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
-                (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins)
+                (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins),
+                fileStorage.ts (Dateiablage: zufällige Schlüssel, Volume)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
                 products.ts (Materialien: Liste, Zusammenführen, Aufräumen
                 ohne Gebinde), printJobs.ts (Druckhistorie: Schreibpfade samt
-                Verbrauchskopplung, Suche, Seiten),
+                Verbrauchskopplung, Suche, Seiten), printFiles.ts (Dateizeilen,
+                Kontingent, Titelbild, Aufräumlauf),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -114,6 +119,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 nächste freie Nummer),
                 printSettings.ts (Druckeinstellungen je Materialart),
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
+                printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -515,6 +521,73 @@ ohne Datenbank in `contracts/printJobs.ts`.
   Übersicht, der Schalter „Als Druck speichern“ im `ConsumptionDialog` und
   Treffer in der Schnellsuche.
 
+### Fotos und 3MF (seit 4.3.0)
+
+Dateien zu Drucken: Metadaten in `print_job_files`, die Bytes in der Ablage
+(`api/lib/fileStorage.ts`, Verzeichnis `UPLOAD_DIR`, im Container ein eigenes
+Volume unter `/data/uploads`). Die erste Stelle der App, an der Benutzerdaten
+außerhalb der Datenbank liegen.
+
+- **Eigene Hono-Routen statt tRPC** (`api/fileRoutes.ts`): superjson taugt
+  nicht für Binärdaten, und ein Foto soll als `<img src>` ladbar sein.
+  `POST /api/files/print-jobs/:id?organizationId=` (multipart, `file` und bei
+  Fotos `thumbnail`), `GET /api/files/:id` und `…/thumbnail`,
+  `GET /api/files/export`. Löschen und Titelbild laufen über tRPC
+  (`print.deleteFile`, `print.setCover`). Die Regeln der Prozeduren gelten von
+  Hand: Sitzung aus dem Cookie, Sperre (außer beim Export, Art. 15/20),
+  `resolveScope`, Zugriffsbegrenzung je Benutzer, Obergrenzen nach der
+  Bereichsprüfung. Eine Datei eines fremden Bereichs ist 404.
+- **Der Typ kommt aus den Bytes** (`detectPrintFile`,
+  `contracts/printFiles.ts`): JPEG, PNG, WebP und 3MF (ein ZIP mit
+  `3D/*.model` – ein Office-Dokument ist auch ein ZIP). Kein SVG, kein HTML.
+  Endung und `Content-Type` der Anfrage zählen nicht; ausgeliefert wird der
+  gespeicherte Typ mit `nosniff`, 3MF immer als `attachment`.
+- **Fotos gehen nie unverändert hinaus.** `prepareImage`
+  (`src/lib/imageUpload.ts`) verkleinert auf 2048 px und kodiert über ein
+  Canvas neu (WebP, sonst JPEG) – das entfernt EXIF samt GPS. Der Server lehnt
+  jedes Foto mit Metadaten ab (`hasMetadata`: EXIF, XMP, IPTC, Text-Chunks),
+  nicht nur GPS: Die Position kann auch in XMP stehen, und der eigene Client
+  erzeugt keine Metadaten. Maße liest der Server selbst.
+- **Der Name auf der Platte ist ein zufälliger Schlüssel** (128 Bit, geprüft
+  gegen `^[0-9a-f]{32}$` vor jedem Zugriff), nie der hochgeladene Name. Der
+  wird nur angezeigt (`sanitizeFileName`) und im `Content-Disposition`
+  genannt.
+- **Reihenfolge:** Hochladen schreibt erst die Datei, dann die Zeile; scheitert
+  die Zeile, geht die Datei sofort. Löschen (Datei, Druck, Konto,
+  Organisation) löscht erst die Zeilen in der Transaktion und die Dateien nach
+  dem Commit (`deleteFileRowsOfJobs` → `removeStoredFiles`). Was dabei
+  liegenbleibt, räumt `sweepOrphanFiles` alle sechs Stunden ab – nur Dateien
+  älter als eine Stunde, damit ein laufender Upload nicht verschwindet. Eine
+  Zeile ohne Datei entsteht so nie, eine Datei ohne Zeile höchstens kurz.
+- **Titelbild** (`print_jobs.coverFileId`): das erste Foto, bis jemand ein
+  anderes wählt; wird es gelöscht, rückt das nächste nach. Nur ein Foto
+  desselben Drucks.
+- **Stufen:** Hochladen und Titelbild `weigher` (nichts geht verloren),
+  Löschen `editor` – `weigher` nur die zuletzt hochgeladene Datei des Drucks
+  in den ersten 15 Minuten (`mayDeletePrintFile`, Alias von
+  `mayDeleteWeighing`).
+- **Grenzen** (`contracts/limits.ts`): 20 Dateien je Druck, Foto 10 MB,
+  Vorschau 1 MB, 3MF 45 MB (unter dem Body-Limit von 50 MB samt Hülle),
+  **1 GB Speicher je Bereich** als Summe über `sizeBytes + thumbnailBytes`.
+  Uploads 30/min, Abrufe 1200/min, Export 5/h je Benutzer.
+- **Export:** Das JSON nennt die Dateien (`printJobFiles`, ohne
+  Speicherschlüssel, mit SHA-256; additiv, Version bleibt 5), die Dateien
+  selbst kommen als ZIP (`/api/files/export`, `fflate`, ohne Kompression,
+  Datei für Datei gestreamt). Nur die eigenen, nicht die der Organisationen –
+  wie beim übrigen Bestand.
+- **Betrieb:** `/verwaltung/system` zeigt, ob die Ablage beschreibbar ist und
+  wie viel belegt ist; der Start schreibt eine Fehlermeldung ins Log, wenn
+  nicht. `/health` bleibt davon unberührt – ohne Ablage läuft alles andere
+  weiter. Gesichert werden müssen jetzt **zwei** Orte (README).
+- **Registriert** in `COUNTED_TABLES`, der Tabellen- und Enum-Liste in
+  `api/postgres.integration.test.ts` und der Ausnahmeliste des
+  DSGVO-Wächters (Personenbezug über den Druck). Eine Organisation mit
+  Drucken gilt nicht mehr als „leer“ (`deleteOrganizationIfEmpty`).
+- **Oberfläche:** `src/components/PrintFiles.tsx` auf `/drucke/:id` (Raster
+  der Vorschauen, Großansicht, Kamera auf dem Telefon, Ziehen und Ablegen),
+  das Titelbild in `PrintJobCard`, der ZIP-Download in
+  `AccountDataActions`.
+
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
 **Eine Kennung kommt je Lager nur einmal vor** (seit 3.1.0), ohne Rücksicht auf
@@ -689,7 +762,8 @@ sonst wäre er eine Benennungsvorschrift statt einer Prüfung, und eine Tabelle,
 die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
 er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
 nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
-über das Gebinde), `materialPrintSettings` (über das Material) und
+über das Gebinde), `materialPrintSettings` (über das Material),
+`printJobMaterials`, `printJobLinks` und `printJobFiles` (über den Druck) und
 `loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
@@ -1179,6 +1253,8 @@ der Instanz, nur für Links in Telegram-Nachrichten; fehlt sie, nennen die
 Nachrichten bloß den Ort in der App. Bewusst konfiguriert und nicht aus den
 Anfrage-Kopfzeilen abgeleitet: Die kann ein Aufrufer setzen, und daraus einen
 Link zu bauen, den wir an Dritte verschicken, wäre eine offene Weiterleitung.
+Optional `UPLOAD_DIR` – das Verzeichnis für Fotos und 3MF-Dateien (Vorgabe
+`/data/uploads` in Produktion, sonst `./data/uploads`); siehe „Fotos und 3MF“.
 `drizzle.config.ts` benötigt ebenfalls `DATABASE_URL`.
 
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
@@ -1286,6 +1362,7 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
+  `printFiles`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1316,8 +1393,9 @@ Datenbank.
   `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
   `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
-  `api/materialProducts.integration.test.ts` und
-  `api/printJobs.integration.test.ts`,
+  `api/materialProducts.integration.test.ts`,
+  `api/printJobs.integration.test.ts` und
+  `api/printFiles.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

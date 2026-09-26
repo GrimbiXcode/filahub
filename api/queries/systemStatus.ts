@@ -15,7 +15,10 @@ import {
   presetContainerVersions,
 } from "@db/schema";
 import { env } from "../lib/env";
+import { printJobFiles } from "@db/schema";
+import { getFileStorage } from "../lib/fileStorage";
 import { getDb, getPool } from "./connection";
+import { usedStorageTotal } from "./printFiles";
 
 /** Verbindungsangabe ohne Zugangsdaten, z. B. „db:5432/filahub“. */
 export function redactUrl(url: string): string {
@@ -132,6 +135,7 @@ const COUNTED_TABLES = [
   "print_jobs",
   "print_job_materials",
   "print_job_links",
+  "print_job_files",
   "hidden_container_presets",
   "preset_proposals",
   /*
@@ -196,4 +200,30 @@ export async function getSeedInfo(): Promise<SeedInfo> {
     revision: PRESET_SEED_REVISION,
     seededRows: counts.reduce((sum, n) => sum + n, 0),
   };
+}
+
+export type StorageInfo = {
+  /** Verzeichnis der Ablage (`UPLOAD_DIR`) */
+  directory: string;
+  /**
+   * Ob sich schreiben lässt. Ein vergessenes Volume soll hier auffallen und
+   * nicht erst beim ersten Foto, das jemand hochladen will.
+   */
+  writable: boolean;
+  /** Belegter Speicher laut Datenbank, Summe über alle Bereiche */
+  usedBytes: number;
+  files: number;
+};
+
+/** Zustand der Dateiablage (seit 4.3.0) */
+export async function getStorageInfo(): Promise<StorageInfo> {
+  const [writable, usedBytes, files] = await Promise.all([
+    getFileStorage().isWritable(),
+    usedStorageTotal(),
+    getDb()
+      .select({ value: count() })
+      .from(printJobFiles)
+      .then(rows => Number(rows.at(0)?.value ?? 0)),
+  ]);
+  return { directory: env.uploadDir, writable, usedBytes, files };
 }

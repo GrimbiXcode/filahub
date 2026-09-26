@@ -102,6 +102,16 @@ export const env = {
    * Anmeldung ohne Telegram für die lokale Entwicklung (`DEV_LOGIN=1`).
    * Wirkt nur außerhalb von NODE_ENV=production – siehe api/devLogin.ts.
    */
+  /*
+    Verzeichnis für hochgeladene Dateien (Fotos und 3MF zu Drucken, seit
+    4.3.0). Im Container ein eigenes Volume – `docker-compose.yml` bindet es
+    unter `/data/uploads` ein. Außerhalb der Produktion ein Ordner im Projekt,
+    damit `npm run dev` ohne Rechte auf `/data` läuft; `.gitignore` nimmt ihn
+    aus.
+  */
+  uploadDir:
+    process.env.UPLOAD_DIR?.trim() ||
+    (process.env.NODE_ENV === "production" ? "/data/uploads" : "data/uploads"),
   devLogin: ["1", "true"].includes((process.env.DEV_LOGIN ?? "").toLowerCase()),
   /** Anzeigename des Entwickler-Kontos */
   devLoginName: process.env.DEV_LOGIN_NAME || "Dev-Benutzer",

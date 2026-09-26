@@ -5,6 +5,7 @@ import {
 } from "@contracts/account";
 import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
+import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 import { getDb } from "./connection";
 import {
   handleAdminAccountDeletion,
@@ -72,15 +73,26 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     where: eq(schema.printJobs.userId, userId),
   });
   const printJobIds = printJobs.map(j => j.id);
-  const [printJobMaterials, printJobLinks] =
+  const [printJobMaterials, printJobLinks, printJobFiles] =
     printJobIds.length === 0
-      ? [[], []]
+      ? [[], [], []]
       : await Promise.all([
           db.query.printJobMaterials.findMany({
             where: inArray(schema.printJobMaterials.printJobId, printJobIds),
           }),
           db.query.printJobLinks.findMany({
             where: inArray(schema.printJobLinks.printJobId, printJobIds),
+          }),
+          /*
+            Fotos und 3MF (seit 4.3.0) als Verzeichnis: Name, Typ, Größe,
+            Prüfsumme. Die Dateien selbst stehen im ZIP-Download daneben
+            (`/api/files/export`) – im JSON sprengten sie jede Grenze. Die
+            Speicherschlüssel bleiben draußen: Sie sind Interna der Ablage
+            und nützen außerhalb dieser Instanz niemandem.
+          */
+          db.query.printJobFiles.findMany({
+            where: inArray(schema.printJobFiles.printJobId, printJobIds),
+            columns: { storageKey: false, thumbnailKey: false },
           }),
         ]);
 
@@ -329,6 +341,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     printJobs,
     printJobMaterials,
     printJobLinks,
+    printJobFiles,
     consumptions,
     containerTypes,
     storageBoxes,
@@ -402,8 +415,14 @@ export async function deleteUserAccount(
   userId: number
 ): Promise<AccountDeletionResult> {
   const db = getDb();
+  /*
+    Speicherschlüssel der Fotos und 3MF-Dateien (seit 4.3.0): In der
+    Transaktion gehen nur die Zeilen, die Dateien erst nach dem Commit – eine
+    zurückgerollte Löschung ließe sonst Zeilen ohne Datei zurück.
+  */
+  const removedKeys: string[] = [];
 
-  return db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
     const user = await tx.query.users.findFirst({
       where: eq(schema.users.id, userId),
       columns: { id: true, unionId: true },
@@ -427,7 +446,11 @@ export async function deleteUserAccount(
       Die Mitgliedschaften selbst gehen erst danach (Schritt 10b) – vorher
       werden sie noch gelesen.
     */
-    const organizations = await handleAdminAccountDeletion(tx, userId);
+    const organizations = await handleAdminAccountDeletion(
+      tx,
+      userId,
+      removedKeys
+    );
 
     // 1. Verweise auf eigene Rollentypen lösen, bevor diese gelöscht werden
     await tx
@@ -446,6 +469,7 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.printJobLinks)
       .where(inArray(schema.printJobLinks.printJobId, ownPrintJobIds));
+    removedKeys.push(...(await deleteFileRowsOfJobs(tx, ownPrintJobIds)));
     await tx
       .delete(schema.printJobs)
       .where(eq(schema.printJobs.userId, userId));
@@ -699,4 +723,6 @@ export async function deleteUserAccount(
       leftOrganizationIds: leftOrganizations.map(row => row.organizationId),
     };
   });
+  await removeStoredFiles(removedKeys);
+  return result;
 }

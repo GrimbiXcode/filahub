@@ -71,6 +71,30 @@ export function printsForPath(filter: {
   return query ? `${PRINTS_PATH}?${query}` : PRINTS_PATH;
 }
 
+/**
+ * Dateien zu Drucken (seit 4.3.0) – eigene Routen neben tRPC, siehe
+ * `api/fileRoutes.ts`. Als `<img src>` ladbar; der Server prüft Sitzung und
+ * Bereich selbst.
+ */
+export function printFileUrl(id: number): string {
+  return `/api/files/${id}`;
+}
+
+export function printFileThumbnailUrl(id: number): string {
+  return `/api/files/${id}/thumbnail`;
+}
+
+export function printFileUploadUrl(
+  printJobId: number,
+  organizationId: number | null
+): string {
+  const query = organizationId ? `?organizationId=${organizationId}` : "";
+  return `/api/files/print-jobs/${printJobId}${query}`;
+}
+
+/** Alle eigenen Dateien als ZIP – neben dem JSON-Export */
+export const PRINT_FILES_EXPORT_URL = "/api/files/export";
+
 /** Eine einzelne Organisation: Mitglieder, Rollen, Beitrittscode. */
 export function organizationPath(id: number): string {
   return `${ORGANIZATIONS_PATH}/${id}`;

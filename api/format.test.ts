@@ -4,6 +4,7 @@ import {
   currencySymbol,
   decimalSeparator,
   formatDate,
+  formatBytes,
   formatGrams,
   formatMoney,
   formatPercent,
@@ -180,5 +181,15 @@ describe("decimalSeparator / currencySymbol", () => {
     expect(decimalSeparator("en-US")).toBe(".");
     expect(currencySymbol("de-DE", "EUR")).toBe("€");
     expect(currencySymbol("en-US", "USD")).toBe("$");
+  });
+});
+
+describe("formatBytes", () => {
+  it("rechnet binär und zeigt ab MB eine Nachkommastelle", () => {
+    expect(norm(formatBytes(512, "de-DE"))).toBe("512 B");
+    expect(norm(formatBytes(2048, "de-DE"))).toBe("2 kB");
+    expect(norm(formatBytes(10 * 1024 * 1024, "de-DE"))).toBe("10,0 MB");
+    expect(norm(formatBytes(1024 ** 3, "en-US"))).toBe("1.0 GB");
+    expect(formatBytes(null, "de-DE")).toBe("–");
   });
 });

@@ -1,8 +1,9 @@
 # Plan: Material und Gebinde, Druckeinstellungen, Druckhistorie
 
 Stand: 4.0.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
-Ende). **Phase 1 ist umgesetzt** (4.0.0), **Phase 2** (4.1.0), **Phase 3**
-(4.2.0); die Abweichungen vom Entwurf stehen unter „Stand der Umsetzung“.
+Ende). **Alle vier Phasen sind umgesetzt**: Phase 1 (4.0.0), Phase 2
+(4.1.0), Phase 3 (4.2.0), Phase 4 (4.3.0); die Abweichungen vom Entwurf stehen
+unter „Stand der Umsetzung“. Offen ist nur die Ausbaustufe „3MF auslesen“.
 
 ## Stand der Umsetzung
 
@@ -77,6 +78,36 @@ mit Grund:
   Blick. Material- und Gebindeseite zeigen die Liste.
 - **Die Filter stehen in der Adresse** (`?material=`, `?gebinde=`, `?tag=` …),
   damit „alle Drucke mit diesem Material“ ein gewöhnlicher Link ist.
+
+**Phase 4 (4.3.0)** – Entscheidungen, die der Entwurf offenließ:
+
+- **Nur Fotos und 3MF, keine Art `other`.** Jede weitere Dateiart wäre ein
+  Typ, dessen Inhalt niemand prüft – und genau das ist der riskante Teil.
+  Wer PDF-Anleitungen braucht, verlinkt sie.
+- **Metadaten ganz ablehnen statt nur GPS zu suchen.** Die Position steht auch
+  in XMP oder als Text; der eigene Client schreibt nie Metadaten. Eine Datei
+  mit Metadaten ist also am Browser vorbei gekommen und wird abgewiesen.
+- **Eine Vorschau je Foto** (480 px, im Browser erzeugt) neben dem Original
+  (2048 px). Sonst lüde die Druckliste für jede Kachel das volle Foto – 30
+  Drucke wären auf dem Telefon mehrere MB.
+- **3MF höchstens 45 MB statt 50**: Das Body-Limit von 50 MB umfasst die
+  Multipart-Hülle; eine 50-MB-Datei scheiterte mit einem nackten 413 statt
+  einer Meldung.
+- **`/health` meldet die Ablage nicht.** Ohne Ablage läuft alles andere
+  weiter; ein Container, der deshalb neu startet, hilft niemandem. Die Meldung
+  steht im Log beim Start und auf `/verwaltung/system`.
+- **Keine Vorschau vor dem Hochladen (`blob:`)**: Die Datei geht sofort nach
+  der Auswahl hinaus, ein Platzhalter zeigt den Fortschritt. Die CSP bleibt
+  damit unverändert eng.
+- **Hochladen darf `weigher`**, Löschen nur `editor` bzw. `weigher` direkt
+  danach – wie bei Wägungen. Wer einen Druck erfassen darf, soll ihn auch
+  fotografieren dürfen.
+- **Eine Organisation mit Drucken ist nicht „leer“.** Seit Phase 3 überleben
+  Drucke ihr Material; ohne diese Zählung hätte das Löschen einer
+  „leeren“ Organisation Jahre an Drucken samt Fotos mitgenommen.
+- **Die Ausbaustufe „3MF auslesen“ ist nicht umgesetzt** – wie in der
+  Release-Tabelle für „später“ vorgesehen. `zipEntryNames` und `fflate` sind
+  die Vorarbeit.
 
 Die Einzelheiten stehen in `AGENTS.md` unter „Material und Gebinde“.
 

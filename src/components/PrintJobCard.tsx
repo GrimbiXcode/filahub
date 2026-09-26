@@ -3,7 +3,7 @@ import { Link2 } from "lucide-react";
 import { linkHost, type PrintJobStatus } from "@contracts/printJobs";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { Badge } from "@/components/ui/badge";
-import { printJobPath } from "@/const";
+import { printFileThumbnailUrl, printJobPath } from "@/const";
 import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -68,6 +68,15 @@ export function PrintJobCard({
       to={printJobPath(job.id)}
       className="flex flex-col gap-2 rounded-lg border bg-card p-3 transition-colors hover:bg-accent/40"
     >
+      {/* Titelbild (seit 4.3.0) – die kleine Vorschau, nicht das Foto */}
+      {!compact && job.coverFileId != null && (
+        <img
+          src={printFileThumbnailUrl(job.coverFileId)}
+          alt=""
+          loading="lazy"
+          className="-mx-3 -mt-3 mb-1 aspect-[4/3] w-[calc(100%+1.5rem)] max-w-none rounded-t-lg object-cover"
+        />
+      )}
       <div className="flex items-start justify-between gap-2">
         <span className="min-w-0 font-medium wrap-break-word">{job.title}</span>
         <PrintStatusBadge status={job.status} />

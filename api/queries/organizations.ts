@@ -28,6 +28,7 @@ import {
   type Organization,
 } from "@db/schema";
 import { getDb, type DbTransaction } from "./connection";
+import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 
 /**
  * Organisationen: gemeinsamer Bestand mehrerer Personen.
@@ -155,7 +156,12 @@ export async function listInvitationsForUser(userId: number) {
  */
 export async function deleteOrganizationCascade(
   tx: DbTransaction,
-  organizationId: number
+  organizationId: number,
+  /**
+   * Nimmt die Speicherschlüssel der Fotos und 3MF-Dateien auf. Der Aufrufer
+   * entfernt die Dateien **nach** dem Commit (`removeStoredFiles`).
+   */
+  removedKeys: string[] = []
 ): Promise<void> {
   // Wägungen und Verbräuche hängen am Material und müssen vor ihm gehen.
   const orgMaterialIds = tx
@@ -182,6 +188,7 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(printJobLinks)
     .where(inArray(printJobLinks.printJobId, orgPrintJobIds));
+  removedKeys.push(...(await deleteFileRowsOfJobs(tx, orgPrintJobIds)));
   await tx
     .delete(printJobs)
     .where(eq(printJobs.organizationId, organizationId));
@@ -267,7 +274,8 @@ export type AdminSuccession =
  */
 export async function handleAdminAccountDeletion(
   tx: DbTransaction,
-  userId: number
+  userId: number,
+  removedKeys: string[] = []
 ): Promise<AdminSuccession[]> {
   const adminOf = await tx
     .select({ organizationId: organizationMembers.organizationId })
@@ -303,7 +311,7 @@ export async function handleAdminAccountDeletion(
       .orderBy(asc(organizationMembers.createdAt), asc(organizationMembers.id));
 
     if (remaining.length === 0) {
-      await deleteOrganizationCascade(tx, organizationId);
+      await deleteOrganizationCascade(tx, organizationId, removedKeys);
       result.push({ organizationId, outcome: "deleted" });
       continue;
     }
@@ -408,7 +416,8 @@ export async function updateOrganization(
 export async function deleteOrganizationIfEmpty(
   id: number
 ): Promise<{ blockedBy: number | null }> {
-  return getDb().transaction(async tx => {
+  const removedKeys: string[] = [];
+  const result = await getDb().transaction(async tx => {
     const lagerRows = await tx
       .select({ value: count() })
       .from(lager)
@@ -421,14 +430,26 @@ export async function deleteOrganizationIfEmpty(
       .select({ value: count() })
       .from(storageBoxes)
       .where(eq(storageBoxes.organizationId, id));
+    /*
+      Die Druckhistorie zählt mit (seit 4.3.0): Drucke überleben ihr Material,
+      eine Organisation ohne Lager kann also noch Jahre an Drucken samt Fotos
+      tragen – und „leer“ hieße dann, sie ungefragt mitzulöschen.
+    */
+    const printRows = await tx
+      .select({ value: count() })
+      .from(printJobs)
+      .where(eq(printJobs.organizationId, id));
     const inside =
       Number(lagerRows.at(0)?.value ?? 0) +
       Number(containerRows.at(0)?.value ?? 0) +
-      Number(boxRows.at(0)?.value ?? 0);
+      Number(boxRows.at(0)?.value ?? 0) +
+      Number(printRows.at(0)?.value ?? 0);
     if (inside > 0) return { blockedBy: inside };
-    await deleteOrganizationCascade(tx, id);
+    await deleteOrganizationCascade(tx, id, removedKeys);
     return { blockedBy: null };
   });
+  await removeStoredFiles(removedKeys);
+  return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { registerDevLogin } from "./devLogin";
+import { registerFileRoutes } from "./fileRoutes";
 import { TELEGRAM_LOGIN_FRAME_PATH } from "@contracts/constants";
 import { env } from "./lib/env";
 
@@ -69,6 +70,7 @@ const sharedCsp = {
   connectSrc: ["'self'"],
   // `data:` nur für das eingebettete SVG-Favicon in index.html.
   // Telegram-Profilbilder werden nicht mehr geladen, deshalb reicht das.
+  // Fotos zu Drucken (seit 4.3.0) kommen von `/api/files/…`, also `'self'`.
   imgSrc: ["'self'", "data:"],
   /*
     `'unsafe-inline'` ist hier unvermeidbar: `src/components/ui/chart.tsx`
@@ -134,6 +136,8 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get("/health", c => c.json({ status: "ok" }));
 // Nur lokal und nur mit DEV_LOGIN=1; sonst wird nichts registriert
 registerDevLogin(app);
+// Fotos und 3MF zu Drucken – eigene Routen, weil tRPC keine Binärdaten kann
+registerFileRoutes(app);
 app.use("/api/trpc/*", async c => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",

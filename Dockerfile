@@ -57,8 +57,13 @@ RUN npm ci --omit=dev --ignore-scripts \
 COPY --from=build /app/dist ./dist
 COPY drizzle.config.ts ./
 COPY db ./db
-# Ab hier nicht mehr als root. Das Abbild braucht zur Laufzeit keine
-# Schreibrechte außerhalb von /tmp; `node` ist im Basisabbild schon angelegt.
+# Dateiablage für Fotos und 3MF (seit 4.3.0, `UPLOAD_DIR`). Das Verzeichnis
+# gehört `node`, damit ein frisch angelegtes Volume die Rechte übernimmt –
+# Docker kopiert Eigentümer und Rechte des Abbild-Pfads ins leere Volume.
+RUN mkdir -p /data/uploads && chown node:node /data/uploads
+VOLUME /data/uploads
+# Ab hier nicht mehr als root. Das Abbild braucht zur Laufzeit Schreibrechte
+# nur in /tmp und in der Dateiablage; `node` ist im Basisabbild schon angelegt.
 USER node
 EXPOSE 3000
 # 127.0.0.1 statt localhost: Der Server lauscht auf IPv4 (0.0.0.0); löst

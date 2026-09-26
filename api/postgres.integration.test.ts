@@ -75,6 +75,7 @@ describe("Migrationen", () => {
       "print_jobs",
       "print_job_materials",
       "print_job_links",
+      "print_job_files",
       "container_types",
       "storage_boxes",
       "custom_colors",
@@ -139,6 +140,7 @@ describe("Migrationen", () => {
       "organization_role",
       "organization_invitation_status",
       "print_job_status",
+      "print_file_kind",
     ]) {
       expect(names).toContain(type);
     }

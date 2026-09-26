@@ -7,6 +7,7 @@ import { roleAllows } from "@contracts/organizations";
 import AuthLayout from "@/components/AuthLayout";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { PageHeader } from "@/components/PageHeader";
+import { PrintFiles } from "@/components/PrintFiles";
 import {
   PrintMaterialSwatch,
   PrintStatusBadge,
@@ -311,6 +312,8 @@ export default function PrintJobDetail() {
             </CardContent>
           </Card>
         </div>
+
+        <PrintFiles job={job} />
 
         {job.notes && (
           <Card>

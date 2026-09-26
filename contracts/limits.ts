@@ -77,6 +77,29 @@ export const MAX_STORAGE_BOXES_PER_SCOPE = 100;
  */
 export const MAX_PRINT_JOBS_PER_SCOPE = 20_000;
 
+/**
+ * Dateien zu Drucken (seit 4.3.0).
+ *
+ * Zwanzig je Druck reichen für Fotos von allen Seiten, dem Fehlschlag und dem
+ * Projekt. Die Größen gelten nach dem Verkleinern im Browser: Ein Foto mit
+ * 2048 px langer Kante ist als WebP oder JPEG selten über 2 MB, 10 MB lassen
+ * Raum für PNG. Eine 3MF mit Modell, Vorschau und Einstellungen liegt meist
+ * unter 20 MB; 45 MB bleiben unter dem Body-Limit von 50 MB samt
+ * Multipart-Hülle – sonst käme statt einer Meldung ein nackter 413.
+ */
+export const MAX_FILES_PER_PRINT_JOB = 20;
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_THUMBNAIL_BYTES = 1024 * 1024;
+export const MAX_3MF_BYTES = 45 * 1024 * 1024;
+
+/**
+ * Speicher je Bereich: 1 GB – rund 500 Fotos und 20 Projekte. Die Ablage ist
+ * ein Volume des Betreibers, ohne Kontingent füllte ein einzelnes Konto die
+ * Platte der ganzen Instanz. Gezählt wird die Summe über `sizeBytes` und
+ * `thumbnailBytes` in der Datenbank.
+ */
+export const MAX_STORAGE_BYTES_PER_SCOPE = 1024 * 1024 * 1024;
+
 // ---------------------------------------------------------------------------
 // Preset-Vorschläge
 // ---------------------------------------------------------------------------

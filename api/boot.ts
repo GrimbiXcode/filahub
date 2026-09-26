@@ -93,6 +93,32 @@ if (env.isProduction) {
   const { runAbuseCheck } = await import("./lib/abuseAlert");
   setInterval(() => void runAbuseCheck(), 15 * 60 * 1000).unref();
 
+  /*
+    Dateiablage (seit 4.3.0). Beim Start prüfen, ob sich schreiben lässt –
+    ein vergessenes Volume soll im Log stehen, nicht erst beim ersten Foto
+    auffallen. `/health` bleibt davon unberührt: Ohne Ablage läuft alles
+    andere weiter, und ein Container, der deshalb neu startet, hilft niemandem.
+
+    Danach alle sechs Stunden der Aufräumlauf für Dateien ohne Zeile – Reste
+    abgebrochener Uploads und Löschungen, deren Nachlauf gescheitert ist.
+  */
+  const { getFileStorage } = await import("./lib/fileStorage");
+  const { sweepOrphanFiles } = await import("./queries/printFiles");
+  if (!(await getFileStorage().isWritable())) {
+    console.error(
+      `Dateiablage nicht beschreibbar: ${env.uploadDir} – Fotos und 3MF-Dateien lassen sich nicht hochladen. Volume und Rechte prüfen (UPLOAD_DIR).`
+    );
+  }
+  const runFileSweep = () =>
+    sweepOrphanFiles()
+      .then(removed => {
+        if (removed > 0)
+          console.log(`Dateiablage: ${removed} verwaiste Dateien entfernt.`);
+      })
+      .catch(error => console.error("Aufräumen der Dateiablage:", error));
+  void runFileSweep();
+  setInterval(() => void runFileSweep(), 6 * 60 * 60 * 1000).unref();
+
   const port = parseInt(process.env.PORT || "3000");
   startTelegramBot();
   // Auf allen Interfaces lauschen, damit der Container von außen

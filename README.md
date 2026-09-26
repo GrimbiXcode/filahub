@@ -58,6 +58,7 @@ cp .env.example .env
 | `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |
 | `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
 | `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
+| `UPLOAD_DIR`                 | Directory for photos and 3MF files of prints (default `/data/uploads`)      |
 
 ### Multi-line values
 
@@ -128,9 +129,13 @@ docker build -t filahub .
 docker run -d --name filahub \
   --env-file .env \
   -p 3000:3000 \
+  -v filahub-uploads:/data/uploads \
   --restart unless-stopped \
   filahub
 ```
+
+The volume holds the photos and 3MF files attached to prints. Without it
+they live in the container and are gone with the next update.
 
 Prebuilt images are published to the GitHub Container Registry
 (`ghcr.io/grimbixcode/filahub`) whenever a version tag is pushed.
@@ -160,6 +165,10 @@ Notes:
 - Postgres is published on `127.0.0.1:5432` in case you want to inspect the
   database or run drizzle commands from the host; remove that port mapping
   if you don't need it.
+- Uploaded photos and 3MF files live in the `uploads` volume, not in the
+  database. **Back up both** – a database dump alone restores the prints
+  without their files. The admin page `/verwaltung/system` shows whether the
+  directory is writable and how much space the files take.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
 

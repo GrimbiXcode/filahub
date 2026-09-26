@@ -95,6 +95,32 @@ export function formatGrams(
 }
 
 /**
+ * Dateigröße (seit 4.3.0): Bytes bis 1 kB, darüber kB/MB/GB mit einer
+ * Nachkommastelle ab MB. Binäre Stufen (1024), wie sie auch die Grenzen in
+ * `contracts/limits.ts` rechnen – sonst stünde an der Grenze von „10 MB“ eine
+ * Datei mit „10,5 MB“.
+ */
+export function formatBytes(
+  bytes: number | null | undefined,
+  locale: string
+): string {
+  if (bytes == null || !Number.isFinite(bytes)) return "–";
+  const units = ["B", "kB", "MB", "GB", "TB"];
+  let value = bytes;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  const digits = unit >= 2 ? 1 : 0;
+  const text = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits,
+  }).format(value);
+  return `${text} ${units[unit]}`;
+}
+
+/**
  * Länge in Metern – die Zweitanzeige beim Filament.
  *
  * Eine Dezimalstelle: Der Wert stammt aus einer Dichte, die meist eine Vorgabe

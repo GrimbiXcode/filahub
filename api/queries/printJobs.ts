@@ -30,6 +30,7 @@ import {
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 import { lockProductInScope } from "./products";
+import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 
 /**
  * Druckhistorie (seit 4.2.0).
@@ -348,13 +349,13 @@ export async function deletePrintJob(
   id: number,
   revertConsumptions: boolean
 ): Promise<boolean> {
-  return getDb().transaction(async tx => {
+  const keys = await getDb().transaction(async tx => {
     const [job] = await tx
       .select({ id: printJobs.id })
       .from(printJobs)
       .where(and(eq(printJobs.id, id), scopeWhere(printJobs, scope)))
       .for("update");
-    if (!job) return false;
+    if (!job) return null;
     if (revertConsumptions) {
       const rows = await tx
         .select({ consumptionId: printJobMaterials.consumptionId })
@@ -370,9 +371,14 @@ export async function deletePrintJob(
     await tx
       .delete(printJobMaterials)
       .where(eq(printJobMaterials.printJobId, id));
+    // Fotos und 3MF: erst die Zeilen, nach dem Commit die Dateien
+    const fileKeys = await deleteFileRowsOfJobs(tx, [id]);
     await tx.delete(printJobs).where(eq(printJobs.id, id));
-    return true;
+    return fileKeys;
   });
+  if (!keys) return false;
+  await removeStoredFiles(keys);
+  return true;
 }
 
 /** Die blanke Zeile im Bereich – für Rechteprüfungen */

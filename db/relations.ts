@@ -4,6 +4,7 @@ import {
   lager,
   materialProducts,
   materials,
+  printJobFiles,
   printJobLinks,
   printJobMaterials,
   printJobs,
@@ -237,6 +238,7 @@ export const presetContainerVariantsRelations = relations(
 export const printJobsRelations = relations(printJobs, ({ many }) => ({
   materials: many(printJobMaterials),
   links: many(printJobLinks),
+  files: many(printJobFiles),
 }));
 
 export const printJobMaterialsRelations = relations(
@@ -260,6 +262,13 @@ export const printJobMaterialsRelations = relations(
 export const printJobLinksRelations = relations(printJobLinks, ({ one }) => ({
   printJob: one(printJobs, {
     fields: [printJobLinks.printJobId],
+    references: [printJobs.id],
+  }),
+}));
+
+export const printJobFilesRelations = relations(printJobFiles, ({ one }) => ({
+  printJob: one(printJobs, {
+    fields: [printJobFiles.printJobId],
     references: [printJobs.id],
   }),
 }));

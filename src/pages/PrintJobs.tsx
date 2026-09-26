@@ -303,7 +303,7 @@ export default function PrintJobs() {
           </div>
         ) : (
           <>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
               {items.map(job => (
                 <PrintJobCard key={job.id} job={job} />
               ))}

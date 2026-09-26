@@ -4,6 +4,7 @@ import {
   currencySymbol as currencySymbolFor,
   formatDate,
   formatDateTime,
+  formatBytes,
   formatGrams,
   formatLiters,
   formatMeters,
@@ -51,6 +52,7 @@ export function FormatProvider({ children }: { children: ReactNode }) {
       currencySymbol: currencySymbolFor(locale, currency),
       formatNumber: n => formatNumber(n, locale),
       formatGrams: grams => formatGrams(grams, locale),
+      formatBytes: bytes => formatBytes(bytes, locale),
       formatDiameter: um => formatDiameter(um, locale),
       formatSecondary: amount => {
         if (amount == null) return "–";

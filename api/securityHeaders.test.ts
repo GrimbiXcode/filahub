@@ -79,6 +79,7 @@ describe("Schutzkopfzeilen", () => {
 
   it("lädt Bilder nur lokal – keine fremden CDNs", async () => {
     // Gilt nur, solange keine Telegram-Profilbilder angezeigt werden.
+    // Fotos zu Drucken (seit 4.3.0) kommen vom eigenen Server.
     const csp = (await headers()).get("content-security-policy");
     expect(directive(csp, "img-src")).toBe("img-src 'self' data:");
   });

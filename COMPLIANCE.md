@@ -228,6 +228,7 @@ Known gaps, deliberately recorded rather than glossed over:
 | Data                                                                                     | On account deletion                                                              |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Own stock: materials, weigh-ins, consumptions, container types, dryboxes, hidden presets | deleted                                                                          |
+| Print history and its uploaded photos and 3MF files                                      | rows deleted in the transaction, files right after it; a sweep catches leftovers |
 | Store shares (`lager_shares`) — granted and received, **before** the stores              | deleted                                                                          |
 | Stores (`lager`) — deleted **after** the materials that point at them                    | deleted                                                                          |
 | Proposals — pending, rejected, withdrawn                                                 | deleted                                                                          |
@@ -249,6 +250,14 @@ Known gaps, deliberately recorded rather than glossed over:
 Sign-in codes are additionally purged after 24 hours, and security log entries
 after 90 days, regardless of any deletion request
 (`api/queries/retention.ts`).
+
+Uploaded files (since 4.3.0) live outside the database, in `UPLOAD_DIR`. A
+database transaction cannot roll back a deleted file, so the order is fixed:
+the rows go first, inside the transaction, and the files only after it has
+committed. If that second step fails, the file has no row left; every six
+hours `sweepOrphanFiles` (`api/queries/printFiles.ts`) deletes such files once
+they are older than an hour. Backups of the upload directory need the same
+retention as database backups.
 
 Security log entries are anonymised rather than deleted for a specific reason:
 if deleting an account emptied the log, anyone who gained unauthorised access

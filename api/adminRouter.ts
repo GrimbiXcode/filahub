@@ -31,6 +31,7 @@ import { countMaterialsWithPresetVariant } from "./queries/filament";
 import {
   countAllTables,
   getDatabaseInfo,
+  getStorageInfo,
   getSchemaMigrations,
   getSeedInfo,
 } from "./queries/systemStatus";
@@ -702,17 +703,20 @@ const abuseAdminRouter = createRouter({
  * Systemzustand für `/verwaltung/system`.
  *
  * Zeigt, worauf der Server läuft und was beim Start passiert ist: Verbindung,
- * Schema-Migrationen, Füllstand der Fachtabellen und Startkatalog.
+ * Schema-Migrationen, Füllstand der Fachtabellen, Startkatalog und – seit
+ * 4.3.0 – die Dateiablage.
  */
 const systemAdminRouter = createRouter({
   status: adminQuery.query(async () => {
-    const [database, schemaMigrations, tableCounts, seed] = await Promise.all([
-      getDatabaseInfo(),
-      getSchemaMigrations(),
-      countAllTables(),
-      getSeedInfo(),
-    ]);
-    return { database, schemaMigrations, tableCounts, seed };
+    const [database, schemaMigrations, tableCounts, seed, storage] =
+      await Promise.all([
+        getDatabaseInfo(),
+        getSchemaMigrations(),
+        countAllTables(),
+        getSeedInfo(),
+        getStorageInfo(),
+      ]);
+    return { database, schemaMigrations, tableCounts, seed, storage };
   }),
 });
 

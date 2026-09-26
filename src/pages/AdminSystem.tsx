@@ -124,6 +124,38 @@ function TableCountsCard({ data }: { data: AdminSystemStatus["tableCounts"] }) {
   );
 }
 
+function StorageCard({ data }: { data: AdminSystemStatus["storage"] }) {
+  const t = useT();
+  const { formatBytes, formatNumber } = useFormat();
+  return (
+    <SectionCard
+      title={t.adminSystem.storage}
+      actions={
+        <Badge
+          variant={data.writable ? "secondary" : "destructive"}
+          className="font-normal"
+        >
+          {data.writable
+            ? t.adminSystem.storageWritable
+            : t.adminSystem.storageNotWritable}
+        </Badge>
+      }
+    >
+      <Row label={t.adminSystem.storageDirectory}>
+        <span className="font-mono">{data.directory}</span>
+      </Row>
+      <Row label={t.adminSystem.storageUsed}>
+        <span className="font-mono">
+          {t.adminSystem.storageUsedValue({
+            size: formatBytes(data.usedBytes),
+            files: formatNumber(data.files),
+          })}
+        </span>
+      </Row>
+    </SectionCard>
+  );
+}
+
 export default function AdminSystem() {
   const t = useT();
   const { data, isLoading } = trpc.admin.system.status.useQuery();
@@ -143,6 +175,7 @@ export default function AdminSystem() {
         <div className="flex flex-col gap-4 sm:gap-6">
           <DatabaseCard data={data.database} />
           <MigrationsCard migrations={data.schemaMigrations} seed={data.seed} />
+          <StorageCard data={data.storage} />
           <TableCountsCard data={data.tableCounts} />
         </div>
       )}

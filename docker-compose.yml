@@ -45,6 +45,10 @@ services:
       DATABASE_URL: postgres://filahub:change-me@db:5432/filahub
     ports:
       - "3000:3000"
+    # Photos and 3MF files of prints (UPLOAD_DIR). Back this volume up
+    # together with the database – it is the second place with user data.
+    volumes:
+      - uploads:/data/uploads
     # The image also ships a Dockerfile HEALTHCHECK; this entry makes the
     # status explicit for Compose (e.g. for monitoring via `docker compose ps`).
     healthcheck:
@@ -59,3 +63,4 @@ services:
 
 volumes:
   db-data:
+  uploads:
