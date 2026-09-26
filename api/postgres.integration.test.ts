@@ -68,6 +68,7 @@ describe("Migrationen", () => {
       "users",
       "lager",
       "material_products",
+      "material_print_settings",
       "materials",
       "weighings",
       "consumptions",

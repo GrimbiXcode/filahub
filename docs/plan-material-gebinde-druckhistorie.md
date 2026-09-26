@@ -1,8 +1,8 @@
 # Plan: Material und Gebinde, Druckeinstellungen, Druckhistorie
 
 Stand: 4.0.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
-Ende). **Phase 1 ist umgesetzt** (Version 4.0.0); die Abweichungen vom Entwurf
-stehen unter „Stand der Umsetzung“. Phasen 2–4 sind offen.
+Ende). **Phase 1 ist umgesetzt** (4.0.0), **Phase 2** (4.1.0); die Abweichungen vom
+Entwurf stehen unter „Stand der Umsetzung“.
 
 ## Stand der Umsetzung
 
@@ -33,6 +33,22 @@ mit Grund:
 - **Lager wechselt Art oder Stärke** nur, solange keines seiner Materialien auch
   in einem anderen Lager liegt – die Gegenrichtung der Konsistenzregel, im
   Entwurf nicht bedacht.
+
+**Phase 2 (4.1.0)** – Entscheidungen, die der Entwurf offenließ:
+
+- **„Aufgebraucht“ kommt über `material.list` mit**, gefiltert wird im Client.
+  Grund: Die nächste freie Kennung rechnet der Browser aus dieser Liste, und
+  die Kennung eines aufgebrauchten Gebindes bleibt belegt (der Unique-Index je
+  Lager gilt weiter). Eine gefilterte Liste hätte Nummern vorgeschlagen, die
+  der Server als doppelt ablehnt.
+- **Ein Material mit nur aufgebrauchten Gebinden warnt nicht.** Sein Bestand
+  ist leer, aber es steht in keinem Regal mehr; die Material-Seite zeigt es.
+  Eine Warnung „nachkaufen“ dafür gehört zum späteren Telegram-Hinweis (#17).
+- **Die Drybox bleibt beim Aufbrauchen zugewiesen** – sie zu lösen änderte die
+  Nettowerte des Verlaufs rückwirkend.
+- **Eingabe in Slicer-Einheiten** (Rückzug in mm, Belichtung in s),
+  gespeichert ganzzahlig (1/100 mm, ms).
+- **Keine Druckeinstellungen je Drucker** – wie im Entwurf ausgeklammert.
 
 Die Einzelheiten stehen in `AGENTS.md` unter „Material und Gebinde“.
 

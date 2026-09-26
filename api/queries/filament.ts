@@ -494,6 +494,8 @@ function stockByProduct(
 ): Map<number, ProductStock> {
   const groups = new Map<number, MaterialOverview[]>();
   for (const g of gebinde) {
+    // Aufgebrauchte Gebinde zählen nicht zum Bestand (seit 4.1.0)
+    if (g.archivedAt != null) continue;
     const list = groups.get(g.productId);
     if (list) list.push(g);
     else groups.set(g.productId, [g]);
@@ -551,7 +553,10 @@ export async function findMaterialsInScope(
         )
       : [];
   const stock = stockByProduct([...list, ...elsewhere]);
-  return list.map(g => ({ ...g, stock: stock.get(g.productId)! }));
+  return list.map(g => ({
+    ...g,
+    stock: stock.get(g.productId) ?? productStock([]),
+  }));
 }
 
 /**
@@ -567,6 +572,10 @@ export async function findGebindeOfProduct(
     and(scopeWhere(materials, scope), eq(materials.productId, productId))!,
     language
   );
+  /*
+    Ein Material, dessen Gebinde alle aufgebraucht sind, hat keinen Eintrag in
+    der Karte – sein Bestand ist leer, nicht unbekannt.
+  */
   const stock = stockByProduct(list).get(productId) ?? productStock([]);
   return { gebinde: list.map(g => ({ ...g, stock })), stock };
 }
@@ -988,4 +997,21 @@ export function findMaterialRowInScope(scope: Scope, id: number) {
   return getDb().query.materials.findFirst({
     where: and(eq(materials.id, id), scopeWhere(materials, scope)),
   });
+}
+
+/**
+ * Markiert ein Gebinde als aufgebraucht bzw. nimmt die Markierung zurück.
+ * Liefert `false`, wenn es das Gebinde im Bereich nicht gibt.
+ */
+export async function setMaterialArchived(
+  scope: Scope,
+  id: number,
+  archived: boolean
+): Promise<boolean> {
+  const rows = await getDb()
+    .update(materials)
+    .set({ archivedAt: archived ? new Date() : null })
+    .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+    .returning({ id: materials.id });
+  return rows.length > 0;
 }

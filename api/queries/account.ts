@@ -54,6 +54,14 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   const materialProducts = await db.query.materialProducts.findMany({
     where: eq(schema.materialProducts.userId, userId),
   });
+  /* Druckeinstellungen hängen am Material – derselbe Wächter wie bei den Wägungen. */
+  const productIds = materialProducts.map(p => p.id);
+  const materialPrintSettings =
+    productIds.length === 0
+      ? []
+      : await db.query.materialPrintSettings.findMany({
+          where: inArray(schema.materialPrintSettings.productId, productIds),
+        });
 
   const materials = await db.query.materials.findMany({
     where: eq(schema.materials.userId, userId),
@@ -298,6 +306,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     profile,
     lager,
     materialProducts,
+    materialPrintSettings,
     materials,
     weighings,
     consumptions,
@@ -423,6 +432,17 @@ export async function deleteUserAccount(
       .delete(schema.materials)
       .where(eq(schema.materials.userId, userId));
     // Die Materialien nach ihren Gebinden – dieselbe Reihenfolge wie beim Löschen eines Gebindes.
+    await tx
+      .delete(schema.materialPrintSettings)
+      .where(
+        inArray(
+          schema.materialPrintSettings.productId,
+          tx
+            .select({ id: schema.materialProducts.id })
+            .from(schema.materialProducts)
+            .where(eq(schema.materialProducts.userId, userId))
+        )
+      );
     await tx
       .delete(schema.materialProducts)
       .where(eq(schema.materialProducts.userId, userId));

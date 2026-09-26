@@ -4,6 +4,11 @@ import {
   COMMON_MATERIAL_TYPES,
   canonicalMaterialType,
 } from "@contracts/materials";
+import {
+  MAX_PRINT_NOTES_LENGTH,
+  hasPrintSettings,
+  printSettingsSchema,
+} from "@contracts/printSettings";
 import { createRouter, authedQuery } from "./middleware";
 import { resolveScope, scopeInput } from "./scope";
 import { productFields } from "./materialRouter";
@@ -11,10 +16,12 @@ import { findGebindeOfProduct } from "./queries/filament";
 import {
   PRODUCT_GONE,
   findMaterialTypesInScope,
+  findPrintSettings,
   findProductLagerKinds,
   findProductRowInScope,
   findProductsInScope,
   mergeProducts,
+  savePrintSettings,
   updateProduct,
 } from "./queries/products";
 import { getDb } from "./queries/connection";
@@ -77,6 +84,8 @@ export const productRouter = createRouter({
       diameterUm: first?.filamentDiameterUm ?? null,
       gebinde,
       stock,
+      /** Druckeinstellungen (seit 4.1.0), `null` = keine hinterlegt */
+      printSettings: await findPrintSettings(input.id),
     };
   }),
 
@@ -106,6 +115,70 @@ export const productRouter = createRouter({
             ])
           : undefined;
       await updateProduct(getDb(), scope, id, { ...data, materialType });
+      return { ok: true };
+    }),
+
+  /**
+   * Druckeinstellungen setzen oder – mit `settings: null` – entfernen.
+   *
+   * Die Materialart der Einstellungen muss die des Materials sein, und die
+   * steht am Lager seiner Gebinde. Sonst stünden an einem Harz Düsen- und
+   * Betttemperaturen, die niemand mehr sieht, weil die Karte nach der Art des
+   * Materials zeichnet.
+   */
+  setPrintSettings: authedQuery
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        settings: printSettingsSchema.nullable(),
+        notes: z.string().max(MAX_PRINT_NOTES_LENGTH).nullable(),
+        ...scopeInput.shape,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      if (!(await findProductRowInScope(scope, input.id))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
+      }
+      const kinds = await findProductLagerKinds(input.id);
+      if (
+        input.settings &&
+        kinds.length > 0 &&
+        kinds.some(k => k.kind !== input.settings!.kind)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Die Druckeinstellungen passen nicht zur Materialart des Lagers.",
+        });
+      }
+      const notes = input.notes?.trim() || null;
+      const empty = !hasPrintSettings(input.settings, notes);
+      const saved = await savePrintSettings(
+        scope,
+        input.id,
+        empty
+          ? null
+          : {
+              settings: input.settings ?? {
+                kind: kinds[0]?.kind ?? "filament",
+              },
+              notes,
+            }
+      );
+      if (!saved) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Material nicht gefunden",
+        });
+      }
       return { ok: true };
     }),
 

@@ -45,7 +45,8 @@ src/            React-Frontend
                 (Detail neben dem Regal), Spool (Spule: Ring = Füllstand, Kern =
                 Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
                 (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
-                ProductGebindeList (die Gebinde eines Materials samt Bestand)
+                ProductGebindeList (die Gebinde eines Materials samt Bestand),
+                PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -108,6 +109,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 Vergleichsform und Schreibweise der Materialart-Bezeichnung),
                 identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
                 nächste freie Nummer),
+                printSettings.ts (Druckeinstellungen je Materialart),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -358,6 +360,62 @@ Benutzer etwas davon hat. Wo die Oberfläche eine Gebindeform kennt, sagt sie
   Tabellenliste in `api/postgres.integration.test.ts` und im Export; der
   DSGVO-Wächter findet `userId` selbst. Gelöscht wird in beiden Kaskaden
   (Konto, Organisation) **nach** den Gebinden.
+- **Gleichzeitigkeit.** Wer ein Gebinde an ein Material hängt (anlegen,
+  umordnen, zusammenführen) oder ein Material leer löscht, nimmt zuerst
+  `lockProductInScope` (`FOR UPDATE` auf die Materialzeile). Ohne die Sperre
+  konnte ein Gebinde auf ein im selben Moment gelöschtes Material zeigen –
+  Fremdschlüssel gibt es keine. Der Lesepfad überspringt ein solches Gebinde,
+  statt die Liste des ganzen Bereichs abstürzen zu lassen.
+
+### Aufgebraucht (seit 4.1.0)
+
+`materials.archivedAt` – „aufgebraucht seit“, `NULL` = in Gebrauch. Der Weg
+statt Löschen für eine leere Rolle: Verlauf, Material und seine
+Druckeinstellungen bleiben.
+
+- **Zählt nicht zum Bestand** (`stockByProduct` überspringt es), steht nicht
+  im Regal, nicht in Wiegen/Abbuchen/Kennungssuche und geht **nicht an
+  Freunde** (alle drei Freundes-Lesepfade filtern `archivedAt IS NULL`).
+- **`material.list` liefert es trotzdem mit**, mit `archivedAt`: Formular und
+  Import berechnen die nächste freie Kennung aus dieser Liste, und die Kennung
+  eines aufgebrauchten Gebindes bleibt belegt, bis es gelöscht wird (der
+  Unique-Index je Lager kennt kein „aufgebraucht“). Gefiltert wird deshalb im
+  Client – in `Home.tsx`, `QuickActions.tsx` und `IdentifierLookup.tsx`.
+- **Die Drybox bleibt zugewiesen.** Die Tara geht in den Verlauf ein; sie beim
+  Aufbrauchen zu lösen, änderte rückwirkend die Nettowerte. Die
+  Belegungszählung der Dryboxen zählt aufgebrauchte Gebinde deshalb mit.
+- Stufe `editor` (`material.setArchived`), wie Ändern.
+
+### Druckeinstellungen (seit 4.1.0)
+
+Je Material eine Zeile in `material_print_settings` (`productId` als
+Primärschlüssel, `settings` jsonb, `notes` Markdown, `schemaVersion`).
+
+- **Eigene Tabelle, keine Spalte am Material** – die Vorbereitung für Freunde:
+  Die Freundes-Lesepfade laden `material_products`; stünden die Einstellungen
+  dort, trennte sie nur die Spaltenauswahl von der Datenpanne.
+  `api/friendVisibility.test.ts` hält fest, dass `api/queries/friends.ts` sie
+  nicht einmal erwähnt. Wer sie Freunden zeigen will, ändert diesen Test mit
+  und baut eine eigene Projektion samt Freigabe je Lager (Plan, Phase 2).
+- **Eine Form je Materialart** (`printSettingsSchema` in
+  `contracts/printSettings.ts`, discriminated union über `kind`), alles
+  ganzzahlig: °C, %, mm/s, Rückzug in 1/100 mm, Belichtung in ms, Schichthöhe
+  in µm, Zeiten in Minuten. Das Formular nimmt mm und s entgegen und rechnet
+  um. `product.setPrintSettings` lehnt eine Art ab, die nicht die des Lagers
+  der Gebinde ist; leer (keine Werte, keine Notizen) heißt: Zeile löschen.
+- **Gespeichertes, das nicht mehr zum Schema passt, wird `null`**
+  (`parseStoredPrintSettings`) statt eines Fehlers – eine Seite, die an einer
+  alten Zeile scheitert, wäre schlimmer als eine leere Karte.
+- **Zusammenführen:** Die Einstellungen des Ziels bleiben; hat es keine,
+  wandern die der Quelle mit. Feldweise zu mischen hieße, Werte zweier
+  Materialien zu verschneiden.
+- **Kaskaden:** mit dem Material (`deleteProductIfEmpty`), bei Konto- und
+  Organisationslöschung vor den Materialien. Kein `userId` – der Besitz folgt
+  aus dem Material, deshalb in der Ausnahmeliste des DSGVO-Wächters; im Export
+  unter `materialPrintSettings` (additiv, Version bleibt 5).
+- **Oberfläche:** `src/components/PrintSettings.tsx` – die kompakte Zeile
+  (`PrintSettingsSummary`) in `ProductGebindeList`, die Karte samt Dialog auf
+  der Material-Seite.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -533,7 +591,8 @@ sonst wäre er eine Benennungsvorschrift statt einer Prüfung, und eine Tabelle,
 die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
 er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
 nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
-über das Material) und `loginCodes` (über die Telegram-ID).
+über das Gebinde), `materialPrintSettings` (über das Material) und
+`loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -1128,7 +1187,7 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`, `productStock`,
+  `identifierTemplate`, `productStock`, `printSettings`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank

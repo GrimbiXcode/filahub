@@ -182,9 +182,10 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese sechzehn plus vier, die den Personenbezug über eine andere Spalte
+      Diese sechzehn plus fünf, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` und seit 2.9.0 `consumptions`
-      (beide über das Material) sowie `loginCodes` (Telegram-ID). Ändert sich
+      (beide über das Gebinde), seit 4.1.0 `materialPrintSettings` (über das
+      Material) sowie `loginCodes` (Telegram-ID). Ändert sich
       die linke Seite, muss die rechte nachziehen.
 
       Vier waren es bis 2.3.0 – `audit_log` gehörte dazu, weil seine Spalten
@@ -203,6 +204,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "loanRequests",
         "loginCodes",
         "materialProducts",
+        "materialPrintSettings",
         "materials",
         "organizationMemberships",
         "organizationInvitations",

@@ -54,7 +54,8 @@ export function IdentifierLookup({
     event.preventDefault();
     const q = value.trim().toLowerCase();
     if (!q) return;
-    const list = allMaterials ?? [];
+    // Aufgebrauchte Gebinde wiegt niemand mehr (seit 4.1.0)
+    const list = (allMaterials ?? []).filter(m => m.archivedAt == null);
     const exact = list.find(m => m.identifier?.toLowerCase() === q);
     const templates = new Map(
       (lagerList ?? []).map(l => [l.id, l.identifierTemplate])

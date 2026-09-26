@@ -1,6 +1,16 @@
 import { and, count, eq, ne, notExists } from "drizzle-orm";
 import type { MaterialKind } from "@contracts/materials";
-import { lager, materialProducts, materials } from "@db/schema";
+import {
+  PRINT_SETTINGS_SCHEMA_VERSION,
+  parseStoredPrintSettings,
+  type PrintSettings,
+} from "@contracts/printSettings";
+import {
+  lager,
+  materialPrintSettings,
+  materialProducts,
+  materials,
+} from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 import { hasChanges } from "./patch";
@@ -40,8 +50,10 @@ export type ProductListItem = typeof materialProducts.$inferSelect & {
   /** Materialart und Stärke aus dem Lager der Gebinde; `null` ohne Gebinde */
   kind: MaterialKind | null;
   diameterUm: number | null;
-  /** Anzahl der Gebinde */
+  /** Anzahl der Gebinde, aufgebrauchte eingeschlossen */
   gebindeCount: number;
+  /** Anzahl der Gebinde in Gebrauch (nicht aufgebraucht) */
+  activeCount: number;
 };
 
 /**
@@ -56,7 +68,7 @@ export async function findProductsInScope(
     where: scopeWhere(materialProducts, scope),
     with: {
       materials: {
-        columns: { id: true },
+        columns: { id: true, archivedAt: true },
         with: {
           lager: {
             columns: { materialKind: true, filamentDiameterUm: true },
@@ -73,6 +85,7 @@ export async function findProductsInScope(
       kind: first?.materialKind ?? null,
       diameterUm: first?.filamentDiameterUm ?? null,
       gebindeCount: gebinde.length,
+      activeCount: gebinde.filter(g => g.archivedAt == null).length,
     };
   });
 }
@@ -188,7 +201,7 @@ export async function deleteProductIfEmpty(
   id: number
 ) {
   if (!(await lockProductInScope(executor, scope, id))) return;
-  await executor
+  const deleted = await executor
     .delete(materialProducts)
     .where(
       and(
@@ -201,7 +214,14 @@ export async function deleteProductIfEmpty(
             .where(eq(materials.productId, id))
         )
       )
-    );
+    )
+    .returning({ id: materialProducts.id });
+  // Die Druckeinstellungen gehen mit dem Material (seit 4.1.0)
+  if (deleted.length > 0) {
+    await executor
+      .delete(materialPrintSettings)
+      .where(eq(materialPrintSettings.productId, id));
+  }
 }
 
 /**
@@ -247,6 +267,24 @@ export async function mergeProducts(
       if (!(await lockProductInScope(tx, scope, id)))
         throw new Error(PRODUCT_GONE);
     }
+    /*
+      Druckeinstellungen: Die des Ziels bleiben. Hat das Ziel keine, wandern
+      die der Quelle mit – sonst gingen sie mit der Quelle verloren. Beide zu
+      mischen hieße, Werte zweier Materialien feldweise zu verschneiden.
+    */
+    const targetHasSettings =
+      (
+        await tx
+          .select({ id: materialPrintSettings.productId })
+          .from(materialPrintSettings)
+          .where(eq(materialPrintSettings.productId, targetId))
+      ).length > 0;
+    if (!targetHasSettings) {
+      await tx
+        .update(materialPrintSettings)
+        .set({ productId: targetId })
+        .where(eq(materialPrintSettings.productId, sourceId));
+    }
     const moved = await tx
       .update(materials)
       .set({ productId: targetId })
@@ -256,5 +294,64 @@ export async function mergeProducts(
       .returning({ id: materials.id });
     await deleteProductIfEmpty(tx, scope, sourceId);
     return moved.length;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Druckeinstellungen (seit 4.1.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Die Druckeinstellungen eines Materials, oder `null`. Ohne Bereichsprüfung –
+ * der Aufrufer hat das Material im Bereich gefunden.
+ */
+export async function findPrintSettings(productId: number): Promise<{
+  settings: PrintSettings | null;
+  notes: string | null;
+  updatedAt: Date;
+} | null> {
+  const row = await getDb().query.materialPrintSettings.findFirst({
+    where: eq(materialPrintSettings.productId, productId),
+  });
+  if (!row) return null;
+  return {
+    settings: parseStoredPrintSettings(row.settings),
+    notes: row.notes,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * Setzt die Druckeinstellungen eines Materials (Upsert) – oder löscht sie,
+ * wenn nichts übrig bleibt. Die Sperre auf das Material ordnet das gegen ein
+ * gleichzeitiges Leerlöschen: Sonst blieben Einstellungen zu einem Material
+ * zurück, das es nicht mehr gibt.
+ */
+export async function savePrintSettings(
+  scope: Scope,
+  productId: number,
+  data: { settings: PrintSettings; notes: string | null } | null
+): Promise<boolean> {
+  return getDb().transaction(async tx => {
+    if (!(await lockProductInScope(tx, scope, productId))) return false;
+    if (data == null) {
+      await tx
+        .delete(materialPrintSettings)
+        .where(eq(materialPrintSettings.productId, productId));
+      return true;
+    }
+    const values = {
+      schemaVersion: PRINT_SETTINGS_SCHEMA_VERSION,
+      settings: data.settings,
+      notes: data.notes,
+    };
+    await tx
+      .insert(materialPrintSettings)
+      .values({ productId, ...values })
+      .onConflictDoUpdate({
+        target: materialPrintSettings.productId,
+        set: { ...values, updatedAt: new Date() },
+      });
+    return true;
   });
 }

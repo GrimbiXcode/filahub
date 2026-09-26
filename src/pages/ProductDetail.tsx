@@ -14,6 +14,7 @@ import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
 import { PageHeader } from "@/components/PageHeader";
+import { PrintSettingsCard } from "@/components/PrintSettings";
 import { ProductGebindeList } from "@/components/ProductGebindeList";
 import {
   AlertDialog,
@@ -161,6 +162,7 @@ export default function ProductDetail() {
               <ProductGebindeList
                 productId={product.id}
                 showMaterialLink={false}
+                showPrintSummary={false}
               />
             </CardContent>
           </Card>
@@ -217,6 +219,12 @@ export default function ProductDetail() {
             </CardContent>
           </Card>
         </div>
+
+        <PrintSettingsCard
+          productId={product.id}
+          kind={product.kind}
+          stored={product.printSettings}
+        />
 
         {canEdit && <MergeCard product={product} />}
       </div>

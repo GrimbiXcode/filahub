@@ -393,6 +393,8 @@ export const de = {
         ? "1 Gebinde von diesem Material"
         : `${vars.count} Gebinde von diesem Material`,
     saved: "Material gespeichert",
+    archivedToggle: (vars: { count: number }) =>
+      vars.count === 1 ? "1 aufgebraucht" : `${vars.count} aufgebraucht`,
     toMaterial: "Zum Material",
     thisOne: "dieses",
     stockOk: "Bestand, ausreichend",
@@ -406,7 +408,7 @@ export const de = {
     densityDefault: "Vorgabe der Materialart",
     mergeTitle: "Zusammenführen",
     mergeHint:
-      "Zwei Einträge, die dasselbe Material sind? Beim Zusammenführen wandern alle Gebinde des anderen hierher, und das andere verschwindet. Name, Farbe und die übrigen Angaben bleiben die von diesem hier.",
+      "Zwei Einträge, die dasselbe Material sind? Beim Zusammenführen wandern alle Gebinde des anderen hierher, und das andere verschwindet. Name, Farbe und die übrigen Angaben bleiben die von diesem hier – ebenso die Druckeinstellungen; hat dieses keine, werden die des anderen übernommen.",
     mergeSuggestions: "Sieht aus wie dasselbe Material",
     mergeOther: "Anderes Material",
     mergeChoose: "Material wählen",
@@ -422,6 +424,70 @@ export const de = {
       vars.count === 1
         ? "1 Gebinde übernommen"
         : `${vars.count} Gebinde übernommen`,
+  },
+  /** Druckeinstellungen je Material (seit 4.1.0) */
+  printSettings: {
+    title: "Druckeinstellungen",
+    add: "Hinterlegen",
+    empty:
+      "Noch nichts hinterlegt. Düse, Bett, Trocknen und Notizen gelten dann für alle Rollen dieses Materials.",
+    editTitle: "Druckeinstellungen bearbeiten",
+    editDescription:
+      "Gilt für alle Gebinde dieses Materials. Leere Felder bleiben leer – nur eintragen, was du weißt.",
+    saved: "Druckeinstellungen gespeichert",
+    invalid: (vars: { field: string }) =>
+      `„${vars.field}“ ist ungültig oder liegt außerhalb des üblichen Bereichs.`,
+    enclosureRequired: "Braucht einen geschlossenen Bauraum",
+    notesLabel: "Notizen (Markdown)",
+    notesPlaceholder:
+      "z. B. erste Schicht langsam, Klebestift auf Glas, im Slicer-Profil „PolyTerra“",
+    short: {
+      nozzle: "Düse",
+      bed: "Bett",
+      drying: "Trocknen",
+      enclosure: "geschlossen",
+      exposure: "Belichtung",
+      bottom: "Boden",
+      refresh: "Frisch",
+    },
+    fields: {
+      nozzleMinC: "Düse von",
+      nozzleMaxC: "Düse bis",
+      bedMinC: "Bett von",
+      bedMaxC: "Bett bis",
+      chamberC: "Bauraum",
+      fanPercent: "Lüfter",
+      speedMaxMmS: "Höchstgeschwindigkeit",
+      flowPercent: "Fluss",
+      retractionHundredthsMm: "Rückzug",
+      dryingC: "Trocknen bei",
+      dryingMinutes: "Trocknen für",
+      exposureMs: "Belichtung",
+      bottomExposureMs: "Belichtung Bodenschichten",
+      bottomLayers: "Bodenschichten",
+      layerHeightUm: "Schichthöhe",
+      postCureMinutes: "Nachhärten",
+      refreshPercent: "Anteil frisches Pulver",
+    },
+    units: {
+      nozzleMinC: "°C",
+      nozzleMaxC: "°C",
+      bedMinC: "°C",
+      bedMaxC: "°C",
+      chamberC: "°C",
+      fanPercent: "%",
+      speedMaxMmS: "mm/s",
+      flowPercent: "%",
+      retractionHundredthsMm: "mm",
+      dryingC: "°C",
+      dryingMinutes: "min",
+      exposureMs: "s",
+      bottomExposureMs: "s",
+      bottomLayers: "Anzahl",
+      layerHeightUm: "µm",
+      postCureMinutes: "min",
+      refreshPercent: "%",
+    },
   },
   materialDetail: {
     notFound: "Material nicht gefunden",
@@ -472,6 +538,14 @@ export const de = {
     deleteMaterialTitle: "Gebinde löschen?",
     deleteMaterialDescription: (vars: { name: string }) =>
       `Dieses Gebinde von „${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht. War es das letzte Gebinde des Materials, verschwindet auch das Material.`,
+    archive: "Aufgebraucht",
+    unarchive: "Wieder in Gebrauch",
+    archivedBadge: "Aufgebraucht",
+    archivedDone: "Als aufgebraucht markiert",
+    unarchivedDone: "Wieder in Gebrauch",
+    archiveInstead: "Stattdessen als aufgebraucht markieren",
+    deleteArchiveHint:
+      "Ist die Rolle nur leer, markiere sie besser als aufgebraucht – dann bleiben Verlauf und Material erhalten.",
     materialDeleted: "Gebinde gelöscht",
     deleteWeighing: "Wägung löschen",
     deleteWeighingTitle: "Wägung löschen?",

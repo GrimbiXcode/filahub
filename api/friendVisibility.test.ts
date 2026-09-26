@@ -351,3 +351,23 @@ describe("toFriendMaterial", () => {
     expect(result.remainingPercent).toBeNull();
   });
 });
+
+/**
+ * Druckeinstellungen gehen vorerst nicht an Freunde (4.1.0). Sie stehen in
+ * einer eigenen Tabelle, damit sie nur hinausgehen können, wenn jemand sie
+ * **ausdrücklich** lädt. Diese Zusicherung ist der Riegel dagegen, dass das
+ * nebenbei geschieht: Wer sie für Freunde freigeben will, ändert diesen Test
+ * mit – und schreibt dazu eine eigene Projektion samt Freigabe je Lager
+ * (siehe `docs/plan-material-gebinde-druckhistorie.md`, Phase 2).
+ */
+describe("Druckeinstellungen bei Freunden", () => {
+  it("werden in den Freundes-Lesepfaden nicht geladen", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./queries/friends.ts", import.meta.url),
+      "utf8"
+    );
+    expect(source).not.toMatch(/materialPrintSettings|material_print_settings/);
+    expect(source).not.toMatch(/printSettings/);
+  });
+});

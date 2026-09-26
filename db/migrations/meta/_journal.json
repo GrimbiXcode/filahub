@@ -162,6 +162,13 @@
       "when": 1790376680547,
       "tag": "0022_material_products",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1790379557327,
+      "tag": "0023_print_settings",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Archive,
@@ -185,9 +185,14 @@ function CommandPalette({
   const scope = useActiveScope();
   const role = useScopeRole();
   // Erst laden, wenn die Suche wirklich geöffnet wird
-  const { data: materials } = trpc.material.list.useQuery(scope, {
+  const { data: allMaterials } = trpc.material.list.useQuery(scope, {
     enabled: open,
   });
+  // Aufgebrauchte Gebinde wiegt und bebucht niemand mehr (seit 4.1.0)
+  const materials = useMemo(
+    () => allMaterials?.filter(m => m.archivedAt == null),
+    [allMaterials]
+  );
 
   /*
     Der Suchbegriff liegt im Zustand, weil das eigene Lager und das der Freunde

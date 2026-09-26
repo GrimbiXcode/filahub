@@ -670,4 +670,195 @@ describe("Material und Gebinde über den Router", () => {
     // Org-Materialien tauchen im persönlichen Bereich nicht auf
     expect(await callerFor(anna).product.list(PERSONAL)).toHaveLength(0);
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 2 (4.1.0): aufgebraucht und Druckeinstellungen
+  // -------------------------------------------------------------------------
+
+  it("zählt aufgebrauchte Gebinde nicht zum Bestand", async () => {
+    const lagerId = await lagerFor(anna);
+    const first = await newMaterial(anna, lagerId);
+    const second = await callerFor(anna).material.create({
+      ...PERSONAL,
+      lagerId,
+      productId: first.productId,
+      nominalWeight: 1000,
+    });
+    await weigh(anna, first.id, 50);
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: second.id,
+      archived: true,
+    });
+    const list = await callerFor(anna).material.list(PERSONAL);
+    // Das aufgebrauchte bleibt in der Liste (Kennungen!), zählt aber nicht mit
+    expect(list).toHaveLength(2);
+    expect(list.find(m => m.id === second.id)?.archivedAt).not.toBeNull();
+    expect(list[0].stock).toMatchObject({
+      count: 1,
+      totalRemaining: 50,
+      low: true,
+    });
+    const products = await callerFor(anna).product.list(PERSONAL);
+    expect(products[0]).toMatchObject({ gebindeCount: 2, activeCount: 1 });
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: second.id,
+      archived: false,
+    });
+    const again = await callerFor(anna).material.list(PERSONAL);
+    expect(again[0].stock.count).toBe(2);
+  });
+
+  it("verlangt für „aufgebraucht“ die Stufe editor und den eigenen Bereich", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await expect(
+      callerFor(bert).material.setArchived({
+        ...PERSONAL,
+        id: created.id,
+        archived: true,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("speichert Druckeinstellungen je Material und löscht sie leer", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    const id = created.productId;
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id,
+      settings: { kind: "filament", nozzleMinC: 205, nozzleMaxC: 220 },
+      notes: "  Erste Schicht langsam  ",
+    });
+    let detail = await callerFor(anna).product.byId({ ...PERSONAL, id });
+    expect(detail.printSettings).toMatchObject({
+      settings: { kind: "filament", nozzleMinC: 205, nozzleMaxC: 220 },
+      notes: "Erste Schicht langsam",
+    });
+    // Überschreiben, nicht anhängen
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id,
+      settings: { kind: "filament", bedMinC: 60 },
+      notes: null,
+    });
+    detail = await callerFor(anna).product.byId({ ...PERSONAL, id });
+    expect(detail.printSettings?.settings).toEqual({
+      kind: "filament",
+      bedMinC: 60,
+    });
+    // Leer heißt: keine Zeile mehr
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id,
+      settings: { kind: "filament" },
+      notes: " ",
+    });
+    detail = await callerFor(anna).product.byId({ ...PERSONAL, id });
+    expect(detail.printSettings).toBeNull();
+    expect(await db().select().from(schema.materialPrintSettings)).toHaveLength(
+      0
+    );
+  });
+
+  it("lehnt Druckeinstellungen einer anderen Materialart ab", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await expect(
+      callerFor(anna).product.setPrintSettings({
+        ...PERSONAL,
+        id: created.productId,
+        settings: { kind: "resin", exposureMs: 2000 },
+        notes: null,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      callerFor(bert).product.setPrintSettings({
+        ...PERSONAL,
+        id: created.productId,
+        settings: { kind: "filament", fanPercent: 50 },
+        notes: null,
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("nimmt die Druckeinstellungen mit dem Material weg", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await callerFor(anna).product.setPrintSettings({
+      ...PERSONAL,
+      id: created.productId,
+      settings: { kind: "filament", fanPercent: 100 },
+      notes: null,
+    });
+    await callerFor(anna).material.delete({ ...PERSONAL, id: created.id });
+    expect(await db().select().from(schema.materialPrintSettings)).toHaveLength(
+      0
+    );
+  });
+
+  it("behält beim Zusammenführen die Einstellungen des Ziels, sonst die der Quelle", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await newMaterial(anna, lagerId);
+    const b = await newMaterial(anna, lagerId);
+    const c = await newMaterial(anna, lagerId);
+    const set = (productId: number, fanPercent: number) =>
+      callerFor(anna).product.setPrintSettings({
+        ...PERSONAL,
+        id: productId,
+        settings: { kind: "filament", fanPercent },
+        notes: null,
+      });
+    await set(a.productId, 10);
+    await set(b.productId, 20);
+    // Ziel a hat eigene – die von b verschwinden mit b
+    await callerFor(anna).product.merge({
+      ...PERSONAL,
+      sourceId: b.productId,
+      targetId: a.productId,
+    });
+    let detail = await callerFor(anna).product.byId({
+      ...PERSONAL,
+      id: a.productId,
+    });
+    expect(detail.printSettings?.settings).toMatchObject({ fanPercent: 10 });
+    // Ziel c hat keine – die von a wandern mit
+    await callerFor(anna).product.merge({
+      ...PERSONAL,
+      sourceId: a.productId,
+      targetId: c.productId,
+    });
+    detail = await callerFor(anna).product.byId({
+      ...PERSONAL,
+      id: c.productId,
+    });
+    expect(detail.printSettings?.settings).toMatchObject({ fanPercent: 10 });
+    expect(await db().select().from(schema.materialPrintSettings)).toHaveLength(
+      1
+    );
+  });
+
+  it("zeigt Freunden keine aufgebrauchten Gebinde", async () => {
+    const lagerId = await lagerFor(anna);
+    const created = await newMaterial(anna, lagerId);
+    await db()
+      .insert(schema.friendships)
+      .values({ userId: anna.id, friendUserId: bert.id, status: "accepted" });
+    await db()
+      .insert(schema.lagerShares)
+      .values({ lagerId, sharedWithUserId: bert.id, visibility: "full" });
+    const before = await callerFor(bert).friend.inventory({
+      friendId: anna.id,
+    });
+    expect(before.materials).toHaveLength(1);
+    await callerFor(anna).material.setArchived({
+      ...PERSONAL,
+      id: created.id,
+      archived: true,
+    });
+    const after = await callerFor(bert).friend.inventory({ friendId: anna.id });
+    expect(after.materials).toHaveLength(0);
+  });
 });

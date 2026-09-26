@@ -10,6 +10,7 @@ import {
 import {
   consumptions,
   lager,
+  materialPrintSettings,
   materialProducts,
   materials,
   containerTypes,
@@ -167,7 +168,18 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(materials)
     .where(eq(materials.organizationId, organizationId));
-  // Die Materialien nach ihren Gebinden
+  // Die Materialien nach ihren Gebinden, davor ihre Druckeinstellungen
+  await tx
+    .delete(materialPrintSettings)
+    .where(
+      inArray(
+        materialPrintSettings.productId,
+        tx
+          .select({ id: materialProducts.id })
+          .from(materialProducts)
+          .where(eq(materialProducts.organizationId, organizationId))
+      )
+    );
   await tx
     .delete(materialProducts)
     .where(eq(materialProducts.organizationId, organizationId));

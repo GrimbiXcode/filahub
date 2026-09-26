@@ -7,6 +7,7 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
   or,
   sql,
 } from "drizzle-orm";
@@ -594,6 +595,8 @@ export async function findFriendMaterialsForSearch(
         unwahrscheinlich, und dies ist die Abfrage, in der das zählt.
       */
       inArray(materials.userId, [...names.keys()]),
+      // Aufgebrauchte Gebinde sind leer – bei Freunden nur Rauschen (4.1.0)
+      isNull(materials.archivedAt),
       or(
         ilike(materials.identifier, pattern),
         /*
@@ -672,7 +675,8 @@ export async function findFriendInventory(
     // Besitzer **und** Lager, aus demselben Grund wie im Suchpfad.
     where: and(
       eq(materials.userId, ownerId),
-      inArray(materials.lagerId, lagerIds)
+      inArray(materials.lagerId, lagerIds),
+      isNull(materials.archivedAt)
     ),
     orderBy: [asc(PRODUCT_NAME), asc(materials.id)],
   });
@@ -701,7 +705,7 @@ export async function findFriendMaterial(
   const row = await getDb().query.materials.findFirst({
     columns: FRIEND_MATERIAL_COLUMNS,
     with: FRIEND_MATERIAL_WITH,
-    where: eq(materials.id, materialId),
+    where: and(eq(materials.id, materialId), isNull(materials.archivedAt)),
   });
   /*
     `ownedByPerson` schließt Material einer Organisation aus. Als einzige der

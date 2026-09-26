@@ -41,6 +41,7 @@ import {
   findIdentifiersInScope,
   findMaterialInScope,
   findMaterialRowInScope,
+  setMaterialArchived,
   findMaterialsInScope,
   findRecentWeighings,
   findWeighing,
@@ -673,6 +674,36 @@ export const materialRouter = createRouter({
         }
       }
       return { created };
+    }),
+
+  /**
+   * Gebinde als aufgebraucht markieren bzw. zurückholen (seit 4.1.0).
+   *
+   * Der Weg statt Löschen, wenn eine Rolle leer ist: Das Material behält seine
+   * Druckeinstellungen, der Verlauf bleibt, und Drucke können weiter darauf
+   * zeigen. Stufe `editor` wie Ändern – es verändert, was im Regal steht.
+   */
+  setArchived: authedQuery
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        archived: z.boolean(),
+        ...scopeInput.shape,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      if (!(await setMaterialArchived(scope, input.id, input.archived))) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Gebinde nicht gefunden",
+        });
+      }
+      return { ok: true };
     }),
 
   /** Neue Wägung: gemessenes Bruttogewicht (Material + Gebinde + ggf. Box) */

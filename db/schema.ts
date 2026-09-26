@@ -547,6 +547,35 @@ export type MaterialProduct = typeof materialProducts.$inferSelect;
 export type InsertMaterialProduct = typeof materialProducts.$inferInsert;
 
 /**
+ * Druckeinstellungen je Material (seit 4.1.0) – eine Zeile je Material.
+ *
+ * **Eine eigene Tabelle und keine Spalte an `material_products`**, und das ist
+ * die Vorbereitung für Freunde: Die Freundes-Lesepfade laden das Material für
+ * Name und Farbe (`FRIEND_MATERIAL_WITH`); stünden die Einstellungen dort als
+ * Spalte, trennte sie nur die Spaltenauswahl von der Datenpanne. So müsste man
+ * sie ausdrücklich laden – `api/friendVisibility.test.ts` hält fest, dass
+ * `api/queries/friends.ts` es nicht tut.
+ *
+ * Kein `userId`: Der Besitz folgt aus dem Material, wie bei den Wägungen aus
+ * dem Gebinde. Die Form von `settings` prüft `printSettingsSchema`
+ * (`contracts/printSettings.ts`).
+ */
+export const materialPrintSettings = pgTable("material_print_settings", {
+  productId: bigint("productId", { mode: "number" }).primaryKey(),
+  /** Version der Form von `settings`, siehe `PRINT_SETTINGS_SCHEMA_VERSION` */
+  schemaVersion: integer("schemaVersion").notNull(),
+  settings: jsonb("settings").notNull(),
+  /** Freitext in Markdown – was in keine Zahl passt */
+  notes: text("notes"),
+  updatedAt: tsColumn("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+export type MaterialPrintSettings = typeof materialPrintSettings.$inferSelect;
+
+/**
  * Das **Gebinde** – die einzelne Rolle, Flasche, der Beutel im Lager, mit
  * Kennung, Wägungen und Verbräuchen. Der Tabellenname stammt aus der Zeit vor
  * 4.0.0, als Produkt und Stück eine Zeile waren; siehe `materialProducts`.
@@ -606,6 +635,14 @@ export const materials = pgTable(
     }),
     /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
     storageBoxId: bigint("storageBoxId", { mode: "number" }),
+    /**
+     * „Aufgebraucht“ seit (4.1.0) – `NULL` = in Gebrauch. Ein aufgebrauchtes
+     * Gebinde bleibt stehen, statt gelöscht zu werden: Sein Material behält
+     * Druckeinstellungen und Verlauf, und Drucke können darauf zeigen. Es
+     * zählt nicht zum Bestand (`productStock`), steht nicht im Regal und geht
+     * nicht an Freunde; seine Kennung bleibt belegt, bis es gelöscht wird.
+     */
+    archivedAt: tsColumn("archivedAt"),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")

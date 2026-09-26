@@ -12,7 +12,9 @@ import {
 import { useNavigate, useParams } from "react-router";
 import {
   Archive,
+  ArchiveRestore,
   ArrowLeft,
+  PackageCheck,
   Disc3,
   Pencil,
   Printer,
@@ -101,6 +103,24 @@ export default function MaterialDetail() {
       utils.material.list.invalidate();
       utils.product.invalidate();
       navigate("/");
+    },
+    onError: e => toast.error(e.message),
+  });
+  /*
+    Aufgebraucht markieren (seit 4.1.0) – der Weg statt Löschen für eine leere
+    Rolle: Verlauf und Material bleiben, das Regal wird frei.
+  */
+  const setArchived = trpc.material.setArchived.useMutation({
+    onSuccess: (_, input) => {
+      toast.success(
+        input.archived
+          ? t.materialDetail.archivedDone
+          : t.materialDetail.unarchivedDone
+      );
+      utils.material.list.invalidate();
+      utils.material.byId.invalidate();
+      utils.product.invalidate();
+      setDeleteOpen(false);
     },
     onError: e => toast.error(e.message),
   });
@@ -234,6 +254,11 @@ export default function MaterialDetail() {
               )}
               <span className="wrap-break-word">{material.name}</span>
               <Badge variant="secondary">{material.materialType}</Badge>
+              {material.archivedAt && (
+                <Badge variant="outline">
+                  {t.materialDetail.archivedBadge}
+                </Badge>
+              )}
             </span>
           }
           description={
@@ -243,8 +268,9 @@ export default function MaterialDetail() {
           }
           actions={
             <>
-              {/* Wiegen und Abbuchen sind `weigher`, Bearbeiten und Löschen `editor`. */}
-              {roleAllows(role, "weigher") && (
+              {/* Wiegen und Abbuchen sind `weigher`, Bearbeiten und Löschen `editor`.
+                  Ein aufgebrauchtes Gebinde wiegt niemand mehr. */}
+              {roleAllows(role, "weigher") && !material.archivedAt && (
                 <>
                   <Button
                     className="flex-1 sm:flex-none"
@@ -269,6 +295,30 @@ export default function MaterialDetail() {
                     onClick={() => openMaterialForm(asOverview)}
                   >
                     <Pencil className="mr-2 h-4 w-4" /> {t.common.edit}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 sm:flex-none"
+                    disabled={setArchived.isPending}
+                    onClick={() =>
+                      setArchived.mutate({
+                        ...scope,
+                        id: material.id,
+                        archived: !material.archivedAt,
+                      })
+                    }
+                  >
+                    {material.archivedAt ? (
+                      <>
+                        <ArchiveRestore className="mr-2 h-4 w-4" />{" "}
+                        {t.materialDetail.unarchive}
+                      </>
+                    ) : (
+                      <>
+                        <PackageCheck className="mr-2 h-4 w-4" />{" "}
+                        {t.materialDetail.archive}
+                      </>
+                    )}
                   </Button>
                   <Button
                     variant="outline"
@@ -509,7 +559,7 @@ export default function MaterialDetail() {
                 {t.materialDetail.history}
               </CardTitle>
               {/* Ausgeblendet statt deaktiviert – siehe `Lager.tsx`. */}
-              {roleAllows(role, "weigher") && (
+              {roleAllows(role, "weigher") && !material.archivedAt && (
                 <div className="flex flex-wrap gap-2">
                   <Button
                     size="sm"
@@ -653,10 +703,26 @@ export default function MaterialDetail() {
               {t.materialDetail.deleteMaterialDescription({
                 name: material.name,
               })}
+              {!material.archivedAt && ` ${t.materialDetail.deleteArchiveHint}`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
+            {!material.archivedAt && (
+              <Button
+                variant="outline"
+                disabled={setArchived.isPending}
+                onClick={() =>
+                  setArchived.mutate({
+                    ...scope,
+                    id: material.id,
+                    archived: true,
+                  })
+                }
+              >
+                {t.materialDetail.archiveInstead}
+              </Button>
+            )}
             <AlertDialogAction
               onClick={() =>
                 deleteMutation.mutate({ ...scope, id: material.id })

@@ -69,6 +69,11 @@ export const ACCOUNT_EXPORT_SECTIONS = [
     mehr.
   */
   "materialProducts",
+  /*
+    Seit 4.1.0: Druckeinstellungen je Material – Werte und Notizen der Person.
+    Additiv, die Exportversion bleibt 5.
+  */
+  "materialPrintSettings",
   "materials",
   "weighings",
   /*

@@ -178,10 +178,19 @@ export default function Home() {
     Abfrage mit – und die Übersicht zeigte fremde Lager samt ihrer Summen.
     `enabled` verhindert das Holen, nicht das Lesen.
   */
-  const { data: materials, isPending: materialsPending } =
+  const { data: materialsOfLager, isPending: materialsPending } =
     trpc.material.list.useQuery(
       activeLagerId != null ? { ...scope, lagerId: activeLagerId } : skipToken
     );
+  /*
+    Aufgebrauchte Gebinde (seit 4.1.0) stehen nicht im Regal und nicht in den
+    Summen. Die Liste liefert sie trotzdem mit, weil Formular und Import ihre
+    Kennungen kennen müssen; gefiltert wird deshalb hier.
+  */
+  const materials = useMemo(
+    () => materialsOfLager?.filter(m => m.archivedAt == null),
+    [materialsOfLager]
+  );
   /*
     Solange die Lagerliste noch unterwegs ist, ist „kein Material“ nicht wahr,
     sondern unbekannt. Eine abgeschaltete Abfrage meldet `isLoading === false`

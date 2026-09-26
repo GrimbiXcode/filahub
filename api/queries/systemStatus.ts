@@ -124,6 +124,7 @@ const COUNTED_TABLES = [
   // Seit 2.2.0. Fehlte in der Auslieferung von 2.2.0 – nachgetragen in 2.3.0.
   "lager",
   "material_products",
+  "material_print_settings",
   "materials",
   "weighings",
   // Seit 2.9.0: Verbräuche, die Abbuchungen ohne Waage.
