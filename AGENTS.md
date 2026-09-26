@@ -89,7 +89,9 @@ api/            Hono/tRPC-Backend
                 vite.ts (Static-Serving samt Cache-Kopfzeilen),
                 clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
                 (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins),
-                fileStorage.ts (Dateiablage: zufällige Schlüssel, Volume)
+                fileStorage.ts (Dateiablage: zufällige Schlüssel, Treiberwahl),
+                s3Storage.ts (S3-Treiber über aws4fetch), storageConfig.ts
+                (STORAGE_DRIVER und S3_* lesen und prüfen)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
@@ -524,9 +526,10 @@ ohne Datenbank in `contracts/printJobs.ts`.
 ### Fotos und 3MF (seit 4.3.0)
 
 Dateien zu Drucken: Metadaten in `print_job_files`, die Bytes in der Ablage
-(`api/lib/fileStorage.ts`, Verzeichnis `UPLOAD_DIR`, im Container ein eigenes
-Volume unter `/data/uploads`). Die erste Stelle der App, an der Benutzerdaten
-außerhalb der Datenbank liegen.
+(`api/lib/fileStorage.ts`) – einem Verzeichnis (`UPLOAD_DIR`, im Container ein
+eigenes Volume unter `/data/uploads`) oder seit 4.4.0 einem S3-kompatiblen
+Objektspeicher (siehe „S3 als Ablage“). Die erste Stelle der App, an der
+Benutzerdaten außerhalb der Datenbank liegen.
 
 - **Eigene Hono-Routen statt tRPC** (`api/fileRoutes.ts`): superjson taugt
   nicht für Binärdaten, und ein Foto soll als `<img src>` ladbar sein.
@@ -604,6 +607,54 @@ außerhalb der Datenbank liegen.
   der Vorschauen, Großansicht, Kamera auf dem Telefon, Ziehen und Ablegen),
   das Titelbild in `PrintJobCard`, der ZIP-Download in
   `AccountDataActions`.
+
+### S3 als Ablage (seit 4.4.0)
+
+`STORAGE_DRIVER=s3` samt `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY` und bei AWS `S3_REGION` (sonst `S3_ENDPOINT`); dazu
+optional `S3_PREFIX`, `S3_FORCE_PATH_STYLE`, `S3_SESSION_TOKEN`. Gelesen und
+geprüft an **einer** Stelle, `parseStorageConfig` (`api/lib/storageConfig.ts`),
+beim Start über `env.storage` – eine unvollständige Angabe lässt den Start
+scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
+
+- **Eine Schnittstelle, zwei Treiber.** `FileStorage` (`put`, `get`, `open`,
+  `delete`, `list`, `removeStaleTemp`, `isWritable`); `getFileStorage` wählt.
+  Der Rest der App kennt nur die Schnittstelle. Wer einen dritten Treiber
+  baut, hängt ihn an die Testreihe in `api/fileStorage.test.ts` – sie läuft
+  gegen jeden Treiber gleich.
+- **`aws4fetch` statt AWS-SDK.** Gebraucht werden PUT, GET, DELETE und
+  ListObjectsV2; das SDK brächte dafür Dutzende Pakete ins Laufzeit-Abbild
+  (Begründung im `Dockerfile`). `aws4fetch` ist eine Datei ohne
+  Abhängigkeiten und übernimmt Signatur (SigV4) und Wiederholung bei 5xx/429.
+  Das XML der Liste liest `parseListObjects` von Hand.
+- **Dieselbe Schlüsselform wie im Verzeichnis** – `<präfix><ab>/<schlüssel>`.
+  Ein Umzug ist eine Kopie (`rclone copy`, `aws s3 sync`), die Datenbank bleibt
+  unverändert. Die Liste nimmt nur Objekte dieser Form; fremde Objekte im
+  Bucket und die Schreibprobe fasst der Aufräumlauf nie an.
+- **Ausgeliefert wird weiter über die App**, als Strom aus dem GET. Keine
+  vorsignierten Adressen: Sie gälten bis zum Ablauf für jeden, der sie hat,
+  an Bereichsprüfung, Sperre und Zugriffsbegrenzung vorbei, und die CSP müsste
+  einen fremden Host für Bilder erlauben. Der Bucket bleibt privat.
+- **Uploads tragen eine signierte Prüfsumme** (`x-amz-content-sha256` statt
+  `UNSIGNED-PAYLOAD`, der Vorgabe von `aws4fetch` für S3) – der Speicher lehnt
+  ab, was unterwegs verändert wurde.
+- **Zeitlimit bis zur Antwort, nicht bis zum Ende** (30 s): Ein 45-MB-Download
+  über eine langsame Leitung darf dauern. `isWritable` schreibt und löscht
+  eine Probe (`<präfix>.filahub-schreibprobe`) – ein HEAD auf den Bucket sagte
+  nicht, ob die Schlüssel schreiben dürfen.
+- **Versionierung im Bucket aus** (oder alte Versionen per Lebenszyklus
+  verfallen lassen): Sonst überlebt ein gelöschtes Foto als alte Version, und
+  eine Löschung nach Art. 17 löschte nichts. Steht in README, PRIVACY und
+  COMPLIANCE.
+- **Getestet** an drei Stellen: `api/fileStorage.test.ts` (Testreihe gegen
+  Verzeichnis und den Nachbau `api/test/fakeS3.ts`, der Signaturkopf und
+  Prüfsumme prüft; mit `S3_TEST_ENDPOINT`, `S3_TEST_BUCKET`,
+  `S3_TEST_ACCESS_KEY_ID`, `S3_TEST_SECRET_ACCESS_KEY` zusätzlich gegen einen
+  echten Speicher), `api/storageConfig.test.ts` (Umgebung, Adressen) und der
+  Block „Mit S3-Ablage“ in `api/printFiles.integration.test.ts` (die Routen
+  mit einem Strom aus `fetch`). Achtung beim Test gegen **moto**: Es rechnet
+  die Signatur einer Liste mit `/` im `prefix` falsch nach (boto3 scheitert
+  dort ebenso) – `S3_TEST_PREFIX=` leer setzen.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -1272,6 +1323,7 @@ Anfrage-Kopfzeilen abgeleitet: Die kann ein Aufrufer setzen, und daraus einen
 Link zu bauen, den wir an Dritte verschicken, wäre eine offene Weiterleitung.
 Optional `UPLOAD_DIR` – das Verzeichnis für Fotos und 3MF-Dateien (Vorgabe
 `/data/uploads` in Produktion, sonst `./data/uploads`); siehe „Fotos und 3MF“.
+Statt dessen `STORAGE_DRIVER=s3` mit `S3_*` – siehe „S3 als Ablage“.
 `drizzle.config.ts` benötigt ebenfalls `DATABASE_URL`.
 
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
@@ -1379,7 +1431,7 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `printFiles`,
+  `printFiles`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1400,6 +1452,12 @@ Datenbank.
 - `api/staticFiles.test.ts` prüft die Cache-Kopfzeilen der statischen
   Auslieferung gegen ein Wegwerf-Verzeichnis – ohne `npm run build`. Der
   Grund steht unter „Aktualisierung der installierten App“.
+- `api/serverBundle.test.ts` baut das Server-Bündel mit **denselben**
+  Schaltern wie `npm run build` (aus `package.json` gelesen) und lässt Node es
+  parsen. Anlass: In 4.3.0 brachte `fflate` ein eigenes `import { createRequire }`
+  mit, der Banner des Builds deklarierte denselben Namen – `vite build`, `tsc`
+  und alle Tests waren grün, der Container wäre beim Start abgestürzt. Der
+  Banner importiert seither unter einem eigenen Namen.
 - `api/format.test.ts` testet die gemeinsamen Formatierer aus
   `contracts/format.ts` – Tests unterhalb von `src/` würde vitest nicht
   einsammeln.

@@ -1003,7 +1003,7 @@ export const en: Messages = {
     storage: "File storage",
     storageWritable: "Writable",
     storageNotWritable: "Not writable",
-    storageDirectory: "Directory",
+    storageLocation: "Location",
     storageUsed: "Used",
     storageUsedValue: (vars: { size: string; files: string }) =>
       `${vars.size} in ${vars.files} files`,

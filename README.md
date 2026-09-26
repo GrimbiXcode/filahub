@@ -59,6 +59,8 @@ cp .env.example .env
 | `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
 | `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
 | `UPLOAD_DIR`                 | Directory for photos and 3MF files of prints (default `/data/uploads`)      |
+| `STORAGE_DRIVER`             | `local` (default, the directory above) or `s3` — see "File storage" below   |
+| `S3_*`                       | Bucket, region, endpoint and keys when `STORAGE_DRIVER=s3`                  |
 
 ### Multi-line values
 
@@ -171,6 +173,52 @@ Notes:
   directory is writable and how much space the files take.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
+
+### File storage: directory or S3
+
+Photos and 3MF files attached to prints are stored outside the database. By
+default they go into a directory (`UPLOAD_DIR`, a volume in the Compose
+template). Since 4.4.0 they can go into any S3-compatible object storage
+instead — AWS S3, Cloudflare R2, Hetzner Object Storage, MinIO, Backblaze B2 …
+
+```bash
+STORAGE_DRIVER=s3
+S3_BUCKET=filahub-files
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+# AWS: region, no endpoint
+S3_REGION=eu-central-1
+# everything else: the endpoint (without the bucket), region as the provider says
+# S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+# S3_REGION=auto
+# optional: several instances in one bucket
+# S3_PREFIX=filahub/
+```
+
+- The app checks the settings on start and refuses to start with an
+  incomplete S3 configuration. `/verwaltung/system` shows where files live and
+  whether the app can write there.
+- **Keep the bucket private.** Files are always delivered through the app,
+  which checks who may see them; nothing needs public access, and no presigned
+  links are issued.
+- **Turn bucket versioning off**, or add a lifecycle rule that expires
+  non-current versions after a few days. Otherwise a deleted photo stays in
+  the bucket as an old version — including after an account deletion.
+- The access key needs `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` and
+  `s3:ListBucket` on this bucket (and prefix), nothing else.
+- **Moving from the directory to S3:** the layout inside the bucket is the
+  same as in the directory, so a plain copy is enough. Stop the app, copy,
+  switch the settings, start again:
+
+  ```bash
+  rclone copy /data/uploads remote:filahub-files/     # or, with the AWS CLI:
+  aws s3 sync /data/uploads s3://filahub-files/       # add the prefix, if any
+  ```
+
+  The same works in the other direction.
+
+- With S3, the uploads volume is no longer needed; back up the bucket instead
+  (or rely on the provider's durability) — still together with the database.
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 

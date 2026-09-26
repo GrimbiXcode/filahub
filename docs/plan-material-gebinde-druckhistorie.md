@@ -736,3 +736,36 @@ Bereichsgrenzen.
 | HEIC in der Auswahl, das Chrome nicht öffnen kann                                               | **Behoben**: nicht mehr angeboten; iOS wandelt bei der Auswahl selbst in JPEG.                                                                                          |
 | Laufende Uploads ohne Status für Screenreader; 3MF im Fotoraster                                | **Behoben**: `role="status"`, 3MF in der Projektliste.                                                                                                                  |
 | ZIP-Download meldet 429/401 nur als gescheiterten Download                                      | **Bewusst so gelassen**: Ein gewöhnlicher Link lädt gestreamt; ein Vorab-Abruf verbrauchte selbst eines der fünf Exporte je Stunde. Der Fall ist selten.                |
+
+## Ausbau: S3 als Ablage (4.4.0)
+
+Im Plan zu Phase 4 vorgesehen („damit später ein S3-Treiber möglich
+bleibt“), jetzt umgesetzt. Entscheidungen:
+
+| Frage               | Entscheidung                                                                                                                                                                                                       |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bibliothek          | **`aws4fetch`** (eine Datei, keine Abhängigkeiten) statt `@aws-sdk/client-s3`. Vier Aufrufe rechtfertigen keinen Paketbaum im Laufzeit-Abbild; das Schwierige – SigV4 und Wiederholung – übernimmt `aws4fetch`.    |
+| Auswahl             | `STORAGE_DRIVER=local\|s3`, geprüft beim Start. Eine halbe S3-Angabe lässt den Start scheitern statt den ersten Upload.                                                                                            |
+| Schlüssel im Bucket | Dieselbe Form wie im Verzeichnis (`<präfix><ab>/<schlüssel>`) – Umzug in beide Richtungen ist eine Kopie. Kein eigenes Umzugswerkzeug: `rclone`/`aws s3 sync` können das besser, und im Abbild gibt es kein `tsx`. |
+| Auslieferung        | Weiter über die App als Strom, **keine** vorsignierten Adressen: Zugriffsprüfung, Sperre, Zugriffsbegrenzung und CSP bleiben, wie sie sind. Preis: Der Datenverkehr läuft durch den Server.                        |
+| Adressstil          | Pfad-Stil bei eigenem Endpunkt (MinIO, viele Selbstbetriebene), Host-Stil bei AWS; überschreibbar.                                                                                                                 |
+| Prüfsumme           | Signierte SHA-256 des Inhalts statt `UNSIGNED-PAYLOAD`.                                                                                                                                                            |
+| Versionierung       | Muss aus sein oder verfallen – sonst wäre eine Löschung nach Art. 17 keine. Dokumentiert, nicht erzwungen (der Speicher lässt sich nicht verlässlich fragen).                                                      |
+| Version             | 4.4.0 mit Wartungsnotiz: Für Benutzer ändert sich nichts, aber Abbilder erscheinen nur zu Versions-Tags.                                                                                                           |
+
+Getestet gegen drei Gegenstellen: das Verzeichnis, einen Nachbau im Prozess
+(`api/test/fakeS3.ts`, prüft Signaturkopf, Prüfsumme, Weiterblättern, 503)
+und **moto** mit eingeschalteter Anmeldung (rechnet die Signatur nach, prüft
+IAM). Dazu die Routen über den Nachbau und ein Lauf der echten App gegen moto:
+Hochladen, Anzeigen, Umzug eines vorhandenen Verzeichnisses per Kopie. Der
+Lauf gegen moto fand einen Unterschied, der keiner von uns ist: moto rechnet
+die Signatur einer Liste mit `/` im Präfix falsch nach – boto3 scheitert dort
+identisch, der Client signiert also wie das Referenz-SDK.
+
+**Beifang:** Der Probelauf des Produktionsbündels gegen moto zeigte, dass das
+Bündel seit 4.3.0 gar nicht startet – `fflate` importiert selbst
+`createRequire`, und der Banner in `npm run build` deklarierte denselben Namen
+(`SyntaxError` beim Laden). Kein Test und kein Build hatte das gesehen.
+Behoben im Banner; `api/serverBundle.test.ts` baut das Bündel seither mit den
+Schaltern aus `package.json` und lässt Node es parsen – rot gegen den alten
+Banner, grün gegen den neuen.

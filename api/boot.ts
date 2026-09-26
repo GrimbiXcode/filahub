@@ -102,11 +102,11 @@ if (env.isProduction) {
     Danach alle sechs Stunden der Aufräumlauf für Dateien ohne Zeile – Reste
     abgebrochener Uploads und Löschungen, deren Nachlauf gescheitert ist.
   */
-  const { getFileStorage } = await import("./lib/fileStorage");
+  const { getFileStorage, storageLocation } = await import("./lib/fileStorage");
   const { sweepOrphanFiles } = await import("./queries/printFiles");
   if (!(await getFileStorage().isWritable())) {
     console.error(
-      `Dateiablage nicht beschreibbar: ${env.uploadDir} – Fotos und 3MF-Dateien lassen sich nicht hochladen. Volume und Rechte prüfen (UPLOAD_DIR).`
+      `Dateiablage nicht beschreibbar: ${storageLocation()} – Fotos und 3MF-Dateien lassen sich nicht hochladen. Volume und Rechte (UPLOAD_DIR) bzw. Bucket und Zugangsdaten (S3_*) prüfen.`
     );
   }
   const runFileSweep = () =>

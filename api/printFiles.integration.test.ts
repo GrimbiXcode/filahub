@@ -30,6 +30,7 @@ import * as schema from "@db/schema";
 import type { User } from "@db/schema";
 import app from "./app";
 import { localFileStorage, setFileStorage } from "./lib/fileStorage";
+import { s3FileStorage } from "./lib/s3Storage";
 import { resetRateLimits } from "./lib/rateLimit";
 import { deleteUserAccount } from "./queries/account";
 import { blockUser } from "./queries/blocking";
@@ -43,6 +44,7 @@ import {
   countRows,
   resetSchema,
 } from "./test/integration-db";
+import { startFakeS3, type FakeS3 } from "./test/fakeS3";
 
 const db = () => getDb();
 const PERSONAL = { organizationId: null } as const;
@@ -544,5 +546,111 @@ describe("Export", () => {
     };
     expect(json.printJobFiles).toHaveLength(2);
     expect(json.printJobFiles[0]).not.toHaveProperty("storageKey");
+  });
+});
+
+describe("Mit S3-Ablage (seit 4.4.0)", () => {
+  /*
+    Dieselben Wege über die Routen, nur mit dem S3-Treiber gegen den Nachbau
+    aus `api/test/fakeS3.ts`: Hochladen, Ausliefern als Strom, Löschen samt
+    Kaskade, Aufräumlauf und Export. Die Ablage selbst prüft
+    `api/fileStorage.test.ts`; hier geht es darum, dass die Routen mit einem
+    Strom aus `fetch` genauso umgehen wie mit einem aus dem Dateisystem.
+  */
+  let s3: FakeS3;
+  const s3Keys = () =>
+    [...s3.objects.keys()].filter(k => k.startsWith("instanz/")).sort();
+
+  beforeAll(async () => {
+    s3 = await startFakeS3({ pageSize: 2 });
+  });
+  afterAll(() => s3.close());
+  beforeEach(() => {
+    s3.objects.clear();
+    setFileStorage(
+      s3FileStorage({
+        driver: "s3",
+        bucket: s3.bucket,
+        region: "us-east-1",
+        endpoint: s3.endpoint,
+        forcePathStyle: true,
+        prefix: "instanz/",
+        accessKeyId: s3.accessKeyId,
+        secretAccessKey: s3.secretAccessKey,
+        sessionToken: null,
+      })
+    );
+  });
+
+  it("lädt hoch, liefert als Strom aus und löscht mit dem Druck", async () => {
+    const jobId = await printFor(anna);
+    const photo = await uploadView(
+      anna,
+      jobId,
+      { bytes: png(), name: "Benchy.png" },
+      { thumbnail: png(240, 180) }
+    );
+    const model = await uploadView(anna, jobId, {
+      bytes: model3mf(),
+      name: "Benchy.3mf",
+    });
+    expect(s3Keys()).toHaveLength(3);
+    // Nichts im Verzeichnis – die Ablage ist wirklich S3
+    expect(await storedFiles()).toEqual([]);
+
+    const file = await get(anna, `/api/files/${photo.id}`);
+    expect(file.status).toBe(200);
+    expect(file.headers.get("content-length")).toBe(String(png().length));
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(png());
+    const thumb = await get(anna, `/api/files/${photo.id}/thumbnail`);
+    expect(new Uint8Array(await thumb.arrayBuffer())).toEqual(png(240, 180));
+    const download = await get(anna, `/api/files/${model.id}`);
+    expect(download.headers.get("content-disposition")).toMatch(/^attachment/);
+    expect((await download.arrayBuffer()).byteLength).toBe(model3mf().length);
+    // Fremde sehen nichts, auch nicht über S3
+    expect((await get(bert, `/api/files/${photo.id}`)).status).toBe(404);
+
+    await callerFor(anna).print.deleteFile({ ...PERSONAL, id: photo.id });
+    expect(s3Keys()).toHaveLength(1);
+    await callerFor(anna).print.delete({
+      ...PERSONAL,
+      id: jobId,
+      revertConsumptions: false,
+    });
+    expect(s3Keys()).toEqual([]);
+    expect(await countRows("print_job_files")).toBe(0);
+  });
+
+  it("räumt verwaiste Objekte ab und exportiert als ZIP", async () => {
+    const jobId = await printFor(anna);
+    await uploadView(anna, jobId, { bytes: png(), name: "a.png" });
+    const orphan = `instanz/ff/${"f".repeat(32)}`;
+    s3.objects.set(orphan, {
+      body: Buffer.from("rest"),
+      lastModified: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    });
+    // Ein fremdes Objekt im Bucket bleibt, wie alt es auch ist
+    s3.objects.set("anderes/ff/" + "f".repeat(32), {
+      body: Buffer.from("fremd"),
+      lastModified: new Date(0),
+    });
+    expect(await sweepOrphanFiles()).toBe(1);
+    expect(s3.objects.has(orphan)).toBe(false);
+    expect(s3.objects.has("anderes/ff/" + "f".repeat(32))).toBe(true);
+    expect(s3Keys()).toHaveLength(1);
+
+    const response = await get(anna, "/api/files/export");
+    const entries = unzipSync(new Uint8Array(await response.arrayBuffer()));
+    expect(Object.keys(entries).sort()).toEqual(
+      expect.arrayContaining(["dateien.json"])
+    );
+    expect(Object.keys(entries)).toHaveLength(2);
+  });
+
+  it("räumt beim Löschen des Kontos auch den Bucket", async () => {
+    const jobId = await printFor(anna);
+    await uploadView(anna, jobId, { bytes: png(), name: "a.png" });
+    await deleteUserAccount(anna.id);
+    expect(s3Keys()).toEqual([]);
   });
 });

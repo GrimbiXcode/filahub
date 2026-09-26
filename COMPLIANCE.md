@@ -133,7 +133,9 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
 - **Categories of data subjects**: registered users of this instance
 - **Categories of data**: see the table in [PRIVACY.md](PRIVACY.md)
 - **Recipients**: Telegram FZ-LLC (authentication, loan and organization
-  notifications); the hosting provider (processor); **other users of this
+  notifications); the hosting provider (processor); with
+  `STORAGE_DRIVER=s3`, the object storage provider (processor, holds uploaded
+  files); **other users of this
   instance** — either limited to what the data subject shared with an accepted
   friend and never including monetary amounts, or, within an organization, its
   fellow members, who see the shared stock itself and each other's display name
@@ -251,13 +253,20 @@ Sign-in codes are additionally purged after 24 hours, and security log entries
 after 90 days, regardless of any deletion request
 (`api/queries/retention.ts`).
 
-Uploaded files (since 4.3.0) live outside the database, in `UPLOAD_DIR`. A
+Uploaded files (since 4.3.0) live outside the database, in `UPLOAD_DIR` or —
+since 4.4.0, with `STORAGE_DRIVER=s3` — in an S3 bucket. A
 database transaction cannot roll back a deleted file, so the order is fixed:
 the rows go first, inside the transaction, and the files only after it has
 committed. If that second step fails, the file has no row left; every six
 hours `sweepOrphanFiles` (`api/queries/printFiles.ts`) deletes such files once
 they are older than an hour. Backups of the upload directory need the same
 retention as database backups.
+
+In an S3 bucket, a delete removes the object only if **versioning is off**.
+With versioning on, the deleted photo survives as a non-current version, and
+an erasure under Art. 17 would not actually erase it. Either keep versioning
+off, or add a lifecycle rule that expires non-current versions within a few
+days and document that period here.
 
 Security log entries are anonymised rather than deleted for a specific reason:
 if deleting an account emptied the log, anyone who gained unauthorised access

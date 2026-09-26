@@ -141,8 +141,8 @@ function StorageCard({ data }: { data: AdminSystemStatus["storage"] }) {
         </Badge>
       }
     >
-      <Row label={t.adminSystem.storageDirectory}>
-        <span className="font-mono">{data.directory}</span>
+      <Row label={t.adminSystem.storageLocation}>
+        <span className="font-mono">{data.location}</span>
       </Row>
       <Row label={t.adminSystem.storageUsed}>
         <span className="font-mono">

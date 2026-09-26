@@ -1026,7 +1026,7 @@ export const de = {
     storage: "Dateiablage",
     storageWritable: "Beschreibbar",
     storageNotWritable: "Nicht beschreibbar",
-    storageDirectory: "Verzeichnis",
+    storageLocation: "Ort",
     storageUsed: "Belegt",
     storageUsedValue: (vars: { size: string; files: string }) =>
       `${vars.size} in ${vars.files} Dateien`,

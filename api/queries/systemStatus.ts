@@ -16,7 +16,7 @@ import {
 } from "@db/schema";
 import { env } from "../lib/env";
 import { printJobFiles } from "@db/schema";
-import { getFileStorage } from "../lib/fileStorage";
+import { getFileStorage, storageLocation } from "../lib/fileStorage";
 import { getDb, getPool } from "./connection";
 import { usedStorageTotal } from "./printFiles";
 
@@ -203,8 +203,8 @@ export async function getSeedInfo(): Promise<SeedInfo> {
 }
 
 export type StorageInfo = {
-  /** Verzeichnis der Ablage (`UPLOAD_DIR`) */
-  directory: string;
+  /** Wo die Dateien liegen – Verzeichnis oder `s3://bucket/präfix (host)` */
+  location: string;
   /**
    * Ob sich schreiben lässt. Ein vergessenes Volume soll hier auffallen und
    * nicht erst beim ersten Foto, das jemand hochladen will.
@@ -225,5 +225,5 @@ export async function getStorageInfo(): Promise<StorageInfo> {
       .from(printJobFiles)
       .then(rows => Number(rows.at(0)?.value ?? 0)),
   ]);
-  return { directory: env.uploadDir, writable, usedBytes, files };
+  return { location: storageLocation(), writable, usedBytes, files };
 }

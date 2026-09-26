@@ -14,14 +14,17 @@ import { constants } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { env } from "./env";
+import { s3FileStorage } from "./s3Storage";
+import { describeStorage } from "./storageConfig";
 
 /**
  * Ablage der hochgeladenen Dateien (seit 4.3.0).
  *
  * Eine kleine Schnittstelle statt `fs` an jeder Stelle: Heute liegt alles in
  * einem Verzeichnis auf einem Volume (`UPLOAD_DIR`), die Metadaten stehen in
- * der Datenbank (`print_job_files`). Soll es später ein Objektspeicher sein,
- * kommt ein zweiter Treiber mit denselben vier Methoden dazu.
+ * der Datenbank (`print_job_files`). Seit 4.4.0 gibt es einen zweiten Treiber
+ * für S3-kompatible Objektspeicher (`api/lib/s3Storage.ts`); beide erfüllen
+ * dieselbe Schnittstelle und dieselbe Testreihe (`api/fileStorage.test.ts`).
  *
  * **Der Name auf der Platte ist ein zufälliger Schlüssel**, nie der
  * hochgeladene Name: kein Pfad-Traversal, keine Kollisionen, und der Name
@@ -165,10 +168,22 @@ export function localFileStorage(dir: string): FileStorage {
 
 let storage: FileStorage | null = null;
 
-/** Die Ablage der Instanz; Tests setzen eine eigene über `setFileStorage`. */
+/**
+ * Die Ablage der Instanz, nach `STORAGE_DRIVER` (siehe
+ * `api/lib/storageConfig.ts`); Tests setzen eine eigene über
+ * `setFileStorage`.
+ */
 export function getFileStorage(): FileStorage {
-  storage ??= localFileStorage(env.uploadDir);
+  storage ??=
+    env.storage.driver === "s3"
+      ? s3FileStorage(env.storage)
+      : localFileStorage(env.storage.directory);
   return storage;
+}
+
+/** Wo die Dateien liegen, für Log und `/verwaltung/system` */
+export function storageLocation(): string {
+  return describeStorage(env.storage);
 }
 
 export function setFileStorage(next: FileStorage | null) {

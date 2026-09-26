@@ -47,6 +47,7 @@ services:
       - "3000:3000"
     # Photos and 3MF files of prints (UPLOAD_DIR). Back this volume up
     # together with the database – it is the second place with user data.
+    # With STORAGE_DRIVER=s3 (see README, "File storage") it stays empty.
     volumes:
       - uploads:/data/uploads
     # The image also ships a Dockerfile HEALTHCHECK; this entry makes the
