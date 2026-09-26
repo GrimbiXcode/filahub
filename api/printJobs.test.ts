@@ -9,6 +9,8 @@ import {
   normalizeTags,
   parseTagInput,
   printJobLinkSchema,
+  tagsOverLimit,
+  MAX_TAGS_PER_PRINT_JOB,
 } from "@contracts/printJobs";
 
 /** Druckhistorie (seit 4.2.0) – die reinen Regeln aus `contracts/printJobs.ts`. */
@@ -26,6 +28,15 @@ describe("Tags", () => {
       "geschenk",
       "petg",
     ]);
+  });
+
+  it("kappt bei der Obergrenze, und das Formular erkennt sie vorher", () => {
+    const many = Array.from({ length: 30 }, (_, i) => `t${i}`);
+    expect(normalizeTags(many)).toHaveLength(MAX_TAGS_PER_PRINT_JOB);
+    expect(tagsOverLimit(many.join(", "))).toBe(true);
+    // Dubletten zählen nicht doppelt
+    const twenty = many.slice(0, MAX_TAGS_PER_PRINT_JOB);
+    expect(tagsOverLimit([...twenty, "T0", "#t1"].join(","))).toBe(false);
   });
 });
 

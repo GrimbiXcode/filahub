@@ -765,7 +765,13 @@ export const materialRouter = createRouter({
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
-      return addWeighing(data);
+      const created = await addWeighing(data);
+      if (!created)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Gebinde nicht gefunden",
+        });
+      return created;
     }),
 
   deleteWeighing: authedQuery
@@ -857,7 +863,13 @@ export const materialRouter = createRouter({
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
-      return addConsumption(data);
+      const created = await addConsumption(data);
+      if (!created)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Gebinde nicht gefunden",
+        });
+      return created;
     }),
 
   /** Spiegel von `deleteWeighing` – dieselbe Korrekturregel, siehe dort. */

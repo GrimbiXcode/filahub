@@ -12,12 +12,10 @@ import {
   encodePrintJobCursor,
   mayDeletePrintJob,
   printJobInputSchema,
-  type PrintJobInput,
 } from "@contracts/printJobs";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { assertWithinLimit } from "./lib/quota";
 import { resolveScope, scopeInput, scopeRole } from "./scope";
-import { countConsumptionsForMaterial } from "./queries/filament";
 import {
   PRINT_JOB_BAD_MATERIAL,
   PRINT_JOB_NOT_FOUND,
@@ -31,6 +29,7 @@ import {
   findPrintJobRowInScope,
   listPrintJobs,
   updatePrintJob,
+  type ConsumptionRoomCheck,
 } from "./queries/printJobs";
 
 /**
@@ -69,20 +68,19 @@ async function withPrintJobErrors<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Die Obergrenze der Verbräuche je Gebinde gilt auch für Drucke. */
-async function assertConsumptionRoom(
-  input: PrintJobInput,
+/**
+ * Die Obergrenze der Verbräuche je Gebinde gilt auch für Drucke. Geprüft wird
+ * in der Transaktion (`insertChildren`), nach der Bereichsprüfung und nur für
+ * Zeilen, die wirklich abbuchen – sonst verriete die Meldung fremde Gebinde,
+ * und eine reine Titeländerung stieße an die eigenen Verbräuche.
+ */
+function consumptionRoom(
   actorUserId: number,
   ip: string | null | undefined
-) {
-  const perGebinde = new Map<number, number>();
-  for (const row of input.materials) {
-    if (row.materialId && row.grams > 0)
-      perGebinde.set(row.materialId, (perGebinde.get(row.materialId) ?? 0) + 1);
-  }
-  for (const [materialId, adding] of perGebinde) {
+): ConsumptionRoomCheck {
+  return (_materialId, current, adding) =>
     assertWithinLimit({
-      current: await countConsumptionsForMaterial(materialId),
+      current,
       max: MAX_CONSUMPTIONS_PER_MATERIAL,
       adding,
       quota: "consumptions_per_material",
@@ -90,7 +88,6 @@ async function assertConsumptionRoom(
       actorUserId,
       ip: ip ?? null,
     });
-  }
 }
 
 const filtersInput = z.object({
@@ -201,8 +198,9 @@ export const printJobRouter = createRouter({
         actorUserId: ctx.user.id,
         ip: ctx.clientIp,
       });
-      await assertConsumptionRoom(data, ctx.user.id, ctx.clientIp);
-      const id = await withPrintJobErrors(() => createPrintJob(scope, data));
+      const id = await withPrintJobErrors(() =>
+        createPrintJob(scope, data, consumptionRoom(ctx.user.id, ctx.clientIp))
+      );
       return { id };
     }),
 
@@ -216,8 +214,14 @@ export const printJobRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, organizationId, ...data } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
-      await assertConsumptionRoom(data, ctx.user.id, ctx.clientIp);
-      await withPrintJobErrors(() => updatePrintJob(scope, id, data));
+      await withPrintJobErrors(() =>
+        updatePrintJob(
+          scope,
+          id,
+          data,
+          consumptionRoom(ctx.user.id, ctx.clientIp)
+        )
+      );
       return { ok: true };
     }),
 

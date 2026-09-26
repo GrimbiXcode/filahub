@@ -103,6 +103,8 @@ export default function MaterialDetail() {
       toast.success(t.materialDetail.materialDeleted);
       utils.material.list.invalidate();
       utils.product.invalidate();
+      // Drucke nennen Gebinde, Kennung und Buchungsstand (seit 4.2.0)
+      utils.print.invalidate();
       navigate("/");
     },
     onError: e => toast.error(e.message),
@@ -121,6 +123,8 @@ export default function MaterialDetail() {
       utils.material.list.invalidate();
       utils.material.byId.invalidate();
       utils.product.invalidate();
+      // Drucke nennen Gebinde, Kennung und Buchungsstand (seit 4.2.0)
+      utils.print.invalidate();
       setDeleteOpen(false);
     },
     onError: e => toast.error(e.message),
@@ -141,6 +145,8 @@ export default function MaterialDetail() {
       utils.material.byId.invalidate();
       utils.material.list.invalidate();
       utils.product.invalidate();
+      // Drucke nennen Gebinde, Kennung und Buchungsstand (seit 4.2.0)
+      utils.print.invalidate();
       setDeletingConsumption(null);
     },
     onError: e => toast.error(e.message),

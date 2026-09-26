@@ -778,6 +778,18 @@ export async function findIdentifiersInScope(scope: Scope): Promise<string[]> {
  */
 export async function deleteMaterial(scope: Scope, id: number) {
   await getDb().transaction(async tx => {
+    /*
+      Das Gebinde zuerst sperren, dann seine Verbräuche löschen. Wer
+      gleichzeitig auf dasselbe Gebinde bucht (Verbrauch, Wägung, Druck),
+      sperrt es mit `FOR SHARE` und wartet damit hier – andersherum entstünde
+      ein Verbrauch zu einem Gebinde, das es nicht mehr gibt, und den keine
+      Kontolöschung mehr fände.
+    */
+    await tx
+      .select({ id: materials.id })
+      .from(materials)
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+      .for("update");
     const scoped = tx
       .select({ id: materials.id })
       .from(materials)
@@ -808,17 +820,34 @@ export async function deleteMaterial(scope: Scope, id: number) {
   });
 }
 
+/**
+ * Sperrt ein Gebinde für die Dauer der Transaktion gegen Löschen
+ * (`FOR SHARE`) – siehe `deleteMaterial`. `false`, wenn es nicht (mehr) da ist.
+ */
+async function holdGebinde(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  materialId: number
+): Promise<boolean> {
+  const rows = await tx
+    .select({ id: materials.id })
+    .from(materials)
+    .where(eq(materials.id, materialId))
+    .for("share");
+  return rows.length > 0;
+}
+
+/** Legt eine Wägung an; `null`, wenn das Gebinde inzwischen gelöscht ist. */
 export async function addWeighing(data: {
   materialId: number;
   grossWeight: number;
   weighedAt?: Date;
   note?: string;
 }) {
-  const [{ id }] = await getDb()
-    .insert(weighings)
-    .values(data)
-    .returning({ id: weighings.id });
-  return getDb().query.weighings.findFirst({ where: eq(weighings.id, id) });
+  return getDb().transaction(async tx => {
+    if (!(await holdGebinde(tx, data.materialId))) return null;
+    const [row] = await tx.insert(weighings).values(data).returning();
+    return row;
+  });
 }
 
 /**
@@ -873,18 +902,17 @@ export async function findLatestWeighingId(
 // Verbräuche – Spiegel der Wägungsfunktionen oben, mit denselben Begründungen
 // ---------------------------------------------------------------------------
 
+/** Wie `addWeighing` – `null`, wenn das Gebinde inzwischen gelöscht ist. */
 export async function addConsumption(data: {
   materialId: number;
   weight: number;
   consumedAt?: Date;
   note?: string;
 }) {
-  const [{ id }] = await getDb()
-    .insert(consumptions)
-    .values(data)
-    .returning({ id: consumptions.id });
-  return getDb().query.consumptions.findFirst({
-    where: eq(consumptions.id, id),
+  return getDb().transaction(async tx => {
+    if (!(await holdGebinde(tx, data.materialId))) return null;
+    const [row] = await tx.insert(consumptions).values(data).returning();
+    return row;
   });
 }
 

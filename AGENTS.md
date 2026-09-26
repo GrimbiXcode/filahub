@@ -455,10 +455,24 @@ ohne Datenbank in `contracts/printJobs.ts`.
 - **Ändern bucht nur um, wenn es muss.** Nur wenn sich Materialzeilen
   (Material, Gebinde, Gramm) oder `printedAt` ändern, werden die alten
   Verbräuche gelöscht und neu gebucht; sonst bleiben sie samt IDs stehen –
-  auf die höchste ID schaut die Korrekturregel der Verbräuche. Beim Umbuchen
-  darf ein inzwischen aufgebrauchtes Gebinde bleiben, von dem der Druck schon
-  abgebucht hatte (sonst ließe sich ein alter Druck nicht umdatieren); neu
-  hinzukommen darf es nicht (`PRINT_JOB_USED_UP`).
+  auf die höchste ID schaut die Korrekturregel der Verbräuche. Das Formular
+  schickt deshalb den gespeicherten Zeitpunkt zurück, solange die Minute
+  gleich ist (das Datumsfeld kennt keine Sekunden).
+- **Beim Umbuchen behält jede unveränderte Zeile ihren Zustand**
+  (`planRows`, Vergleich an derselben Stelle): War sie nicht abgebucht – etwa
+  weil jemand den Verbrauch einzeln gelöscht hat –, bleibt sie es; sonst holte
+  jede Datumskorrektur ihn still zurück. Eine unveränderte Zeile darf auch ein
+  inzwischen aufgebrauchtes Gebinde behalten und eines, das inzwischen einem
+  anderen Material gehört (Schnappschuss). Neu hinzukommen darf beides nicht
+  (`PRINT_JOB_USED_UP`, `PRINT_JOB_BAD_MATERIAL`).
+- **Die Verbrauchsgrenze prüft die Transaktion**, nach der Bereichsprüfung und
+  nach dem Zurücknehmen der eigenen alten Buchungen (`ConsumptionRoomCheck`) –
+  sonst verriete „voll“ fremde Gebinde, und eine Titeländerung stieße an die
+  eigenen Verbräuche.
+- **Gebinde werden gesperrt.** Druck, Wägung und Verbrauch halten das Gebinde
+  mit `FOR SHARE`, `deleteMaterial` sperrt es als Erstes mit `FOR UPDATE`.
+  Sonst entstand ein Verbrauch zu einem Gebinde, das im selben Moment gelöscht
+  wurde – und den keine Kontolöschung mehr fand.
 - **Löschen fragt.** `print.delete` mit `revertConsumptions`: ja löscht die
   verknüpften Verbräuche mit, nein lässt sie stehen. Ein einzeln gelöschter
   Verbrauch setzt `consumptionId` auf NULL, der Druck bleibt.
@@ -470,11 +484,11 @@ ohne Datenbank in `contracts/printJobs.ts`.
   mitschicken (das Schema verlangt ein Material); `updatePrintJob` lässt sie
   deshalb stehen.
 - **Tags klein, Links nur `https://`.** `normalizeTags` (getrimmt, ohne „#“,
-  klein, ohne Dubletten) und `isHttpsUrl` – ein `javascript:`-Link wäre
+  klein, ohne Dubletten, höchstens 20) und `isHttpsUrl` – ein `javascript:`-Link wäre
   Skript im eigenen Ursprung. Links öffnen mit `rel="noopener noreferrer"`.
 - **Suche serverseitig und seitenweise**, anders als die Gebindeliste: Die
   Historie wächst ohne Grenze. `ILIKE` über Titel, Notizen, Tags, Drucker,
-  Links und Materialnamen, mindestens `PRINT_JOB_SEARCH_MIN_LENGTH` Zeichen,
+  Links und Materialnamen (den aktuellen **und** den Schnappschuss), mindestens `PRINT_JOB_SEARCH_MIN_LENGTH` Zeichen,
   `%`/`_` maskiert. Cursor `printedAt|id` über `printedAt desc, id desc`.
   Volltext oder `pg_trgm` erst, wenn es langsam wird.
 - **Stufen:** `viewer` sieht und sucht, `weigher` erfasst (ein Druck bucht ab

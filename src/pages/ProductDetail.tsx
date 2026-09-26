@@ -279,6 +279,7 @@ function MergeCard({ product }: { product: ProductDetailData }) {
     onSuccess: ({ moved }) => {
       toast.success(t.product.merged({ count: moved }));
       utils.product.invalidate();
+      utils.print.invalidate();
       utils.material.list.invalidate();
       utils.material.byId.invalidate();
       setConfirming(null);

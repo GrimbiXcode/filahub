@@ -39,6 +39,7 @@ export const en: Messages = {
     apply: "Use this",
     create: "Create",
     add: "Add",
+    imageMissing: (vars: { src: string }) => `Image not found: ${vars.src}`,
     nothingFound: "Nothing found.",
     unknownError: "Unknown error",
     nameRequired: "Please enter a name",
@@ -1221,6 +1222,9 @@ export const en: Messages = {
       invalidLink: "Please enter a link starting with https://",
       invalidDate: "Please enter date and time",
       invalidGrams: "Please enter a valid amount in grams",
+      invalidDuration: "The duration is too long – at most 720 hours",
+      tooManyTags: (vars: { max: number }) =>
+        `At most ${vars.max} different tags per print`,
       materialMissing: "Please pick a material for every row",
       usedUpGebinde:
         "This container is used up – nothing more can be logged from it.",

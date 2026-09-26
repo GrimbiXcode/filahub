@@ -142,7 +142,9 @@ export default function PrintJobs() {
                     productId != null || gebinde
                       ? {
                           productId: gebinde?.productId ?? productId!,
-                          materialId: gebinde?.id ?? null,
+                          // Von einem aufgebrauchten Gebinde bucht niemand ab
+                          materialId:
+                            gebinde && !gebinde.archivedAt ? gebinde.id : null,
                         }
                       : null
                   )

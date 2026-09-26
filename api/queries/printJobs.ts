@@ -51,26 +51,59 @@ export const PRINT_JOB_NOT_FOUND = "PRINT_JOB_NOT_FOUND";
 export const PRINT_JOB_BAD_MATERIAL = "PRINT_JOB_BAD_MATERIAL";
 export const PRINT_JOB_USED_UP = "PRINT_JOB_USED_UP";
 
+type OldRow = typeof printJobMaterials.$inferSelect;
+type InputRow = PrintJobInput["materials"][number];
+
+/**
+ * Je Eingabezeile, was mit ihr geschieht. `previous` ist die alte Zeile an
+ * derselben Stelle, **wenn sie unverändert ist** (Material, Gebinde, Gramm).
+ *
+ * Eine unveränderte Zeile behält ihren Zustand: War sie abgebucht, wird sie
+ * es wieder (etwa mit neuem Datum); war sie es nicht – weil jemand den
+ * Verbrauch einzeln gelöscht hat –, bleibt sie es auch. Sonst holte jede
+ * Datumskorrektur einen bewusst gelöschten Verbrauch still zurück.
+ */
+type RowPlan = { row: InputRow; previous: OldRow | null; book: boolean };
+
+function planRows(
+  input: readonly InputRow[],
+  old: readonly OldRow[] = []
+): RowPlan[] {
+  return input.map((row, i) => {
+    const candidate = old[i];
+    const previous =
+      candidate &&
+      candidate.productId === row.productId &&
+      candidate.materialId === (row.materialId ?? null) &&
+      candidate.grams === row.grams
+        ? candidate
+        : null;
+    const bookable = row.materialId != null && row.grams > 0;
+    return {
+      row,
+      previous,
+      book: bookable && (previous ? previous.consumptionId != null : true),
+    };
+  });
+}
+
 /**
  * Prüft die Materialzeilen gegen den Bereich und liefert je Material den
- * Namen für den Schnappschuss. Unter Sperre der Materialien: Sonst könnte ein
- * Material zwischen Prüfung und Schreiben mit seinem letzten Gebinde
- * verschwinden (`lockProductInScope`).
+ * Namen für den Schnappschuss.
+ *
+ * Unter Sperre: die Materialien (`lockProductInScope`), damit keines zwischen
+ * Prüfung und Schreiben mit seinem letzten Gebinde verschwindet, und die
+ * Gebinde (`FOR SHARE`), damit keines gelöscht wird, während hier ein
+ * Verbrauch darauf entsteht – `deleteMaterial` sperrt das Gebinde deshalb als
+ * Erstes.
  */
 async function checkMaterialRows(
   tx: Tx,
   scope: Scope,
-  rows: PrintJobInput["materials"],
-  /**
-   * Gebinde, von denen dieser Druck schon abgebucht hatte. Beim Umbuchen
-   * (anderes Datum, andere Grammzahl) darf ein inzwischen aufgebrauchtes
-   * Gebinde bleiben – sonst ließe sich ein alter Druck nicht mehr umdatieren,
-   * sobald seine Rolle leer ist. Neu hinzukommen darf es nicht.
-   */
-  previouslyBooked: ReadonlySet<number> = new Set()
+  plans: readonly RowPlan[]
 ): Promise<Map<number, string>> {
   const names = new Map<number, string>();
-  const productIds = [...new Set(rows.map(r => r.productId))].sort(
+  const productIds = [...new Set(plans.map(p => p.row.productId))].sort(
     (a, b) => a - b
   );
   for (const productId of productIds) {
@@ -84,7 +117,11 @@ async function checkMaterialRows(
       .where(inArray(materialProducts.id, productIds));
     for (const p of products) names.set(p.id, p.name);
   }
-  const gebindeIds = rows.flatMap(r => (r.materialId ? [r.materialId] : []));
+  const gebindeIds = [
+    ...new Set(
+      plans.flatMap(p => (p.row.materialId ? [p.row.materialId] : []))
+    ),
+  ].sort((a, b) => a - b);
   if (gebindeIds.length > 0) {
     const gebinde = await tx
       .select({
@@ -95,28 +132,55 @@ async function checkMaterialRows(
       .from(materials)
       .where(
         and(inArray(materials.id, gebindeIds), scopeWhere(materials, scope))
-      );
+      )
+      .orderBy(materials.id)
+      .for("share");
     const byId = new Map(gebinde.map(g => [g.id, g]));
-    for (const row of rows) {
+    for (const { row, previous, book } of plans) {
       if (!row.materialId) continue;
       const g = byId.get(row.materialId);
-      // Das Gebinde muss zum Bereich **und** zum genannten Material gehören
-      if (!g || g.productId !== row.productId)
+      // Das Gebinde muss immer zum Bereich gehören …
+      if (!g) throw new Error(PRINT_JOB_BAD_MATERIAL);
+      /*
+        … und zum genannten Material – außer die Zeile ist unverändert: Wurde
+        das Gebinde seither einem anderen Material zugeordnet, bleibt der Druck
+        beim Material von damals (Schnappschuss), und ein Umdatieren darf
+        daran nicht scheitern.
+      */
+      if (!previous && g.productId !== row.productId)
         throw new Error(PRINT_JOB_BAD_MATERIAL);
-      if (g.archivedAt != null && row.grams > 0 && !previouslyBooked.has(g.id))
+      /*
+        Von einem aufgebrauchten Gebinde wird nichts **neu** abgebucht. Eine
+        unveränderte Zeile darf es behalten – sonst ließe sich ein alter Druck
+        nicht mehr umdatieren, sobald seine Rolle leer ist.
+      */
+      if (g.archivedAt != null && book && !previous)
         throw new Error(PRINT_JOB_USED_UP);
     }
   }
   return names;
 }
 
+/**
+ * Prüft die Obergrenze der Verbräuche je Gebinde, **nach** der
+ * Bereichsprüfung und nach dem Zurücknehmen der alten Buchungen – sonst
+ * verriete die Meldung fremde Gebinde, und ein Druck, der nur umgebucht wird,
+ * stieße an seine eigenen Verbräuche.
+ */
+export type ConsumptionRoomCheck = (
+  materialId: number,
+  current: number,
+  adding: number
+) => void;
+
 /** Schreibt Links und Materialzeilen samt Verbräuchen eines Drucks. */
 async function insertChildren(
   tx: Tx,
   printJobId: number,
   input: PrintJobInput,
+  plans: readonly RowPlan[],
   names: Map<number, string>,
-  firstPosition = 0
+  options: { firstPosition?: number; assertRoom?: ConsumptionRoomCheck } = {}
 ) {
   if (input.links.length > 0) {
     await tx.insert(printJobLinks).values(
@@ -128,10 +192,23 @@ async function insertChildren(
       }))
     );
   }
-  let position = firstPosition;
-  for (const row of input.materials) {
+  if (options.assertRoom) {
+    const adding = new Map<number, number>();
+    for (const { row, book } of plans)
+      if (book && row.materialId)
+        adding.set(row.materialId, (adding.get(row.materialId) ?? 0) + 1);
+    for (const [materialId, count] of adding) {
+      const [{ value }] = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(consumptions)
+        .where(eq(consumptions.materialId, materialId));
+      options.assertRoom(materialId, value, count);
+    }
+  }
+  let position = options.firstPosition ?? 0;
+  for (const { row, book } of plans) {
     let consumptionId: number | null = null;
-    if (row.materialId && row.grams > 0) {
+    if (book && row.materialId) {
       const [created] = await tx
         .insert(consumptions)
         .values({
@@ -169,37 +246,27 @@ function jobColumns(input: PrintJobInput) {
 
 export async function createPrintJob(
   scope: Scope,
-  input: PrintJobInput
+  input: PrintJobInput,
+  assertRoom?: ConsumptionRoomCheck
 ): Promise<number> {
   return getDb().transaction(async tx => {
-    const names = await checkMaterialRows(tx, scope, input.materials);
+    const plans = planRows(input.materials);
+    const names = await checkMaterialRows(tx, scope, plans);
     const [{ id }] = await tx
       .insert(printJobs)
       .values({ ...jobColumns(input), ...scopeOwner(scope) })
       .returning({ id: printJobs.id });
-    await insertChildren(tx, id, input, names);
+    await insertChildren(tx, id, input, plans, names, { assertRoom });
     return id;
   });
-}
-
-/** Die Materialzeilen als vergleichbarer Schlüssel – unverändert heißt: nicht neu buchen. */
-function materialsKey(
-  rows: readonly {
-    productId: number | null;
-    materialId?: number | null;
-    grams: number;
-  }[]
-): string {
-  return JSON.stringify(
-    rows.map(r => [r.productId, r.materialId ?? null, r.grams])
-  );
 }
 
 /**
  * Ändert einen Druck. Materialien und Zeitpunkt wirken auf den Bestand: Hat
  * sich eines davon geändert, werden die alten Verbräuche zurückgenommen und
  * neu gebucht – sonst bleiben sie unangetastet (auch ihre IDs, auf die die
- * Korrekturregel der Verbräuche schaut).
+ * Korrekturregel der Verbräuche schaut). Welche Zeile dabei wieder abbucht,
+ * entscheidet `planRows`.
  *
  * Zeilen, deren Material es nicht mehr gibt (`productId` NULL), kann die
  * Eingabe nicht nennen – das Schema verlangt ein Material. Sie bleiben
@@ -209,7 +276,8 @@ function materialsKey(
 export async function updatePrintJob(
   scope: Scope,
   id: number,
-  input: PrintJobInput
+  input: PrintJobInput,
+  assertRoom?: ConsumptionRoomCheck
 ): Promise<void> {
   await getDb().transaction(async tx => {
     const [job] = await tx
@@ -225,22 +293,13 @@ export async function updatePrintJob(
       .orderBy(printJobMaterials.position);
     const old = all.filter(r => r.productId != null);
     const orphans = all.length - old.length;
+    const plans = planRows(input.materials, old);
     const rebook =
-      materialsKey(old) !== materialsKey(input.materials) ||
+      old.length !== plans.length ||
+      plans.some(p => !p.previous) ||
       job.printedAt.getTime() !== input.printedAt.getTime();
     const names = rebook
-      ? await checkMaterialRows(
-          tx,
-          scope,
-          input.materials,
-          new Set(
-            old.flatMap(r =>
-              r.materialId != null && r.consumptionId != null
-                ? [r.materialId]
-                : []
-            )
-          )
-        )
+      ? await checkMaterialRows(tx, scope, plans)
       : new Map<number, string>();
 
     await tx
@@ -261,17 +320,19 @@ export async function updatePrintJob(
             old.map(r => r.id)
           )
         );
+      // Den Schnappschuss unveränderter Zeilen behalten, wo das Material
+      // nicht mehr gelesen wurde (siehe `checkMaterialRows`)
+      for (const { row, previous } of plans)
+        if (previous && !names.has(row.productId))
+          names.set(row.productId, previous.productName);
       // Hinter den stehengebliebenen Zeilen weiterzählen
       const maxPosition = Math.max(-1, ...all.map(r => r.position));
-      await insertChildren(
-        tx,
-        id,
-        input,
-        names,
-        orphans > 0 ? maxPosition + 1 : 0
-      );
+      await insertChildren(tx, id, input, plans, names, {
+        firstPosition: orphans > 0 ? maxPosition + 1 : 0,
+        assertRoom,
+      });
     } else {
-      await insertChildren(tx, id, { ...input, materials: [] }, names);
+      await insertChildren(tx, id, { ...input, materials: [] }, [], names);
     }
   });
 }
@@ -416,7 +477,28 @@ function filterConditions(scope: Scope, f: PrintJobFilters): SQL[] {
               )
             )
         ),
-        materialRows(ilike(printJobMaterials.productName, pattern))
+        /*
+          Der Name, wie er angezeigt wird: der aktuelle des Materials, sonst
+          der Schnappschuss. Nur den Schnappschuss zu durchsuchen fände ein
+          umbenanntes oder zusammengeführtes Material nicht mehr.
+        */
+        materialRows(
+          or(
+            ilike(printJobMaterials.productName, pattern),
+            inArray(
+              printJobMaterials.productId,
+              db
+                .select({ id: materialProducts.id })
+                .from(materialProducts)
+                .where(
+                  and(
+                    scopeWhere(materialProducts, scope),
+                    ilike(materialProducts.name, pattern)
+                  )
+                )
+            )
+          )!
+        )
       )!
     );
   }
@@ -504,7 +586,7 @@ async function loadChildren(ids: number[]) {
       name: product?.name ?? row.productName,
       color: product?.color ?? null,
       texture: product?.texture ?? null,
-      materialId: gebinde?.id ?? null,
+      materialId: row.materialId,
       identifier: gebinde?.identifier ?? null,
       gebindeArchived: gebinde?.archivedAt != null,
       grams: row.grams,

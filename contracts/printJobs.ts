@@ -18,6 +18,11 @@ export const MAX_LINKS_PER_PRINT_JOB = 10;
 export const MAX_TAGS_PER_PRINT_JOB = 20;
 export const MAX_TAG_LENGTH = 40;
 export const MAX_PRINT_JOB_NOTES_LENGTH = 10_000;
+export const MAX_LINK_LENGTH = 2000;
+/** Gramm je Materialzeile – 100 kg sind kein Druck mehr */
+export const MAX_PRINT_GRAMS = 100_000;
+/** Dauer eines Drucks: 30 Tage */
+export const MAX_PRINT_DURATION_MINUTES = 60 * 24 * 30;
 /** Seitengröße der Liste – die Historie wächst unbegrenzt, geladen wird seitenweise. */
 export const PRINT_JOB_PAGE_SIZE = 30;
 /** Mindestlänge des Freitexts – kürzere Suchen wären ein vollständiger Scan. */
@@ -25,12 +30,15 @@ export const PRINT_JOB_SEARCH_MIN_LENGTH = 2;
 
 /**
  * Tags werden **klein** gespeichert, getrimmt, Leerraum zusammengefasst, ohne
- * führendes „#“ und ohne Dubletten. Sie sind Stichworte zum Wiederfinden wie
+ * führendes „#“, ohne Dubletten und höchstens `MAX_TAGS_PER_PRINT_JOB`. Sie sind Stichworte zum Wiederfinden wie
  * Hashtags; „Vase“ und „vase“ als zwei Tags hätten nur den Filter zerteilt.
  */
 export function normalizeTags(raw: readonly string[]): string[] {
   const seen = new Set<string>();
   for (const tag of raw) {
+    // Mehr als die Obergrenze wird still abgeschnitten – das Formular sagt es
+    // vorher, und ein Fehler für den 21. Tag wäre kleinlich.
+    if (seen.size >= MAX_TAGS_PER_PRINT_JOB) break;
     const clean = tag
       .trim()
       .replace(/^#+/, "")
@@ -42,9 +50,22 @@ export function normalizeTags(raw: readonly string[]): string[] {
   return [...seen];
 }
 
+const TAG_SEPARATORS = /[,;#\n]+/;
+
 /** „vase, Deko #geschenk“ → ["vase", "deko", "geschenk"] – Eingabe im Formular */
 export function parseTagInput(input: string): string[] {
-  return normalizeTags(input.split(/[,;#\n]+/));
+  return normalizeTags(input.split(TAG_SEPARATORS));
+}
+
+/** Ob die Eingabe mehr verschiedene Tags nennt, als ein Druck tragen kann */
+export function tagsOverLimit(input: string): boolean {
+  const distinct = new Set(
+    input
+      .split(TAG_SEPARATORS)
+      .map(tag => tag.trim().replace(/\s+/g, " ").toLowerCase())
+      .filter(Boolean)
+  );
+  return distinct.size > MAX_TAGS_PER_PRINT_JOB;
 }
 
 /**
@@ -56,7 +77,7 @@ export const printJobLinkSchema = z.object({
   url: z
     .string()
     .trim()
-    .max(2000, "Der Link ist zu lang")
+    .max(MAX_LINK_LENGTH, "Der Link ist zu lang")
     .refine(value => isHttpsUrl(value), {
       message: "Bitte einen Link mit https:// angeben",
     }),
@@ -90,7 +111,7 @@ export function linkHost(value: string): string {
 export const printJobMaterialInputSchema = z.object({
   productId: z.number().int().positive(),
   materialId: z.number().int().positive().nullable().optional(),
-  grams: z.number().int().min(0).max(100_000),
+  grams: z.number().int().min(0).max(MAX_PRINT_GRAMS),
 });
 
 export const printJobInputSchema = z.object({
@@ -101,7 +122,7 @@ export const printJobInputSchema = z.object({
     .number()
     .int()
     .min(0)
-    .max(60 * 24 * 30)
+    .max(MAX_PRINT_DURATION_MINUTES)
     .nullable(),
   printer: z.string().trim().max(100).nullable(),
   notes: z.string().max(MAX_PRINT_JOB_NOTES_LENGTH).nullable(),

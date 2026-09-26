@@ -3,11 +3,16 @@ import { useNavigate } from "react-router";
 import { Check, ChevronsUpDown, Package, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  MAX_LINK_LENGTH,
   MAX_LINKS_PER_PRINT_JOB,
   MAX_MATERIALS_PER_PRINT_JOB,
+  MAX_PRINT_DURATION_MINUTES,
+  MAX_PRINT_GRAMS,
+  MAX_TAGS_PER_PRINT_JOB,
   PRINT_JOB_STATUSES,
   isHttpsUrl,
   parseTagInput,
+  tagsOverLimit,
   type PrintJobStatus,
 } from "@contracts/printJobs";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
@@ -204,7 +209,16 @@ export function PrintJobDialog({
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const when = new Date(printedAt);
+    if (!title.trim()) return toast.error(t.prints.form.titleRequired);
+    /*
+      Das Feld kennt nur Minuten. Steht dort noch der ursprüngliche Wert,
+      bleibt der gespeicherte Zeitpunkt samt Sekunden – sonst sähe der Server
+      bei jeder Titeländerung ein neues Datum und buchte die Verbräuche um.
+    */
+    const when =
+      editing && printedAt === toLocalInput(new Date(editing.printedAt))
+        ? new Date(editing.printedAt)
+        : new Date(printedAt);
     if (!printedAt || Number.isNaN(when.getTime()))
       return toast.error(t.prints.form.invalidDate);
     const materials: {
@@ -218,7 +232,7 @@ export function PrintJobDialog({
       if (row.productId == null)
         return toast.error(t.prints.form.materialMissing);
       const grams = row.grams.trim() === "" ? 0 : Number(row.grams);
-      if (!Number.isInteger(grams) || grams < 0)
+      if (!Number.isInteger(grams) || grams < 0 || grams > MAX_PRINT_GRAMS)
         return toast.error(t.prints.form.invalidGrams);
       materials.push({
         productId: row.productId,
@@ -232,7 +246,11 @@ export function PrintJobDialog({
         url: link.url.trim(),
         label: link.label.trim() || null,
       }));
-    if (cleanLinks.some(link => !isHttpsUrl(link.url)))
+    if (
+      cleanLinks.some(
+        link => !isHttpsUrl(link.url) || link.url.length > MAX_LINK_LENGTH
+      )
+    )
       return toast.error(t.prints.form.invalidLink);
     const h = hours.trim() === "" ? 0 : Number(hours);
     const m = minutes.trim() === "" ? 0 : Number(minutes);
@@ -242,6 +260,13 @@ export function PrintJobDialog({
         : Number.isFinite(h) && Number.isFinite(m)
           ? Math.max(0, Math.round(h * 60 + m))
           : null;
+    if (durationMinutes != null && durationMinutes > MAX_PRINT_DURATION_MINUTES)
+      return toast.error(t.prints.form.invalidDuration);
+    const parsedTags = parseTagInput(tags);
+    if (tagsOverLimit(tags))
+      return toast.error(
+        t.prints.form.tooManyTags({ max: MAX_TAGS_PER_PRINT_JOB })
+      );
     const data = {
       ...scope,
       title: title.trim(),
@@ -250,7 +275,7 @@ export function PrintJobDialog({
       durationMinutes,
       printer: printer.trim() || null,
       notes: notes.trim() || null,
-      tags: parseTagInput(tags),
+      tags: parsedTags,
       links: cleanLinks,
       materials,
     };
@@ -331,6 +356,14 @@ export function PrintJobDialog({
                 <div className="min-w-0 flex-1">
                   <MaterialRowPicker
                     row={row}
+                    alreadyBooked={
+                      editing?.materials.some(
+                        m =>
+                          m.booked &&
+                          m.materialId != null &&
+                          m.materialId === row.materialId
+                      ) ?? false
+                    }
                     materials={allMaterials ?? []}
                     products={products ?? []}
                     onChange={patch => setRow(row.key, patch)}
@@ -596,11 +629,14 @@ type ProductOption = {
  */
 function MaterialRowPicker({
   row,
+  alreadyBooked,
   materials,
   products,
   onChange,
 }: {
   row: Row;
+  /** Der Druck hat von diesem Gebinde schon abgebucht – dann darf es bleiben */
+  alreadyBooked: boolean;
   materials: MaterialOverview[];
   products: ProductOption[];
   onChange: (patch: Partial<Row>) => void;
@@ -720,11 +756,13 @@ function MaterialRowPicker({
           </Command>
         </PopoverContent>
       </Popover>
-      {gebinde?.archivedAt != null && Number(row.grams) > 0 && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">
-          {t.prints.form.usedUpGebinde}
-        </p>
-      )}
+      {gebinde?.archivedAt != null &&
+        !alreadyBooked &&
+        Number(row.grams) > 0 && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">
+            {t.prints.form.usedUpGebinde}
+          </p>
+        )}
     </div>
   );
 }

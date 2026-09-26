@@ -6,6 +6,7 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { MAX_CONSUMPTIONS_PER_MATERIAL } from "@contracts/limits";
 import type { PrintJobInput } from "@contracts/printJobs";
 import { getDb } from "./queries/connection";
 import { deleteUserAccount } from "./queries/account";
@@ -304,6 +305,136 @@ describe("Druck erfassen und Verbrauch", () => {
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });
 
+  it("holt beim Umdatieren keinen einzeln gelöschten Verbrauch zurück", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        materials: [{ productId: a.productId, materialId: a.id, grams: 40 }],
+      }),
+    });
+    const [consumption] = await db().select().from(schema.consumptions);
+    await callerFor(anna).material.deleteConsumption({
+      ...PERSONAL,
+      id: consumption.id,
+    });
+    expect(await remaining(anna, a.id)).toBe(1000);
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        printedAt: new Date("2026-09-03T10:00:00Z"),
+        materials: [{ productId: a.productId, materialId: a.id, grams: 40 }],
+      }),
+    });
+    expect(await remaining(anna, a.id)).toBe(1000);
+    const detail = await callerFor(anna).print.byId({ ...PERSONAL, id });
+    expect(detail.materials[0].booked).toBe(false);
+    // Wer die Gramm ändert, bucht bewusst neu
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        materials: [{ productId: a.productId, materialId: a.id, grams: 30 }],
+      }),
+    });
+    expect(await remaining(anna, a.id)).toBe(970);
+  });
+
+  it("lässt umdatieren, nachdem das Gebinde einem anderen Material zugeordnet wurde", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    const a2 = await callerFor(anna).material.create({
+      ...PERSONAL,
+      lagerId,
+      productId: a.productId,
+      nominalWeight: 1000,
+    });
+    const b = await spool(anna, lagerId, { color: "Rot" });
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        materials: [{ productId: a.productId, materialId: a2.id, grams: 10 }],
+      }),
+    });
+    await callerFor(anna).material.update({
+      ...PERSONAL,
+      id: a2.id,
+      productId: b.productId,
+    });
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        printedAt: new Date("2026-09-04T10:00:00Z"),
+        materials: [{ productId: a.productId, materialId: a2.id, grams: 10 }],
+      }),
+    });
+    const detail = await callerFor(anna).print.byId({ ...PERSONAL, id });
+    expect(detail.materials[0]).toMatchObject({
+      productId: a.productId,
+      materialId: a2.id,
+      booked: true,
+    });
+    // Neu zuordnen lässt sich das fremd gewordene Gebinde nicht
+    await expect(
+      callerFor(anna).print.update({
+        ...PERSONAL,
+        id,
+        ...job({
+          materials: [{ productId: a.productId, materialId: a2.id, grams: 11 }],
+        }),
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("prüft die Verbrauchsgrenze erst im Bereich und ohne die eigenen Buchungen", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    await db()
+      .insert(schema.consumptions)
+      .values(
+        Array.from({ length: MAX_CONSUMPTIONS_PER_MATERIAL - 1 }, () => ({
+          materialId: a.id,
+          weight: 1,
+        }))
+      );
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        materials: [{ productId: a.productId, materialId: a.id, grams: 1 }],
+      }),
+    });
+    // Voll – aber Titel ändern und Umdatieren gehen weiter
+    await callerFor(anna).print.update({
+      ...PERSONAL,
+      id,
+      ...job({
+        title: "Neuer Titel",
+        printedAt: new Date("2026-09-05T10:00:00Z"),
+        materials: [{ productId: a.productId, materialId: a.id, grams: 1 }],
+      }),
+    });
+    await expect(
+      callerFor(anna).print.create({
+        ...PERSONAL,
+        ...job({
+          materials: [{ productId: a.productId, materialId: a.id, grams: 1 }],
+        }),
+      })
+    ).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+    // Ein fremdes Gebinde meldet „gibt es nicht“, nicht „voll“
+    await expect(
+      callerFor(bert).print.create({
+        ...PERSONAL,
+        ...job({
+          materials: [{ productId: a.productId, materialId: a.id, grams: 1 }],
+        }),
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
   it("zieht beim Zusammenführen mit", async () => {
     const lagerId = await lagerFor(anna);
     const a = await spool(anna, lagerId);
@@ -398,6 +529,29 @@ describe("Suche, Filter und Seiten", () => {
     expect(await search("%%")).toEqual([]);
     // Zu kurz: kein Filter
     expect(await search("z")).toHaveLength(5);
+  });
+
+  it("findet ein Material unter seinem aktuellen Namen und kappt die Tags", async () => {
+    const lagerId = await lagerFor(anna);
+    const a = await spool(anna, lagerId);
+    const { id } = await callerFor(anna).print.create({
+      ...PERSONAL,
+      ...job({
+        tags: Array.from({ length: 30 }, (_, i) => `tag${i}`),
+        materials: [{ productId: a.productId, materialId: null, grams: 0 }],
+      }),
+    });
+    await callerFor(anna).product.update({
+      ...PERSONAL,
+      id: a.productId,
+      name: "Galaxy Black",
+    });
+    const found = await callerFor(anna).print.list({
+      ...PERSONAL,
+      query: "galaxy",
+    });
+    expect(found.items.map(i => i.id)).toEqual([id]);
+    expect(found.items[0].tags).toHaveLength(20);
   });
 
   it("filtert nach Status, Tag, Drucker, Materialart und Zeitraum", async () => {

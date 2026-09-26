@@ -48,6 +48,7 @@ export const de = {
     apply: "Übernehmen",
     create: "Anlegen",
     add: "Hinzufügen",
+    imageMissing: (vars: { src: string }) => `Bild nicht gefunden: ${vars.src}`,
     nothingFound: "Nichts gefunden.",
     unknownError: "Unbekannter Fehler",
     nameRequired: "Bitte einen Namen angeben",
@@ -1256,6 +1257,9 @@ export const de = {
       invalidLink: "Bitte einen Link mit https:// angeben",
       invalidDate: "Bitte Datum und Uhrzeit angeben",
       invalidGrams: "Bitte eine gültige Menge in Gramm angeben",
+      invalidDuration: "Die Dauer ist zu lang – höchstens 720 Stunden",
+      tooManyTags: (vars: { max: number }) =>
+        `Höchstens ${vars.max} verschiedene Tags je Druck`,
       materialMissing: "Bitte für jede Zeile ein Material wählen",
       usedUpGebinde:
         "Dieses Gebinde ist aufgebraucht – davon lässt sich nichts mehr abbuchen.",
