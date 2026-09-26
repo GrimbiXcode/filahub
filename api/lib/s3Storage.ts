@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { AwsClient } from "aws4fetch";
+import { AwsV4Signer } from "aws4fetch";
 import type { FileStorage } from "./fileStorage";
 import { isStorageKey } from "./fileStorage";
 import type { S3StorageConfig } from "./storageConfig";
@@ -12,7 +12,8 @@ import type { S3StorageConfig } from "./storageConfig";
  * einen Baum von Dutzenden Paketen ins Laufzeit-Abbild – jedes davon eine
  * Stelle, an der die nächste Schwachstelle auftaucht (siehe die Begründung im
  * `Dockerfile`). `aws4fetch` ist eine Datei ohne Abhängigkeiten und macht
- * genau das Schwierige: die Signatur (SigV4) samt Wiederholung bei 5xx/429.
+ * genau das Schwierige: die Signatur (SigV4). Senden und Wiederholen
+ * übernimmt `send` selbst – siehe dort, warum nicht `AwsClient.fetch`.
  *
  * **Dieselbe Schlüsselform wie auf dem Volume** – `<präfix><ab>/<schlüssel>`.
  * Wer vom Verzeichnis umzieht, kopiert es unverändert in den Bucket
@@ -26,7 +27,7 @@ import type { S3StorageConfig } from "./storageConfig";
 
 /** Wie lange eine Anfrage bis zur Antwort (nicht bis zum Ende) dauern darf */
 const REQUEST_TIMEOUT_MS = 30_000;
-/** Wiederholungen bei 5xx und 429 – `aws4fetch` wartet dazwischen exponentiell */
+/** Wiederholungen bei 5xx und 429, dazwischen exponentiell wartend */
 const RETRIES = 3;
 /** Schlüssel der Schreibprobe – passt bewusst nicht auf `isStorageKey` */
 const PROBE_NAME = ".filahub-schreibprobe";
@@ -111,15 +112,34 @@ export function s3Url(config: S3StorageConfig, objectKey: string): URL {
       );
 }
 
-export function s3FileStorage(config: S3StorageConfig): FileStorage {
-  const client = new AwsClient({
-    accessKeyId: config.accessKeyId,
-    secretAccessKey: config.secretAccessKey,
-    sessionToken: config.sessionToken ?? undefined,
-    service: "s3",
-    region: config.region,
-    retries: RETRIES,
+type S3Init = {
+  method: "GET" | "PUT" | "DELETE";
+  body?: Uint8Array;
+  headers?: Record<string, string>;
+};
+
+/** Wartet, bricht aber ab, sobald das Zeitlimit greift */
+function delay(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(signal.reason);
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
   });
+}
+
+export function s3FileStorage(
+  config: S3StorageConfig,
+  /** Nur für Tests: kürzeres Zeitlimit */
+  options: { timeoutMs?: number } = {}
+): FileStorage {
+  const timeoutMs = options.timeoutMs ?? REQUEST_TIMEOUT_MS;
 
   /** `<präfix><ab>/<schlüssel>` – dieselbe Form wie im Verzeichnis */
   const objectKey = (key: string) => {
@@ -128,20 +148,70 @@ export function s3FileStorage(config: S3StorageConfig): FileStorage {
   };
 
   /**
-   * Eine Anfrage mit Zeitlimit **bis zur Antwort**. Danach läuft der Körper
-   * frei – ein 45-MB-Download über eine langsame Leitung darf dauern.
+   * Signiert und sendet, mit eigener Wiederholung bei 5xx und 429.
+   *
+   * **Nicht `AwsClient.fetch`:** Es verpackt jede Anfrage in ein eigenes
+   * `Request`, und undici folgt dem Abbruchsignal dann nur über eine schwache
+   * Referenz – räumt die Speicherbereinigung das Zwischenobjekt ab, greift
+   * das Zeitlimit nie (nachgestellt: ein hängender Speicher hielt `get` über
+   * 40 s, ein langsamer Upload lief nach dem Abbruch weiter). Hier hängt das
+   * Signal am `fetch` selbst. Und eine verworfene Antwort wird vor dem
+   * nächsten Versuch geschlossen – sonst hielte sie ihre Verbindung, bis die
+   * Speicherbereinigung kommt.
    */
-  async function request(
+  async function send(
     url: URL,
-    init: RequestInit & { headers?: Record<string, string> }
+    init: S3Init,
+    signal: AbortSignal
   ): Promise<Response> {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    try {
-      return await client.fetch(url.toString(), {
-        ...init,
-        signal: controller.signal,
+    for (let attempt = 0; ; attempt++) {
+      const signed = await new AwsV4Signer({
+        method: init.method,
+        url: url.toString(),
+        headers: init.headers,
+        body: init.body as Uint8Array<ArrayBuffer> | undefined,
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+        sessionToken: config.sessionToken ?? undefined,
+        service: "s3",
+        region: config.region,
+      }).sign();
+      const response = await fetch(signed.url, {
+        method: init.method,
+        headers: signed.headers,
+        // Ein Uint8Array ist ein gültiger Körper; der Typ kennt nur die
+        // ArrayBuffer-Variante, `Buffer` aus `node:fs` liegt auf ArrayBufferLike
+        body: init.body as Uint8Array<ArrayBuffer> | undefined,
+        signal,
       });
+      const retryable = response.status >= 500 || response.status === 429;
+      if (!retryable || attempt >= RETRIES) return response;
+      await response.body?.cancel();
+      await delay(Math.random() * 100 * 2 ** attempt, signal);
+    }
+  }
+
+  /**
+   * Eine Anfrage samt Verarbeitung der Antwort unter **einem** Zeitlimit –
+   * auch das Lesen des Körpers (eine Liste, ein Vorschaubild) kann hängen.
+   * Nur wer die Antwort als Strom weitergibt (`open`), gibt das Limit nach
+   * den Kopfzeilen frei (`release`): Ein 45-MB-Download über eine langsame
+   * Leitung darf dauern.
+   */
+  async function exchange<T>(
+    operation: string,
+    url: URL,
+    init: S3Init,
+    handle: (response: Response, release: () => void) => Promise<T>
+  ): Promise<T> {
+    const controller = new AbortController();
+    const timer = setTimeout(
+      () => controller.abort(new S3Error(operation, 0, "Timeout")),
+      timeoutMs
+    );
+    try {
+      const response = await send(url, init, controller.signal);
+      return await handle(response, () => clearTimeout(timer));
     } finally {
       clearTimeout(timer);
     }
@@ -153,30 +223,43 @@ export function s3FileStorage(config: S3StorageConfig): FileStorage {
   }
 
   async function putObject(key: string, data: Uint8Array) {
-    const response = await request(s3Url(config, key), {
-      method: "PUT",
-      // Ein Uint8Array ist ein gültiger Körper; der Typ kennt nur die
-      // ArrayBuffer-Variante, `Buffer` aus `node:fs` liegt auf ArrayBufferLike
-      body: data as Uint8Array<ArrayBuffer>,
-      headers: {
-        /*
-          Signierte Prüfsumme statt `UNSIGNED-PAYLOAD`: Der Speicher lehnt
-          ab, was unterwegs verändert wurde, und die Signatur deckt den
-          Inhalt mit ab.
-        */
-        "x-amz-content-sha256": createHash("sha256").update(data).digest("hex"),
-        "content-type": "application/octet-stream",
+    await exchange(
+      "PUT",
+      s3Url(config, key),
+      {
+        method: "PUT",
+        body: data,
+        headers: {
+          /*
+            Signierte Prüfsumme statt `UNSIGNED-PAYLOAD` (der Vorgabe für S3):
+            Der Speicher lehnt ab, was unterwegs verändert wurde, und die
+            Signatur deckt den Inhalt mit ab.
+          */
+          "x-amz-content-sha256": createHash("sha256")
+            .update(data)
+            .digest("hex"),
+          "content-type": "application/octet-stream",
+        },
       },
-    });
-    if (!response.ok) await fail("PUT", response);
-    await response.body?.cancel();
+      async response => {
+        if (!response.ok) await fail("PUT", response);
+        await response.body?.cancel();
+      }
+    );
   }
 
   async function deleteObject(key: string) {
-    const response = await request(s3Url(config, key), { method: "DELETE" });
-    // 404 ist beim Löschen kein Fehler: weg ist weg
-    if (!response.ok && response.status !== 404) await fail("DELETE", response);
-    await response.body?.cancel();
+    await exchange(
+      "DELETE",
+      s3Url(config, key),
+      { method: "DELETE" },
+      async response => {
+        // 404 ist beim Löschen kein Fehler: weg ist weg
+        if (!response.ok && response.status !== 404)
+          await fail("DELETE", response);
+        await response.body?.cancel();
+      }
+    );
   }
 
   return {
@@ -185,32 +268,56 @@ export function s3FileStorage(config: S3StorageConfig): FileStorage {
     },
 
     async get(key) {
-      const response = await request(s3Url(config, objectKey(key)), {
-        method: "GET",
-      });
-      if (response.status === 404) {
-        await response.body?.cancel();
-        return null;
-      }
-      if (!response.ok) await fail("GET", response);
-      return new Uint8Array(await response.arrayBuffer());
+      return exchange(
+        "GET",
+        s3Url(config, objectKey(key)),
+        { method: "GET" },
+        async response => {
+          if (response.status === 404) {
+            await response.body?.cancel();
+            return null;
+          }
+          if (!response.ok) await fail("GET", response);
+          return new Uint8Array(await response.arrayBuffer());
+        }
+      );
     },
 
     async open(key) {
-      const response = await request(s3Url(config, objectKey(key)), {
-        method: "GET",
-      });
-      if (response.status === 404) {
-        await response.body?.cancel();
-        return null;
-      }
-      if (!response.ok) await fail("GET", response);
-      const size = Number(response.headers.get("content-length"));
-      if (!response.body || !Number.isFinite(size)) {
-        await response.body?.cancel();
-        throw new S3Error("GET", response.status, "MissingContentLength");
-      }
-      return { stream: response.body, size };
+      return exchange(
+        "GET",
+        s3Url(config, objectKey(key)),
+        { method: "GET" },
+        async (response, release) => {
+          if (response.status === 404) {
+            await response.body?.cancel();
+            return null;
+          }
+          if (!response.ok) await fail("GET", response);
+          const length = response.headers.get("content-length");
+          const encoding = response.headers.get("content-encoding");
+          /*
+            Die Größe muss stimmen – die Route schickt sie als
+            `content-length`. Fehlt sie (chunked) oder ist die Antwort
+            komprimiert (dann entpackt undici, und die Länge gilt für die
+            gepackten Bytes), wird gepuffert, noch unter dem Zeitlimit.
+          */
+          if (
+            response.body &&
+            length != null &&
+            /^\d+$/.test(length) &&
+            (!encoding || encoding === "identity")
+          ) {
+            release();
+            return { stream: response.body, size: Number(length) };
+          }
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          return {
+            stream: new Blob([bytes]).stream() as ReadableStream<Uint8Array>,
+            size: bytes.length,
+          };
+        }
+      );
     },
 
     async delete(key) {
@@ -225,9 +332,15 @@ export function s3FileStorage(config: S3StorageConfig): FileStorage {
         url.searchParams.set("list-type", "2");
         if (config.prefix) url.searchParams.set("prefix", config.prefix);
         if (token) url.searchParams.set("continuation-token", token);
-        const response = await request(url, { method: "GET" });
-        if (!response.ok) await fail("LIST", response);
-        const page = parseListObjects(await response.text());
+        const page = await exchange(
+          "LIST",
+          url,
+          { method: "GET" },
+          async response => {
+            if (!response.ok) await fail("LIST", response);
+            return parseListObjects(await response.text());
+          }
+        );
         for (const object of page.objects) {
           // Nur, was nach unserer Form aussieht – fremde Objekte im Bucket
           // oder die Schreibprobe fasst der Aufräumlauf nie an.

@@ -24,7 +24,8 @@ export type S3StorageConfig = {
   /**
    * Bucket im Pfad (`endpoint/bucket/schlüssel`) statt im Hostnamen. Vorgabe:
    * an, sobald ein eigener Endpunkt gesetzt ist – MinIO und viele
-   * Selbstbetriebene können nur das; bei AWS aus.
+   * Selbstbetriebene können nur das – oder der Bucket einen Punkt trägt; bei
+   * AWS sonst aus.
    */
   forcePathStyle: boolean;
   /** Präfix vor jedem Schlüssel, z. B. `filahub/`; leer oder mit `/` am Ende */
@@ -106,7 +107,13 @@ export function parseStorageConfig(source: Env): StorageConfig {
 
   let prefix = read("S3_PREFIX").replace(/^\/+/, "");
   if (prefix && !prefix.endsWith("/")) prefix += "/";
-  if (!/^[A-Za-z0-9._\-/]*$/.test(prefix) || prefix.includes("//"))
+  if (
+    !/^[A-Za-z0-9._\-/]*$/.test(prefix) ||
+    prefix.includes("//") ||
+    // `.` und `..` löst die Adresse auf – `../` verließe den Bucket, und die
+    // Liste suchte an einer anderen Stelle, als geschrieben wurde
+    prefix.split("/").some(part => part === "." || part === "..")
+  )
     throw new Error(
       "S3_PREFIX darf nur Buchstaben, Ziffern, Punkt, Binde- und Unterstrich sowie / enthalten."
     );
@@ -117,11 +124,17 @@ export function parseStorageConfig(source: Env): StorageConfig {
     bucket,
     region: read("S3_REGION") || "us-east-1",
     endpoint,
+    /*
+      Vorgabe: Pfad-Stil bei eigenem Endpunkt, und bei einem Bucket mit Punkt
+      im Namen – im Hostnamen deckte das Wildcard-Zertifikat
+      (`*.s3.<region>.amazonaws.com`) die zusätzliche Ebene nicht, TLS
+      scheiterte.
+    */
     forcePathStyle: truthy(pathStyle)
       ? true
       : falsy(pathStyle)
         ? false
-        : endpoint != null,
+        : endpoint != null || bucket.includes("."),
     prefix,
     accessKeyId: read("S3_ACCESS_KEY_ID"),
     secretAccessKey: read("S3_SECRET_ACCESS_KEY"),

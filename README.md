@@ -204,15 +204,18 @@ S3_REGION=eu-central-1
 - **Turn bucket versioning off**, or add a lifecycle rule that expires
   non-current versions after a few days. Otherwise a deleted photo stays in
   the bucket as an old version — including after an account deletion.
-- The access key needs `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` and
-  `s3:ListBucket` on this bucket (and prefix), nothing else.
+- The access key needs `s3:PutObject`, `s3:GetObject` and `s3:DeleteObject`
+  on the objects, and `s3:ListBucket` on the bucket **without a prefix
+  condition** — without it, AWS answers a missing file with 403 instead of
+  404, and the app treats that as an error rather than "not there".
 - **Moving from the directory to S3:** the layout inside the bucket is the
   same as in the directory, so a plain copy is enough. Stop the app, copy,
   switch the settings, start again:
 
   ```bash
-  rclone copy /data/uploads remote:filahub-files/     # or, with the AWS CLI:
-  aws s3 sync /data/uploads s3://filahub-files/       # add the prefix, if any
+  rclone copy /data/uploads remote:filahub-files/ --exclude "*.tmp"
+  # or, with the AWS CLI (add the prefix to the target, if any):
+  aws s3 sync /data/uploads s3://filahub-files/ --exclude "*.tmp" --exclude "lost+found/*"
   ```
 
   The same works in the other direction.

@@ -22,6 +22,13 @@ export type FakeS3 = {
   requests: { method: string; path: string; authorization: string | null }[];
   /** Die nächsten `count` Anfragen mit diesem Status beantworten */
   failNext(count: number, status: number): void;
+  /**
+   * Die nächste Anfrage hängen lassen: vor den Kopfzeilen (`headers`) oder
+   * nach dem ersten Teil des Körpers (`body`) – für die Zeitlimits.
+   */
+  stallNext(mode: "headers" | "body"): void;
+  /** GET ohne `content-length` beantworten (chunked) */
+  chunked: boolean;
   close(): Promise<void>;
 };
 
@@ -48,6 +55,8 @@ export async function startFakeS3(
   const objects = new Map<string, { body: Buffer; lastModified: Date }>();
   const requests: FakeS3["requests"] = [];
   let failures = { count: 0, status: 503 };
+  let stall: "headers" | "body" | null = null;
+  const state = { chunked: false };
 
   const server: Server = createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
@@ -63,6 +72,16 @@ export async function startFakeS3(
       res.end(payload);
     };
 
+    if (stall === "headers") {
+      stall = null;
+      return; // keine Antwort – der Client muss selbst aufgeben
+    }
+    if (stall === "body") {
+      stall = null;
+      res.writeHead(200, { "content-length": "1000" });
+      res.write("angefangen");
+      return; // der Rest kommt nie
+    }
     if (failures.count > 0) {
       failures.count--;
       return send(failures.status, errorXml("SlowDown"));
@@ -131,8 +150,16 @@ export async function startFakeS3(
       if (!object) return send(404, errorXml("NoSuchKey"));
       res.writeHead(200, {
         "content-type": "application/octet-stream",
-        "content-length": String(object.body.length),
+        ...(state.chunked
+          ? {}
+          : { "content-length": String(object.body.length) }),
       });
+      if (state.chunked) {
+        // In zwei Teilen, damit Node tatsächlich chunked sendet
+        const half = Math.floor(object.body.length / 2);
+        res.write(object.body.subarray(0, half));
+        return res.end(object.body.subarray(half));
+      }
       return res.end(object.body);
     }
     if (req.method === "DELETE") {
@@ -154,9 +181,20 @@ export async function startFakeS3(
     failNext(count, status) {
       failures = { count, status };
     },
+    stallNext(mode) {
+      stall = mode;
+    },
+    get chunked() {
+      return state.chunked;
+    },
+    set chunked(value: boolean) {
+      state.chunked = value;
+    },
     close: () =>
-      new Promise<void>((resolve, reject) =>
-        server.close(error => (error ? reject(error) : resolve()))
-      ),
+      new Promise<void>((resolve, reject) => {
+        // Hängende Verbindungen der Zeitlimit-Tests mit schließen
+        server.closeAllConnections();
+        server.close(error => (error ? reject(error) : resolve()));
+      }),
   };
 }

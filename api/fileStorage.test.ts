@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  isStorageKey,
   localFileStorage,
   newStorageKey,
   type FileStorage,
@@ -225,6 +226,42 @@ describe("S3-Treiber im Einzelnen", () => {
     expect(await storage.isWritable()).toBe(false);
   });
 
+  it("gibt einen hängenden Speicher nach dem Zeitlimit auf", async () => {
+    const storage = s3FileStorage(configFor(server), { timeoutMs: 300 });
+    const key = newStorageKey();
+    await storage.put(key, bytes("da"));
+    for (const mode of ["headers", "body"] as const) {
+      server.stallNext(mode);
+      const started = Date.now();
+      const error = await storage.get(key).catch(e => e);
+      expect(error).toMatchObject({ code: "Timeout" });
+      expect(Date.now() - started).toBeLessThan(3000);
+    }
+    server.stallNext("headers");
+    await expect(storage.put(key, bytes("neu"))).rejects.toMatchObject({
+      code: "Timeout",
+    });
+    // Eine Schreibprobe gegen einen hängenden Speicher hält den Start nicht auf
+    server.stallNext("headers");
+    expect(await storage.isWritable()).toBe(false);
+  });
+
+  it("liefert die richtige Größe auch ohne content-length", async () => {
+    const storage = s3FileStorage(configFor(server));
+    const key = newStorageKey();
+    await storage.put(key, bytes("hallo welt"));
+    server.chunked = true;
+    try {
+      const opened = await storage.open(key);
+      expect(opened?.size).toBe(10);
+      expect(new TextDecoder().decode(await readAll(opened!.stream))).toBe(
+        "hallo welt"
+      );
+    } finally {
+      server.chunked = false;
+    }
+  });
+
   it("liest ListObjectsV2 samt Sonderzeichen und Weiterblättern", () => {
     const page = parseListObjects(
       `<ListBucketResult><IsTruncated>true</IsTruncated><NextContinuationToken>a&amp;b&lt;c</NextContinuationToken>` +
@@ -281,7 +318,20 @@ if (real.endpoint && real.bucket && real.accessKeyId && real.secretAccessKey) {
       secretAccessKey: real.secretAccessKey!,
       sessionToken: null,
     };
-    const storage = s3FileStorage(config);
+    const base = s3FileStorage(config);
+    /*
+      Aufgeräumt wird nur, was die Tests selbst angelegt haben – nie „alles,
+      was die Liste zeigt“. Mit leerem Präfix (moto, siehe oben) enthielte
+      die Liste sonst die Dateien einer App, die denselben Bucket benutzt.
+    */
+    const created = new Set<string>();
+    const storage: FileStorage = {
+      ...base,
+      put: async (key, data) => {
+        if (isStorageKey(key)) created.add(key);
+        await base.put(key, data);
+      },
+    };
     const foreign = s3FileStorage({ ...config, prefix: `${prefix}zz-` });
     return {
       storage,
@@ -290,7 +340,7 @@ if (real.endpoint && real.bucket && real.accessKeyId && real.secretAccessKey) {
         await foreign.put("f".repeat(32), bytes("fremd"));
       },
       async cleanup() {
-        for (const { key } of await storage.list()) await storage.delete(key);
+        for (const key of created) await base.delete(key);
         await foreign.delete("f".repeat(32));
       },
     };

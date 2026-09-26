@@ -638,8 +638,14 @@ scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
 - **Uploads tragen eine signierte Prüfsumme** (`x-amz-content-sha256` statt
   `UNSIGNED-PAYLOAD`, der Vorgabe von `aws4fetch` für S3) – der Speicher lehnt
   ab, was unterwegs verändert wurde.
-- **Zeitlimit bis zur Antwort, nicht bis zum Ende** (30 s): Ein 45-MB-Download
-  über eine langsame Leitung darf dauern. `isWritable` schreibt und löscht
+- **Senden und Zeitlimit selbst, nicht `AwsClient.fetch`.** Dessen
+  Zwischen-`Request` hält undici nur schwach am Abbruchsignal – das Zeitlimit
+  griff nie. `send` signiert mit `AwsV4Signer`, hängt das Signal an `fetch`
+  selbst und schließt verworfene Antworten vor der Wiederholung. Das Limit
+  (30 s) gilt bis zum Ende der Verarbeitung; nur `open` gibt es nach den
+  Kopfzeilen frei – ein 45-MB-Download über eine langsame Leitung darf
+  dauern. Ohne verlässliche `content-length` puffert `open`, damit die Route
+  die richtige Größe schickt. `isWritable` schreibt und löscht
   eine Probe (`<präfix>.filahub-schreibprobe`) – ein HEAD auf den Bucket sagte
   nicht, ob die Schlüssel schreiben dürfen.
 - **Versionierung im Bucket aus** (oder alte Versionen per Lebenszyklus
@@ -654,7 +660,9 @@ scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
   Block „Mit S3-Ablage“ in `api/printFiles.integration.test.ts` (die Routen
   mit einem Strom aus `fetch`). Achtung beim Test gegen **moto**: Es rechnet
   die Signatur einer Liste mit `/` im `prefix` falsch nach (boto3 scheitert
-  dort ebenso) – `S3_TEST_PREFIX=` leer setzen.
+  dort ebenso) – `S3_TEST_PREFIX=` leer setzen. Die Tests räumen nur ab, was
+  sie selbst angelegt haben; trotzdem einen eigenen Test-Bucket nehmen, nie
+  den einer laufenden Instanz.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 

@@ -62,6 +62,16 @@ describe("parseStorageConfig", () => {
     ).toMatchObject({ forcePathStyle: false, region: "auto" });
   });
 
+  it("nimmt bei einem Bucket mit Punkt den Pfad-Stil", () => {
+    expect(
+      parseStorageConfig({
+        ...s3,
+        S3_BUCKET: "dateien.example.org",
+        S3_REGION: "eu-central-1",
+      })
+    ).toMatchObject({ forcePathStyle: true });
+  });
+
   it("nennt fehlende Angaben – ohne Werte preiszugeben", () => {
     expect(() => parseStorageConfig({ STORAGE_DRIVER: "s3" })).toThrow(
       "S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_REGION"
@@ -89,7 +99,7 @@ describe("parseStorageConfig", () => {
       expect(() =>
         parseStorageConfig({ ...withRegion, S3_ENDPOINT: endpoint })
       ).toThrow(/S3_ENDPOINT/);
-    for (const prefix of ["a b", "a//b", "../x?y"])
+    for (const prefix of ["a b", "a//b", "../x?y", "../", "x/./", "a/../b"])
       expect(() =>
         parseStorageConfig({ ...withRegion, S3_PREFIX: prefix })
       ).toThrow(/S3_PREFIX/);
