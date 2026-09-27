@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { visibilityAllows } from "@contracts/friends";
+import { colorSpecSchema } from "@contracts/appearance";
 import {
   resolveShare,
   toFriendMaterial,
@@ -170,12 +171,18 @@ describe("toFriendMaterial", () => {
    * hinausgehen. Aufgelöst wird dafür mit dem Katalog des **Besitzers** – mit
    * dem des Betrachters bekäme „Signalrot“ die Farbe, die *er* darunter
    * versteht.
+   *
+   * **In 4.7.0 kam `colorSpec` dazu**, aus demselben Grund: das Farbbild zu
+   * `color` (mehrere Farben, Anordnung), aufgelöst mit dem Katalog des
+   * Besitzers. Die Notizen seiner Wirkungen bleiben draußen – eigener Test
+   * unten.
    */
   it("gibt genau die erlaubten Felder heraus", () => {
     const result = toFriendMaterial(materialRow(), "Alex");
     expect(Object.keys(result).sort()).toEqual([
       "color",
       "colorHex",
+      "colorSpec",
       "id",
       "identifier",
       "manufacturer",
@@ -190,6 +197,42 @@ describe("toFriendMaterial", () => {
       "texture",
       "textureKind",
     ]);
+  });
+
+  /*
+    Das Farbbild geht hinaus, die Freitext-Notizen seiner Wirkungen nicht –
+    ein Katalogeintrag kann darin alles Mögliche tragen.
+  */
+  it("gibt das Farbbild ohne die Notizen der Wirkungen heraus", () => {
+    const spec = colorSpecSchema.parse({
+      schemaVersion: 1,
+      layout: "coextruded",
+      colors: [{ hex: "#c8a02c" }, { hex: "#b6bcc4" }],
+      effects: [
+        {
+          kind: "photochromic",
+          to: { hex: "#7b3fb8" },
+          note: "Notiz, die niemand anderes lesen soll",
+        },
+      ],
+    });
+    const result = toFriendMaterial(
+      materialRow({ color: "Morgenglanz" }),
+      "Alex",
+      {
+        colors: new Map([["morgenglanz", "#c8a02c"]]),
+        textures: new Map(),
+        colorSpecs: new Map([["morgenglanz", spec]]),
+      }
+    );
+    expect(result.colorSpec?.colors.map(stop => stop.hex)).toEqual([
+      "#c8a02c",
+      "#b6bcc4",
+    ]);
+    expect(result.colorSpec?.effects).toEqual([
+      { kind: "photochromic", to: { hex: "#7b3fb8" } },
+    ]);
+    expect(JSON.stringify(result)).not.toContain("Notiz");
   });
 
   /*

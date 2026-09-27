@@ -27,6 +27,13 @@ import {
   TEXTURE_KINDS,
   textureKindSchema,
   type AppearanceCatalog,
+  COLOR_LAYOUTS,
+  COLOR_LAYOUT_LIMITS,
+  colorSpecIsTrivial,
+  colorSpecSchema,
+  overlayInkFor,
+  parseStoredColorSpec,
+  type ColorSpec,
 } from "@contracts/appearance";
 
 function catalog(
@@ -201,6 +208,7 @@ describe("Auflösung", () => {
       kind: "fiber",
       source: "builtin",
       matched: null,
+      spec: null,
     });
   });
 });
@@ -450,6 +458,7 @@ describe("Farbwörter in Herstellerfarben", () => {
         hex: builtinHex(key),
         source: "builtin",
         matched: null,
+        spec: null,
       });
     }
   });
@@ -479,6 +488,7 @@ describe("Farbwörter in Herstellerfarben", () => {
         hex: null,
         source: null,
         matched: null,
+        spec: null,
       });
     }
   });
@@ -490,6 +500,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: builtinHex("yellow"),
       source: "word",
       matched: "Yellow",
+      spec: null,
     });
     expect(resolveColor("Matte Dark Green").matched).toBe("Dark Green");
     expect(resolveColor("Himmelblau-Traum").matched).toBe("Himmelblau");
@@ -500,6 +511,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: builtinHex("darkGreen"),
       source: "builtin",
       matched: null,
+      spec: null,
     });
   });
 
@@ -534,6 +546,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: builtinHex("lightPink"),
       source: "builtin",
       matched: null,
+      spec: null,
     });
   });
 
@@ -553,6 +566,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: "#e0c060",
       source: "word",
       matched: "Savanne",
+      spec: null,
     });
     // Der ganze Name schlägt jede Wortsuche.
     const whole = catalog({ "savanna yellow": "#d4b000" });
@@ -560,6 +574,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: "#d4b000",
       source: "custom",
       matched: null,
+      spec: null,
     });
   });
 
@@ -569,6 +584,7 @@ describe("Auflösung über Farbwörter", () => {
       hex: "#667755",
       source: "word",
       matched: "Moos Nebel",
+      spec: null,
     });
   });
 
@@ -585,6 +601,315 @@ describe("Auflösung über Farbwörter", () => {
       kind: "matte",
       source: "word",
       matched: "Brown",
+      spec: null,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Farbbild (seit 4.7.0)
+// ---------------------------------------------------------------------------
+
+function stops(count: number) {
+  const palette = ["#d02c2c", "#e8c018", "#2e9e46", "#2158c8"];
+  return Array.from({ length: count }, (_, index) => ({
+    hex: palette[index % palette.length],
+  }));
+}
+
+describe("Farbbild-Schema", () => {
+  /*
+    Drei- und vierfarbige Filamente sind vollwertig: Die Grenzen je Anordnung
+    stehen an einer Stelle, und hier wird jede an der Grenze geprüft – die
+    Untergrenze geht, die Obergrenze geht, eins darüber nicht.
+  */
+  for (const layout of COLOR_LAYOUTS) {
+    const { min, max } = COLOR_LAYOUT_LIMITS[layout];
+    it(`nimmt bei „${layout}“ ${min} bis ${max} Farben`, () => {
+      const base = { schemaVersion: 1, layout };
+      expect(
+        colorSpecSchema.safeParse({ ...base, colors: stops(min) }).success
+      ).toBe(true);
+      expect(
+        colorSpecSchema.safeParse({ ...base, colors: stops(max) }).success
+      ).toBe(true);
+      expect(
+        colorSpecSchema.safeParse({ ...base, colors: stops(max + 1) }).success
+      ).toBe(false);
+      if (min > 1) {
+        expect(
+          colorSpecSchema.safeParse({ ...base, colors: stops(min - 1) }).success
+        ).toBe(false);
+      }
+    });
+  }
+
+  it("führt koextrudiert als zwei-, drei- und vierfarbig", () => {
+    expect(COLOR_LAYOUT_LIMITS.coextruded).toEqual({ min: 2, max: 4 });
+  });
+
+  it("ergänzt fehlende Partikel und Wirkungen als leere Listen", () => {
+    const parsed = colorSpecSchema.parse({
+      schemaVersion: 1,
+      layout: "coextruded",
+      colors: stops(2),
+    });
+    expect(parsed.accents).toEqual([]);
+    expect(parsed.effects).toEqual([]);
+  });
+
+  it("verlangt bei Wirkungen eine Zielfarbe, außer bei Infrarot und Sonstigem", () => {
+    const base = { schemaVersion: 1, layout: "solid", colors: stops(1) };
+    expect(
+      colorSpecSchema.safeParse({
+        ...base,
+        effects: [{ kind: "photochromic" }],
+      }).success
+    ).toBe(false);
+    expect(
+      colorSpecSchema.safeParse({
+        ...base,
+        effects: [{ kind: "photochromic", to: { hex: "#7b3fb8" } }],
+      }).success
+    ).toBe(true);
+    expect(
+      colorSpecSchema.safeParse({ ...base, effects: [{ kind: "infrared" }] })
+        .success
+    ).toBe(true);
+  });
+
+  it("lässt jede Wirkung nur einmal zu und die Schwelle nur bei Wärme", () => {
+    const base = { schemaVersion: 1, layout: "solid", colors: stops(1) };
+    const uv = { kind: "photochromic", to: { hex: "#7b3fb8" } };
+    expect(
+      colorSpecSchema.safeParse({ ...base, effects: [uv, uv] }).success
+    ).toBe(false);
+    expect(
+      colorSpecSchema.safeParse({
+        ...base,
+        effects: [{ ...uv, thresholdC: 30 }],
+      }).success
+    ).toBe(false);
+    expect(
+      colorSpecSchema.safeParse({
+        ...base,
+        effects: [
+          { kind: "thermochromic", to: { hex: "#ffffff" }, thresholdC: 31 },
+        ],
+      }).success
+    ).toBe(true);
+  });
+
+  it("liest Unlesbares als null statt zu scheitern", () => {
+    expect(parseStoredColorSpec(null)).toBeNull();
+    expect(parseStoredColorSpec({ schemaVersion: 99 })).toBeNull();
+    expect(parseStoredColorSpec("kaputt")).toBeNull();
+    expect(
+      parseStoredColorSpec({
+        schemaVersion: 1,
+        layout: "gradient",
+        colors: stops(3),
+      })?.colors
+    ).toHaveLength(3);
+  });
+
+  it("erkennt ein Farbbild, das nur ein Farbcode ist", () => {
+    const solid = colorSpecSchema.parse({
+      schemaVersion: 1,
+      layout: "solid",
+      colors: stops(1),
+    });
+    expect(colorSpecIsTrivial(solid)).toBe(true);
+    const withAccent = colorSpecSchema.parse({
+      schemaVersion: 1,
+      layout: "solid",
+      colors: stops(1),
+      accents: [{ hex: "#000000" }],
+    });
+    expect(colorSpecIsTrivial(withAccent)).toBe(false);
+  });
+
+  it("führt nur gültige mitgelieferte Farbbilder", () => {
+    for (const color of BUILTIN_COLORS) {
+      if (!color.spec) continue;
+      expect(colorSpecSchema.safeParse(color.spec).success, color.key).toBe(
+        true
+      );
+      expect(color.spec.colors[0].hex, color.key).toBe(color.hex);
+    }
+  });
+});
+
+describe("Farbbild in der Auflösung", () => {
+  it("liefert den Regenbogen als Segmente", () => {
+    const rainbow = resolveColor("Regenbogen");
+    expect(rainbow.source).toBe("builtin");
+    expect(rainbow.spec?.layout).toBe("segmented");
+    expect(rainbow.spec?.colors).toHaveLength(6);
+  });
+
+  it("gibt das Farbbild eines eigenen Eintrags mit", () => {
+    const spec: ColorSpec = colorSpecSchema.parse({
+      schemaVersion: 1,
+      layout: "coextruded",
+      colors: [{ hex: "#c8a02c" }, { hex: "#b6bcc4" }, { hex: "#a45c33" }],
+    });
+    const own: AppearanceCatalog = {
+      ...catalog({ dreiklang: "#c8a02c" }),
+      colorSpecs: new Map([["dreiklang", spec]]),
+    };
+    const resolved = resolveColor("Dreiklang", own);
+    expect(resolved.source).toBe("custom");
+    expect(resolved.spec?.colors.map(stop => stop.hex)).toEqual([
+      "#c8a02c",
+      "#b6bcc4",
+      "#a45c33",
+    ]);
+    // Auch als Teil eines längeren Namens
+    expect(resolveColor("Silk Dreiklang", own).spec?.layout).toBe("coextruded");
+  });
+});
+
+/*
+  Stufe 4. Die Trenner sind nicht gleich sicher: Zeichen genügen mit einem
+  bekannten Teil, Wörter und Bindestrich brauchen lauter bekannte – sonst
+  würde „Dark-Green“ zweifarbig und „Back to Black“ ein Verlauf.
+*/
+describe("Zusammengesetzte Farbnamen", () => {
+  function layoutOf(name: string, texture?: string) {
+    const resolved = resolveColor(name, undefined, texture);
+    return {
+      source: resolved.source,
+      layout: resolved.spec?.layout ?? null,
+      colors: resolved.spec?.colors.map(stop => stop.hex) ?? [],
+    };
+  }
+
+  it("macht aus zwei, drei und vier Farben ein koextrudiertes Farbbild", () => {
+    expect(layoutOf("Rot/Blau")).toEqual({
+      source: "compound",
+      layout: "coextruded",
+      colors: [builtinHex("red"), builtinHex("blue")],
+    });
+    expect(layoutOf("Rot/Gelb/Blau").colors).toHaveLength(3);
+    expect(layoutOf("Rot/Gelb/Grün/Blau")).toMatchObject({
+      layout: "coextruded",
+    });
+    expect(layoutOf("Rot/Gelb/Grün/Blau").colors).toHaveLength(4);
+  });
+
+  it("macht aus fünf und mehr Farben Segmente", () => {
+    expect(layoutOf("Rot/Orange/Gelb/Grün/Blau").layout).toBe("segmented");
+  });
+
+  it("nimmt Leerraum um das Zeichen hin, aber nur auf beiden Seiten", () => {
+    expect(layoutOf("Rot / Blau").layout).toBe("coextruded");
+    expect(layoutOf("PLA+ Black").layout).toBeNull();
+    expect(resolveColorHex("PLA+ Black")).toBe(builtinHex("black"));
+  });
+
+  it("liest Verlaufswörter als Verlauf", () => {
+    expect(layoutOf("Red to Blue").layout).toBe("gradient");
+    expect(layoutOf("Blau zu Violett").layout).toBe("gradient");
+  });
+
+  it("folgt Schlüsselwörtern in Farbe oder Oberfläche", () => {
+    expect(layoutOf("Dual Rot/Blau").colors).toHaveLength(2);
+    expect(layoutOf("Gold/Silber", "Gradient").layout).toBe("gradient");
+    expect(layoutOf("Gold & Silber", "Silk Dual").layout).toBe("coextruded");
+    expect(layoutOf("Rot/Blau", "Multicolor").layout).toBe("segmented");
+  });
+
+  it("trennt am Bindestrich nur, wenn alle Teile Farben sind", () => {
+    expect(layoutOf("Rot-Blau").layout).toBe("coextruded");
+    expect(layoutOf("Dark-Green")).toEqual({
+      source: "builtin",
+      layout: null,
+      colors: [],
+    });
+    expect(resolveColorHex("Blau-Grün")).toBe(builtinHex("teal"));
+  });
+
+  it("trennt an Wörtern nur, wenn alle Teile Farben sind", () => {
+    expect(layoutOf("Black and White").colors).toEqual([
+      builtinHex("black"),
+      builtinHex("white"),
+    ]);
+    expect(layoutOf("Back to Black").layout).toBeNull();
+    expect(layoutOf("Green Glow in the Dark").layout).toBeNull();
+    expect(resolveColor("Salt and Pepper").hex).toBeNull();
+  });
+
+  it("lässt Oberflächenwörter als Teil weg", () => {
+    expect(layoutOf("Black, matte")).toEqual({
+      source: "word",
+      layout: null,
+      colors: [],
+    });
+  });
+
+  it("zeigt einen unbekannten Teil als Lücke, wenn ein anderer bekannt ist", () => {
+    expect(layoutOf("Rot/Xyz").colors).toEqual([builtinHex("red"), null]);
+    expect(resolveColor("Dawn/Dusk").hex).toBeNull();
+  });
+
+  it("löst jeden Teil einzeln samt Farbwörtern auf", () => {
+    expect(layoutOf("Savanna Yellow / Earth Brown").colors).toEqual([
+      builtinHex("yellow"),
+      builtinHex("brown"),
+    ]);
+    expect(resolveColor("Savanna Yellow / Earth Brown").matched).toBe(
+      "Savanna Yellow / Earth Brown"
+    );
+  });
+
+  it("nimmt die erste bekannte Farbe als Leitfarbe", () => {
+    expect(resolveColorHex("Xyz/Blau")).toBe(builtinHex("blue"));
+  });
+
+  it("lässt einen eigenen Eintrag für den ganzen Namen gewinnen", () => {
+    const own = catalog({ "rot/blau": "#800080" });
+    expect(resolveColor("Rot/Blau", own)).toMatchObject({
+      hex: "#800080",
+      source: "custom",
+      spec: null,
+    });
+  });
+});
+
+describe("Musterfarbe über mehreren Grundfarben", () => {
+  it("nimmt die Tinte mit dem besten schlechtesten Kontrast", () => {
+    expect(overlayInkFor(["#f5f5f5", "#e8c018"])).toBe(INK_DARK);
+    expect(overlayInkFor(["#1c1c1e", "#16306e"])).toBe(INK_LIGHT);
+    expect(overlayInkFor([null, "#f5f5f5"])).toBe(INK_DARK);
+  });
+
+  /*
+    Auf einem Verlauf von Schwarz nach Weiß reicht keine Tinte überall. Die
+    Zeichnung legt deshalb einen Rand im Gegenton um das Muster – an jedem
+    Stopp erreicht dann Tinte **oder** Rand die 4,5:1. Geprüft über ein Raster
+    aus Zweier- und Dreierverläufen.
+  */
+  it("bleibt mit Rand auf jedem Stopp eines Verlaufs sichtbar", () => {
+    const steps = [0, 64, 128, 192, 255];
+    const hex = (r: number, g: number, b: number) =>
+      "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
+    const grid = steps.flatMap(r =>
+      steps.flatMap(g => steps.map(b => hex(r, g, b)))
+    );
+    for (let i = 0; i < grid.length; i += 7) {
+      for (let j = 0; j < grid.length; j += 11) {
+        const colors = [grid[i], grid[j], grid[(i + j) % grid.length]];
+        const ink = overlayInkFor(colors);
+        const rim = counterInk(ink);
+        for (const color of colors) {
+          const best = Math.max(
+            contrastRatio(color, ink),
+            contrastRatio(color, rim)
+          );
+          expect(best).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
   });
 });

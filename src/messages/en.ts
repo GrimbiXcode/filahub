@@ -673,6 +673,51 @@ export const en: Messages = {
     unknownColor: "No colour code stored for this colour",
     recognizedColor: (vars: { word: string }) =>
       `Recognised from \u201c${vars.word}\u201d \u2013 the shade is approximate`,
+    recognizedColors: (vars: { words: string }) =>
+      `Recognised as multi-colour from \u201c${vars.words}\u201d \u2013 approximate`,
+    layoutLabel: "Arrangement",
+    layouts: {
+      solid: "Single colour",
+      coextruded: "Multi-colour (2\u20134)",
+      gradient: "Gradient",
+      segmented: "Segments",
+    },
+    layoutHints: {
+      solid: "One colour",
+      coextruded:
+        "The strand is split lengthwise \u2013 dual, tri, quad. Which colour shows depends on the wall.",
+      gradient: "The colour changes smoothly along the strand.",
+      segmented: "Hard changes in sections along the strand.",
+    },
+    colorsLabel: "Colours",
+    colorStopLabel: (vars: { n: number }) => `Colour ${vars.n}`,
+    colorStopName: "Name (optional)",
+    addColorStop: "Add colour",
+    removeColorStop: (vars: { n: number }) => `Remove colour ${vars.n}`,
+    moveColorStopUp: (vars: { n: number }) => `Move colour ${vars.n} forward`,
+    accentsLabel: "Particles and veins",
+    accentsHint:
+      "Colours of the specks, glitter or veins \u2013 drawn for the speckled, sparkle and marbled finishes.",
+    accentStopLabel: (vars: { n: number }) => `Particle colour ${vars.n}`,
+    addAccent: "Add particle colour",
+    removeAccent: (vars: { n: number }) => `Remove particle colour ${vars.n}`,
+    specSummary: (vars: { count: number; layout: string }) =>
+      `${vars.count} colours \u00b7 ${vars.layout}`,
+    labelLayout: {
+      coextruded: (vars: { count: number }) =>
+        vars.count === 2
+          ? "two-colour"
+          : vars.count === 3
+            ? "three-colour"
+            : "four-colour",
+      gradient: () => "gradient",
+      segmented: () => "in segments",
+    },
+    labelSpec: (vars: { layout: string; colors: string }) =>
+      `${vars.layout}: ${vars.colors}`,
+    labelColorCount: (vars: { count: number }) => `${vars.count} colours`,
+    labelAnd: "and",
+    labelUnknownPart: "unknown",
     setExactColorFor: (vars: { name: string }) =>
       `Set exact colour for \u201c${vars.name}\u201d`,
     labelColor: (vars: { color: string }) => `Colour ${vars.color}`,

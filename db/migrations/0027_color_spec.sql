@@ -1,0 +1,1 @@
+ALTER TABLE "custom_colors" ADD COLUMN "spec" jsonb;

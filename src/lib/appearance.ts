@@ -3,6 +3,7 @@ import {
   resolveAppearance,
   type AppearanceCatalog,
   type ResolvedAppearance,
+  type ResolvedColorSpec,
   type TextureKind,
 } from "@contracts/appearance";
 import { useActiveScope } from "@/lib/activeScope";
@@ -40,6 +41,12 @@ export function useAppearanceCatalog(): {
     () => ({
       colors: new Map((data?.colors ?? []).map(c => [c.nameKey, c.hex])),
       textures: new Map((data?.textures ?? []).map(t => [t.nameKey, t.kind])),
+      // Nur Einträge mit Farbbild; die Leitfarbe steht für alle in `colors`.
+      colorSpecs: new Map(
+        (data?.colors ?? []).flatMap(c =>
+          c.spec ? [[c.nameKey, c.spec] as const] : []
+        )
+      ),
     }),
     [data]
   );
@@ -73,17 +80,45 @@ export function useAppearanceResolver(): (
 export function useSwatchLabel(): (
   color: string | null | undefined,
   texture: string | null | undefined,
-  hex: string | null
+  hex: string | null,
+  spec?: ResolvedColorSpec | null
 ) => string {
   const t = useT();
   return useMemo(
-    () => (color, texture, hex) => {
+    () => (color, texture, hex, spec) => {
       const parts: string[] = [];
       parts.push(
         color
           ? t.appearance.labelColor({ color })
           : t.appearance.labelColorUnknown
       );
+      /*
+        Mehrfarbig: Anordnung und die Farben beim Namen – „zweifarbig: Gold
+        und Silber“. Nie der Farbcode; „#c8a02c“ vorgelesen hilft niemandem.
+        Ohne Namen „Farbe 2“, ein unbekannter Teil heißt so.
+      */
+      if (spec && spec.colors.length >= 2 && spec.layout !== "solid") {
+        const names = spec.colors.map(
+          (stop, index) =>
+            stop.name ??
+            (stop.hex
+              ? t.appearance.colorStopLabel({ n: index + 1 })
+              : t.appearance.labelUnknownPart)
+        );
+        // Ohne einen einzigen Namen hilft die Aufzählung „Farbe 1 … Farbe 6“
+        // niemandem – dann nur die Zahl.
+        const joined = spec.colors.every(stop => !stop.name)
+          ? t.appearance.labelColorCount({ count: spec.colors.length })
+          : `${names.slice(0, -1).join(", ")} ${t.appearance.labelAnd} ${names.at(-1)}`;
+        parts.push(
+          t.appearance.labelSpec({
+            layout: t.appearance.labelLayout[spec.layout]({
+              count: spec.colors.length,
+            }),
+            colors: joined,
+          })
+        );
+      }
       if (texture) parts.push(t.appearance.labelTexture({ texture }));
       if (color && !hex) parts.push(t.appearance.labelNoColorCode);
       return parts.join(", ");

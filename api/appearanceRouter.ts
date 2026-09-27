@@ -2,9 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
   appearanceNameSchema,
+  colorSpecIsTrivial,
+  colorSpecSchema,
   hexSchema,
   normalizeHex,
+  parseStoredColorSpec,
   textureKindSchema,
+  type ColorSpec,
 } from "@contracts/appearance";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { resolveScope, scopeInput } from "./scope";
@@ -48,10 +52,56 @@ const hexInput = z
   .transform(raw => normalizeHex(raw) ?? raw)
   .pipe(hexSchema);
 
+/**
+ * Eine eigene Farbe: **entweder** ein Farbcode (`hex`) **oder** ein Farbbild
+ * (`spec`, seit 4.7.0) – beides zugleich ist `BAD_REQUEST`, dasselbe Muster
+ * wie `material.create` mit `productId`. Die Leitfarbe in `hex` leitet bei
+ * einem Farbbild der Server ab (`colorData`), damit es keine zweite Wahrheit
+ * gibt.
+ */
 const colorInput = z.object({
   name: appearanceNameSchema,
-  hex: hexInput,
+  hex: hexInput.optional(),
+  /** `null` beim Ändern: Farbbild entfernen, die Leitfarbe bleibt */
+  spec: colorSpecSchema.nullable().optional(),
 });
+
+/**
+ * Leitfarbe und Farbbild aus der Eingabe – die **eine** Stelle, an der beides
+ * zusammenkommt.
+ *
+ * - Farbbild → Leitfarbe ist seine erste Farbe. Ist es nur ein Farbcode
+ *   (eine Farbe, keine Partikel, keine Wirkung), wird es als solcher
+ *   gespeichert: eine Wahrheit, nicht zwei.
+ * - Farbcode → das Farbbild entfällt; wer auf eine Farbe zurückgeht, meint
+ *   einfarbig.
+ * - `spec: null` allein → Farbbild entfernen, die Leitfarbe bleibt.
+ */
+function colorData(input: { hex?: string; spec?: ColorSpec | null }): {
+  hex?: string;
+  spec?: ColorSpec | null;
+} {
+  if (input.hex !== undefined && input.spec != null) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: "Bitte entweder einen Farbcode oder ein Farbbild angeben.",
+    });
+  }
+  if (input.spec != null) {
+    return {
+      hex: input.spec.colors[0].hex,
+      spec: colorSpecIsTrivial(input.spec) ? null : input.spec,
+    };
+  }
+  if (input.hex !== undefined) return { hex: input.hex, spec: null };
+  if (input.spec === null) return { spec: null };
+  return {};
+}
+
+/** Zeilen mit gelesenem Farbbild – `jsonb` kommt als `unknown` aus der Datenbank */
+function withSpec<T extends { spec: unknown }>(row: T) {
+  return { ...row, spec: parseStoredColorSpec(row.spec) };
+}
 
 const textureInput = z.object({
   name: appearanceNameSchema,
@@ -107,7 +157,7 @@ export const appearanceRouter = createRouter({
       findCustomColorsInScope(scope),
       findCustomTexturesInScope(scope),
     ]);
-    return { colors, textures };
+    return { colors: colors.map(withSpec), textures };
   }),
 
   createColor: authedQuery
@@ -121,7 +171,14 @@ export const appearanceRouter = createRouter({
     )
     .input(colorInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
-      const { organizationId, ...data } = input;
+      const { organizationId, name, ...rest } = input;
+      const { hex, spec } = colorData(rest);
+      if (hex === undefined) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Farbcode oder Farbbild fehlt.",
+        });
+      }
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
       assertWithinLimit({
         current: await countCustomColorsInScope(scope),
@@ -132,7 +189,12 @@ export const appearanceRouter = createRouter({
         ip: ctx.clientIp,
       });
       try {
-        return await createCustomColor(scope, data);
+        const created = await createCustomColor(scope, {
+          name,
+          hex,
+          spec: spec ?? null,
+        });
+        return created && withSpec(created);
       } catch (error) {
         asConflict(error, "Diese Farbe ist bereits hinterlegt.");
       }
@@ -141,7 +203,11 @@ export const appearanceRouter = createRouter({
   updateColor: authedQuery
     .input(colorInput.partial().extend(idInput.shape))
     .mutation(async ({ ctx, input }) => {
-      const { id, organizationId, ...data } = input;
+      const { id, organizationId, name, ...rest } = input;
+      const data = {
+        ...colorData(rest),
+        ...(name === undefined ? {} : { name }),
+      };
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
       const updated = await updateCustomColor(scope, id, data).catch(error =>
         asConflict(error, "Diese Farbe ist bereits hinterlegt.")
@@ -151,7 +217,7 @@ export const appearanceRouter = createRouter({
           code: "NOT_FOUND",
           message: "Farbe nicht gefunden",
         });
-      return updated;
+      return withSpec(updated);
     }),
 
   deleteColor: authedQuery.input(idInput).mutation(async ({ ctx, input }) => {

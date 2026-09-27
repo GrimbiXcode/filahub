@@ -693,6 +693,51 @@ export const de = {
     unknownColor: "Für diese Farbe ist kein Farbcode hinterlegt",
     recognizedColor: (vars: { word: string }) =>
       `Erkannt aus „${vars.word}“ – der Farbton ist ungefähr`,
+    recognizedColors: (vars: { words: string }) =>
+      `Erkannt als mehrfarbig aus „${vars.words}“ – ungefähr`,
+    layoutLabel: "Anordnung",
+    layouts: {
+      solid: "Einfarbig",
+      coextruded: "Mehrfarbig (2–4)",
+      gradient: "Verlauf",
+      segmented: "Segmente",
+    },
+    layoutHints: {
+      solid: "Eine Farbe",
+      coextruded:
+        "Der Querschnitt ist geteilt – Dual, Tri, Quad. Welche Farbe man sieht, hängt von der Wand ab.",
+      gradient: "Die Farbe wechselt fließend entlang des Strangs.",
+      segmented: "Harte Wechsel in Abschnitten entlang des Strangs.",
+    },
+    colorsLabel: "Farben",
+    colorStopLabel: (vars: { n: number }) => `Farbe ${vars.n}`,
+    colorStopName: "Name (optional)",
+    addColorStop: "Farbe hinzufügen",
+    removeColorStop: (vars: { n: number }) => `Farbe ${vars.n} entfernen`,
+    moveColorStopUp: (vars: { n: number }) => `Farbe ${vars.n} nach vorn`,
+    accentsLabel: "Partikel und Adern",
+    accentsHint:
+      "Farben der Einsprengsel, des Glitzers oder der Adern – gezeichnet bei den Oberflächen gesprenkelt, glitzernd und marmoriert.",
+    accentStopLabel: (vars: { n: number }) => `Partikelfarbe ${vars.n}`,
+    addAccent: "Partikelfarbe hinzufügen",
+    removeAccent: (vars: { n: number }) => `Partikelfarbe ${vars.n} entfernen`,
+    specSummary: (vars: { count: number; layout: string }) =>
+      `${vars.count} Farben · ${vars.layout}`,
+    labelLayout: {
+      coextruded: (vars: { count: number }): string =>
+        vars.count === 2
+          ? "zweifarbig"
+          : vars.count === 3
+            ? "dreifarbig"
+            : "vierfarbig",
+      gradient: (): string => "Farbverlauf",
+      segmented: (): string => "in Segmenten",
+    },
+    labelSpec: (vars: { layout: string; colors: string }) =>
+      `${vars.layout}: ${vars.colors}`,
+    labelColorCount: (vars: { count: number }) => `${vars.count} Farben`,
+    labelAnd: "und",
+    labelUnknownPart: "unbekannt",
     setExactColorFor: (vars: { name: string }) =>
       `„${vars.name}“ genau festlegen`,
     labelColor: (vars: { color: string }) => `Farbe ${vars.color}`,

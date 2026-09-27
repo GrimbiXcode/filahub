@@ -2,13 +2,14 @@ import { useState } from "react";
 import { roleAllows } from "@contracts/organizations";
 import {
   TEXTURE_KIND_CHOICES,
-  normalizeHex,
+  toResolvedSpec,
   type TextureKind,
 } from "@contracts/appearance";
 import { Palette, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { ColorSpecEditor } from "@/components/ColorSpecEditor";
 import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
@@ -46,6 +47,11 @@ import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { CustomColorItem, CustomTextureItem } from "@/types";
 import { formKeys } from "@/lib/formKeyboard";
+import {
+  editorValueFrom,
+  editorValueToInput,
+  type ColorEditorValue,
+} from "@/lib/colorSpecEditor";
 
 /**
  * Eigene Farben und Oberflächen verwalten.
@@ -77,7 +83,9 @@ export default function Appearance() {
     null
   );
   const [colorName, setColorName] = useState("");
-  const [hex, setHex] = useState("#3b82f6");
+  const [colorValue, setColorValue] = useState<ColorEditorValue>(() =>
+    editorValueFrom(null)
+  );
 
   const [textureDialogOpen, setTextureDialogOpen] = useState(false);
   const [editingTexture, setEditingTexture] =
@@ -103,7 +111,7 @@ export default function Appearance() {
   const openColorDialog = (color: CustomColorItem | null) => {
     setEditingColor(color);
     setColorName(color?.name ?? "");
-    setHex(color?.hex ?? "#3b82f6");
+    setColorValue(editorValueFrom(color?.hex, color?.spec));
     setColorDialogOpen(true);
   };
 
@@ -171,11 +179,11 @@ export default function Appearance() {
     e.preventDefault();
     const name = colorName.trim();
     if (!name) return toast.error(t.appearance.nameRequired);
-    const value = normalizeHex(hex);
-    if (!value) return toast.error(t.appearance.invalidHex);
+    const input = editorValueToInput(colorValue);
+    if (!input) return toast.error(t.appearance.invalidHex);
     if (editingColor)
-      updateColor.mutate({ ...scope, id: editingColor.id, name, hex: value });
-    else createColor.mutate({ ...scope, name, hex: value });
+      updateColor.mutate({ ...scope, id: editingColor.id, name, ...input });
+    else createColor.mutate({ ...scope, name, ...input });
   };
 
   const submitTexture = (e: React.FormEvent) => {
@@ -189,7 +197,6 @@ export default function Appearance() {
 
   const colors = data?.colors ?? [];
   const textures = data?.textures ?? [];
-  const previewHex = normalizeHex(hex);
 
   return (
     <AuthLayout>
@@ -233,14 +240,24 @@ export default function Appearance() {
                         <AppearanceSwatch
                           hex={color.hex}
                           kind="plain"
+                          spec={color.spec && toResolvedSpec(color.spec)}
                           label={color.name}
                         />
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {color.name}
                         </span>
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {color.hex}
-                        </span>
+                        {color.spec ? (
+                          <span className="text-xs text-muted-foreground">
+                            {t.appearance.specSummary({
+                              count: color.spec.colors.length,
+                              layout: t.appearance.layouts[color.spec.layout],
+                            })}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {color.hex}
+                          </span>
+                        )}
                         {mayEdit && (
                           <RowActions
                             editLabel={t.appearance.editColor}
@@ -312,7 +329,8 @@ export default function Appearance() {
       </div>
 
       <Dialog open={colorDialogOpen} onOpenChange={setColorDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        {/* Mit vier Farben und Partikeln länger als ein Telefon hoch ist */}
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
               {editingColor ? t.appearance.editColor : t.appearance.newColor}
@@ -329,35 +347,11 @@ export default function Appearance() {
                 placeholder={t.appearance.colorNamePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="a-color-hex">{t.appearance.hexLabel}</Label>
-              <div className="flex items-center gap-2">
-                {/*
-                  Farbwähler und Textfeld nebeneinander: Der Wähler ist der
-                  bequeme Weg, das Textfeld der genaue – einen Code aus dem
-                  Datenblatt des Herstellers tippt man ab, statt ihn zu treffen.
-                */}
-                <Input
-                  id="a-color-hex"
-                  type="color"
-                  value={previewHex ?? "#000000"}
-                  onChange={e => setHex(e.target.value)}
-                  className="h-10 w-14 p-1"
-                />
-                <Input
-                  value={hex}
-                  onChange={e => setHex(e.target.value)}
-                  className="font-mono"
-                  placeholder="#1a2b3c"
-                />
-                <AppearanceSwatch
-                  hex={previewHex}
-                  kind="plain"
-                  label={t.appearance.preview}
-                  size="md"
-                />
-              </div>
-            </div>
+            <ColorSpecEditor
+              idPrefix="a-color"
+              value={colorValue}
+              onChange={setColorValue}
+            />
             <DialogFooter>
               <Button
                 type="button"

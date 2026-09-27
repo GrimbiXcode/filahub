@@ -279,7 +279,7 @@ export default function Home() {
     const resolved = resolveAppearance(m.color, m.texture);
     return {
       ...resolved,
-      label: swatchLabel(m.color, m.texture, resolved.hex),
+      label: swatchLabel(m.color, m.texture, resolved.hex, resolved.spec),
     };
   };
 
@@ -1406,6 +1406,7 @@ function MaterialCard({
           size={56}
           hex={appearance.hex}
           kind={appearance.kind}
+          spec={appearance.spec}
           percent={material.remainingPercent}
           label={appearance.label}
         />

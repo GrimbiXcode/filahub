@@ -2,7 +2,8 @@
 
 Stand: 4.5.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
 Ende); offen sind nur noch die Punkte unter „Offene Fragen“. **Phase A ist
-umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0); RAL und C bis E stehen aus.
+umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0), **Phase C** (4.7.0); RAL,
+D und E stehen aus.
 
 ## Stand der Umsetzung
 
@@ -46,8 +47,38 @@ sobald die Quelle der Farbwerte geklärt ist (Entscheidung vom 27.09.2026:
 - **Das Formular sagt „‚X‘ genau festlegen“** statt „hinterlegen“, wenn der
   Ton erkannt wurde; der Farbwähler steht auf dem erkannten Ton. Gespeichert
   wird wie bisher eine eigene Farbe – Stufe 1 schlägt danach die Wortsuche.
-- **Bis Phase C** ergibt „Rot/Blau“ über die Wortsuche Blau (hinterstes Wort),
+- **Bis Phase C** ergab „Rot/Blau“ über die Wortsuche Blau (hinterstes Wort),
   nicht zwei Farben.
+
+**Phase C (4.7.0)** – Abweichungen und was der Entwurf offenließ:
+
+- **Katalog mit zweiter Map** (`AppearanceCatalog.colorSpecs`) statt
+  `colors: Map<string, {hex, spec}>`: Alles, was nur die Leitfarbe braucht,
+  blieb unverändert.
+- **Trenner nach Sicherheit gestaffelt**, im Entwurf nicht bedacht: Zeichen
+  (`/ + & |`) mit einem bekannten Teil, Wörter und Bindestrich nur mit lauter
+  bekannten. Sonst wurden „Dark-Green“, „Black, matte“, „Back to Black“ und
+  „Green Glow in the Dark“ mehrfarbig. Zeichen nur mit gleichem Abstand auf
+  beiden Seiten („PLA+ Black“). Oberflächenwörter fallen als Teil weg. „ in “
+  und „ x “ sind **keine** Trenner (Glow in the Dark, 1 x 1 kg), „bis“ schon.
+- **Die erste Farbe links bzw. oben links** – in der ersten Fassung begann
+  der erste Keil oben und lief nach rechts, „Rot/Blau“ stand als Blau/Rot da.
+- **Die Spule verteilt Streifen und Verläufe über ihren sichtbaren Kern**
+  (`inset`); vorher zeigte sie vom Regenbogen zwei Farben.
+- **Der Rand im Gegenton nur bei Mustern aus einzelnen Formen**; bei
+  Flächenmustern (Rauschen, Glanz, Schachbrett) machte er aus Glanz Grau.
+- **Wirkungsnotizen verlassen den Server schon jetzt nicht** (der Entwurf sah
+  das für Phase D vor): Das Schema kennt `note` seit 4.7.0, also gilt der
+  Riegel ab da.
+- **Beschriftung ohne Namenssuche im Katalog über den Farbcode** (Entwurf:
+  „Namen des mitgelieferten Katalogs, deren Farbcode exakt passt“): Die
+  Namen dort sind deutsch und englisch gemischt, und die Sprache wäre
+  geraten. Statt dessen „Farbe 2“, und ohne einen einzigen Namen „6 Farben“.
+- **Editor im Formular eingebettet**, kein zweiter Dialog über dem ersten
+  (dieselbe Begründung wie beim Farbwähler bis 4.6.0); Reihenfolge per Knopf
+  statt Ziehen.
+- **Der Regenbogen hört auf „Regenbogen“ und „Rainbow“**, nicht auf
+  „Multicolor“ – das ist ein Schlüsselwort der Anordnung.
 
 ## Ziel
 

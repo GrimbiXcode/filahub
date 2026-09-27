@@ -97,10 +97,12 @@ export function FriendMaterialList({
                   <AppearanceSwatch
                     hex={material.colorHex}
                     kind={material.textureKind}
+                    spec={material.colorSpec}
                     label={swatchLabel(
                       material.color,
                       material.texture,
-                      material.colorHex
+                      material.colorHex,
+                      material.colorSpec
                     )}
                     className="mt-0.5"
                   />
@@ -193,10 +195,12 @@ export function FriendMaterialList({
                       <AppearanceSwatch
                         hex={material.colorHex}
                         kind={material.textureKind}
+                        spec={material.colorSpec}
                         label={swatchLabel(
                           material.color,
                           material.texture,
-                          material.colorHex
+                          material.colorHex,
+                          material.colorSpec
                         )}
                       />
                       {material.color ?? t.common.none}

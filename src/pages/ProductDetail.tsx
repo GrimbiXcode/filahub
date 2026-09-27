@@ -121,10 +121,12 @@ export default function ProductDetail() {
               <AppearanceSwatch
                 hex={appearance.hex}
                 kind={appearance.kind}
+                spec={appearance.spec}
                 label={swatchLabel(
                   product.color,
                   product.texture,
-                  appearance.hex
+                  appearance.hex,
+                  appearance.spec
                 )}
                 size="md"
               />

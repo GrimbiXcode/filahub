@@ -125,6 +125,7 @@ function SpoolCard({
           size={72}
           hex={appearance.hex}
           kind={appearance.kind}
+          spec={appearance.spec}
           percent={material.remainingPercent}
           label={appearance.label}
         />

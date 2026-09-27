@@ -52,6 +52,12 @@ import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
 import { useActiveScope } from "@/lib/activeScope";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { ColorSpecEditor } from "@/components/ColorSpecEditor";
+import {
+  editorValueFrom,
+  editorValueToInput,
+  type ColorEditorValue,
+} from "@/lib/colorSpecEditor";
 import { useAppearanceCatalog, useSwatchLabel } from "@/lib/appearance";
 
 type Props = {
@@ -72,9 +78,6 @@ const NEW_PRODUCT = "new";
 
 /** Übliche Netto-Füllmengen einer Spule in Gramm */
 const COMMON_NOMINAL_WEIGHTS = [250, 500, 750, 1000] as const;
-
-/** Ausgangston des Farbwählers, wenn aus dem Namen nichts erkannt wurde */
-const DEFAULT_NEW_HEX = "#3b82f6";
 
 /** Baut die Bezeichnung aus Hersteller + Typ + Farbe. */
 function buildAutoName(manufacturer: string, type: string, color: string) {
@@ -125,12 +128,13 @@ export function MaterialFormDialog({
   const [color, setColor] = useState("");
   const [texture, setTexture] = useState("");
   /*
-    Vorbelegung des Farbwählers, wenn eine Farbe nicht genau hinterlegt ist.
-    `null` = unberührt: Dann zeigt der Farbwähler den erkannten Ton („Savanna
-    Yellow“ → Gelb) als Ausgangspunkt, sonst die Vorgabe. Wer ihn anfasst,
-    behält seine Wahl, bis sich der Farbname ändert.
+    Das Farbbild im Kasten „genau festlegen“, wenn eine Farbe nicht genau
+    hinterlegt ist. `null` = unberührt: Dann steht der Editor auf dem, was
+    die App erkannt hat („Savanna Yellow“ → Gelb, „Rot/Blau“ → zweifarbig),
+    sonst auf der Vorgabe. Wer ihn anfasst, behält seine Wahl, bis sich der
+    Farbname ändert.
   */
-  const [newHex, setNewHex] = useState<string | null>(null);
+  const [newColor, setNewColor] = useState<ColorEditorValue | null>(null);
   const [lagerId, setLagerId] = useState<string>("");
   const [density, setDensity] = useState("");
   const [price, setPrice] = useState("");
@@ -178,7 +182,7 @@ export function MaterialFormDialog({
       setMaterialType(material?.materialType ?? "");
       setManufacturer(material?.manufacturer ?? "");
       setColor(material?.color ?? "");
-      setNewHex(null);
+      setNewColor(null);
       setTexture(material?.texture ?? "");
       /*
         Beim Anlegen bleibt das Feld leer und `effectiveLagerId` unten setzt das
@@ -293,9 +297,17 @@ export function MaterialFormDialog({
   const needsColorCode =
     !catalogPending &&
     color.trim().length > 0 &&
-    (appearance.hex == null || appearance.source === "word");
-  const approximateColor = appearance.source === "word" && appearance.matched;
-  const pickerHex = newHex ?? appearance.hex ?? DEFAULT_NEW_HEX;
+    (appearance.hex == null ||
+      appearance.source === "word" ||
+      appearance.source === "compound");
+  const colorEditorValue =
+    newColor ?? editorValueFrom(appearance.hex, appearance.spec);
+  const recognizedHint =
+    appearance.source === "word" && appearance.matched
+      ? t.appearance.recognizedColor({ word: appearance.matched })
+      : appearance.source === "compound" && appearance.matched
+        ? t.appearance.recognizedColors({ words: appearance.matched })
+        : null;
 
   const addColor = trpc.appearance.createColor.useMutation({
     onSuccess: () => {
@@ -782,10 +794,12 @@ export function MaterialFormDialog({
                         <AppearanceSwatch
                           hex={chosenAppearance.hex}
                           kind={chosenAppearance.kind}
+                          spec={chosenAppearance.spec}
                           label={swatchLabel(
                             chosenProduct.color ?? "",
                             chosenProduct.texture ?? "",
-                            chosenAppearance.hex
+                            chosenAppearance.hex,
+                            chosenAppearance.spec
                           )}
                           size="md"
                         />
@@ -857,7 +871,7 @@ export function MaterialFormDialog({
                         value={color}
                         onChange={value => {
                           setColor(value);
-                          setNewHex(null);
+                          setNewColor(null);
                         }}
                         suggestions={colorSuggestions}
                         placeholder={t.materialForm.colorPlaceholder}
@@ -866,7 +880,13 @@ export function MaterialFormDialog({
                     <AppearanceSwatch
                       hex={appearance.hex}
                       kind={appearance.kind}
-                      label={swatchLabel(color, texture, appearance.hex)}
+                      spec={appearance.spec}
+                      label={swatchLabel(
+                        color,
+                        texture,
+                        appearance.hex,
+                        appearance.spec
+                      )}
                       size="md"
                     />
                   </div>
@@ -887,46 +907,45 @@ export function MaterialFormDialog({
                 */
                     <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
                       <span className="text-xs text-muted-foreground">
-                        {approximateColor
-                          ? t.appearance.recognizedColor({
-                              word: approximateColor,
-                            })
-                          : t.appearance.unknownColor}
+                        {recognizedHint ?? t.appearance.unknownColor}
                       </span>
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <Input
-                          type="color"
-                          aria-label={t.appearance.hexLabel}
-                          value={pickerHex}
-                          onChange={e => setNewHex(e.target.value)}
-                          className="h-9 w-12 shrink-0 p-1"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="max-w-full"
-                          disabled={addColor.isPending}
-                          onClick={() =>
-                            addColor.mutate({
-                              ...scope,
-                              name: color.trim(),
-                              hex: pickerHex,
-                            })
+                      <ColorSpecEditor
+                        compact
+                        idPrefix="m-new-color"
+                        value={colorEditorValue}
+                        onChange={setNewColor}
+                        previewKind={appearance.kind}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="max-w-full justify-self-start"
+                        disabled={addColor.isPending}
+                        onClick={() => {
+                          const input = editorValueToInput(colorEditorValue);
+                          if (!input) {
+                            toast.error(t.appearance.invalidHex);
+                            return;
                           }
-                        >
-                          {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
-                          <span className="truncate">
-                            {approximateColor
-                              ? t.appearance.setExactColorFor({
-                                  name: color.trim(),
-                                })
-                              : t.appearance.addColorFor({
-                                  name: color.trim(),
-                                })}
-                          </span>
-                        </Button>
-                      </div>
+                          addColor.mutate({
+                            ...scope,
+                            name: color.trim(),
+                            ...input,
+                          });
+                        }}
+                      >
+                        {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
+                        <span className="truncate">
+                          {recognizedHint
+                            ? t.appearance.setExactColorFor({
+                                name: color.trim(),
+                              })
+                            : t.appearance.addColorFor({
+                                name: color.trim(),
+                              })}
+                        </span>
+                      </Button>
                     </div>
                   )}
                 </div>

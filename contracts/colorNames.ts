@@ -27,6 +27,8 @@
  * Name als Eintrag.
  */
 
+import type { ColorSpec } from "./appearance";
+
 export type BuiltinColor = {
   /** Stabile Kennung, unabhängig von den Namen – für Tests und Sortierung */
   readonly key: string;
@@ -40,6 +42,8 @@ export type BuiltinColor = {
    * obwohl „Transparent“ das hinterste Wort ist.
    */
   readonly weak?: true;
+  /** Farbbild, wenn der Name mehr als eine Farbe meint („Regenbogen“) */
+  readonly spec?: ColorSpec;
 };
 
 export const BUILTIN_COLORS: readonly BuiltinColor[] = [
@@ -510,6 +514,32 @@ export const BUILTIN_COLORS: readonly BuiltinColor[] = [
   { key: "khaki", hex: "#c3b091", names: ["Khaki", "Kaki"] },
   { key: "taupe", hex: "#8b7d6b", names: ["Taupe"] },
   { key: "champagne", hex: "#f1ddb3", names: ["Champagner", "Champagne"] },
+
+  // --- Mehrfarbig -----------------------------------------------------------
+  /*
+    Der einzige mitgelieferte mehrfarbige Eintrag: Verläufe und Duals sind
+    Herstellerfarben („Dawn Radiance“) und gehören in den eigenen Katalog –
+    oder ergeben sich aus dem Namen („Gold/Silber“).
+  */
+  {
+    key: "rainbow",
+    hex: "#d02c2c",
+    names: ["Regenbogen", "Rainbow"],
+    spec: {
+      schemaVersion: 1,
+      layout: "segmented",
+      colors: [
+        { hex: "#d02c2c" },
+        { hex: "#e8721c" },
+        { hex: "#e8c018" },
+        { hex: "#2e9e46" },
+        { hex: "#2158c8" },
+        { hex: "#7b3fb8" },
+      ],
+      accents: [],
+      effects: [],
+    },
+  },
 
   // --- Durchsichtig -----------------------------------------------------------
   {

@@ -1,7 +1,9 @@
 import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import {
   normalizeAppearanceName,
+  parseStoredColorSpec,
   type AppearanceCatalog,
+  type ColorSpec,
   type TextureKind,
 } from "@contracts/appearance";
 import { customColors, customTextures, materialProducts } from "@db/schema";
@@ -31,10 +33,18 @@ export function findCustomColorsInScope(scope: Scope) {
   });
 }
 
-export async function createCustomColor(
-  scope: Scope,
-  data: { name: string; hex: string }
-) {
+/**
+ * Was eine eigene Farbe ausmacht. `spec` = `null` heißt einfarbig; die
+ * Leitfarbe in `hex` leitet der Router aus dem Farbbild ab, nie der Aufrufer
+ * (`api/appearanceRouter.ts`).
+ */
+export type CustomColorData = {
+  name: string;
+  hex: string;
+  spec: ColorSpec | null;
+};
+
+export async function createCustomColor(scope: Scope, data: CustomColorData) {
   const [{ id }] = await getDb()
     .insert(customColors)
     .values({
@@ -69,7 +79,7 @@ export async function countCustomColorsInScope(scope: Scope): Promise<number> {
 export async function updateCustomColor(
   scope: Scope,
   id: number,
-  data: Partial<{ name: string; hex: string }>
+  data: Partial<CustomColorData>
 ) {
   const patch =
     data.name === undefined
@@ -165,6 +175,7 @@ export async function deleteCustomTexture(scope: Scope, id: number) {
 type MutableCatalog = {
   colors: Map<string, string>;
   textures: Map<string, TextureKind>;
+  colorSpecs: Map<string, ColorSpec>;
 };
 
 /**
@@ -217,14 +228,21 @@ export async function findAppearanceCatalogsForUsers(
   function forUser(userId: number): MutableCatalog {
     const existing = catalogs.get(userId);
     if (existing) return existing;
-    const fresh: MutableCatalog = { colors: new Map(), textures: new Map() };
+    const fresh: MutableCatalog = {
+      colors: new Map(),
+      textures: new Map(),
+      colorSpecs: new Map(),
+    };
     catalogs.set(userId, fresh);
     return fresh;
   }
 
   for (const color of colors) {
     if (color.userId == null) continue;
-    forUser(color.userId).colors.set(color.nameKey, color.hex);
+    const catalog = forUser(color.userId);
+    catalog.colors.set(color.nameKey, color.hex);
+    const spec = parseStoredColorSpec(color.spec);
+    if (spec) catalog.colorSpecs.set(color.nameKey, spec);
   }
   for (const texture of textures) {
     if (texture.userId == null) continue;

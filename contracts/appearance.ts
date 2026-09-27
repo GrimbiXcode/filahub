@@ -307,9 +307,18 @@ export const BUILTIN_TEXTURES: readonly BuiltinTexture[] = [
 // Auflösung
 // ---------------------------------------------------------------------------
 
-const BUILTIN_COLOR_BY_NAME = new Map<string, string>(
+/** Ein Treffer im Katalog: die Leitfarbe und, wenn es eines gibt, das Farbbild */
+type CatalogHit = { readonly hex: string; readonly spec: ColorSpec | null };
+
+const BUILTIN_COLOR_BY_NAME = new Map<string, CatalogHit>(
   BUILTIN_COLORS.flatMap(color =>
-    color.names.map(name => [normalizeAppearanceName(name), color.hex] as const)
+    color.names.map(
+      name =>
+        [
+          normalizeAppearanceName(name),
+          { hex: color.hex, spec: color.spec ?? null },
+        ] as const
+    )
   )
 );
 
@@ -326,16 +335,26 @@ const BUILTIN_TEXTURE_BY_NAME = new Map<string, TextureKind>(
  *
  * Als Map und nicht als Liste, weil sie für jede Zeile der Übersicht befragt
  * wird – einmal gebaut, danach nur noch nachgeschlagen.
+ *
+ * `colorSpecs` (seit 4.7.0) führt nur die Einträge mit Farbbild; `colors`
+ * trägt für **jeden** Eintrag die Leitfarbe. Zwei Maps statt einer mit
+ * Objekten, damit alles, was nur eine Farbe braucht, unverändert bleibt.
  */
 export type AppearanceCatalog = {
   readonly colors: ReadonlyMap<string, string>;
   readonly textures: ReadonlyMap<string, TextureKind>;
+  readonly colorSpecs?: ReadonlyMap<string, ColorSpec>;
 };
 
 export const EMPTY_APPEARANCE_CATALOG: AppearanceCatalog = {
   colors: new Map(),
   textures: new Map(),
 };
+
+function ownHit(key: string, catalog: AppearanceCatalog): CatalogHit | null {
+  const hex = catalog.colors.get(key);
+  return hex ? { hex, spec: catalog.colorSpecs?.get(key) ?? null } : null;
+}
 
 // ---------------------------------------------------------------------------
 // Farbwörter in längeren Namen (seit 4.6.0)
@@ -355,11 +374,11 @@ export const EMPTY_APPEARANCE_CATALOG: AppearanceCatalog = {
 
   1. ganzer Name im eigenen Katalog                → `custom`
   2. ganzer Name im mitgelieferten Katalog        → `builtin`
+  4. zusammengesetzter Name („Rot/Blau“)          → `compound` (seit 4.7.0)
   5. längster bekannter Teilausdruck              → `word`
   6. deutsches Kompositum über die Endung         → `word`
 
-  Die Lücken in der Zählung sind Absicht: Stufe 3 (RAL-Nummern) und Stufe 4
-  (zusammengesetzte Namen wie „Rot/Blau“) folgen, siehe
+  Die Lücke in der Zählung ist Absicht: Stufe 3 (RAL-Nummern) folgt, siehe
   `docs/plan-farbbild-oberflaechen.md`. Die Nummern bleiben die des Plans,
   damit Code und Plan dieselbe Sprache sprechen.
 */
@@ -401,7 +420,7 @@ function phraseKey(name: string): string {
     .join(" ");
 }
 
-type BuiltinWordEntry = { readonly hex: string; readonly weak: boolean };
+type BuiltinWordEntry = CatalogHit & { readonly weak: boolean };
 
 const BUILTIN_COLOR_BY_PHRASE = new Map<string, BuiltinWordEntry>(
   BUILTIN_COLORS.flatMap(color =>
@@ -409,21 +428,25 @@ const BUILTIN_COLOR_BY_PHRASE = new Map<string, BuiltinWordEntry>(
       name =>
         [
           phraseKey(name),
-          { hex: color.hex, weak: color.weak === true },
+          {
+            hex: color.hex,
+            spec: color.spec ?? null,
+            weak: color.weak === true,
+          },
         ] as const
     )
   )
 );
 
 /**
- * Die Endungen, längste zuerst – „weiss“ vor „ss“ gäbe es nicht, aber
- * „violett“ muss vor einem denkbaren „ett“ geprüft werden, und die Reihenfolge
- * soll nicht davon abhängen, wie jemand die Liste sortiert.
+ * Die Endungen, längste zuerst – „violett“ muss vor einem denkbaren „ett“
+ * geprüft werden, und die Reihenfolge soll nicht davon abhängen, wie jemand
+ * die Liste sortiert.
  */
 const COMPOUND_BASES: readonly (readonly [string, string])[] =
   COMPOUND_BASE_WORDS.flatMap(word => {
-    const hex = BUILTIN_COLOR_BY_NAME.get(word);
-    return hex ? [[word, hex] as const] : [];
+    const hit = BUILTIN_COLOR_BY_NAME.get(word);
+    return hit ? [[word, hit.hex] as const] : [];
   }).sort((a, b) => b[0].length - a[0].length);
 
 const LIGHTER = new Set(LIGHTER_WORDS);
@@ -447,52 +470,89 @@ function mixHex(hex: string, toward: string, share: number): string {
   );
 }
 
-/** Heller oder dunkler, wenn das Wort davor es sagt; sonst unverändert */
-function shade(hex: string, modifier: string | undefined) {
+/** Die Mischung, die ein Helligkeitswort verlangt, oder `null` */
+function shadeOf(modifier: string | undefined) {
   if (modifier && LIGHTER.has(modifier)) {
-    return { hex: mixHex(hex, INK_LIGHT, LIGHTER_MIX), shaded: true };
+    return (hex: string) => mixHex(hex, INK_LIGHT, LIGHTER_MIX);
   }
   if (modifier && DARKER.has(modifier)) {
-    return { hex: mixHex(hex, INK_DARK, DARKER_MIX), shaded: true };
+    return (hex: string) => mixHex(hex, INK_DARK, DARKER_MIX);
   }
-  return { hex, shaded: false };
+  return null;
 }
 
 /** Die eigenen Einträge als Wortfolgen – je Katalog einmal gebaut */
 const customPhraseCache = new WeakMap<
-  ReadonlyMap<string, string>,
-  ReadonlyMap<string, string>
+  AppearanceCatalog,
+  ReadonlyMap<string, CatalogHit>
 >();
 
 function customByPhrase(
-  colors: ReadonlyMap<string, string>
-): ReadonlyMap<string, string> {
-  const cached = customPhraseCache.get(colors);
+  catalog: AppearanceCatalog
+): ReadonlyMap<string, CatalogHit> {
+  const cached = customPhraseCache.get(catalog);
   if (cached) return cached;
-  const built = new Map<string, string>();
-  for (const [nameKey, hex] of colors) {
+  const built = new Map<string, CatalogHit>();
+  for (const [nameKey, hex] of catalog.colors) {
     const key = phraseKey(nameKey);
-    if (key && !built.has(key)) built.set(key, hex);
+    if (key && !built.has(key)) {
+      built.set(key, { hex, spec: catalog.colorSpecs?.get(nameKey) ?? null });
+    }
   }
-  customPhraseCache.set(colors, built);
+  customPhraseCache.set(catalog, built);
   return built;
 }
 
 /**
- * Woher ein Farbcode kommt. `word` heißt „aus einem Teil des Namens“ – der Ton
- * ist dann ungefähr, und das Formular bietet an, ihn genau festzulegen.
+ * Woher ein Farbcode kommt. `word` heißt „aus einem Teil des Namens“,
+ * `compound` „aus mehreren Farbnamen zusammengesetzt“ – der Ton bzw. das
+ * Farbbild ist dann ungefähr, und das Formular bietet an, es genau
+ * festzulegen.
  */
-export type ColorSource = "custom" | "builtin" | "word";
+export type ColorSource = "custom" | "builtin" | "compound" | "word";
 
 export type ResolvedColor = {
-  /** `null` = kein Farbcode bekannt; die Anzeige fällt auf das Rückfallfeld */
+  /**
+   * Leitfarbe; `null` = kein Farbcode bekannt, die Anzeige fällt auf das
+   * Rückfallfeld. Bei einem Farbbild die erste bekannte Farbe.
+   */
   readonly hex: string | null;
   readonly source: ColorSource | null;
-  /** Das gefundene Farbwort in der Schreibweise der Eingabe, nur bei `word` */
+  /** Das gefundene Farbwort in der Schreibweise der Eingabe, bei `word` und `compound` */
   readonly matched: string | null;
+  /** Das Farbbild, wenn es mehr als eine Leitfarbe zu zeigen gibt */
+  readonly spec: ResolvedColorSpec | null;
 };
 
-const UNKNOWN_COLOR: ResolvedColor = { hex: null, source: null, matched: null };
+const UNKNOWN_COLOR: ResolvedColor = {
+  hex: null,
+  source: null,
+  matched: null,
+  spec: null,
+};
+
+/** Treffer → Ergebnis, mit Helligkeitswort auf Leitfarbe und Farbbild */
+function fromHit(
+  hit: CatalogHit,
+  source: ColorSource,
+  matched: string | null,
+  shade: ((hex: string) => string) | null = null
+): ResolvedColor {
+  const spec = hit.spec ? toResolvedSpec(hit.spec) : null;
+  if (!shade) return { hex: hit.hex, source, matched, spec };
+  return {
+    hex: shade(hit.hex),
+    source,
+    matched,
+    spec: spec && {
+      ...spec,
+      colors: spec.colors.map(stop => ({
+        ...stop,
+        hex: stop.hex && shade(stop.hex),
+      })),
+    },
+  };
+}
 
 /**
  * Stufe 5: der längste bekannte Teilausdruck, bei gleicher Länge eigene
@@ -507,7 +567,7 @@ function findColorWord(
   words: readonly Word[],
   catalog: AppearanceCatalog
 ): ResolvedColor | null {
-  const own = customByPhrase(catalog.colors);
+  const own = customByPhrase(catalog);
   for (const allowWeak of [false, true]) {
     for (
       let length = Math.min(words.length, MAX_PHRASE_WORDS);
@@ -519,32 +579,29 @@ function findColorWord(
         for (let start = words.length - length; start >= 0; start--) {
           const phrase = words.slice(start, start + length);
           const key = phrase.map(word => word.key).join(" ");
-          const entry =
-            source === "custom"
-              ? own.get(key)
-              : (() => {
-                  const found = BUILTIN_COLOR_BY_PHRASE.get(key);
-                  return found && (allowWeak || !found.weak)
-                    ? found.hex
-                    : undefined;
-                })();
-          if (!entry) continue;
+          let hit: CatalogHit | undefined;
+          if (source === "custom") {
+            hit = own.get(key);
+          } else {
+            const found = BUILTIN_COLOR_BY_PHRASE.get(key);
+            if (found && (allowWeak || !found.weak)) hit = found;
+          }
+          if (!hit) continue;
           /*
             Deckt die Wortfolge den ganzen Namen ab („Dark-Green“ statt „Dark
             green“), ist es kein Teiltreffer, sondern nur eine andere
             Schreibweise – dann auch keine Rückfrage im Formular.
           */
-          if (length === words.length) {
-            return { hex: entry, source, matched: null };
-          }
+          if (length === words.length) return fromHit(hit, source, null);
           const before = words[start - 1];
-          const shaded = shade(entry, before?.key);
-          const used = shaded.shaded ? [before, ...phrase] : phrase;
-          return {
-            hex: shaded.hex,
-            source: "word",
-            matched: used.map(word => word.raw).join(" "),
-          };
+          const shade = shadeOf(before?.key);
+          const used = shade ? [before, ...phrase] : phrase;
+          return fromHit(
+            hit,
+            "word",
+            used.map(word => word.raw).join(" "),
+            shade
+          );
         }
       }
     }
@@ -565,61 +622,199 @@ function findCompoundWord(words: readonly Word[]): ResolvedColor | null {
       if (!word.key.endsWith(base)) continue;
       const prefix = word.key.slice(0, -base.length);
       if (prefix.length < COMPOUND_MIN_PREFIX) continue;
-      return {
-        hex: shade(hex, prefix).hex,
-        source: "word",
-        matched: word.raw,
-      };
+      return fromHit({ hex, spec: null }, "word", word.raw, shadeOf(prefix));
     }
   }
   return null;
 }
 
-function computeColor(
+/** Ein einzelner Name über die Stufen 1, 2, 5 und 6 – ohne Zerlegen */
+function resolveSingle(
   color: string,
   catalog: AppearanceCatalog
 ): ResolvedColor {
   const key = normalizeAppearanceName(color);
   if (!key) return UNKNOWN_COLOR;
-  const own = catalog.colors.get(key);
-  if (own) return { hex: own, source: "custom", matched: null };
+  const own = ownHit(key, catalog);
+  if (own) return fromHit(own, "custom", null);
   const builtin = BUILTIN_COLOR_BY_NAME.get(key);
-  if (builtin) return { hex: builtin, source: "builtin", matched: null };
+  if (builtin) return fromHit(builtin, "builtin", null);
   const words = splitWords(color);
   return (
     findColorWord(words, catalog) ?? findCompoundWord(words) ?? UNKNOWN_COLOR
   );
 }
 
+// ---------------------------------------------------------------------------
+// Zusammengesetzte Namen (seit 4.7.0, Stufe 4)
+// ---------------------------------------------------------------------------
+
+/*
+  „Rot/Blau“, „Gold & Silber“, „Red to Blue“: mehrere Farbnamen in einem.
+  Daraus wird ein berechnetes Farbbild – nie gespeichert; wer es anders will,
+  legt den ganzen Namen als eigene Farbe an und schlägt damit diese Stufe.
+
+  Die Trenner sind nicht gleich sicher, und das ist die ganze Kunst hier:
+
+  - **Zeichen** (`/`, `+`, `&`, `|`) meinen fast immer „und noch eine Farbe“.
+    Es genügt, wenn ein Teil bekannt ist; ein unbekannter erscheint als
+    schraffiertes Stück. Nur mit gleichem Abstand auf beiden Seiten – sonst
+    wäre „PLA+ Black“ zweifarbig.
+  - **Wörter und Bindestrich** (`,`, „und“, „and“, „-“, „zu“, „to“, „bis“,
+    „→“) meinen oft anderes: „Dark-Green“ ist eine Farbe, „Green Glow in the
+    Dark“ kein Verlauf. Hier müssen **alle** Teile bekannt sein.
+
+  Teile, die Oberflächenwörter sind („Black, matte“), fallen vorher weg.
+*/
+
+const SYMBOL_SPLIT = /(?<=\S)[/+&|](?=\S)|\s+[/+&|]\s+/;
+const GRADIENT_SPLIT = /\s*(?:→|->)\s*|\s+(?:zu|to|bis)\s+/i;
+const WORD_SPLIT = /\s*,\s*|\s+(?:und|and)\s+|\s*-\s*/i;
+
+/** Schlüsselwörter der Anordnung, in Farb- oder Oberflächenname (Vergleichsform als Wortfolge) */
+const LAYOUT_WORDS: readonly (readonly [ColorLayout, RegExp])[] = [
+  [
+    "coextruded",
+    /\b(?:dual|tri|quad|tetra|zweifarbig|dreifarbig|vierfarbig|bi ?colou?r|tri ?colou?r|quad ?colou?r|magic|coextrusion|koextrudiert|[234] ?(?:colou?r|farbig))\b/,
+  ],
+  ["gradient", /\b(?:gradient|verlauf|farbverlauf|ombre)\b/],
+  [
+    "segmented",
+    /\b(?:segment|segmente|segmented|segmentiert|multi ?colou?r|mehrfarbig)\b/,
+  ],
+];
+
+/**
+ * Dieselben Schlüsselwörter in der Schreibweise der Eingabe – sie werden vor
+ * dem Zerlegen entfernt, sonst hätte „Dual Rot/Blau“ drei Teile.
+ */
+const LAYOUT_WORDS_RAW =
+  /(?<![\p{L}\d])(?:dual|tri|quad|tetra|zweifarbig|dreifarbig|vierfarbig|bi-?colou?r|tri-?colou?r|quad-?colou?r|magic|coextrusion|koextrudiert|gradient|farbverlauf|verlauf|ombr[eé]|segmente|segmented|segmentiert|segment|multi-?colou?r|mehrfarbig|[234][ -]?(?:colou?r|farbig))(?![\p{L}\d])/giu;
+
+function layoutFromWords(text: string): ColorLayout | null {
+  const key = phraseKey(text);
+  for (const [layout, pattern] of LAYOUT_WORDS) {
+    if (pattern.test(key)) return layout;
+  }
+  return null;
+}
+
+function isTextureName(part: string, catalog: AppearanceCatalog): boolean {
+  const key = normalizeAppearanceName(part);
+  return catalog.textures.has(key) || BUILTIN_TEXTURE_BY_NAME.has(key);
+}
+
+function findCompoundName(
+  color: string,
+  texture: string | null | undefined,
+  catalog: AppearanceCatalog
+): ResolvedColor | null {
+  const stripped = color.replace(LAYOUT_WORDS_RAW, " ").trim();
+  const attempts: {
+    readonly split: RegExp;
+    readonly allKnown: boolean;
+    readonly layout: ColorLayout | null;
+  }[] = [
+    { split: SYMBOL_SPLIT, allKnown: false, layout: null },
+    { split: GRADIENT_SPLIT, allKnown: true, layout: "gradient" },
+    { split: WORD_SPLIT, allKnown: true, layout: null },
+  ];
+  for (const attempt of attempts) {
+    const parts = stripped
+      .split(attempt.split)
+      .map(part => part.trim())
+      .filter(part => part.length > 0 && !isTextureName(part, catalog));
+    if (parts.length < 2) continue;
+    const resolved = parts.map(part => ({
+      raw: part,
+      color: resolveSingle(part, catalog),
+    }));
+    const known = resolved.filter(part => part.color.hex != null);
+    if (known.length === 0) continue;
+    if (attempt.allKnown && known.length < resolved.length) continue;
+
+    const explicit =
+      layoutFromWords(color) ?? (texture ? layoutFromWords(texture) : null);
+    let layout: ColorLayout =
+      explicit ??
+      attempt.layout ??
+      (resolved.length <= COLOR_LAYOUT_LIMITS.coextruded.max
+        ? "coextruded"
+        : "segmented");
+    if (layout === "solid") layout = "coextruded";
+    if (resolved.length > COLOR_LAYOUT_LIMITS[layout].max) {
+      layout = "segmented";
+    }
+    const stops = resolved.slice(0, COLOR_LAYOUT_LIMITS[layout].max);
+    return {
+      hex: known[0].color.hex,
+      source: "compound",
+      matched: stops.map(part => part.raw).join(" / "),
+      spec: {
+        layout,
+        colors: stops.map(part => ({ hex: part.color.hex, name: part.raw })),
+        accents: [],
+        effects: [],
+      },
+    };
+  }
+  return null;
+}
+
+function computeColor(
+  color: string,
+  texture: string | null | undefined,
+  catalog: AppearanceCatalog
+): ResolvedColor {
+  const key = normalizeAppearanceName(color);
+  if (!key) return UNKNOWN_COLOR;
+  const own = ownHit(key, catalog);
+  if (own) return fromHit(own, "custom", null);
+  const builtin = BUILTIN_COLOR_BY_NAME.get(key);
+  if (builtin) return fromHit(builtin, "builtin", null);
+  return (
+    findCompoundName(color, texture, catalog) ?? resolveSingle(color, catalog)
+  );
+}
+
 /*
   Zwischenspeicher je Katalog: Die Übersicht fragt je Zeile und je Rendern,
-  die Wortsuche ist teurer als ein Nachschlagen. Geschlüsselt am Objekt der
-  eigenen Farben – ein neu geladener Katalog ist ein neues Objekt, der alte
-  Speicher fällt mit ihm weg. Die Obergrenze fängt das Formular ab, das bei
-  jedem Tastendruck einen neuen Namen fragt.
+  die Wortsuche ist teurer als ein Nachschlagen. Geschlüsselt am Katalog – ein
+  neu geladener ist ein neues Objekt, der alte Speicher fällt mit ihm weg. Die
+  Obergrenze fängt das Formular ab, das bei jedem Tastendruck einen neuen
+  Namen fragt.
 */
 const RESOLVED_CACHE_LIMIT = 2000;
 const resolvedCache = new WeakMap<
-  ReadonlyMap<string, string>,
+  AppearanceCatalog,
   Map<string, ResolvedColor>
 >();
 
-/** Farbcode samt Herkunft zu einem Freitext-Farbnamen, eigene Einträge zuerst */
+/**
+ * Farbcode samt Herkunft und Farbbild zu einem Freitext-Farbnamen, eigene
+ * Einträge zuerst.
+ *
+ * `texture` ist nur für die Anordnung eines zusammengesetzten Namens da:
+ * „Gold/Silber“ mit der Oberfläche „Silk Dual“ ist koextrudiert, mit
+ * „Gradient“ ein Verlauf.
+ */
 export function resolveColor(
   color: string | null | undefined,
-  catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
+  catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG,
+  texture?: string | null
 ): ResolvedColor {
   if (!color) return UNKNOWN_COLOR;
-  let cache = resolvedCache.get(catalog.colors);
+  let cache = resolvedCache.get(catalog);
   if (!cache) {
     cache = new Map();
-    resolvedCache.set(catalog.colors, cache);
+    resolvedCache.set(catalog, cache);
   }
-  const cached = cache.get(color);
+  const cacheKey = texture ? `${color}\u0000${texture}` : color;
+  const cached = cache.get(cacheKey);
   if (cached) return cached;
-  const resolved = computeColor(color, catalog);
+  const resolved = computeColor(color, texture, catalog);
   if (cache.size >= RESOLVED_CACHE_LIMIT) cache.clear();
-  cache.set(color, resolved);
+  cache.set(cacheKey, resolved);
   return resolved;
 }
 
@@ -632,13 +827,15 @@ export function resolveColorHex(
 }
 
 export type ResolvedAppearance = {
-  /** `null` = kein Farbcode bekannt; die Anzeige fällt auf das Rückfallfeld */
+  /** Leitfarbe; `null` = kein Farbcode bekannt, die Anzeige fällt auf das Rückfallfeld */
   hex: string | null;
   kind: TextureKind;
   /** Woher der Farbcode kommt; `null`, wenn es keinen gibt */
   source: ColorSource | null;
-  /** Das gefundene Farbwort, nur bei `source === "word"` */
+  /** Das gefundene Farbwort, bei `word` und `compound` */
   matched: string | null;
+  /** Das Farbbild, wenn es mehr als die Leitfarbe gibt */
+  spec: ResolvedColorSpec | null;
 };
 
 /**
@@ -670,12 +867,13 @@ export function resolveAppearance(
   texture: string | null | undefined,
   catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
 ): ResolvedAppearance {
-  const resolved = resolveColor(color, catalog);
+  const resolved = resolveColor(color, catalog, texture);
   return {
     hex: resolved.hex,
     kind: resolveTextureKind(texture, catalog),
     source: resolved.source,
     matched: resolved.matched,
+    spec: resolved.spec,
   };
 }
 
@@ -771,3 +969,206 @@ export const appearanceNameSchema = z
     value => normalizeAppearanceName(value).length <= APPEARANCE_NAME_MAX,
     "Name ist zu lang"
   );
+
+// ---------------------------------------------------------------------------
+// Farbbild (seit 4.7.0)
+// ---------------------------------------------------------------------------
+
+/*
+  Bis 4.6.0 hatte eine Farbe genau einen Farbcode. Ein Farbbild beschreibt,
+  was darüber hinausgeht: mehrere Farben und wie sie im Strang liegen, Farben
+  für Partikel und Adern (die Muster „gesprenkelt“, „glitzernd“,
+  „marmoriert“ zeichnen darin) und Wirkungen unter Einwirkung (UV, Wärme,
+  Dunkelheit – gezeichnet erst ab Phase D des Plans, im Schema aber schon
+  jetzt, damit dafür keine zweite Schemaversion nötig wird).
+
+  Es hängt am **Katalogeintrag** (`custom_colors.spec`), nicht am Material:
+  Der Name bleibt Freitext, die Darstellung kommt wie bisher über die
+  Vergleichsform. Begründung in `docs/plan-farbbild-oberflaechen.md`
+  („Architektur-Entscheidung“).
+*/
+
+export const COLOR_LAYOUTS = [
+  "solid",
+  "coextruded",
+  "gradient",
+  "segmented",
+] as const;
+
+export type ColorLayout = (typeof COLOR_LAYOUTS)[number];
+
+/**
+ * Wie viele Farben je Anordnung – an **einer** Stelle, gelesen von Schema,
+ * Editor und Namensauflösung. Koextrudiert bis vier (Dual, Tri, Quad), Verlauf
+ * und Segmente bis acht: mehr unterscheidet auf einer Spule niemand.
+ */
+export const COLOR_LAYOUT_LIMITS: Readonly<
+  Record<ColorLayout, { readonly min: number; readonly max: number }>
+> = {
+  solid: { min: 1, max: 1 },
+  coextruded: { min: 2, max: 4 },
+  gradient: { min: 2, max: 8 },
+  segmented: { min: 2, max: 8 },
+};
+
+/** Höchstens so viele Partikel- bzw. Aderfarben */
+export const COLOR_ACCENTS_MAX = 4;
+
+export const COLOR_EFFECT_KINDS = [
+  "photochromic", // UV / Sonnenlicht
+  "thermochromic", // Wärme
+  "phosphorescent", // nachleuchtend
+  "fluorescent", // Schwarzlicht / Neon
+  "goniochromic", // Blickwinkel (Chamäleon, Iridescent)
+  "infrared", // IR-durchlässig / -reaktiv
+  "other",
+] as const;
+
+export type ColorEffectKind = (typeof COLOR_EFFECT_KINDS)[number];
+
+export const COLOR_EFFECTS_MAX = 4;
+
+/** Wirkungen, die keine Zielfarbe brauchen */
+const EFFECTS_WITHOUT_TARGET: ReadonlySet<ColorEffectKind> = new Set([
+  "infrared",
+  "other",
+]);
+
+/**
+ * Eine Farbe im Farbbild. Der Name ist **nur Beschriftung** (Hilfstechnik:
+ * „wechselt unter UV zu Violett“ statt „zu #7b3fb8“) und wird nicht
+ * aufgelöst – sonst hinge ein Farbbild an anderen Katalogeinträgen, und ein
+ * Umbenennen dort änderte es still.
+ */
+export const specColorSchema = z.object({
+  hex: hexSchema,
+  name: z.string().trim().max(APPEARANCE_NAME_MAX).optional(),
+});
+
+export const colorEffectSchema = z.object({
+  kind: z.enum(COLOR_EFFECT_KINDS),
+  /** Farbe unter Einwirkung; fehlt bei „infrared“, darf bei „other“ fehlen */
+  to: specColorSchema.optional(),
+  /** Nur thermochrom: Schwelle in ganzen °C */
+  thresholdC: z.number().int().min(-40).max(150).optional(),
+  note: z.string().trim().max(200).optional(),
+});
+
+export type ColorEffect = z.infer<typeof colorEffectSchema>;
+
+export const COLOR_SPEC_VERSION = 1;
+
+export const colorSpecSchema = z
+  .object({
+    schemaVersion: z.literal(COLOR_SPEC_VERSION),
+    layout: z.enum(COLOR_LAYOUTS),
+    colors: z.array(specColorSchema).min(1).max(8),
+    accents: z.array(specColorSchema).max(COLOR_ACCENTS_MAX).default([]),
+    effects: z.array(colorEffectSchema).max(COLOR_EFFECTS_MAX).default([]),
+  })
+  .superRefine((spec, ctx) => {
+    const { min, max } = COLOR_LAYOUT_LIMITS[spec.layout];
+    if (spec.colors.length < min || spec.colors.length > max) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["colors"],
+        message:
+          min === max
+            ? `Diese Anordnung hat genau ${min} Farbe`
+            : `Diese Anordnung hat ${min} bis ${max} Farben`,
+      });
+    }
+    const kinds = new Set<string>();
+    spec.effects.forEach((effect, index) => {
+      if (kinds.has(effect.kind)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["effects", index, "kind"],
+          message: "Jede Wirkung höchstens einmal",
+        });
+      }
+      kinds.add(effect.kind);
+      if (!effect.to && !EFFECTS_WITHOUT_TARGET.has(effect.kind)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["effects", index, "to"],
+          message: "Farbe unter Einwirkung fehlt",
+        });
+      }
+      if (effect.thresholdC !== undefined && effect.kind !== "thermochromic") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["effects", index, "thresholdC"],
+          message: "Eine Schwelle gibt es nur bei Wärme",
+        });
+      }
+    });
+  });
+
+/** Ein Farbbild, wie es gespeichert und geschickt wird */
+export type ColorSpec = z.output<typeof colorSpecSchema>;
+export type ColorSpecInput = z.input<typeof colorSpecSchema>;
+
+/**
+ * Ein gespeichertes Farbbild lesen. Was nicht (mehr) zum Schema passt, wird
+ * `null` – das Feld fällt dann auf die Leitfarbe zurück, statt die Übersicht
+ * scheitern zu lassen. Vorbild `parseStoredPrintSettings`.
+ */
+export function parseStoredColorSpec(raw: unknown): ColorSpec | null {
+  if (raw == null) return null;
+  const parsed = colorSpecSchema.safeParse(raw);
+  return parsed.success ? parsed.data : null;
+}
+
+/**
+ * Trägt das Farbbild etwas, das die Leitfarbe allein nicht sagt? Eine
+ * einzelne Farbe ohne Partikel und Wirkung ist nur ein Farbcode und wird als
+ * solcher gespeichert – eine Wahrheit, nicht zwei.
+ */
+export function colorSpecIsTrivial(spec: ColorSpec): boolean {
+  return (
+    spec.layout === "solid" &&
+    spec.accents.length === 0 &&
+    spec.effects.length === 0
+  );
+}
+
+/** Eine Farbe eines aufgelösten Farbbilds; `hex: null` = unbekannter Teil */
+export type ColorStop = { readonly hex: string | null; readonly name?: string };
+
+/**
+ * Das Farbbild, wie die Zeichnung es braucht. Anders als `ColorSpec` darf eine
+ * Farbe unbekannt sein: Ein zusammengesetzter Name wie „Rot/Xyz“ zeigt das
+ * unbekannte Stück schraffiert.
+ */
+export type ResolvedColorSpec = {
+  readonly layout: ColorLayout;
+  readonly colors: readonly ColorStop[];
+  /** Partikel- und Aderfarben als `#rrggbb` */
+  readonly accents: readonly string[];
+  readonly effects: readonly ColorEffect[];
+};
+
+export function toResolvedSpec(spec: ColorSpec): ResolvedColorSpec {
+  return {
+    layout: spec.layout,
+    colors: spec.colors.map(color => ({ hex: color.hex, name: color.name })),
+    accents: spec.accents.map(accent => accent.hex),
+    effects: spec.effects,
+  };
+}
+
+/**
+ * Die Musterfarbe über **mehreren** Grundfarben: die, deren **kleinster**
+ * Kontrast über alle Farben am größten ist. Auf einem Verlauf von Schwarz
+ * nach Weiß gibt es keine, die überall 4,5:1 schafft – dort zeichnet die
+ * Oberfläche zusätzlich einen Rand im Gegenton (`textures.tsx`).
+ * Unbekannte Farben zählen nicht mit.
+ */
+export function overlayInkFor(colors: readonly (string | null)[]): OverlayInk {
+  const known = colors.filter((hex): hex is string => hex != null);
+  if (known.length === 0) return INK_DARK;
+  const worst = (ink: string) =>
+    Math.min(...known.map(hex => contrastRatio(hex, ink)));
+  return worst(INK_LIGHT) >= worst(INK_DARK) ? INK_LIGHT : INK_DARK;
+}

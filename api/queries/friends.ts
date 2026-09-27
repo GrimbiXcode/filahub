@@ -24,6 +24,7 @@ import {
 import {
   EMPTY_APPEARANCE_CATALOG,
   resolveAppearance,
+  type ResolvedColorSpec,
   type AppearanceCatalog,
   type TextureKind,
 } from "@contracts/appearance";
@@ -326,6 +327,17 @@ export type FriendMaterial = {
    */
   colorHex: string | null;
   textureKind: TextureKind;
+  /**
+   * Das Farbbild (seit 4.7.0), ebenfalls mit dem Katalog des Besitzers
+   * aufgelöst – mehrere Farben, Anordnung, Partikel, Wirkungen. Darstellung
+   * von `color` wie `colorHex`, keine neue Auskunft über den Bestand.
+   *
+   * **Ohne die Notizen der Wirkungen**: Die sind Freitext eines
+   * Katalogeintrags, und Freitext geht nie hinaus (dieselbe Erwägung wie bei
+   * `notes`). `withoutEffectNotes` nimmt sie heraus, bevor die Zeile den
+   * Server verlässt; `api/friendVisibility.test.ts` prüft es.
+   */
+  colorSpec: ResolvedColorSpec | null;
   nominalWeight: number;
   remainingWeight: number;
   remainingPercent: number | null;
@@ -489,6 +501,17 @@ function ownedByPerson<T extends { userId: number | null }>(
   return row.userId != null;
 }
 
+/** Das Farbbild ohne die Freitext-Notizen seiner Wirkungen – siehe `FriendMaterial.colorSpec` */
+function withoutEffectNotes(
+  spec: ResolvedColorSpec | null
+): ResolvedColorSpec | null {
+  if (!spec) return null;
+  return {
+    ...spec,
+    effects: spec.effects.map(({ note, ...effect }) => effect),
+  };
+}
+
 /**
  * Bildet eine geladene Zeile auf das ab, was hinausgehen darf.
  *
@@ -541,6 +564,7 @@ export function toFriendMaterial(
     texture: product.texture,
     colorHex: appearance.hex,
     textureKind: appearance.kind,
+    colorSpec: withoutEffectNotes(appearance.spec),
     nominalWeight: row.nominalWeight,
     remainingWeight,
     remainingPercent,

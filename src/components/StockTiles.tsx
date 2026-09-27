@@ -185,6 +185,7 @@ export function StockTiles({
                     size={44}
                     hex={appearance.hex}
                     kind={appearance.kind}
+                    spec={appearance.spec}
                     percent={m.remainingPercent}
                     label={appearance.label}
                   />

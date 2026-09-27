@@ -277,8 +277,17 @@ export function textureOverlay(
   kind: TextureKind,
   uid: string,
   ink: string,
-  counter: string
+  counter: string,
+  /**
+   * Partikel- und Aderfarben aus dem Farbbild (seit 4.7.0). Leer = Tinte und
+   * Gegenton wie bisher. Gezeichnet nur von Sprenkel, Glitzer und Marmor –
+   * die anderen Muster sind Licht, nicht Stoff.
+   */
+  accents: readonly string[] = []
 ) {
+  /** Die `index`-te Akzentfarbe reihum, sonst der Rückfall */
+  const accent = (index: number, fallback: string) =>
+    accents.length > 0 ? accents[index % accents.length] : fallback;
   switch (kind) {
     case "plain":
       return null;
@@ -371,7 +380,13 @@ export function textureOverlay(
               cx={cx}
               cy={cy}
               r={r}
-              fill={tone === 0 ? ink : counter}
+              fill={
+                accents.length > 0
+                  ? accent(index, ink)
+                  : tone === 0
+                    ? ink
+                    : counter
+              }
               fillOpacity={tone === 0 ? 0.7 : 0.5}
             />
           ))}
@@ -390,7 +405,14 @@ export function textureOverlay(
             <path key={index} d={starPath(x, y, r)} fillOpacity="0.85" />
           ))}
           {GLITTER.map(([cx, cy, r], index) => (
-            <circle key={index} cx={cx} cy={cy} r={r} fillOpacity="0.7" />
+            <circle
+              key={index}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill={accent(index, ink)}
+              fillOpacity="0.7"
+            />
           ))}
         </g>
       );
@@ -402,7 +424,7 @@ export function textureOverlay(
     */
     case "marble":
       return (
-        <g fill="none" stroke={ink} strokeLinecap="round">
+        <g fill="none" stroke={accent(0, ink)} strokeLinecap="round">
           <path
             d="M-1 6 C 5 3, 8 10, 13 8 S 20 3, 25 5"
             strokeOpacity="0.45"

@@ -88,7 +88,12 @@ export default function MaterialDetail() {
   const resolved = resolveAppearance(material?.color, material?.texture);
   const swatch = {
     ...resolved,
-    label: swatchLabel(material?.color, material?.texture, resolved.hex),
+    label: swatchLabel(
+      material?.color,
+      material?.texture,
+      resolved.hex,
+      resolved.spec
+    ),
     size: "md" as const,
   };
 
@@ -355,6 +360,7 @@ export default function MaterialDetail() {
                 size={140}
                 hex={swatch.hex}
                 kind={swatch.kind}
+                spec={swatch.spec}
                 percent={material.remainingPercent}
                 label={swatch.label}
                 showPercent

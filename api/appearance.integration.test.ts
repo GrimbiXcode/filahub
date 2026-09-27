@@ -358,3 +358,123 @@ describe("Migration 0026 – carbon wird fiber", () => {
     expect(count.rows[0].c).toBe("0");
   });
 });
+
+describe("Farbbild (seit 4.7.0)", () => {
+  const dual = {
+    schemaVersion: 1 as const,
+    layout: "coextruded" as const,
+    colors: [{ hex: "#c8a02c" }, { hex: "#b6bcc4" }, { hex: "#a45c33" }],
+  };
+
+  it("leitet die Leitfarbe aus dem Farbbild ab", async () => {
+    const created = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Dreiklang",
+      spec: dual,
+    });
+    expect(created?.hex).toBe("#c8a02c");
+    expect(created?.spec?.colors).toHaveLength(3);
+
+    const { colors } = await callerFor(anna).appearance.list(PERSONAL);
+    expect(colors[0].spec?.layout).toBe("coextruded");
+  });
+
+  it("lehnt Farbcode und Farbbild zugleich ab, und keines von beiden", async () => {
+    await expect(
+      callerFor(anna).appearance.createColor({
+        ...PERSONAL,
+        name: "Doppelt",
+        hex: "#ff0000",
+        spec: dual,
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      callerFor(anna).appearance.createColor({ ...PERSONAL, name: "Leer" })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("lehnt ein Farbbild mit zu vielen Farben ab", async () => {
+    await expect(
+      callerFor(anna).appearance.createColor({
+        ...PERSONAL,
+        name: "Fünf",
+        spec: {
+          ...dual,
+          colors: [...dual.colors, { hex: "#000000" }, { hex: "#ffffff" }],
+        },
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("speichert ein einfarbiges Farbbild als bloßen Farbcode", async () => {
+    const created = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Nur eine",
+      spec: { schemaVersion: 1, layout: "solid", colors: [{ hex: "#123456" }] },
+    });
+    expect(created?.hex).toBe("#123456");
+    expect(created?.spec).toBeNull();
+  });
+
+  it("wechselt beim Ändern zwischen Farbbild und Farbcode", async () => {
+    const created = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Wechsel",
+      hex: "#111111",
+    });
+    const withSpec = await callerFor(anna).appearance.updateColor({
+      ...PERSONAL,
+      id: created!.id,
+      spec: dual,
+    });
+    expect(withSpec.hex).toBe("#c8a02c");
+    expect(withSpec.spec?.layout).toBe("coextruded");
+
+    const backToHex = await callerFor(anna).appearance.updateColor({
+      ...PERSONAL,
+      id: created!.id,
+      hex: "#222222",
+    });
+    expect(backToHex.hex).toBe("#222222");
+    expect(backToHex.spec).toBeNull();
+
+    // Nur umbenennen lässt Farbcode und Farbbild stehen.
+    await callerFor(anna).appearance.updateColor({
+      ...PERSONAL,
+      id: created!.id,
+      spec: dual,
+    });
+    const renamed = await callerFor(anna).appearance.updateColor({
+      ...PERSONAL,
+      id: created!.id,
+      name: "Umbenannt",
+    });
+    expect(renamed.name).toBe("Umbenannt");
+    expect(renamed.spec?.colors).toHaveLength(3);
+  });
+
+  it("liest ein kaputtes gespeichertes Farbbild als null", async () => {
+    const created = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Kaputt",
+      spec: dual,
+    });
+    await db()
+      .update(schema.customColors)
+      .set({ spec: { schemaVersion: 99 } })
+      .where(eq(schema.customColors.id, created!.id));
+    const { colors } = await callerFor(anna).appearance.list(PERSONAL);
+    expect(colors.find(c => c.id === created!.id)?.spec).toBeNull();
+    expect(colors.find(c => c.id === created!.id)?.hex).toBe("#c8a02c");
+  });
+
+  it("sieht die Farbbilder eines anderen Bereichs nicht", async () => {
+    await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "Privat",
+      spec: dual,
+    });
+    const { colors } = await callerFor(bert).appearance.list(PERSONAL);
+    expect(colors).toHaveLength(0);
+  });
+});

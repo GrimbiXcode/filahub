@@ -837,6 +837,8 @@ describe("Was ein Freund zu sehen bekommt", () => {
         // Seit 2.7.0: die Darstellung zu `color`/`texture`, siehe
         // `api/friendVisibility.test.ts`.
         "colorHex",
+        // Seit 4.7.0: das Farbbild zu `color`, ohne Notizen der Wirkungen.
+        "colorSpec",
         "id",
         "identifier",
         "manufacturer",
@@ -885,6 +887,34 @@ describe("Was ein Freund zu sehen bekommt", () => {
     });
     expect(hits.map(h => h.id)).toEqual([alexMaterialId]);
     expect(hits[0].colorHex).toBe("#ff0000");
+  });
+
+  it("gibt das Farbbild aus dem Katalog des Besitzers mit", async () => {
+    await befriend({ main: "full" });
+    await setProductOf(alexMaterialId, { color: "Dreiklang" });
+    await db()
+      .insert(schema.customColors)
+      .values({
+        userId: alex.id,
+        name: "Dreiklang",
+        nameKey: "dreiklang",
+        hex: "#c8a02c",
+        spec: {
+          schemaVersion: 1,
+          layout: "coextruded",
+          colors: [{ hex: "#c8a02c" }, { hex: "#b6bcc4" }, { hex: "#a45c33" }],
+          accents: [],
+          effects: [
+            { kind: "photochromic", to: { hex: "#7b3fb8" }, note: "geheim" },
+          ],
+        },
+      });
+
+    const hits = await callerFor(bea).friend.searchMaterials({
+      query: "Dreiklang",
+    });
+    expect(hits[0].colorSpec?.colors).toHaveLength(3);
+    expect(JSON.stringify(hits[0])).not.toContain("geheim");
   });
 
   /**

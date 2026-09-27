@@ -63,7 +63,12 @@ export function ProductGebindeList({
   if (!product) return <Skeleton className="h-24 w-full rounded-lg" />;
 
   const appearance = resolveAppearance(product.color, product.texture);
-  const label = swatchLabel(product.color, product.texture, appearance.hex);
+  const label = swatchLabel(
+    product.color,
+    product.texture,
+    appearance.hex,
+    appearance.spec
+  );
   const { stock } = product;
   const isFilament = product.kind === "filament";
   const active = product.gebinde.filter(g => g.archivedAt == null);
@@ -79,6 +84,7 @@ export function ProductGebindeList({
           size={compact ? 28 : 36}
           hex={appearance.hex}
           kind={appearance.kind}
+          spec={appearance.spec}
           percent={g.remainingPercent}
           label={label}
         />

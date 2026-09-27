@@ -46,6 +46,9 @@ src/            React-Frontend
                 (Detail neben dem Regal), Spool (Spule: Ring = Füllstand, Kern =
                 Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
                 (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
+                colorFace (Fläche im 24er-Raum: einfarbig, Keile, Streifen,
+                Verlauf – geteilt von Feld und Spule), ColorSpecEditor
+                (Farbbild bearbeiten, auf /optik und im Materialformular),
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
@@ -65,6 +68,7 @@ src/            React-Frontend
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox oder Material),
+                colorSpecEditor.ts (Zustand des Farbbild-Editors, Umwandlung),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
@@ -809,7 +813,7 @@ als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
   aus einem Namen ohne bekanntes Farbwort („Dawn Radiance“ bleibt schraffiert).
 - **Bei Freunden löst der Server auf** (`toFriendMaterial`), weil der Katalog des
   Betrachters die Farben des Freundes nicht kennt. `FriendMaterial` trägt dafür
-  `colorHex` und `textureKind`; die festgenagelte Schlüsselmenge in
+  `colorHex` und `textureKind`, seit 4.7.0 auch `colorSpec`; die festgenagelte Schlüsselmenge in
   `api/friendVisibility.test.ts` wurde dafür bewusst erweitert. Überall sonst
   löst der Browser auf – ein Katalogaufruf je Seite, nicht zwei Felder je Zeile.
 
@@ -850,8 +854,9 @@ Black“, „Tannengrün“). `resolveColor` (`contracts/appearance.ts`) findet 
 Farbwort, der Wortschatz steht in `contracts/colorNames.ts` (rund 150
 Einträge, deutsch und englisch). Stufen, die erste mit Treffer gewinnt: ganzer
 Name eigen → ganzer Name mitgeliefert → längster Teilausdruck → deutsches
-Kompositum über die Endung. Die Nummern im Code (1, 2, 5, 6) sind die des
-Plans; 3 (RAL) und 4 (zusammengesetzte Namen wie „Rot/Blau“) folgen.
+Kompositum über die Endung. Die Nummern im Code (1, 2, 4, 5, 6) sind die des
+Plans; 3 (RAL) folgt, 4 (zusammengesetzte Namen) kam mit 4.7.0 – siehe
+„Farbbild seit 4.7.0“.
 
 - **Längster Teilausdruck, bei gleicher Länge eigene Einträge vor
   mitgelieferten, dann der hinterste** – das Farbwort steht im Deutschen wie
@@ -880,6 +885,63 @@ Plans; 3 (RAL) und 4 (zusammengesetzte Namen wie „Rot/Blau“) folgen.
 - Die Zusicherung ist eine Tabelle echter Herstellerfarben samt Negativliste
   in `api/appearance.test.ts` – wer Wortschatz oder Regel ändert, sieht dort,
   was sich verschiebt.
+
+### Farbbild seit 4.7.0
+
+Eine eigene Farbe kann statt eines Farbcodes ein **Farbbild** tragen
+(`custom_colors.spec`, jsonb, `colorSpecSchema` in `contracts/appearance.ts`):
+Anordnung (`solid`, `coextruded` 2–4, `gradient` und `segmented` 2–8 –
+Grenzen an **einer** Stelle, `COLOR_LAYOUT_LIMITS`), Farben mit optionalem
+Namen, bis zu vier Partikel-/Aderfarben (`accents`) und Wirkungen (`effects`,
+im Schema, bearbeitet ab Phase D des Plans).
+
+- **Am Katalogeintrag, nicht am Material.** Der Farbname bleibt Freitext;
+  Import, Suche, Zusammenführen und `material_products` sind unberührt.
+- **`hex` bleibt die Leitfarbe** – die erste Farbe, **nur** vom Server
+  abgeleitet (`colorData` in `api/appearanceRouter.ts`). Eingabe **entweder**
+  `hex` **oder** `spec`, beides ist `BAD_REQUEST`. Ein Farbbild aus einer
+  Farbe ohne Partikel und Wirkung wird als bloßer Farbcode gespeichert
+  (`colorSpecIsTrivial`) – eine Wahrheit, nicht zwei.
+- **Unlesbares wird `null`** (`parseStoredColorSpec`), das Feld fällt auf die
+  Leitfarbe zurück. `appearance.list` liefert das Farbbild schon gelesen.
+- **Der Katalog trägt es als zweite Map** (`AppearanceCatalog.colorSpecs`,
+  nur Einträge mit Farbbild); `colors` hält für alle die Leitfarbe. Die
+  Auflösung gibt es als `ResolvedAppearance.spec` weiter
+  (`ResolvedColorSpec`: Farben dürfen `hex: null` sein – ein unbekannter Teil).
+- **Zusammengesetzte Namen (Stufe 4)** ergeben ein berechnetes Farbbild, nie
+  gespeichert: „Rot/Blau“ zweifarbig, bis vier Teile koextrudiert, ab fünf
+  Segmente, „Red to Blue“ Verlauf; Schlüsselwörter (Dual, Tri, Quad,
+  Gradient, Multicolor …) in Farb- **oder** Oberflächenname bestimmen die
+  Anordnung. **Zeichen-Trenner** (`/ + & |`, mit gleichem Abstand auf beiden
+  Seiten – „PLA+ Black“ bleibt einfarbig) genügen mit einem bekannten Teil,
+  ein unbekannter wird schraffiert. **Wort-Trenner** (Bindestrich, Komma,
+  „und/and“, „zu/to/bis/→“) verlangen lauter bekannte Teile, sonst wären
+  „Dark-Green“ zweifarbig und „Back to Black“ ein Verlauf. Teile, die
+  Oberflächennamen sind („Black, matte“), fallen vorher weg.
+- **Gezeichnet in `colorFace`** (`src/components/colorFace.tsx`), geteilt von
+  Feld und Spule: Keile bzw. Streifen als eigene Teilflächen, **jede mit
+  eigener Tinte** (`overlayInk` je Fläche, die Kontrastzusicherung gilt
+  weiter je Fläche). Beim Verlauf nimmt `overlayInkFor` die Tinte mit dem
+  besten schlechtesten Kontrast, und Muster aus einzelnen Formen (Striche,
+  Punkte, Sterne, Adern) bekommen einen Rand im Gegenton (`feMorphology`) –
+  bei Flächenmustern würde der Rand aus Glanz Grau machen. Die erste Farbe
+  steht links bzw. oben links.
+- **Die Spule zeigt nur ihren Kern** (Radius 7,2 im 24er-Raum). Streifen und
+  Verläufe verteilen sich deshalb über den sichtbaren Teil (`inset` in
+  `colorFace`, `CORE_INSET` in `Spool.tsx`) – sonst zeigte die Spule vom
+  Regenbogen nur zwei Farben.
+- **Freunde** bekommen `FriendMaterial.colorSpec` (Schlüsselmenge in
+  `api/friendVisibility.test.ts` und `api/friends.integration.test.ts`
+  bewusst erweitert), **ohne die Notizen der Wirkungen** (Freitext,
+  `withoutEffectNotes`).
+- **Beschriftung** (`useSwatchLabel`): „zweifarbig: Gold und Silber“ aus den
+  Namen im Farbbild, nie ein Farbcode; ohne einen einzigen Namen nur „6
+  Farben“.
+- **Editor** (`ColorSpecEditor`) auf `/optik` und kompakt im Kasten „genau
+  festlegen“ des Materialformulars – dort vorbelegt mit dem, was die
+  Auflösung erkannt hat (auch einem berechneten Farbbild). Reihenfolge per
+  Knopf „nach vorn“ statt Ziehen; Wirkungen werden erhalten, nicht
+  bearbeitet.
 
 ## Namenslisten, die kein Compiler prüft
 

@@ -1,10 +1,7 @@
 import { useId, type CSSProperties } from "react";
-import {
-  counterInk,
-  overlayInk,
-  type TextureKind,
-} from "@contracts/appearance";
-import { hatchDefs, textureDefs, textureOverlay } from "./textures";
+import type { ResolvedColorSpec, TextureKind } from "@contracts/appearance";
+import { colorFace, faceInk } from "./colorFace";
+import { hatchDefs } from "./textures";
 import { fillLevelStroke } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +23,20 @@ import { cn } from "@/lib/utils";
  * leer und grau statt irgendetwas vorzutäuschen.
  */
 
+/**
+ * Der Kern (Radius 36 im 120er-Raum) zeigt vom 24er-Raum der Muster nur den
+ * Kreis mit Radius 7,2 um die Mitte – je Seite bleiben 4,8 unsichtbar.
+ * `colorFace` verteilt Streifen und Verläufe über den sichtbaren Teil.
+ */
+const CORE_INSET = 12 - 36 / 5;
+
 /** Umfang des Füllrings – Radius 52 im 120er-Raum. */
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 
 export function Spool({
   hex,
   kind,
+  spec,
   percent,
   label,
   size = 72,
@@ -41,6 +46,8 @@ export function Spool({
   /** `null` = kein Farbcode hinterlegt; dann erscheint die Schraffur */
   hex: string | null;
   kind: TextureKind;
+  /** Farbbild (seit 4.7.0): mehrere Farben, Partikelfarben */
+  spec?: ResolvedColorSpec | null;
   /** Füllstand 0–100, `null` ohne Nennmenge */
   percent: number | null;
   /** Für Hilfstechnik – die Spule ersetzt die Wörter nicht */
@@ -56,7 +63,7 @@ export function Spool({
   const clamped =
     percent == null ? 0 : Math.max(0, Math.min(100, percent)) / 100;
   const length = clamped * RING_CIRCUMFERENCE;
-  const ink = hex ? overlayInk(hex) : null;
+  const ink = hex ? faceInk(hex, spec) : null;
 
   return (
     <svg
@@ -71,7 +78,6 @@ export function Spool({
         <clipPath id={`${uid}-core`}>
           <circle cx="60" cy="60" r="36" />
         </clipPath>
-        {hex && ink ? textureDefs(kind, uid, ink, counterInk(ink)) : null}
         {!hex && hatchDefs(uid)}
       </defs>
 
@@ -101,13 +107,10 @@ export function Spool({
 
       {/* Kern: Farbe und Oberfläche, in den Kreis geschnitten */}
       <g clipPath={`url(#${uid}-core)`}>
-        {hex && ink ? (
-          <>
-            <rect width="120" height="120" fill={hex} />
-            <g transform="scale(5)">
-              {textureOverlay(kind, uid, ink, counterInk(ink))}
-            </g>
-          </>
+        {hex ? (
+          <g transform="scale(5)">
+            {colorFace({ hex, kind, spec, uid, inset: CORE_INSET })}
+          </g>
         ) : (
           <>
             <rect width="120" height="120" className="fill-muted" />

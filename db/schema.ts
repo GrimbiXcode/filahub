@@ -407,8 +407,20 @@ export const customColors = pgTable(
      * Unique-Index noch ein Nachschlagen ohne Volltabellenlauf möglich wäre.
      */
     nameKey: varchar("nameKey", { length: 100 }).notNull(),
-    /** Farbcode als „#rrggbb“, klein geschrieben (`hexSchema`) */
+    /**
+     * Farbcode als „#rrggbb“, klein geschrieben (`hexSchema`). Mit Farbbild
+     * die **Leitfarbe** – die erste Farbe, abgeleitet vom Server, nie
+     * eingegeben. Alles, was nur eine Farbe braucht (Kontrast, alte Clients),
+     * liest weiter hier.
+     */
     hex: varchar("hex", { length: 7 }).notNull(),
+    /**
+     * Farbbild seit 4.7.0 (`colorSpecSchema` in `contracts/appearance.ts`):
+     * mehrere Farben samt Anordnung, Partikelfarben, Wirkungen. `NULL` =
+     * einfarbig, dann ist `hex` alles. Gelesen über `parseStoredColorSpec`,
+     * das Unlesbares zu `null` macht statt die Übersicht scheitern zu lassen.
+     */
+    spec: jsonb("spec"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
   },
   t => [

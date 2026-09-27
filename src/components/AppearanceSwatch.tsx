@@ -1,11 +1,8 @@
 import { useId } from "react";
-import {
-  counterInk,
-  overlayInk,
-  type TextureKind,
-} from "@contracts/appearance";
+import type { ResolvedColorSpec, TextureKind } from "@contracts/appearance";
 import { cn } from "@/lib/utils";
-import { hatchDefs, textureDefs, textureOverlay } from "./textures";
+import { colorFace } from "./colorFace";
+import { hatchDefs } from "./textures";
 
 /**
  * Farbe und Oberfläche eines Materials als ein Feld.
@@ -36,6 +33,7 @@ export type SwatchSize = keyof typeof SIZES;
 export function AppearanceSwatch({
   hex,
   kind,
+  spec,
   label,
   size = "sm",
   className,
@@ -43,6 +41,8 @@ export function AppearanceSwatch({
   /** `null` = kein Farbcode hinterlegt; dann erscheint das Rückfallfeld */
   hex: string | null;
   kind: TextureKind;
+  /** Farbbild (seit 4.7.0): mehrere Farben, Partikelfarben */
+  spec?: ResolvedColorSpec | null;
   /** Beschriftung mit den echten Texten – der Text darf nicht verlorengehen */
   label: string;
   size?: SwatchSize;
@@ -71,7 +71,7 @@ export function AppearanceSwatch({
       )}
     >
       {hex ? (
-        <ColorSwatch hex={hex} kind={kind} uid={uid} />
+        <ColorSwatch hex={hex} kind={kind} spec={spec} uid={uid} />
       ) : (
         <FallbackSwatch uid={uid} />
       )}
@@ -82,20 +82,17 @@ export function AppearanceSwatch({
 function ColorSwatch({
   hex,
   kind,
+  spec,
   uid,
 }: {
   hex: string;
   kind: TextureKind;
+  spec?: ResolvedColorSpec | null;
   uid: string;
 }) {
-  const ink = overlayInk(hex);
-  const counter = counterInk(ink);
-
   return (
     <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden="true">
-      <defs>{textureDefs(kind, uid, ink, counter)}</defs>
-      <rect width="24" height="24" fill={hex} />
-      {textureOverlay(kind, uid, ink, counter)}
+      {colorFace({ hex, kind, spec, uid })}
     </svg>
   );
 }
