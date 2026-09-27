@@ -184,7 +184,7 @@ export function StockTiles({
                   <Spool
                     size={44}
                     hex={appearance.hex}
-                    kind={appearance.kind}
+                    kinds={appearance.kinds}
                     spec={appearance.spec}
                     percent={m.remainingPercent}
                     label={appearance.label}

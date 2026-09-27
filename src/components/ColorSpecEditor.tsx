@@ -33,6 +33,9 @@ import { EFFECT_ICONS } from "@/lib/effectIcons";
 import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 
+/** Vorschau ohne Oberfläche – eine feste Liste, damit die Vorgabe nicht je Rendern neu entsteht */
+const NO_TEXTURE: readonly TextureKind[] = [];
+
 /**
  * Farbbild bearbeiten: Anordnung, Farben, Partikelfarben – mit Vorschau.
  *
@@ -49,7 +52,7 @@ export function ColorSpecEditor({
   value,
   onChange,
   idPrefix,
-  previewKind = "plain",
+  previewKinds = NO_TEXTURE,
   compact = false,
 }: {
   value: ColorEditorValue;
@@ -57,7 +60,7 @@ export function ColorSpecEditor({
   /** Eindeutiger Vorsatz für Feldkennungen, falls zwei Editoren auf einer Seite stehen */
   idPrefix: string;
   /** Oberfläche für die Vorschau – im Materialformular die eingetragene */
-  previewKind?: TextureKind;
+  previewKinds?: readonly TextureKind[];
   /** Schmale Fassung ohne Spule und Erklärtexte, für das Materialformular */
   compact?: boolean;
 }) {
@@ -110,7 +113,7 @@ export function ColorSpecEditor({
         {compact ? (
           <AppearanceSwatch
             hex={preview.hex}
-            kind={previewKind}
+            kinds={previewKinds}
             spec={preview.spec}
             label={t.appearance.preview}
             size="md"
@@ -118,7 +121,7 @@ export function ColorSpecEditor({
         ) : (
           <Spool
             hex={preview.hex}
-            kind={previewKind}
+            kinds={previewKinds}
             spec={preview.spec}
             percent={null}
             label={t.appearance.preview}

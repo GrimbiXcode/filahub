@@ -852,6 +852,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
         "secondary",
         "texture",
         "textureKind",
+        "textureKinds",
       ]);
     }
   });

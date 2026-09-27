@@ -197,6 +197,13 @@
       "when": 1790542056354,
       "tag": "0027_color_spec",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790545932803,
+      "tag": "0028_texture_second_kind",
+      "breakpoints": true
     }
   ]
 }

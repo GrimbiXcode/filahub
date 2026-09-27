@@ -90,6 +90,90 @@ export const TEXTURE_KIND_CHOICES: readonly TextureKind[] = [
   "marble",
 ];
 
+/**
+ * Die zwei Ebenen einer Oberfläche (seit 4.9.0): **Struktur** ist, was im
+ * Strang steckt (Partikel, Fasern, Adern, Maserung), **Glanz**, wie die
+ * Oberfläche das Licht zurückwirft. „Silk Glitter“ ist beides zugleich –
+ * Glitzer im seidenglänzenden Strang –, zwei Glanzarten zugleich dagegen
+ * ergeben keinen Sinn. Je Ebene höchstens eine Art.
+ *
+ * `glow` und `transparent` zählen zum Glanz: Beide liegen als Licht über der
+ * ganzen Fläche, nicht als Stoff darin. `plain` steht beim Glanz, weil es
+ * dort der Grundfall ist („ohne Glanz“) – gezeichnet wird es nie.
+ *
+ * Die eine Stelle für diese Zuordnung; `api/appearance.test.ts` prüft, dass
+ * jede Art hier steht.
+ */
+export const TEXTURE_LAYERS = ["structure", "finish"] as const;
+
+export type TextureLayer = (typeof TEXTURE_LAYERS)[number];
+
+export const TEXTURE_LAYER: Readonly<Record<TextureKind, TextureLayer>> = {
+  plain: "finish",
+  matte: "finish",
+  satin: "finish",
+  silk: "finish",
+  glossy: "finish",
+  metallic: "finish",
+  transparent: "finish",
+  glow: "finish",
+  fiber: "structure",
+  wood: "structure",
+  speckle: "structure",
+  sparkle: "structure",
+  marble: "structure",
+};
+
+/**
+ * Die gezeichneten Arten in Ebenenreihenfolge: Struktur unten, Glanz
+ * darüber – so wie das Licht erst die Oberfläche trifft und dann durchscheint.
+ * `plain` fällt weg (es zeichnet nichts), ebenso eine zweite Art derselben
+ * Ebene (die erste gewinnt). Leer heißt: nur die Farbe.
+ */
+export function layeredTextureKinds(
+  kinds: readonly (TextureKind | null | undefined)[]
+): readonly TextureKind[] {
+  const byLayer = new Map<TextureLayer, TextureKind>();
+  for (const kind of kinds) {
+    if (!kind || kind === "plain") continue;
+    const layer = TEXTURE_LAYER[kind];
+    if (!byLayer.has(layer)) byLayer.set(layer, kind);
+  }
+  return TEXTURE_LAYERS.flatMap(layer => {
+    const kind = byLayer.get(layer);
+    return kind ? [kind] : [];
+  });
+}
+
+/**
+ * Ob zwei Arten zusammen eine Oberfläche ergeben: ja, wenn sie auf
+ * verschiedenen Ebenen liegen oder eine davon fehlt bzw. `plain` ist. Zwei
+ * Glanzarten („matt und glänzend“) oder zwei Strukturen nicht – die Zeichnung
+ * könnte nur eine zeigen, und welche, wäre Zufall.
+ */
+export function textureKindsCompatible(
+  kind: TextureKind,
+  secondKind: TextureKind | null | undefined
+): boolean {
+  if (!secondKind || secondKind === "plain" || kind === "plain") return true;
+  return TEXTURE_LAYER[kind] !== TEXTURE_LAYER[secondKind];
+}
+
+/**
+ * Die gespeicherte Form einer eigenen Oberfläche: `kind` ist die erste
+ * gezeichnete Art (Struktur, wenn es eine gibt), `secondKind` die zweite oder
+ * `null`. Eine Reihenfolge statt zweier gleichwertiger Spalten – „Glitzer +
+ * Silk“ und „Silk + Glitzer“ sind dieselbe Oberfläche und sollen dieselbe
+ * Zeile sein. `plain` neben einer echten Art fällt weg.
+ */
+export function storedTextureKinds(
+  kind: TextureKind,
+  secondKind: TextureKind | null | undefined
+): { kind: TextureKind; secondKind: TextureKind | null } {
+  const layered = layeredTextureKinds([kind, secondKind]);
+  return { kind: layered[0] ?? "plain", secondKind: layered[1] ?? null };
+}
+
 // ---------------------------------------------------------------------------
 // Farbcode
 // ---------------------------------------------------------------------------
@@ -353,6 +437,12 @@ export type AppearanceCatalog = {
   readonly colors: ReadonlyMap<string, string>;
   readonly textures: ReadonlyMap<string, TextureKind>;
   readonly colorSpecs?: ReadonlyMap<string, ColorSpec>;
+  /**
+   * Die zweite Art einer eigenen Oberfläche (seit 4.9.0), nur Einträge mit
+   * einer – dieselbe Aufteilung wie `colorSpecs`: `textures` trägt für jeden
+   * Eintrag die erste Art.
+   */
+  readonly textureSecondKinds?: ReadonlyMap<string, TextureKind>;
 };
 
 export const EMPTY_APPEARANCE_CATALOG: AppearanceCatalog = {
@@ -838,7 +928,11 @@ export function resolveColorHex(
 export type ResolvedAppearance = {
   /** Leitfarbe; `null` = kein Farbcode bekannt, die Anzeige fällt auf das Rückfallfeld */
   hex: string | null;
-  kind: TextureKind;
+  /**
+   * Die gezeichneten Musterarten, Struktur vor Glanz, höchstens eine je
+   * Ebene (seit 4.9.0, bis dahin eine einzelne `kind`). Leer = nur die Farbe.
+   */
+  kinds: readonly TextureKind[];
   /** Woher der Farbcode kommt; `null`, wenn es keinen gibt */
   source: ColorSource | null;
   /** Das gefundene Farbwort, bei `word` und `compound` */
@@ -847,22 +941,165 @@ export type ResolvedAppearance = {
   spec: ResolvedColorSpec | null;
 };
 
+// ---------------------------------------------------------------------------
+// Oberflächen: ganzer Name, sonst je Ebene ein Teilausdruck (seit 4.9.0)
+// ---------------------------------------------------------------------------
+
+/*
+  „Silk Glitter“, „Matte Galaxy“, „Marmor glänzend“ – bis 4.8.0 fand die
+  Auflösung nur den ganzen Namen, und solche Oberflächen blieben ohne Muster.
+  Seither dieselben Stufen wie bei der Farbe, nur je Ebene:
+
+  1. ganzer Name im eigenen Katalog       → seine eine oder zwei Arten
+  2. ganzer Name im mitgelieferten Katalog → seine Art
+  5. je Ebene der längste bekannte Teilausdruck, bei gleicher Länge eigene
+     Einträge vor mitgelieferten, dann der hinterste
+
+  Ein eigener Eintrag mit zwei Arten, der als Teil gefunden wird („Silk
+  Galaxy“ in „Silk Galaxy Special“), bewirbt sich mit beiden auf ihren
+  Ebenen.
+*/
+
+/** Längste Wortfolge, die als Oberflächenname gesucht wird („Glow in the dark“) */
+const MAX_TEXTURE_PHRASE_WORDS = 4;
+
+type TexturePhraseEntry = {
+  readonly kinds: readonly TextureKind[];
+  readonly custom: boolean;
+};
+
+const BUILTIN_TEXTURE_BY_PHRASE = new Map<string, TexturePhraseEntry>(
+  BUILTIN_TEXTURES.flatMap(texture =>
+    texture.names.map(
+      name =>
+        [phraseKey(name), { kinds: [texture.kind], custom: false }] as const
+    )
+  )
+);
+
+function ownTextureKinds(
+  key: string,
+  catalog: AppearanceCatalog
+): readonly TextureKind[] | null {
+  const kind = catalog.textures.get(key);
+  if (!kind) return null;
+  const second = catalog.textureSecondKinds?.get(key);
+  return second ? [kind, second] : [kind];
+}
+
+const customTexturePhraseCache = new WeakMap<
+  AppearanceCatalog,
+  ReadonlyMap<string, TexturePhraseEntry>
+>();
+
+function customTexturesByPhrase(
+  catalog: AppearanceCatalog
+): ReadonlyMap<string, TexturePhraseEntry> {
+  const cached = customTexturePhraseCache.get(catalog);
+  if (cached) return cached;
+  const built = new Map<string, TexturePhraseEntry>();
+  for (const nameKey of catalog.textures.keys()) {
+    const key = phraseKey(nameKey);
+    const kinds = ownTextureKinds(nameKey, catalog);
+    if (key && kinds && !built.has(key)) {
+      built.set(key, { kinds, custom: true });
+    }
+  }
+  customTexturePhraseCache.set(catalog, built);
+  return built;
+}
+
+type LayerHit = {
+  readonly kind: TextureKind;
+  readonly length: number;
+  readonly custom: boolean;
+  readonly start: number;
+};
+
+/** Ob `next` den bisherigen Treffer einer Ebene schlägt – die Regel aus Stufe 5 */
+function beats(next: LayerHit, best: LayerHit | undefined): boolean {
+  if (!best) return true;
+  if (next.length !== best.length) return next.length > best.length;
+  if (next.custom !== best.custom) return next.custom;
+  return next.start >= best.start;
+}
+
+function computeTextureKinds(
+  texture: string,
+  catalog: AppearanceCatalog
+): readonly TextureKind[] {
+  const key = normalizeAppearanceName(texture);
+  if (!key) return [];
+  const own = ownTextureKinds(key, catalog);
+  if (own) return layeredTextureKinds(own);
+  const builtin = BUILTIN_TEXTURE_BY_NAME.get(key);
+  if (builtin) return layeredTextureKinds([builtin]);
+
+  const words = splitWords(texture);
+  const custom = customTexturesByPhrase(catalog);
+  const best = new Map<TextureLayer, LayerHit>();
+  for (let start = 0; start < words.length; start++) {
+    const limit = Math.min(MAX_TEXTURE_PHRASE_WORDS, words.length - start);
+    for (let length = 1; length <= limit; length++) {
+      const phrase = words
+        .slice(start, start + length)
+        .map(word => word.key)
+        .join(" ");
+      // Ein eigener Eintrag verdrängt den mitgelieferten gleichen Namens ganz.
+      const entry = custom.get(phrase) ?? BUILTIN_TEXTURE_BY_PHRASE.get(phrase);
+      if (!entry) continue;
+      for (const kind of entry.kinds) {
+        if (kind === "plain") continue;
+        const hit = { kind, length, custom: entry.custom, start };
+        const layer = TEXTURE_LAYER[kind];
+        if (beats(hit, best.get(layer))) best.set(layer, hit);
+      }
+    }
+  }
+  return layeredTextureKinds([...best.values()].map(hit => hit.kind));
+}
+
+const textureCache = new WeakMap<
+  AppearanceCatalog,
+  Map<string, readonly TextureKind[]>
+>();
+
 /**
- * Musterart zu einem Freitext-Oberflächennamen, eigene Einträge zuerst.
+ * Die Musterarten zu einem Freitext-Oberflächennamen, eigene Einträge zuerst,
+ * Struktur vor Glanz (seit 4.9.0).
  *
- * Unbekannt heißt `plain` und nicht „nichts": Eine Farbe ohne Muster ist eine
- * gültige Darstellung, ein leeres Feld wäre ein Fehler, der keiner ist.
+ * Unbekannt heißt leer – nur die Farbe – und nicht „nichts“: Eine Farbe ohne
+ * Muster ist eine gültige Darstellung, ein leeres Feld wäre ein Fehler, der
+ * keiner ist.
+ */
+export function resolveTextureKinds(
+  texture: string | null | undefined,
+  catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
+): readonly TextureKind[] {
+  if (!texture) return [];
+  let cache = textureCache.get(catalog);
+  if (!cache) {
+    cache = new Map();
+    textureCache.set(catalog, cache);
+  }
+  const cached = cache.get(texture);
+  if (cached) return cached;
+  const resolved = computeTextureKinds(texture, catalog);
+  if (cache.size >= RESOLVED_CACHE_LIMIT) cache.clear();
+  cache.set(texture, resolved);
+  return resolved;
+}
+
+/**
+ * Eine einzelne Musterart – die erste gezeichnete, also die Struktur, wenn es
+ * eine gibt, sonst der Glanz, sonst `plain`. Für Stellen, die nur eine Art
+ * kennen (`FriendMaterial.textureKind` für ältere Oberflächen).
  */
 export function resolveTextureKind(
   texture: string | null | undefined,
   catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
 ): TextureKind {
-  if (!texture) return "plain";
-  const key = normalizeAppearanceName(texture);
-  if (!key) return "plain";
-  return (
-    catalog.textures.get(key) ?? BUILTIN_TEXTURE_BY_NAME.get(key) ?? "plain"
-  );
+  return resolveTextureKinds(texture, catalog)[0] ?? "plain";
 }
 
 /**
@@ -879,7 +1116,7 @@ export function resolveAppearance(
   const resolved = resolveColor(color, catalog, texture);
   return {
     hex: resolved.hex,
-    kind: resolveTextureKind(texture, catalog),
+    kinds: resolveTextureKinds(texture, catalog),
     source: resolved.source,
     matched: resolved.matched,
     spec: resolved.spec,

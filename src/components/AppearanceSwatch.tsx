@@ -32,7 +32,7 @@ export type SwatchSize = keyof typeof SIZES;
 
 export function AppearanceSwatch({
   hex,
-  kind,
+  kinds,
   spec,
   label,
   size = "sm",
@@ -40,7 +40,8 @@ export function AppearanceSwatch({
 }: {
   /** `null` = kein Farbcode hinterlegt; dann erscheint das Rückfallfeld */
   hex: string | null;
-  kind: TextureKind;
+  /** Musterarten, Struktur vor Glanz (seit 4.9.0 bis zu zwei) */
+  kinds: readonly TextureKind[];
   /** Farbbild (seit 4.7.0): mehrere Farben, Partikelfarben */
   spec?: ResolvedColorSpec | null;
   /** Beschriftung mit den echten Texten – der Text darf nicht verlorengehen */
@@ -71,7 +72,7 @@ export function AppearanceSwatch({
       )}
     >
       {hex ? (
-        <ColorSwatch hex={hex} kind={kind} spec={spec} uid={uid} />
+        <ColorSwatch hex={hex} kinds={kinds} spec={spec} uid={uid} />
       ) : (
         <FallbackSwatch uid={uid} />
       )}
@@ -81,18 +82,18 @@ export function AppearanceSwatch({
 
 function ColorSwatch({
   hex,
-  kind,
+  kinds,
   spec,
   uid,
 }: {
   hex: string;
-  kind: TextureKind;
+  kinds: readonly TextureKind[];
   spec?: ResolvedColorSpec | null;
   uid: string;
 }) {
   return (
     <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden="true">
-      {colorFace({ hex, kind, spec, uid })}
+      {colorFace({ hex, kinds, spec, uid })}
     </svg>
   );
 }

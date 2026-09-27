@@ -73,7 +73,7 @@ export function FriendMaterialList({
 }: Props) {
   const t = useT();
   /*
-    Nur die Beschriftung, nicht die Auflösung: `colorHex` und `textureKind`
+    Nur die Beschriftung, nicht die Auflösung: `colorHex` und `textureKinds`
     kommen fertig aus dem Server. Der Katalog des Betrachters kennt die eigenen
     Farben seines Freundes nicht – siehe `toFriendMaterial`.
   */
@@ -96,7 +96,7 @@ export function FriendMaterialList({
                 <div className="flex min-w-0 items-start gap-2">
                   <AppearanceSwatch
                     hex={material.colorHex}
-                    kind={material.textureKind}
+                    kinds={material.textureKinds}
                     spec={material.colorSpec}
                     label={swatchLabel(
                       material.color,
@@ -194,7 +194,7 @@ export function FriendMaterialList({
                     <span className="flex items-center gap-2">
                       <AppearanceSwatch
                         hex={material.colorHex}
-                        kind={material.textureKind}
+                        kinds={material.textureKinds}
                         spec={material.colorSpec}
                         label={swatchLabel(
                           material.color,

@@ -48,7 +48,7 @@ const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 
 export function Spool({
   hex,
-  kind,
+  kinds,
   spec,
   glow,
   effectsFrom,
@@ -60,7 +60,8 @@ export function Spool({
 }: {
   /** `null` = kein Farbcode hinterlegt; dann erscheint die Schraffur */
   hex: string | null;
-  kind: TextureKind;
+  /** Musterarten, Struktur vor Glanz (seit 4.9.0 bis zu zwei) */
+  kinds: readonly TextureKind[];
   /** Farbbild (seit 4.7.0): mehrere Farben, Partikelfarben */
   spec?: ResolvedColorSpec | null;
   /** Leuchtfarbe, wenn das Stück in der gezeigten Ansicht leuchtet (4.8.0) */
@@ -132,7 +133,7 @@ export function Spool({
       <g clipPath={`url(#${uid}-core)`}>
         {hex ? (
           <g transform="scale(5)">
-            {colorFace({ hex, kind, spec, uid, inset: CORE_INSET, glow })}
+            {colorFace({ hex, kinds, spec, uid, inset: CORE_INSET, glow })}
           </g>
         ) : (
           <>

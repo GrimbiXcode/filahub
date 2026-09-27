@@ -1461,7 +1461,7 @@ function MaterialCard({
         <Spool
           size={56}
           hex={appearance.hex}
-          kind={appearance.kind}
+          kinds={appearance.kinds}
           spec={appearance.spec}
           percent={material.remainingPercent}
           label={appearance.label}

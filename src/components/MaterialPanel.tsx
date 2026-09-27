@@ -167,7 +167,7 @@ function PanelContent({
         <Spool
           size={140}
           hex={appearance.hex}
-          kind={appearance.kind}
+          kinds={appearance.kinds}
           spec={appearance.spec}
           percent={material.remainingPercent}
           label={appearance.label}

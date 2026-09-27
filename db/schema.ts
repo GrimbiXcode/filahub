@@ -464,6 +464,14 @@ export const customTextures = pgTable(
     /** Vergleichsform, siehe `customColors.nameKey` */
     nameKey: varchar("nameKey", { length: 100 }).notNull(),
     kind: textureKindEnum("kind").notNull(),
+    /**
+     * Zweite Art auf der anderen Ebene (seit 4.9.0): „Silk Glitter“ ist
+     * `sparkle` + `silk`. `NULL` = nur eine. Die Reihenfolge ist fest
+     * (`storedTextureKinds`): `kind` trägt die Struktur, wenn es eine gibt.
+     * Dass beide auf verschiedenen Ebenen liegen, prüft der Router – die
+     * Zuordnung der Ebenen (`TEXTURE_LAYER`) steht im Code, nicht im SQL.
+     */
+    secondKind: textureKindEnum("secondKind"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
   },
   t => [

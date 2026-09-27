@@ -42,6 +42,12 @@ export function useAppearanceCatalog(): {
     () => ({
       colors: new Map((data?.colors ?? []).map(c => [c.nameKey, c.hex])),
       textures: new Map((data?.textures ?? []).map(t => [t.nameKey, t.kind])),
+      // Nur Oberflächen mit zweiter Art (seit 4.9.0), wie bei den Farbbildern.
+      textureSecondKinds: new Map(
+        (data?.textures ?? []).flatMap(t =>
+          t.secondKind ? [[t.nameKey, t.secondKind] as const] : []
+        )
+      ),
       // Nur Einträge mit Farbbild; die Leitfarbe steht für alle in `colors`.
       colorSpecs: new Map(
         (data?.colors ?? []).flatMap(c =>
@@ -162,4 +168,26 @@ export function useSwatchLabel(): (
 export function useTextureKindLabel(): (kind: TextureKind) => string {
   const t = useT();
   return useMemo(() => (kind: TextureKind) => t.appearance.kinds[kind], [t]);
+}
+
+/**
+ * Beschriftung einer oder zweier Musterarten (seit 4.9.0): „Glitzernd +
+ * Seide“. Struktur zuerst, wie gezeichnet; leer heißt „Ohne Muster“.
+ */
+export function useTextureKindsLabel(): (
+  kinds: readonly TextureKind[]
+) => string {
+  const t = useT();
+  return useMemo(
+    () => (kinds: readonly TextureKind[]) => {
+      const [first, second] = kinds;
+      if (!first) return t.appearance.kinds.plain;
+      if (!second) return t.appearance.kinds[first];
+      return t.appearance.kindPair({
+        structure: t.appearance.kinds[first],
+        finish: t.appearance.kinds[second],
+      });
+    },
+    [t]
+  );
 }

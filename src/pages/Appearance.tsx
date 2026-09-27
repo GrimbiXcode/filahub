@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { roleAllows } from "@contracts/organizations";
 import {
+  layeredTextureKinds,
   TEXTURE_KIND_CHOICES,
+  TEXTURE_LAYER,
   toResolvedSpec,
   type TextureKind,
 } from "@contracts/appearance";
@@ -42,7 +44,7 @@ import {
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
-import { useTextureKindLabel } from "@/lib/appearance";
+import { useTextureKindLabel, useTextureKindsLabel } from "@/lib/appearance";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
 import type { CustomColorItem, CustomTextureItem } from "@/types";
@@ -52,6 +54,22 @@ import {
   editorValueToInput,
   type ColorEditorValue,
 } from "@/lib/colorSpecEditor";
+
+/** Die Auswahl je Ebene, in der Reihenfolge von `TEXTURE_KIND_CHOICES` */
+const FINISH_CHOICES = TEXTURE_KIND_CHOICES.filter(
+  kind => TEXTURE_LAYER[kind] === "finish"
+);
+const STRUCTURE_CHOICES = TEXTURE_KIND_CHOICES.filter(
+  kind => TEXTURE_LAYER[kind] === "structure"
+);
+
+/** Wert des Struktur-Felds, wenn keine gewählt ist – Radix erlaubt keinen leeren */
+const NO_STRUCTURE = "none";
+
+/** Die gespeicherten Arten einer Oberfläche, Struktur vor Glanz */
+function kindsOf(texture: CustomTextureItem) {
+  return layeredTextureKinds([texture.kind, texture.secondKind]);
+}
 
 /**
  * Eigene Farben und Oberflächen verwalten.
@@ -72,6 +90,7 @@ export default function Appearance() {
   const role = useScopeRole();
   const t = useT();
   const kindLabel = useTextureKindLabel();
+  const kindsLabel = useTextureKindsLabel();
   const { data, isLoading } = trpc.appearance.list.useQuery(scope);
   const mayEdit = roleAllows(role, "editor");
 
@@ -93,7 +112,14 @@ export default function Appearance() {
   const [deletingTexture, setDeletingTexture] =
     useState<CustomTextureItem | null>(null);
   const [textureName, setTextureName] = useState("");
-  const [kind, setKind] = useState<TextureKind>("matte");
+  /*
+    Zwei Felder statt einer Liste (seit 4.9.0): Glanz ist Pflicht (`plain` =
+    ohne), Struktur nicht. Wer bis 4.8.0 nur „Glitzernd“ gewählt hat, sieht
+    hier Glitzernd und „Ohne Muster“ – dieselbe Oberfläche.
+  */
+  const [finish, setFinish] = useState<TextureKind>("matte");
+  const [structure, setStructure] = useState<TextureKind | null>(null);
+  const dialogKinds = layeredTextureKinds([structure, finish]);
 
   /*
     Nach jeder Änderung auch die Materiallisten auffrischen: Die Darstellung
@@ -118,7 +144,15 @@ export default function Appearance() {
   const openTextureDialog = (texture: CustomTextureItem | null) => {
     setEditingTexture(texture);
     setTextureName(texture?.name ?? "");
-    setKind(texture?.kind ?? "matte");
+    const kinds = texture ? kindsOf(texture) : [];
+    setFinish(
+      texture
+        ? (kinds.find(kind => TEXTURE_LAYER[kind] === "finish") ?? "plain")
+        : "matte"
+    );
+    setStructure(
+      kinds.find(kind => TEXTURE_LAYER[kind] === "structure") ?? null
+    );
     setTextureDialogOpen(true);
   };
 
@@ -190,9 +224,10 @@ export default function Appearance() {
     e.preventDefault();
     const name = textureName.trim();
     if (!name) return toast.error(t.appearance.nameRequired);
+    const kinds = { kind: finish, secondKind: structure };
     if (editingTexture)
-      updateTexture.mutate({ ...scope, id: editingTexture.id, name, kind });
-    else createTexture.mutate({ ...scope, name, kind });
+      updateTexture.mutate({ ...scope, id: editingTexture.id, name, ...kinds });
+    else createTexture.mutate({ ...scope, name, ...kinds });
   };
 
   const colors = data?.colors ?? [];
@@ -239,7 +274,7 @@ export default function Appearance() {
                       >
                         <AppearanceSwatch
                           hex={color.hex}
-                          kind="plain"
+                          kinds={[]}
                           spec={color.spec && toResolvedSpec(color.spec)}
                           label={color.name}
                         />
@@ -301,14 +336,14 @@ export default function Appearance() {
                         */}
                         <AppearanceSwatch
                           hex="#8a8a8f"
-                          kind={texture.kind}
+                          kinds={kindsOf(texture)}
                           label={texture.name}
                         />
                         <span className="min-w-0 flex-1 truncate font-medium">
                           {texture.name}
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {kindLabel(texture.kind)}
+                        <span className="text-right text-xs text-muted-foreground">
+                          {kindsLabel(kindsOf(texture))}
                         </span>
                         {mayEdit && (
                           <RowActions
@@ -393,32 +428,74 @@ export default function Appearance() {
                 placeholder={t.appearance.textureNamePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="a-texture-kind">{t.appearance.kindLabel}</Label>
-              <div className="flex items-center gap-2">
-                <Select
-                  value={kind}
-                  onValueChange={value => setKind(value as TextureKind)}
-                >
-                  <SelectTrigger id="a-texture-kind" className="min-w-0 flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEXTURE_KIND_CHOICES.map(value => (
-                      <SelectItem key={value} value={value}>
-                        {kindLabel(value)}
+            <div className="flex items-end gap-3">
+              <div className="grid min-w-0 flex-1 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="a-texture-finish">
+                    {t.appearance.finishLabel}
+                  </Label>
+                  <Select
+                    value={finish}
+                    onValueChange={value => setFinish(value as TextureKind)}
+                  >
+                    <SelectTrigger id="a-texture-finish" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FINISH_CHOICES.map(value => (
+                        <SelectItem key={value} value={value}>
+                          {kindLabel(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="a-texture-structure">
+                    {t.appearance.structureLabel}
+                  </Label>
+                  <Select
+                    value={structure ?? NO_STRUCTURE}
+                    onValueChange={value =>
+                      setStructure(
+                        value === NO_STRUCTURE ? null : (value as TextureKind)
+                      )
+                    }
+                  >
+                    <SelectTrigger
+                      id="a-texture-structure"
+                      className="w-full"
+                      aria-describedby="a-texture-structure-hint"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_STRUCTURE}>
+                        {t.appearance.structureNone}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <AppearanceSwatch
-                  hex="#8a8a8f"
-                  kind={kind}
-                  label={t.appearance.preview}
-                  size="md"
-                />
+                      {STRUCTURE_CHOICES.map(value => (
+                        <SelectItem key={value} value={value}>
+                          {kindLabel(value)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
+              <AppearanceSwatch
+                hex="#8a8a8f"
+                kinds={dialogKinds}
+                label={t.appearance.preview}
+                size="md"
+                className="mb-1"
+              />
             </div>
+            <p
+              id="a-texture-structure-hint"
+              className="-mt-2 text-xs text-muted-foreground"
+            >
+              {t.appearance.structureHint}
+            </p>
             <DialogFooter>
               <Button
                 type="button"

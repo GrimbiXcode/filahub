@@ -671,7 +671,15 @@ export const de = {
       "Genau so, wie die Farbe am Material steht – Groß- und Kleinschreibung sind egal.",
     hexLabel: "Farbcode *",
     kindLabel: "Muster *",
-    kindHint: "Der Name ist frei, das Muster wird aus dieser Liste gezeichnet.",
+    kindHint:
+      "Der Name ist frei, das Muster wird aus diesen Listen gezeichnet – je ein Glanz und eine Struktur.",
+    finishLabel: "Glanz *",
+    structureLabel: "Struktur",
+    structureNone: "Keine Struktur",
+    structureHint:
+      "Was im Strang steckt – Glitzer, Fasern, Sprenkel. Zusammen mit dem Glanz: „Silk Glitter“ ist Glanz Silk mit Struktur Glitzernd.",
+    kindPair: (vars: { structure: string; finish: string }): string =>
+      `${vars.structure} + ${vars.finish}`,
     preview: "Vorschau",
     colorCreated: "Farbe hinterlegt",
     colorSaved: "Farbe gespeichert",

@@ -196,6 +196,7 @@ describe("toFriendMaterial", () => {
       "secondary",
       "texture",
       "textureKind",
+      "textureKinds",
     ]);
   });
 

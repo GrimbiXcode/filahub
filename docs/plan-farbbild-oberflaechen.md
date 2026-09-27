@@ -3,7 +3,7 @@
 Stand: 4.5.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
 Ende); offen sind nur noch die Punkte unter „Offene Fragen“. **Phase A ist
 umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0), **Phase C** (4.7.0),
-**Phase D** (4.8.0); RAL und E stehen aus.
+**Phase D** (4.8.0), **Phase E** (4.9.0); RAL steht aus.
 
 ## Stand der Umsetzung
 
@@ -99,6 +99,31 @@ sobald die Quelle der Farbwerte geklärt ist (Entscheidung vom 27.09.2026:
   die Vorschau darunter – keine eigene Karte für eine optionale Angabe.
 - **Das Feld für die Schwelle** trägt die Einheit fest daneben; der
   Platzhalter allein verschwand beim Tippen.
+
+**Phase E (4.9.0)** – Abweichungen und was der Entwurf offenließ:
+
+- **`ResolvedAppearance.kind` ist entfallen**, nicht umbenannt: `kinds` ist
+  leer statt `["plain"]`, wenn nichts zu zeichnen ist. `resolveTextureKind`
+  bleibt als Kurzform (erste gezeichnete Art, sonst `plain`) – genutzt für
+  `FriendMaterial.textureKind`.
+- **Gespeichert in fester Reihenfolge** (`storedTextureKinds`): `kind` trägt
+  die Struktur, wenn es eine gibt, `secondKind` den Glanz. „Glitzer + Silk“
+  und „Silk + Glitzer“ sind dieselbe Zeile. `plain` neben einer echten Art
+  fällt weg.
+- **Die Ebenenprüfung liegt im Router** (`textureKindData`), nicht im zod-Schema
+  und nicht im SQL: Beim Ändern einer einzelnen Art muss gegen die
+  gespeicherte andere geprüft werden, und die Ebenenzuordnung steht im Code.
+- **Der Katalog trägt die zweite Art als eigene Map**
+  (`textureSecondKinds`), wie `colorSpecs` – was nur eine Art braucht, bleibt
+  unverändert.
+- **Ein eigener Eintrag verdrängt den mitgelieferten gleichen Namens auch als
+  Teil**: Wer „Glitter“ als metallisch hinterlegt, bekommt in „Silk Glitter“
+  kein Glitzern dazu.
+- **Der Glanz liegt über einer Struktur mit 70 % Deckkraft**
+  (`FINISH_OVER_STRUCTURE` in `textures.tsx`), damit Partikel unter einem
+  Glanzband sichtbar bleiben – am Bildschirm in beiden Schemata angesehen.
+- **`/optik`**: „Glanz“ ist Pflicht (mit „Ohne Muster“), „Struktur“ optional;
+  die Liste nennt beide („Glitzernd + Silk“).
 
 ## Ziel
 

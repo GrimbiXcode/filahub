@@ -651,7 +651,15 @@ export const en: Messages = {
       "Exactly as the colour reads on the material \u2013 upper and lower case do not matter.",
     hexLabel: "Colour code *",
     kindLabel: "Pattern *",
-    kindHint: "The name is yours, the pattern is drawn from this list.",
+    kindHint:
+      "The name is yours, the pattern is drawn from these lists \u2013 one sheen and one structure.",
+    finishLabel: "Sheen *",
+    structureLabel: "Structure",
+    structureNone: "No structure",
+    structureHint:
+      "What is inside the strand \u2013 glitter, fibres, speckles. Combined with the sheen: \u201cSilk Glitter\u201d is sheen Silk with structure Sparkle.",
+    kindPair: (vars: { structure: string; finish: string }): string =>
+      `${vars.structure} + ${vars.finish}`,
     preview: "Preview",
     colorCreated: "Colour added",
     colorSaved: "Colour saved",

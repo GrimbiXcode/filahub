@@ -7,7 +7,7 @@ import {
   type ResolvedColorSpec,
   type TextureKind,
 } from "@contracts/appearance";
-import { hatchDefs, textureDefs, textureOverlay } from "./textures";
+import { hatchDefs, texturesDefs, texturesOverlay } from "./textures";
 
 /**
  * Farbe und Oberfläche eines Materials im 24×24-Raum – die Fläche, die das
@@ -105,14 +105,15 @@ type Region = {
 
 function faceBody({
   hex,
-  kind,
+  kinds,
   spec,
   uid,
   inset = 0,
 }: {
   /** Leitfarbe; bei `null` ohne Farbbild zeichnet der Aufrufer das Rückfallfeld */
   hex: string;
-  kind: TextureKind;
+  /** Musterarten, Struktur vor Glanz – seit 4.9.0 bis zu zwei */
+  kinds: readonly TextureKind[];
   spec?: ResolvedColorSpec | null;
   /** Dokumentweit eindeutige Kennung für Muster, Verläufe und Zuschnitte */
   uid: string;
@@ -128,9 +129,9 @@ function faceBody({
     const ink = overlayInk(hex);
     return (
       <>
-        <defs>{textureDefs(kind, uid, ink, counterInk(ink))}</defs>
+        <defs>{texturesDefs(kinds, uid, ink, counterInk(ink))}</defs>
         <rect width="24" height="24" fill={hex} />
-        {textureOverlay(kind, uid, ink, counterInk(ink), accents)}
+        {texturesOverlay(kinds, uid, ink, counterInk(ink), accents)}
       </>
     );
   }
@@ -142,7 +143,8 @@ function faceBody({
     const known = colors.filter(
       (stop): stop is { hex: string } => stop.hex != null
     );
-    const rimmed = RIMMED_KINDS.has(kind);
+    // Den Rand bekommen nur die Arten aus einzelnen Formen, siehe oben.
+    const rimmed = kinds.filter(kind => RIMMED_KINDS.has(kind));
     return (
       <>
         <defs>
@@ -162,10 +164,10 @@ function faceBody({
               />
             ))}
           </linearGradient>
-          {textureDefs(kind, uid, ink, counter)}
-          {rimmed && (
+          {texturesDefs(kinds, uid, ink, counter)}
+          {rimmed.length > 0 && (
             <>
-              {textureDefs(kind, `${uid}-rim`, counter, ink)}
+              {texturesDefs(rimmed, `${uid}-rim`, counter, ink)}
               <filter id={`${uid}-rimfilter`}>
                 <feMorphology operator="dilate" radius="0.45" />
               </filter>
@@ -173,12 +175,12 @@ function faceBody({
           )}
         </defs>
         <rect width="24" height="24" fill={`url(#${uid}-fill)`} />
-        {rimmed && (
+        {rimmed.length > 0 && (
           <g filter={`url(#${uid}-rimfilter)`} opacity="0.6">
-            {textureOverlay(kind, `${uid}-rim`, counter, ink, [])}
+            {texturesOverlay(rimmed, `${uid}-rim`, counter, ink, [])}
           </g>
         )}
-        {textureOverlay(kind, uid, ink, counter, accents)}
+        {texturesOverlay(kinds, uid, ink, counter, accents)}
       </>
     );
   }
@@ -209,7 +211,7 @@ function faceBody({
           const ink = overlayInk(region.hex);
           return (
             <g key={region.id}>
-              {textureDefs(kind, region.id, ink, counterInk(ink))}
+              {texturesDefs(kinds, region.id, ink, counterInk(ink))}
             </g>
           );
         })}
@@ -238,7 +240,7 @@ function faceBody({
         return (
           <g key={region.id} clipPath={`url(#${region.id}-clip)`}>
             <rect width="24" height="24" fill={region.hex} />
-            {textureOverlay(kind, region.id, ink, counterInk(ink), accents)}
+            {texturesOverlay(kinds, region.id, ink, counterInk(ink), accents)}
           </g>
         );
       })}
@@ -274,7 +276,7 @@ export function colorFace({
   ...face
 }: {
   hex: string;
-  kind: TextureKind;
+  kinds: readonly TextureKind[];
   spec?: ResolvedColorSpec | null;
   uid: string;
   inset?: number;

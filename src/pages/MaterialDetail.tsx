@@ -359,7 +359,7 @@ export default function MaterialDetail() {
               <EffectPreview
                 size={140}
                 hex={swatch.hex}
-                kind={swatch.kind}
+                kinds={swatch.kinds}
                 spec={swatch.spec}
                 percent={material.remainingPercent}
                 label={swatch.label}

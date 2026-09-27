@@ -83,7 +83,7 @@ export function ProductGebindeList({
         <Spool
           size={compact ? 28 : 36}
           hex={appearance.hex}
-          kind={appearance.kind}
+          kinds={appearance.kinds}
           spec={appearance.spec}
           percent={g.remainingPercent}
           label={label}

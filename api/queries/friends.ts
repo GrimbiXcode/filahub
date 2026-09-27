@@ -326,7 +326,17 @@ export type FriendMaterial = {
    * nichts Neues.
    */
   colorHex: string | null;
+  /**
+   * Die erste gezeichnete Musterart – bis 4.8.0 die einzige. Bleibt für
+   * Oberflächen, die während des Neuladens noch die alte Fassung zeigen.
+   */
   textureKind: TextureKind;
+  /**
+   * Alle gezeichneten Musterarten, Struktur vor Glanz (seit 4.9.0: „Silk
+   * Glitter“ ist zwei). Wie `textureKind` eine Darstellung von `texture`,
+   * keine neue Auskunft.
+   */
+  textureKinds: readonly TextureKind[];
   /**
    * Das Farbbild (seit 4.7.0), ebenfalls mit dem Katalog des Besitzers
    * aufgelöst – mehrere Farben, Anordnung, Partikel, Wirkungen. Darstellung
@@ -563,7 +573,8 @@ export function toFriendMaterial(
     color: product.color,
     texture: product.texture,
     colorHex: appearance.hex,
-    textureKind: appearance.kind,
+    textureKind: appearance.kinds[0] ?? "plain",
+    textureKinds: appearance.kinds,
     colorSpec: withoutEffectNotes(appearance.spec),
     nominalWeight: row.nominalWeight,
     remainingWeight,

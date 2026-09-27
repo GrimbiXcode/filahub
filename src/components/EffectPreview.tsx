@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  */
 export function EffectPreview({
   hex,
-  kind,
+  kinds,
   spec,
   percent,
   label,
@@ -28,7 +28,7 @@ export function EffectPreview({
   className,
 }: {
   hex: string | null;
-  kind: TextureKind;
+  kinds: readonly TextureKind[];
   spec?: ResolvedColorSpec | null;
   percent: number | null;
   label: string;
@@ -47,7 +47,7 @@ export function EffectPreview({
     <div className={cn("flex flex-col items-center gap-2", className)}>
       <Spool
         hex={shown.hex}
-        kind={kind}
+        kinds={kinds}
         spec={shown.spec}
         glow={shown.glow}
         effectsFrom={spec}

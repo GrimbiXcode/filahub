@@ -7,8 +7,11 @@ import {
   hexSchema,
   normalizeHex,
   parseStoredColorSpec,
+  storedTextureKinds,
+  textureKindsCompatible,
   textureKindSchema,
   type ColorSpec,
+  type TextureKind,
 } from "@contracts/appearance";
 import { createRouter, authedQuery, rateLimited } from "./middleware";
 import { resolveScope, scopeInput } from "./scope";
@@ -26,6 +29,7 @@ import {
   deleteCustomColor,
   deleteCustomTexture,
   findCustomColorsInScope,
+  findCustomTextureInScope,
   findCustomTexturesInScope,
   updateCustomColor,
   updateCustomTexture,
@@ -112,7 +116,31 @@ const textureInput = z.object({
    * wird eines der Muster, die der Code kennt.
    */
   kind: textureKindSchema,
+  /**
+   * Zweite Art auf der anderen Ebene (seit 4.9.0) – „Silk Glitter“ ist
+   * Glitzer **und** Seidenglanz. `null` = keine. Welche von beiden in `kind`
+   * steht, ist gleich; gespeichert wird in fester Reihenfolge
+   * (`storedTextureKinds`).
+   */
+  secondKind: textureKindSchema.nullable().optional(),
 });
+
+const TEXTURE_LAYER_CONFLICT =
+  "Zwei Arten derselben Ebene gehen nicht zusammen – je eine Struktur und ein Glanz.";
+
+/** Beide Arten geprüft und in der gespeicherten Reihenfolge */
+function textureKindData(
+  kind: TextureKind,
+  secondKind: TextureKind | null | undefined
+) {
+  if (!textureKindsCompatible(kind, secondKind)) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: TEXTURE_LAYER_CONFLICT,
+    });
+  }
+  return storedTextureKinds(kind, secondKind);
+}
 
 const idInput = z.object({
   id: z.number().int().positive(),
@@ -247,7 +275,8 @@ export const appearanceRouter = createRouter({
     )
     .input(textureInput.extend(scopeInput.shape))
     .mutation(async ({ ctx, input }) => {
-      const { organizationId, ...data } = input;
+      const { organizationId, name, kind, secondKind } = input;
+      const kinds = textureKindData(kind, secondKind);
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
       assertWithinLimit({
         current: await countCustomTexturesInScope(scope),
@@ -258,7 +287,7 @@ export const appearanceRouter = createRouter({
         ip: ctx.clientIp,
       });
       try {
-        return await createCustomTexture(scope, data);
+        return await createCustomTexture(scope, { name, ...kinds });
       } catch (error) {
         asConflict(error, "Diese Oberfläche ist bereits hinterlegt.");
       }
@@ -267,8 +296,30 @@ export const appearanceRouter = createRouter({
   updateTexture: authedQuery
     .input(textureInput.partial().extend(idInput.shape))
     .mutation(async ({ ctx, input }) => {
-      const { id, organizationId, ...data } = input;
+      const { id, organizationId, name, kind, secondKind } = input;
       const scope = await resolveScope(ctx.user.id, organizationId, "editor");
+      /*
+        Die Arten als Paar: Wer nur eine schickt, wird mit der gespeicherten
+        anderen geprüft – sonst entstünden über zwei Aufrufe zwei Glanzarten.
+        Ein fremder Eintrag fällt dabei wie unten als NOT_FOUND heraus.
+      */
+      let kinds: ReturnType<typeof storedTextureKinds> | undefined;
+      if (kind !== undefined || secondKind !== undefined) {
+        const stored = await findCustomTextureInScope(scope, id);
+        if (!stored)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Oberfläche nicht gefunden",
+          });
+        kinds = textureKindData(
+          kind ?? stored.kind,
+          secondKind !== undefined ? secondKind : stored.secondKind
+        );
+      }
+      const data = {
+        ...(name !== undefined ? { name } : {}),
+        ...kinds,
+      };
       const updated = await updateCustomTexture(scope, id, data).catch(error =>
         asConflict(error, "Diese Oberfläche ist bereits hinterlegt.")
       );

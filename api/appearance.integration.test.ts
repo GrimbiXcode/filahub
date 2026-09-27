@@ -14,7 +14,8 @@ import { eq, sql } from "drizzle-orm";
 import { deleteUserAccount } from "./queries/account";
 import { getDb, migrateDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
-import { TEXTURE_KINDS } from "@contracts/appearance";
+import { resolveTextureKinds, TEXTURE_KINDS } from "@contracts/appearance";
+import { findAppearanceCatalogsForUsers } from "./queries/appearance";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
 import {
@@ -515,5 +516,136 @@ describe("Wirkungen (seit 4.8.0)", () => {
         },
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});
+
+describe("Zwei Oberflächen zugleich (seit 4.9.0)", () => {
+  it("speichert Struktur und Glanz in fester Reihenfolge", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+      secondKind: "sparkle",
+    });
+    expect(created?.kind).toBe("sparkle");
+    expect(created?.secondKind).toBe("silk");
+  });
+
+  it("legt ohne zweite Art an wie bisher", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Nur matt",
+      kind: "matte",
+    });
+    expect(created?.kind).toBe("matte");
+    expect(created?.secondKind).toBeNull();
+  });
+
+  it("lehnt zwei Arten derselben Ebene ab", async () => {
+    await expect(
+      callerFor(anna).appearance.createTexture({
+        ...PERSONAL,
+        name: "Matt glänzend",
+        kind: "matte",
+        secondKind: "glossy",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    await expect(
+      callerFor(anna).appearance.createTexture({
+        ...PERSONAL,
+        name: "Stein-Marmor",
+        kind: "speckle",
+        secondKind: "marble",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("prüft beim Ändern einer Art gegen die gespeicherte andere", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+      secondKind: "sparkle",
+    });
+    // Nur `kind` geschickt: geprüft gegen die gespeicherte Seide – passt.
+    const changed = await callerFor(anna).appearance.updateTexture({
+      ...PERSONAL,
+      id: created!.id,
+      kind: "marble",
+    });
+    expect(changed?.kind).toBe("marble");
+    expect(changed?.secondKind).toBe("silk");
+
+    await expect(
+      callerFor(anna).appearance.updateTexture({
+        ...PERSONAL,
+        id: created!.id,
+        kind: "glossy",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+
+  it("nimmt die zweite Art mit null wieder weg", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+      secondKind: "sparkle",
+    });
+    const changed = await callerFor(anna).appearance.updateTexture({
+      ...PERSONAL,
+      id: created!.id,
+      kind: "silk",
+      secondKind: null,
+    });
+    expect(changed?.kind).toBe("silk");
+    expect(changed?.secondKind).toBeNull();
+  });
+
+  it("ändert den Namen, ohne die Arten anzufassen", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+      secondKind: "sparkle",
+    });
+    const changed = await callerFor(anna).appearance.updateTexture({
+      ...PERSONAL,
+      id: created!.id,
+      name: "Sternenglanz",
+    });
+    expect(changed?.name).toBe("Sternenglanz");
+    expect(changed?.kind).toBe("sparkle");
+    expect(changed?.secondKind).toBe("silk");
+  });
+
+  it("verrät eine fremde Oberfläche auch beim Prüfen der Arten nicht", async () => {
+    const created = await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+    });
+    await expect(
+      callerFor(bert).appearance.updateTexture({
+        ...PERSONAL,
+        id: created!.id,
+        kind: "sparkle",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("gibt die zweite Art in den Katalog für Freunde", async () => {
+    await callerFor(anna).appearance.createTexture({
+      ...PERSONAL,
+      name: "Sternenseide",
+      kind: "silk",
+      secondKind: "sparkle",
+    });
+    const catalogs = await findAppearanceCatalogsForUsers([anna.id]);
+    const catalog = catalogs.get(anna.id)!;
+    expect(resolveTextureKinds("Sternenseide", catalog)).toEqual([
+      "sparkle",
+      "silk",
+    ]);
   });
 });

@@ -793,7 +793,7 @@ export function MaterialFormDialog({
                       {chosenAppearance && (
                         <AppearanceSwatch
                           hex={chosenAppearance.hex}
-                          kind={chosenAppearance.kind}
+                          kinds={chosenAppearance.kinds}
                           spec={chosenAppearance.spec}
                           label={swatchLabel(
                             chosenProduct.color ?? "",
@@ -879,7 +879,7 @@ export function MaterialFormDialog({
                     </div>
                     <AppearanceSwatch
                       hex={appearance.hex}
-                      kind={appearance.kind}
+                      kinds={appearance.kinds}
                       spec={appearance.spec}
                       label={swatchLabel(
                         color,
@@ -914,7 +914,7 @@ export function MaterialFormDialog({
                         idPrefix="m-new-color"
                         value={colorEditorValue}
                         onChange={setNewColor}
-                        previewKind={appearance.kind}
+                        previewKinds={appearance.kinds}
                       />
                       <Button
                         type="button"

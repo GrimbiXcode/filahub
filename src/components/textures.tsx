@@ -1,4 +1,5 @@
-import type { TextureKind } from "@contracts/appearance";
+import { Fragment } from "react";
+import { TEXTURE_LAYER, type TextureKind } from "@contracts/appearance";
 
 /**
  * Die Zeichnungen je Oberfläche – als `<defs>` und als Fläche darüber, im
@@ -479,4 +480,51 @@ export function textureOverlay(
         </g>
       );
   }
+}
+
+/*
+  Zwei Oberflächen zugleich (seit 4.9.0): Struktur unten, Glanz darüber. Die
+  Arten zeichnen je für sich wie bisher; ihre Kennungen (`-noise`, `-silk` …)
+  gehören je zu einer Glanzart, die Strukturen brauchen keine – zwei Arten
+  verschiedener Ebenen kommen sich also nie in die Quere.
+*/
+
+/** Anteil, mit dem der Glanz über einer Struktur liegt – die Partikel bleiben sichtbar */
+const FINISH_OVER_STRUCTURE = 0.7;
+
+/** Die `<defs>` aller Arten, in Ebenenreihenfolge */
+export function texturesDefs(
+  kinds: readonly TextureKind[],
+  uid: string,
+  ink: string,
+  counter: string
+) {
+  return kinds.map(kind => (
+    <Fragment key={kind}>{textureDefs(kind, uid, ink, counter)}</Fragment>
+  ));
+}
+
+/**
+ * Die Zeichnungen aller Arten, Struktur zuerst. Liegt ein Glanz über einer
+ * Struktur, wird er zurückgenommen: Ein volles Glanzband über Glitzer machte
+ * aus dem Glitzer einen Schleier.
+ */
+export function texturesOverlay(
+  kinds: readonly TextureKind[],
+  uid: string,
+  ink: string,
+  counter: string,
+  accents: readonly string[] = []
+) {
+  const layered = kinds.length > 1;
+  return kinds.map(kind => {
+    const overlay = textureOverlay(kind, uid, ink, counter, accents);
+    return layered && TEXTURE_LAYER[kind] === "finish" ? (
+      <g key={kind} opacity={FINISH_OVER_STRUCTURE}>
+        {overlay}
+      </g>
+    ) : (
+      <Fragment key={kind}>{overlay}</Fragment>
+    );
+  });
 }

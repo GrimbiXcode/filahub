@@ -1,0 +1,1 @@
+ALTER TABLE "custom_textures" ADD COLUMN "secondKind" texture_kind;

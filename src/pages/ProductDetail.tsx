@@ -127,7 +127,7 @@ export default function ProductDetail() {
             <span className="flex flex-wrap items-center gap-2">
               <AppearanceSwatch
                 hex={appearance.hex}
-                kind={appearance.kind}
+                kinds={appearance.kinds}
                 spec={appearance.spec}
                 label={swatchLabel(
                   product.color,
@@ -243,7 +243,7 @@ export default function ProductDetail() {
               {effects.length > 0 && (
                 <EffectPreview
                   hex={appearance.hex}
-                  kind={appearance.kind}
+                  kinds={appearance.kinds}
                   spec={appearance.spec}
                   percent={null}
                   label={swatchLabel(

@@ -124,7 +124,7 @@ function SpoolCard({
         <Spool
           size={72}
           hex={appearance.hex}
-          kind={appearance.kind}
+          kinds={appearance.kinds}
           spec={appearance.spec}
           percent={material.remainingPercent}
           label={appearance.label}

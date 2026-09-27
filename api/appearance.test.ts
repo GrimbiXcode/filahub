@@ -23,6 +23,11 @@ import {
   resolveColor,
   resolveColorHex,
   resolveTextureKind,
+  resolveTextureKinds,
+  layeredTextureKinds,
+  storedTextureKinds,
+  textureKindsCompatible,
+  TEXTURE_LAYER,
   TEXTURE_KIND_CHOICES,
   TEXTURE_KINDS,
   textureKindSchema,
@@ -42,16 +47,20 @@ import {
 
 function catalog(
   colors: Record<string, string> = {},
-  textures: Record<string, string> = {}
+  textures: Record<string, string> = {},
+  textureSecondKinds: Record<string, string> = {}
 ): AppearanceCatalog {
-  return {
-    colors: new Map(Object.entries(colors)),
-    textures: new Map(
-      Object.entries(textures).map(([name, kind]) => [
+  const kinds = (entries: Record<string, string>) =>
+    new Map(
+      Object.entries(entries).map(([name, kind]) => [
         name,
         textureKindSchema.parse(kind),
       ])
-    ),
+    );
+  return {
+    colors: new Map(Object.entries(colors)),
+    textures: kinds(textures),
+    textureSecondKinds: kinds(textureSecondKinds),
   };
 }
 
@@ -209,7 +218,7 @@ describe("Auflösung", () => {
   it("löst Farbe und Oberfläche in einem Zug auf", () => {
     expect(resolveAppearance("Rot", "Carbon")).toEqual({
       hex: "#d02c2c",
-      kind: "fiber",
+      kinds: ["fiber"],
       source: "builtin",
       matched: null,
       spec: null,
@@ -602,7 +611,7 @@ describe("Auflösung über Farbwörter", () => {
   it("gibt die Herkunft über resolveAppearance weiter", () => {
     expect(resolveAppearance("Earth Brown", "Matt")).toEqual({
       hex: builtinHex("brown"),
-      kind: "matte",
+      kinds: ["matte"],
       source: "word",
       matched: "Brown",
       spec: null,
@@ -1021,5 +1030,165 @@ describe("Neon und Nachleuchten", () => {
     const glow = resolveColor("Glow in the dark green");
     expect(glow.hex).toBe(builtinHex("natural"));
     expect(availableConditions(glow.spec)).toEqual(["normal", "dark"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Zwei Oberflächen zugleich (seit 4.9.0)
+// ---------------------------------------------------------------------------
+
+describe("Ebenen der Musterarten", () => {
+  it("ordnet jede Art genau einer Ebene zu", () => {
+    expect(Object.keys(TEXTURE_LAYER).sort()).toEqual(
+      [...TEXTURE_KINDS].sort()
+    );
+  });
+
+  it("zeichnet Struktur vor Glanz und lässt plain weg", () => {
+    expect(layeredTextureKinds(["silk", "sparkle"])).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+    expect(layeredTextureKinds(["plain", "marble"])).toEqual(["marble"]);
+    expect(layeredTextureKinds(["plain", null, undefined])).toEqual([]);
+  });
+
+  it("nimmt je Ebene nur die erste Art", () => {
+    expect(layeredTextureKinds(["matte", "glossy", "fiber"])).toEqual([
+      "fiber",
+      "matte",
+    ]);
+  });
+
+  it("lässt nur Arten verschiedener Ebenen zusammen", () => {
+    expect(textureKindsCompatible("silk", "sparkle")).toBe(true);
+    expect(textureKindsCompatible("sparkle", "silk")).toBe(true);
+    expect(textureKindsCompatible("matte", null)).toBe(true);
+    expect(textureKindsCompatible("plain", "matte")).toBe(true);
+    expect(textureKindsCompatible("matte", "glossy")).toBe(false);
+    expect(textureKindsCompatible("speckle", "marble")).toBe(false);
+  });
+
+  it("speichert in fester Reihenfolge, unabhängig von der Eingabe", () => {
+    expect(storedTextureKinds("silk", "sparkle")).toEqual({
+      kind: "sparkle",
+      secondKind: "silk",
+    });
+    expect(storedTextureKinds("sparkle", "silk")).toEqual({
+      kind: "sparkle",
+      secondKind: "silk",
+    });
+    expect(storedTextureKinds("plain", "sparkle")).toEqual({
+      kind: "sparkle",
+      secondKind: null,
+    });
+    expect(storedTextureKinds("matte", null)).toEqual({
+      kind: "matte",
+      secondKind: null,
+    });
+    expect(storedTextureKinds("plain", null)).toEqual({
+      kind: "plain",
+      secondKind: null,
+    });
+  });
+});
+
+describe("Zwei Oberflächen aus einem Namen", () => {
+  it.each([
+    ["Silk Glitter", ["sparkle", "silk"]],
+    ["Glitter Silk", ["sparkle", "silk"]],
+    ["Matte Galaxy", ["sparkle", "matte"]],
+    ["Marmor glänzend", ["marble", "glossy"]],
+    ["Satin Faserverstärkt", ["fiber", "satin"]],
+    ["Matt CF", ["fiber", "matte"]],
+    ["Silk-Glitter", ["sparkle", "silk"]],
+    ["PLA Silk Galaxy", ["sparkle", "silk"]],
+    ["Holz matt", ["wood", "matte"]],
+  ])("„%s“ → %j", (name, kinds) => {
+    expect(resolveTextureKinds(name)).toEqual(kinds);
+  });
+
+  it("bleibt bei einem ganzen Namen bei einer Art", () => {
+    expect(resolveTextureKinds("Galaxy")).toEqual(["sparkle"]);
+    expect(resolveTextureKinds("Matt")).toEqual(["matte"]);
+    expect(resolveTextureKinds("Glow in the dark")).toEqual(["glow"]);
+  });
+
+  it("findet in einem Namen ohne bekannten Teil nichts", () => {
+    expect(resolveTextureKinds("Wolkenschimmer")).toEqual([]);
+    expect(resolveTextureKinds("Premium Edition")).toEqual([]);
+    expect(resolveTextureKinds(null)).toEqual([]);
+  });
+
+  it("nimmt je Ebene den längsten, bei gleicher Länge den hintersten Teil", () => {
+    // zwei Glanzarten: die hintere gewinnt
+    expect(resolveTextureKinds("Matte Glossy")).toEqual(["glossy"]);
+    // „Satin finish“ ist länger als „Glossy“
+    expect(resolveTextureKinds("Satin finish Glossy")).toEqual(["satin"]);
+    // zwei Strukturen: die hintere gewinnt, der Glanz bleibt
+    expect(resolveTextureKinds("Marble Glitter Silk")).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+  });
+
+  it("gibt als einzelne Art die Struktur zurück", () => {
+    expect(resolveTextureKind("Silk Glitter")).toBe("sparkle");
+    expect(resolveTextureKind("Matt")).toBe("matte");
+  });
+
+  it("liefert beide Arten eines eigenen Eintrags", () => {
+    const own = catalog(
+      {},
+      { sternenseide: "sparkle" },
+      { sternenseide: "silk" }
+    );
+    expect(resolveTextureKinds("Sternenseide", own)).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+    // als Teil eines längeren Namens bewirbt es sich mit beiden
+    expect(resolveTextureKinds("Sternenseide Edition", own)).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+  });
+
+  it("lässt eigene Teile bei gleicher Länge vor mitgelieferten gewinnen", () => {
+    const own = catalog(
+      {},
+      { sternenseide: "sparkle" },
+      { sternenseide: "silk" }
+    );
+    // „Matt“ ist mitgeliefert, „Sternenseide“ eigen – beide ein Wort
+    expect(resolveTextureKinds("Sternenseide Matt", own)).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+  });
+
+  it("verdrängt mit einem eigenen Eintrag den mitgelieferten gleichen Namens", () => {
+    const own = catalog({}, { glitter: "metallic" });
+    // „Glitter“ ist hier kein Glitzer, sondern metallisch – auch als Teil
+    expect(resolveTextureKinds("Silk Glitter", own)).toEqual(["metallic"]);
+  });
+
+  it("zeichnet einen eigenen Eintrag ohne Muster nicht", () => {
+    const own = catalog({}, { standard: "plain" });
+    expect(resolveTextureKinds("Standard", own)).toEqual([]);
+    expect(resolveTextureKinds("Standard Glitter", own)).toEqual(["sparkle"]);
+  });
+
+  it("gibt beide Arten über resolveAppearance weiter", () => {
+    expect(resolveAppearance("Schwarz", "Silk Glitter").kinds).toEqual([
+      "sparkle",
+      "silk",
+    ]);
+  });
+
+  it("liefert für denselben Namen dasselbe Ergebnis aus dem Speicher", () => {
+    expect(resolveTextureKinds("Silk Glitter")).toBe(
+      resolveTextureKinds("Silk Glitter")
+    );
   });
 });

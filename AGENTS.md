@@ -816,7 +816,7 @@ als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
   aus einem Namen ohne bekanntes Farbwort („Dawn Radiance“ bleibt schraffiert).
 - **Bei Freunden löst der Server auf** (`toFriendMaterial`), weil der Katalog des
   Betrachters die Farben des Freundes nicht kennt. `FriendMaterial` trägt dafür
-  `colorHex` und `textureKind`, seit 4.7.0 auch `colorSpec`; die festgenagelte Schlüsselmenge in
+  `colorHex` und `textureKind`, seit 4.7.0 auch `colorSpec`, seit 4.9.0 `textureKinds`; die festgenagelte Schlüsselmenge in
   `api/friendVisibility.test.ts` wurde dafür bewusst erweitert. Überall sonst
   löst der Browser auf – ein Katalogaufruf je Seite, nicht zwei Felder je Zeile.
 
@@ -982,6 +982,39 @@ Schema (`effects` im Farbbild) und werden seit 4.8.0 bearbeitet und gezeigt.
   `contracts/colorNames.ts`), dazu `glowGreen`/`glowBlue` als nachleuchtende
   Farben. „Nachleuchtend“ ist als Oberfläche dazugekommen.
 - **Wirkungsnotizen gehen nie an Freunde** (seit 4.7.0, `withoutEffectNotes`).
+
+### Zwei Oberflächen seit 4.9.0
+
+„Silk Glitter“ ist Glitzer **und** Seidenglanz. Eine Oberfläche hat seither
+bis zu zwei Musterarten, je eine von zwei **Ebenen** (`TEXTURE_LAYER` in
+`contracts/appearance.ts`, die eine Stelle): **Struktur** (`fiber`, `wood`,
+`speckle`, `sparkle`, `marble`) wird unten gezeichnet, **Glanz** (`plain`,
+`matte`, `satin`, `silk`, `glossy`, `metallic`, `transparent`, `glow`)
+darüber, mit 70 % Deckkraft (`texturesOverlay` in `textures.tsx`). Ein Test
+prüft, dass jede Art genau eine Ebene hat.
+
+- **`ResolvedAppearance.kinds`** statt `kind`: null bis zwei Arten, Struktur
+  zuerst, `plain` nie darin. Spule, Feld und `colorFace` nehmen `kinds`.
+  `resolveTextureKind` bleibt als Kurzform (erste Art, sonst `plain`).
+- **Auflösung wie bei den Farbwörtern:** ganzer Name eigen → ganzer Name
+  mitgeliefert → je Ebene der längste Teilausdruck (bis vier Wörter), bei
+  gleicher Länge eigene vor mitgelieferten, dann der hinterste. Ein eigener
+  Eintrag verdrängt den mitgelieferten gleichen Namens ganz, auch als Teil.
+  Zwischengespeichert je Katalog wie `resolveColor`.
+- **`custom_textures.secondKind`** (nullable, Migration `0028` von
+  drizzle-kit). Gespeichert in fester Reihenfolge (`storedTextureKinds`:
+  `kind` = Struktur, wenn es eine gibt). Zwei Arten derselben Ebene lehnt der
+  Router ab (`textureKindsCompatible`, `BAD_REQUEST`) – beim Ändern einer
+  einzelnen Art gegen die gespeicherte andere, deshalb dort und nicht im
+  zod-Schema. Die Datenbank prüft die Ebene nicht; die Zuordnung steht im Code.
+- **Der Katalog** trägt die zweite Art als eigene Map
+  (`AppearanceCatalog.textureSecondKinds`), wie `colorSpecs`.
+- **Freunde:** `FriendMaterial.textureKinds` dazu, `textureKind` bleibt (erste
+  Art) – Schlüsselmengen in `api/friendVisibility.test.ts` und
+  `api/friends.integration.test.ts` bewusst erweitert. Export: `secondKind`
+  additiv, Version bleibt 5.
+- **Oberfläche:** `/optik` mit „Glanz“ (Pflicht) und „Struktur“ (optional);
+  der Filter „Oberfläche“ der Übersicht vergleicht weiter den Freitext.
 
 ## Namenslisten, die kein Compiler prüft
 

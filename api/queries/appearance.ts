@@ -116,7 +116,7 @@ export function findCustomTexturesInScope(scope: Scope) {
 
 export async function createCustomTexture(
   scope: Scope,
-  data: { name: string; kind: TextureKind }
+  data: { name: string; kind: TextureKind; secondKind: TextureKind | null }
 ) {
   const [{ id }] = await getDb()
     .insert(customTextures)
@@ -128,6 +128,13 @@ export async function createCustomTexture(
     .returning({ id: customTextures.id });
   return getDb().query.customTextures.findFirst({
     where: eq(customTextures.id, id),
+  });
+}
+
+/** Eine eigene Oberfläche des Bereichs – oder nichts, wenn sie fremd ist */
+export function findCustomTextureInScope(scope: Scope, id: number) {
+  return getDb().query.customTextures.findFirst({
+    where: and(eq(customTextures.id, id), scopeWhere(customTextures, scope)),
   });
 }
 
@@ -145,7 +152,11 @@ export async function countCustomTexturesInScope(
 export async function updateCustomTexture(
   scope: Scope,
   id: number,
-  data: Partial<{ name: string; kind: TextureKind }>
+  data: Partial<{
+    name: string;
+    kind: TextureKind;
+    secondKind: TextureKind | null;
+  }>
 ) {
   const patch =
     data.name === undefined
@@ -176,6 +187,7 @@ type MutableCatalog = {
   colors: Map<string, string>;
   textures: Map<string, TextureKind>;
   colorSpecs: Map<string, ColorSpec>;
+  textureSecondKinds: Map<string, TextureKind>;
 };
 
 /**
@@ -232,6 +244,7 @@ export async function findAppearanceCatalogsForUsers(
       colors: new Map(),
       textures: new Map(),
       colorSpecs: new Map(),
+      textureSecondKinds: new Map(),
     };
     catalogs.set(userId, fresh);
     return fresh;
@@ -246,7 +259,11 @@ export async function findAppearanceCatalogsForUsers(
   }
   for (const texture of textures) {
     if (texture.userId == null) continue;
-    forUser(texture.userId).textures.set(texture.nameKey, texture.kind);
+    const catalog = forUser(texture.userId);
+    catalog.textures.set(texture.nameKey, texture.kind);
+    if (texture.secondKind) {
+      catalog.textureSecondKinds.set(texture.nameKey, texture.secondKind);
+    }
   }
   return catalogs;
 }

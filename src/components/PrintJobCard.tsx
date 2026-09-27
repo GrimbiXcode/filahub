@@ -38,7 +38,7 @@ export function PrintMaterialSwatch({
   return (
     <AppearanceSwatch
       hex={appearance.hex}
-      kind={appearance.kind}
+      kinds={appearance.kinds}
       spec={appearance.spec}
       label={swatchLabel(
         material.color,
