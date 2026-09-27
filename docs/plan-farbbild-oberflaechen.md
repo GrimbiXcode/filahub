@@ -1,7 +1,8 @@
 # Plan: Farbbild und neue Oberflächen
 
-Stand: 4.4.0. **Entwurf** – nichts davon ist umgesetzt. Die Punkte unter
-„Offene Fragen“ am Ende sind vor Phase A zu entscheiden.
+Stand: 4.4.0. **Entwurf** – nichts davon ist umgesetzt. Die Grundsatzfragen
+sind entschieden (siehe „Entscheidungen“ am Ende); offen sind nur noch die
+Punkte unter „Offene Fragen“.
 
 ## Ziel
 
@@ -15,6 +16,9 @@ Musterart (`TEXTURE_KINDS`). Zwei Wünsche:
 2. **Neue Oberflächen** – Partikel wie Stein- oder Galaxy-Filament und
    gesprenkelte Oberflächen wie colorFabb stoneFill („Moss Green“: grüne Basis
    mit dunklen und hellen Einsprengseln, matt).
+3. **Beschreibende Farbnamen erkennen** – „Savanna Yellow“, „Earth Brown“,
+   „Charcoal Black“ sollen ohne eigenen Katalogeintrag als Gelb, Braun, Schwarz
+   erscheinen, und „Rot/Blau“ als zweifarbig.
 
 Was bleibt, wie es ist – das sind die tragenden Entscheidungen aus 2.7.0
 (siehe `AGENTS.md`, „Farbe und Oberfläche als Darstellung“):
@@ -24,7 +28,11 @@ Was bleibt, wie es ist – das sind die tragenden Entscheidungen aus 2.7.0
   Namen.
 - Die Darstellung entsteht beim **Anzeigen** über die Vergleichsform
   (`normalizeAppearanceName`), eigene Einträge schlagen den Katalog.
-- **Ohne Farbcode wird nicht geraten.**
+- **Ohne Farbwort wird nicht geraten.** Bis 4.4.0 hieß die Regel „ohne
+  Farbcode“; mit Wunsch 3 wird sie präziser: Ein Farbton entsteht nur aus einem
+  Farbwort, das **im Namen steht** („Yellow“ in „Savanna Yellow“). Ein Name
+  ohne bekanntes Farbwort („Dawn Radiance“) bleibt schraffiert – kein Hash,
+  kein Zufall.
 - **Der Name ist offen, die Zeichnung nicht** – neue Muster kommen als Code,
   nie als Zeichenanweisung aus der Datenbank.
 - Das Muster bleibt auf jeder Grundfarbe sichtbar (`overlayInk`).
@@ -71,7 +79,7 @@ Mehrere Wirkungen zugleich kommen vor – etwa „Glow + UV Color Change“ oder
 
 **Wichtig für die Zuordnung:** Heute steht „Neon“ als Oberfläche bei `glow`
 (`BUILTIN_TEXTURES`). Das ist fachlich falsch – Neon ist fluoreszierend, nicht
-nachleuchtend – und wird in Phase C korrigiert (siehe dort).
+nachleuchtend – und wird in Phase D korrigiert (siehe dort).
 
 ### Oberflächen – was heute fehlt
 
@@ -80,21 +88,36 @@ nachleuchtend – und wird in Phase C korrigiert (siehe dort).
 | **`speckle`** gesprenkelt | Matte, deckende Einsprengsel – Steinmehl, Granulat, Farbpartikel                                       | Gesprenkelt, Stein, Steinoptik, Granit, Terrazzo, Konfetti / Speckled, Stone, Stonefill, Granite, Terrazzo, Sprinkle, Rock |
 | **`sparkle`** glitzernd   | Reflektierende Plättchen (Glimmer, Glitter) – funkeln je nach Licht; Galaxy = dunkle Basis mit Glitter | Glitzer, Glitzernd, Funkelnd, Galaxy, Sternenstaub / Sparkle, Glitter, Galaxy, Starlight, Stardust                         |
 | **`marble`** marmoriert   | Adern oder Wolken in einer zweiten Farbe                                                               | Marmor, Marmoriert / Marble, Marbled                                                                                       |
+| **`satin`** Satin         | Weicher, breiter Schimmer ohne harte Kante – zwischen Matt und Silk                                    | Satin, Seidenmatt, Satiniert / Satin, Satin finish                                                                         |
+
+**`carbon` wird zu `fiber` – „Faserverstärkt“.** Kohlefaser ist nur eine von
+mehreren Verstärkungen; Glas-, Aramid-(Kevlar-), Basalt- und Aluminiumfasern
+sehen im Regal gleich aus und sind für den Drucker dieselbe Aussage („Faser
+drin, abrasiv“). Die Art heißt in der Oberfläche **Faserverstärkt / Fibre
+reinforced** und findet:
+
+| Namen (DE / EN)                                                                                                                    |
+| ---------------------------------------------------------------------------------------------------------------------------------- |
+| Faserverstärkt, Faser, Carbon, Karbon, Kohlefaser, Carbonfaser, Glasfaser, Aramid, Kevlar, Basaltfaser, Aluminiumfaser, CF, GF, AF |
+| Fibre reinforced, Fiber reinforced, Fibre, Fiber, Carbon fibre, Carbon fiber, Glass fibre, Glass fiber, Aramid fibre, Basalt fibre |
 
 Dazu Namen, die heute auf `plain` fallen, obwohl eine vorhandene Art passt:
 
-| Name                                        | Musterart                                                              |
-| ------------------------------------------- | ---------------------------------------------------------------------- |
-| Satin, Seidenmatt (schon da)                | `silk` bzw. `matte` – Satin liegt zwischen beiden; Vorschlag `silk`    |
-| Perlmutt, Pearl, Pearlescent                | `silk`                                                                 |
-| Transluzent, Translucent, Kristall, Crystal | `transparent`                                                          |
-| Glasfaser, GF, Glass fibre                  | `carbon` (Fasergewebe als Chiffre) – oder `matte`, siehe offene Fragen |
-| Kork, Cork, Bambus, Bamboo                  | `wood`                                                                 |
-| Bronzefill, Copperfill, Metallfüllung       | `metallic`                                                             |
+| Name                                        | Musterart     |
+| ------------------------------------------- | ------------- |
+| Perlmutt, Pearl, Pearlescent                | `silk`        |
+| Transluzent, Translucent, Kristall, Crystal | `transparent` |
+| Kork, Cork, Bambus, Bamboo                  | `wood`        |
+| Bronzefill, Copperfill, Metallfüllung       | `metallic`    |
 
-Bewusst **keine** eigene Art für Glasfaser, Hanf, Aero/Schaum (LW-PLA): Auf 24
-Pixeln unterscheidet sie niemand von Matt oder Carbon, und jede Art kostet eine
-Zeichnung, eine Übersetzung und einen Enum-Wert, der nie mehr verschwindet.
+**„Seidenmatt“ wandert von `matte` zu `satin`** – es ist die wörtliche
+Übersetzung. Bestehende Materialien mit dieser Oberfläche zeigen danach den
+Schimmer statt des Rauschens; das gehört in die Release Note.
+
+Bewusst **keine** eigene Art für Hanf oder Aero/Schaum (LW-PLA): Auf 24 Pixeln
+unterscheidet sie niemand von Matt oder Faserverstärkt, und jede Art kostet
+eine Zeichnung, eine Übersetzung und einen Enum-Wert, der nie mehr
+verschwindet.
 
 ### Materialarten
 
@@ -112,6 +135,8 @@ Materialart, so wie `FORMS_BY_KIND` nur sortiert und nicht filtert.
 | **Leitfarbe** / main colour       | `custom_colors.hex` | Die erste Farbe; trägt Kontrast, Freundesansicht, Rückwärtskompatibilität |
 | **Akzentfarben** / accent colours | `ColorSpec.accents` | Farben für Partikel, Glitter, Adern                                       |
 | **Wirkung** / effect              | `ColorEffect`       | Farbwechsel oder Leuchten unter Einwirkung                                |
+| **Farbwort** / colour word        | `COLOR_WORDS`       | Bekannter Farbname, der in einem längeren Namen gefunden wird             |
+| **Herkunft** / source             | `ColorSource`       | Wie die Farbe gefunden wurde: eigen, Katalog, Farbwort, zusammengesetzt   |
 
 ## Architektur-Entscheidung: Wo das Farbbild steht
 
@@ -157,6 +182,118 @@ arbeitet unverändert weiter:
 - das kleine Feld dort, wo für mehr kein Platz ist,
 - ein möglicher späterer Filter „Farbfamilie“.
 
+## Farbnamen erkennen
+
+Heute findet `resolveColorHex` nur den **ganzen** Namen: „Gelb“ ja, „Savanna
+Yellow“ nein – obwohl das Farbwort darin steht. Herstellerfarben sind fast
+immer so gebaut: ein Bild plus ein Farbwort („Earth Brown“, „Charcoal Black“,
+„Jade White“, „Sky Blue“, „Mandarin Orange“, „Tannengrün“, „Signalrot“).
+
+### Die Auflösung in Stufen
+
+Eine Funktion, `resolveColor(name, catalog)` in `contracts/appearance.ts`, die
+erste Stufe mit Treffer gewinnt:
+
+| Stufe | Was                                                  | Beispiel                                     | Herkunft   |
+| ----- | ---------------------------------------------------- | -------------------------------------------- | ---------- |
+| 1     | Ganzer Name, eigener Katalog                         | „Savanne“ → eigener Eintrag                  | `custom`   |
+| 2     | Ganzer Name, mitgelieferter Katalog samt Farbwörtern | „Charcoal“, „Oliv“, „Petrol“                 | `builtin`  |
+| 3     | Zusammengesetzter Name (siehe unten)                 | „Rot/Blau“, „Savanna Yellow & Earth Brown“   | `compound` |
+| 4     | Längster bekannter Teilausdruck                      | „Savanna **Yellow**“, „Matte **Dark Green**“ | `word`     |
+| 5     | Deutsches Kompositum über die Endung                 | „Himmel**blau**“, „Signal**rot**“            | `word`     |
+| –     | nichts gefunden                                      | „Dawn Radiance“                              | `null`     |
+
+- **Stufe 4:** Der Name wird in Wörter zerlegt (Leerraum, Bindestrich, Punkt,
+  Klammern); gesucht wird über alle zusammenhängenden Wortfolgen, **die
+  längste gewinnt**, bei Gleichstand die **hinterste** – im Deutschen wie im
+  Englischen steht das Farbwort am Ende („Earth Brown“, nicht „Brown Earth“).
+  Eigene Einträge gehen bei gleicher Länge vor. So findet „Matte Dark Green“
+  den Katalogeintrag „Dark green“ und nicht bloß „Green“.
+- **Stufe 5:** Ein einzelnes Wort, das in keiner Stufe passt, wird auf das
+  längste bekannte Farbwort am **Ende** geprüft; der Rest muss mindestens drei
+  Buchstaben haben. „Himmelblau“ → Blau, „Weinrot“ → Rot. Steht davor ein
+  Helligkeitswort („Pastellgrün“, „Dunkeltürkis“), gilt es wie unten.
+- **Helligkeitswörter** (Hell/Light/Pale/Pastell/Pastel, Dunkel/Dark/Deep/Tief)
+  verschieben den Grundton, wenn es keinen eigenen Eintrag für die Kombination
+  gibt: hell = 40 % zu Weiß gemischt, dunkel = 35 % zu Schwarz. Eine feste
+  Rechnung, kein Raten – und nur, wenn das Farbwort selbst gefunden wurde.
+- **Keine Oberflächenwörter als Farbe.** „Stone“, „Galaxy“, „Silk“, „Marble“,
+  „Glow“, „Matte“ stehen nicht im Farbwortschatz, sonst würde „Stone Grey“ zu
+  einem Steinton statt zu Grau. Metallwörter (Gold, Silber, Kupfer, Bronze)
+  bleiben Farben – sie sind beides.
+- **Zwischengespeichert** je Vergleichsform (eine `Map` im Resolver des
+  Clients bzw. je Anfrage auf dem Server); die Übersicht fragt je Zeile.
+
+### Wortschatz
+
+`BUILTIN_COLORS` wächst von 27 auf rund 150 Einträge, weiter mit deutschem und
+englischem Namen je Eintrag. Quellen:
+
+- **Die benannten Farben aus CSS** (W3C, frei verwendbar): Olive, Teal, Navy,
+  Coral, Salmon, Khaki, Ivory, Lavender, Crimson, Indigo, Plum, Chocolate …
+  Nicht alle 148 – „PapayaWhip“ steht auf keiner Rolle; die Auswahl folgt wie
+  bisher den Etiketten.
+- **Typische Wörter von Filament-Etiketten**, die in CSS fehlen: Charcoal,
+  Anthracite, Graphite, Slate, Ash, Nardo, Titanium, Gunmetal, Bone, Cream,
+  Champagne, Sand, Desert, Latte, Caramel, Mocha, Coffee, Terracotta, Rust,
+  Brick, Wine, Burgundy, Cherry, Ruby, Scarlet, Sakura, Blush, Peach, Apricot,
+  Mandarin, Mustard, Lemon, Mint, Sage, Jade, Emerald, Forest, Army, Moss,
+  Petrol, Aqua, Ice, Sky, Ocean, Marine, Cobalt, Royal, Midnight, Lilac,
+  Violet, Grape …
+- **Deutsche Gegenstücke**: Oliv, Petrol, Koralle, Lachs, Elfenbein, Creme,
+  Champagner, Schiefer, Graphit, Titan, Schokolade, Mokka, Karamell,
+  Terrakotta, Rost, Ziegelrot, Weinrot, Kirschrot, Rubin, Karmin, Purpur,
+  Pfirsich, Aprikose, Senf, Ocker, Zitronengelb, Minze, Salbei, Jade,
+  Smaragd, Moosgrün, Olivgrün, Himmelblau, Eisblau, Königsblau, Kobaltblau,
+  Mitternachtsblau, Flieder, Lavendel, Pflaume, Blaugrün (Petrol) …
+- **Eine Zusicherung** in `api/appearance.test.ts`: eine Tabelle echter
+  Herstellerfarben (Bambu, Polymaker, Prusament, eSUN, Sunlu, Elegoo, Extrudr,
+  colorFabb) mit dem erwarteten Katalogschlüssel – „Savanna Yellow“ →
+  `yellow`, „Earth Brown“ → `brown`, „Charcoal Black“ → `black` … – und eine
+  zweite mit Namen, die **nichts** finden dürfen („Dawn Radiance“, „Galaxy“,
+  „Stone“). Wer den Wortschatz erweitert, sieht dort, was sich verschiebt.
+
+### Zusammengesetzte Namen (Stufe 3)
+
+„Sofern möglich“ heißt konkret:
+
+- **Trenner:** `/`, `+`, `&`, `|`, `,`, „ und “, „ and “, „ x “. Ein
+  **Bindestrich** trennt nur, wenn der ganze Name vorher in Stufe 1/2 nicht
+  gefunden wurde – „Blau-Grün“ steht als Petrol im Katalog und kommt deshalb
+  nie hier an, „Rot-Blau“ schon.
+- **Verlaufswörter:** „ zu “, „ to “, „→“, „ in “ („Red to Blue“, „Blau in
+  Violett“) trennen ebenfalls und ergeben einen **Verlauf**.
+- **Jeder Teil** wird über die Stufen 1, 2, 4 und 5 aufgelöst („Savanna Yellow
+  / Earth Brown“ geht also).
+- **Anordnung** aus Schlüsselwörtern in Farb- **oder** Oberflächenname:
+  Dual, Zweifarbig, Bicolor, Tri, Dreifarbig, Tricolor, Magic, Coextrusion →
+  koextrudiert; Gradient, Verlauf, Farbverlauf, Ombre → Verlauf; Segment,
+  Multicolor → segmentiert. Ohne Schlüsselwort: zwei oder drei Teile →
+  koextrudiert, vier und mehr → segmentiert. Die Schlüsselwörter werden vor
+  dem Zerlegen entfernt („Dual Rot/Blau“ hat zwei Teile, nicht drei).
+- **Mindestens ein Teil muss bekannt sein.** Ein unbekannter Teil erscheint
+  als schraffiertes Stück im Feld – die ehrliche Lücke wie bisher, nur
+  kleiner. Kein Teil bekannt → weiter mit Stufe 4.
+- Das Ergebnis ist ein **berechnetes Farbbild** (`ColorSpec` ohne Namen,
+  Leitfarbe = erster bekannter Teil). Es wird nie gespeichert; wer es anders
+  will, legt den Namen als eigene Farbe an und schlägt damit Stufe 3.
+
+### Oberfläche
+
+- Das Feld zeigt eine über Farbwort erkannte Farbe **wie jede andere** – die
+  Übersicht soll nicht mit Hinweisen übersät sein.
+- **Im Materialformular** steht bei Herkunft `word` oder `compound` unter dem
+  Feld: „Erkannt aus ‚Yellow‘ – ungefähr. **Genau festlegen**“. Der Knopf
+  öffnet den Farb-Dialog, vorbelegt mit dem erkannten Ton (ab Phase C den
+  Farbbild-Dialog, vorbelegt mit dem berechneten Farbbild).
+  Bisher erschien „Farbe anlegen“ nur ohne Farbcode (`MaterialFormDialog`,
+  `appearance.hex == null`); diese Bedingung wird zu „Herkunft ist nicht
+  `custom`/`builtin`“.
+- Die Beschriftung für Hilfstechnik bleibt beim Namen („Farbe Savanna
+  Yellow“); dass der Ton geschätzt ist, sagt nur das Formular.
+- Freunde: Der Server löst mit derselben Funktion auf, `colorHex` kommt also
+  auch dort gefüllt an; `FriendMaterial` braucht dafür kein neues Feld.
+
 ## Datenmodell
 
 ### `contracts/appearance.ts`
@@ -168,7 +305,7 @@ export const TEXTURE_KINDS = [
   "glossy",
   "silk",
   "metallic",
-  "carbon",
+  "fiber", // bis 4.4.0 „carbon“, umbenannt in Phase A
   "transparent",
   "glow",
   "wood",
@@ -176,6 +313,7 @@ export const TEXTURE_KINDS = [
   "speckle",
   "sparkle",
   "marble",
+  "satin",
 ] as const;
 
 export const COLOR_LAYOUTS = [
@@ -236,16 +374,21 @@ export const colorSpecSchema = z
 `ResolvedAppearance` wächst:
 
 ```ts
+export type ColorSource = "custom" | "builtin" | "compound" | "word";
+
 export type ResolvedAppearance = {
   hex: string | null; // Leitfarbe, wie bisher
   kind: TextureKind; // wie bisher
   spec: ColorSpec | null; // neu; null = einfarbig bzw. unbekannt
+  source: ColorSource | null; // neu; null = nichts gefunden
+  matched: string | null; // neu; das gefundene Farbwort („Yellow“)
 };
 ```
 
 `AppearanceCatalog.colors` wird von `Map<string, string>` zu
 `Map<string, { hex: string; spec: ColorSpec | null }>`. Die Aufrufer von
-`resolveColorHex` bleiben dieselben; `resolveColorSpec` kommt dazu.
+`resolveColorHex` bleiben dieselben (die Funktion wird zur dünnen Hülle um
+`resolveColor`); `resolveColorSpec` kommt dazu.
 
 ### Mitgelieferter Katalog
 
@@ -260,9 +403,11 @@ export type ResolvedAppearance = {
 | `neonPink`   | Neonpink, Neon pink             | einfarbig, fluoreszierend                           |
 | `glowGreen`  | Nachtleuchtend, Glow green      | Natur, nachleuchtend grün                           |
 
-Nicht mehr: Verläufe und Duals sind **Herstellerfarben** („Dawn Radiance“,
-„Gold/Silber“) und gehören in den eigenen Katalog. Der mitgelieferte folgt
-weiter dem, was auf Etiketten steht, nicht einer Farbenlehre.
+Nicht mehr: Verläufe und Duals sind **Herstellerfarben** („Dawn Radiance“)
+und gehören in den eigenen Katalog – oder sie ergeben sich aus dem Namen
+(„Gold/Silber“, Stufe 3). Der mitgelieferte folgt weiter dem, was auf
+Etiketten steht, nicht einer Farbenlehre; dazu kommt der Farbwortschatz aus
+„Farbnamen erkennen“.
 
 ### `db/schema.ts`
 
@@ -273,10 +418,22 @@ spec: jsonb("spec").$type<unknown>(),   // NULL = einfarbig
 
 - **Eine nullable Spalte, kein Backfill.** Bestehende Zeilen sind einfarbig und
   bleiben es; drizzle-kit erzeugt die Migration vollständig
-  (`0027_color_spec.sql`, Phase B), keine Handarbeit.
-- `texture_kind` bekommt drei Werte (`ALTER TYPE … ADD VALUE`, Phase A,
-  `0026_texture_kinds.sql`). Achtung: Ein neuer Enum-Wert ist erst nach dem
-  Commit benutzbar; die Migration darf ihn also nicht selbst verwenden.
+  (`0027_color_spec.sql`, Phase C), keine Handarbeit.
+- **`0026_texture_kinds.sql` (Phase A) ist von Hand ergänzt.** Vier neue Werte
+  (`ALTER TYPE … ADD VALUE`) und eine Umbenennung:
+  `ALTER TYPE "texture_kind" RENAME VALUE 'carbon' TO 'fiber'`. drizzle-kit
+  erkennt die Umbenennung nicht und würde den Typ entfernen und neu anlegen
+  (Spalten über `text` umgießen) – dieselbe Falle wie bei Tabellen (`AGENTS.md`,
+  „Umbenennungen werden von Hand migriert“). `RENAME VALUE` ändert die
+  gespeicherten Zeilen in `custom_textures.kind` mit, ohne sie anzufassen. Die
+  Probe: `npm run db:generate` erzeugt danach eine **leere** Migration.
+  Achtung: Ein neuer Enum-Wert ist erst nach dem Commit benutzbar; die
+  Migration darf ihn also nicht selbst verwenden.
+- Nach außen sichtbar ändert sich der Wert `carbon` → `fiber` an zwei Stellen:
+  `FriendMaterial.textureKind` (der Client lädt beim Versionssprung ohnehin
+  neu, siehe „Aktualisierung der installierten App“) und der Export
+  (`customTextures.kind`) – alte Exporte behalten `carbon`, es gibt keinen
+  Rückimport, der daran scheitern könnte.
 - **Keine eigene Tabelle** für Farben im Farbbild: höchstens 16 Einträge je
   Farbbild, nie einzeln abgefragt, immer als Ganzes gelesen und geschrieben.
 
@@ -324,9 +481,17 @@ Verlauf von Schwarz nach Weiß gibt es keine Tinte, die überall reicht. Deshalb
 - **`speckle`**: 20–30 kleine Punkte unterschiedlicher Größe an **festen**
   Positionen (Konstante, kein Zufall zur Laufzeit – sonst flackerte das Muster
   bei jedem Rendern und wäre in Tests nicht prüfbar). Farben: die Akzentfarben
-  des Farbbilds reihum; ohne Farbbild Tinte und Gegenton wie bei `carbon`
+  des Farbbilds reihum; ohne Farbbild Tinte und Gegenton wie bei `fiber`
   (stoneFill hat dunkle **und** helle Einsprengsel). Dazu leicht mattes
   Rauschen wie `matte`.
+- **`satin`**: ein breites, flaches Schimmerband wie `silk`, aber mit halber
+  Deckkraft und ohne helle Mitte, darunter ein Hauch Rauschen – die Mitte
+  zwischen `matte` und `silk`, und von beiden auf 24 px unterscheidbar
+  (Prüfung am Bildschirm in beiden Farbschemata, wie beim Silk-Band in 2.7.0).
+- **`fiber`** (bisher `carbon`): Das Köpergewebe zeigt ein Laminat, im
+  Filament stecken aber **Kurzfasern**. Neu: 10–14 kurze Striche in wenigen
+  Richtungen an festen Positionen, Tinte mit leichtem Gegenton – liest sich als
+  „Fasern drin“, egal ob Kohle, Glas oder Aluminium. Das Gewebe entfällt.
 - **`sparkle`**: wenige vierstrahlige Funkelsterne plus feine Punkte in der
   Tinte, die Punkte in den Akzentfarben (Galaxy mit Gold- und Silberglitter).
   Unterschied zu `speckle`: hell und spitz statt rund und matt.
@@ -336,7 +501,7 @@ Verlauf von Schwarz nach Weiß gibt es keine Tinte, die überall reicht. Deshalb
   die Übersicht zeigt Dutzende Spulen. Höchstens im großen Kern der
   Material-Seite, und dann nur ohne `prefers-reduced-motion`.
 
-### Wirkungen (Phase C)
+### Wirkungen (Phase D)
 
 Auf 24 px ist kein Platz für eine Wirkung; sie steht dort nur in der
 Beschriftung. Ab der Spule:
@@ -394,8 +559,9 @@ type="color">` wie heute) plus optionaler Name, Ziehen zum Umordnen,
 - Ist die Farbe schon hinterlegt, gibt es daneben „Farbbild bearbeiten“ – mit
   dem Hinweis, dass das alle Materialien mit diesem Farbnamen betrifft (die
   Zahl liefert schon `countMaterialsWithAppearanceName`).
-- Oberflächen-Vorschläge (`COMMON_TEXTURES`) um „Gesprenkelt“, „Glitzer“,
-  „Galaxy“, „Marmor“, „Stein“ ergänzen.
+- Oberflächen-Vorschläge (`COMMON_TEXTURES`) um „Satin“, „Gesprenkelt“,
+  „Glitzer“, „Galaxy“, „Marmor“, „Stein“ ergänzen; „Carbon“ wird
+  „Faserverstärkt“ (der Name „Carbon“ findet die Art weiterhin).
 
 ### Übersicht
 
@@ -432,41 +598,76 @@ colorSpec: ColorSpec | null; // aus dem Katalog des Eigentümers
 ## Phasen
 
 Jede Phase ist eine eigene Version mit Release Note, unabhängig auslieferbar.
+A und B brauchen kein Farbbild und bringen den größten Teil des sichtbaren
+Gewinns; deshalb stehen sie vorn.
 
 ### Phase A – Neue Oberflächen (4.5.0)
 
 Klein, ohne Farbbild, sofort nützlich.
 
-1. `TEXTURE_KINDS` + `speckle`, `sparkle`, `marble`; Migration `ADD VALUE`.
-2. `BUILTIN_TEXTURES` und `COMMON_TEXTURES` um die Namen oben (inkl. der
-   Zuordnungen Satin, Perlmutt, Transluzent, Kork …). Die bestehende
-   Zusicherung in `api/appearance.test.ts` (jeder Vorschlag wird gezeichnet)
-   deckt die neuen Vorschläge ohne Änderung mit ab.
-3. Zeichnungen in `textures.tsx` (Tinte/Gegenton, feste Punktlisten).
-4. `appearance.kinds` in `de.ts`/`en.ts`.
-5. Enum-Liste in `api/postgres.integration.test.ts` nachziehen.
+1. `TEXTURE_KINDS` + `speckle`, `sparkle`, `marble`, `satin`; `carbon` →
+   `fiber`. Migration `0026_texture_kinds.sql` von Hand (siehe oben), Probe mit
+   leerem `db:generate`.
+2. `BUILTIN_TEXTURES` und `COMMON_TEXTURES` um die Namen oben, „Seidenmatt“ zu
+   `satin`, die Faser-Namen zu `fiber`. Die bestehende Zusicherung in
+   `api/appearance.test.ts` (jeder Vorschlag wird gezeichnet) deckt die neuen
+   Vorschläge ohne Änderung mit ab.
+3. Zeichnungen in `textures.tsx` (Tinte/Gegenton, feste Punkt- und
+   Strichlisten); `fiber` bekommt die Kurzfasern statt des Gewebes.
+4. `appearance.kinds` in `de.ts`/`en.ts` („Faserverstärkt“ / „Fibre
+   reinforced“, „Satin“, „Gesprenkelt“ / „Speckled“, „Glitzernd“ / „Sparkle“,
+   „Marmoriert“ / „Marbled“).
+5. Enum-Liste in `api/postgres.integration.test.ts` nachziehen; ein
+   Integrationstest legt vor `0026` eine eigene Oberfläche mit `carbon` an und
+   prüft danach `fiber` (Vorbild `migrateUntil`, wie bei `0022`).
 6. Tests: jede Art hat Defs **oder** Overlay (Schutz gegen ein vergessenes
    `case`), die Namenszuordnung, Eindeutigkeit der Namen.
+7. Release Note: neue Oberflächen, „Carbon“ heißt jetzt „Faserverstärkt“,
+   „Seidenmatt“ sieht anders aus.
 
-### Phase B – Farbbild: Anordnung, mehrere Farben, Akzentfarben (4.6.0)
+### Phase B – Farbnamen erkennen (4.6.0)
+
+Ohne Schema, ohne Migration – reine Logik in `contracts/appearance.ts`.
+
+1. Farbwortschatz in `BUILTIN_COLORS` (rund 150 Einträge, DE + EN).
+2. `resolveColor` mit den Stufen 1, 2, 4 und 5 samt Helligkeitswörtern;
+   `ResolvedAppearance.source`/`matched`. Stufe 3 (zusammengesetzt) folgt in
+   Phase C, weil sie das Farbbild zum Zeichnen braucht.
+3. Zwischenspeicher je Vergleichsform im Resolver (Client) und je Anfrage
+   (Server, Freundesliste).
+4. Materialformular: Hinweis „Erkannt aus ‚…‘ – ungefähr“ mit „Genau
+   festlegen“.
+5. Tests: die Tabelle echter Herstellerfarben, die Negativliste, längster und
+   hinterster Treffer, Komposita samt Mindestrest, Helligkeitswörter, eigene
+   Einträge schlagen Farbwörter, Oberflächenwörter finden keine Farbe.
+6. `AGENTS.md`: „Ohne Farbcode wird nicht geraten“ wird „Ohne Farbwort wird
+   nicht geraten“, mit Begründung.
+
+### Phase C – Farbbild und zusammengesetzte Namen (4.7.0)
 
 1. `colorSpecSchema`, `parseStoredColorSpec`, `resolveColorSpec`,
    `overlayInkFor` in `contracts/appearance.ts` – mit Wirkungen schon im
-   Schema (Version 1), damit Phase C keine Schemaversion braucht.
-2. Spalte `custom_colors.spec`, Migration.
+   Schema (Version 1), damit Phase D keine Schemaversion braucht.
+2. Spalte `custom_colors.spec`, Migration `0027_color_spec.sql`.
 3. `appearance.createColor`/`updateColor`: **entweder** `hex` **oder** `spec`;
    Leitfarbe serverseitig abgeleitet. Stufe `editor` wie bisher.
 4. Katalog im Client (`useAppearanceCatalog`) und für Freunde mit `spec`.
-5. Grundflächen je Anordnung in Feld und Spule; Muster je Teilfläche.
-6. `ColorSpecEditor` auf `/farben` und im Materialformular.
-7. Beschriftung (`useSwatchLabel`), `FriendMaterial.colorSpec`,
+5. Grundflächen je Anordnung in Feld und Spule; Muster je Teilfläche;
+   schraffiertes Stück für einen unbekannten Teil.
+6. **Stufe 3** der Namensauflösung: Trenner, Verlaufswörter,
+   Anordnungs-Schlüsselwörter, „mindestens ein Teil bekannt“.
+7. `ColorSpecEditor` auf `/farben` und im Materialformular („Genau festlegen“
+   übernimmt ein berechnetes Farbbild als Vorlage).
+8. Beschriftung (`useSwatchLabel`), `FriendMaterial.colorSpec`,
    `api/friendVisibility.test.ts`, Export.
-8. Mitgeliefert: `rainbow`.
-9. Tests: Schema (Grenzen je Anordnung, `hex` xor `spec`), Rückfall bei
-   unlesbarem Farbbild, Kontrastzusicherung für Verläufe, Integrationstest
-   Anlegen/Ändern/Freundesansicht.
+9. Mitgeliefert: `rainbow`.
+10. Tests: Schema (Grenzen je Anordnung, `hex` xor `spec`), Rückfall bei
+    unlesbarem Farbbild, Kontrastzusicherung für Verläufe, zusammengesetzte
+    Namen („Rot/Blau“, „Dual Rot/Blau“, „Red to Blue“, „Rot-Blau“ gegen
+    „Blau-Grün“, „Savanna Yellow / Earth Brown“, „Rot/Xyz“), Integrationstest
+    Anlegen/Ändern/Freundesansicht.
 
-### Phase C – Wirkungen (4.7.0)
+### Phase D – Wirkungen (4.8.0)
 
 1. Editor-Abschnitt „Wirkungen“.
 2. Abzeichen an der Spule, Vorschau-Umschalter auf Material- und
@@ -474,29 +675,32 @@ Klein, ohne Farbbild, sofort nützlich.
 3. Filter „Wirkung“ in der Übersicht.
 4. Mitgeliefert: die Neon- und Nachtleucht-Einträge.
 5. **„Neon“ verlässt `glow`.** Als Oberfläche löst „Neon“ danach auf `plain`
-   auf, als **Farbe** gibt es die fluoreszierenden Katalogeinträge. Das ändert
-   die Darstellung bestehender Materialien mit Oberfläche „Neon“ (Hof
+   auf, als **Farbe** gibt es die fluoreszierenden Katalogeinträge (und über
+   Stufe 4 findet „Neon Green“ den Eintrag „Neongrün“). Das ändert die
+   Darstellung bestehender Materialien mit Oberfläche „Neon“ (Hof
    verschwindet) – in der Release Note erwähnen. `COMMON_TEXTURES` führt
    „Neon“ nicht, die Zusicherung in `api/appearance.test.ts` bleibt grün.
 6. `note` wird in der Freundes-Projektion entfernt – Test dafür.
 
-### Phase D (optional) – Zwei Oberflächen zugleich
+### Phase E (optional) – Zwei Oberflächen zugleich
 
 „Silk Glitter“, „Matt Galaxy“, „Marmor glänzend“ sind heute **eine** Art. Wenn
 die Nachfrage kommt: `custom_textures.secondKind texture_kind NULL`, mit der
-Regel „eine Glanz-Art (`matte`, `glossy`, `silk`, `metallic`, `transparent`)
-plus eine Struktur-Art (`speckle`, `sparkle`, `marble`, `carbon`, `wood`)“.
-Gezeichnet wird Struktur unter Glanz. `ResolvedAppearance.kind` wird zu
-`kinds: TextureKind[]`. Nicht vorher – jede Stelle, die heute eine Art
-nimmt, müsste mit.
+Regel „eine Glanz-Art (`matte`, `satin`, `glossy`, `silk`, `metallic`,
+`transparent`) plus eine Struktur-Art (`speckle`, `sparkle`, `marble`,
+`fiber`, `wood`)“. Gezeichnet wird Struktur unter Glanz.
+`ResolvedAppearance.kind` wird zu `kinds: TextureKind[]`. Dieselbe
+Wortsuche wie bei den Farben (Stufe 4) fände dann in „Silk Glitter“ beide.
+Nicht vorher – jede Stelle, die heute eine Art nimmt, müsste mit.
 
 ## Was sonst mitzieht (leicht vergessen)
 
-- `AGENTS.md`: Abschnitt „Farbe und Oberfläche als Darstellung“ um Farbbild,
-  Leitfarbe, Wirkungen und die angepasste Kontrastregel ergänzen; Projektstruktur
-  (`colorSpec.tsx`).
+- `AGENTS.md`: Abschnitt „Farbe und Oberfläche als Darstellung“ um Farbwörter,
+  Farbbild, Leitfarbe, Wirkungen und die angepasste Kontrastregel ergänzen;
+  Projektstruktur (`colorSpec.tsx`); die Handmigration `0026` unter den
+  Umbenennungen erwähnen.
 - `api/postgres.integration.test.ts`: Enum-Werte von `texture_kind`.
-- `api/friendVisibility.test.ts`: Schlüsselmenge (Phase B), `note` (Phase C).
+- `api/friendVisibility.test.ts`: Schlüsselmenge (Phase C), `note` (Phase D).
 - `api/account.integration.test.ts`: nichts – keine neue Tabelle, keine neue
   Benutzerspalte.
 - `COUNTED_TABLES`: nichts – keine neue Tabelle.
@@ -506,28 +710,43 @@ nimmt, müsste mit.
 
 ## Tests (Übersicht)
 
-| Test                                 | Phase | Prüft                                                                                  |
-| ------------------------------------ | ----- | -------------------------------------------------------------------------------------- |
-| `api/appearance.test.ts`             | A–C   | neue Arten, Namen, Schema, Rückfall, Kontrast auf Verläufen, Label-Texte ohne Hexwerte |
-| `api/friendVisibility.test.ts`       | B, C  | `colorSpec` drin, `note` draußen                                                       |
-| `api/appearance.integration.test.ts` | B     | `hex` xor `spec`, abgeleitete Leitfarbe, Bereichsgrenze                                |
-| `api/postgres.integration.test.ts`   | A     | Enum-Werte                                                                             |
+| Test                                 | Phase | Prüft                                                                                                      |
+| ------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------- |
+| `api/appearance.test.ts`             | A–D   | neue Arten, Namen, Farbwörter (Herstellertabelle + Negativliste), zusammengesetzte Namen, Schema, Kontrast |
+| `api/friendVisibility.test.ts`       | C, D  | `colorSpec` drin, `note` draußen                                                                           |
+| `api/appearance.integration.test.ts` | A, C  | `carbon` → `fiber` über die Migration; `hex` xor `spec`, abgeleitete Leitfarbe, Bereichsgrenze             |
+| `api/postgres.integration.test.ts`   | A     | Enum-Werte                                                                                                 |
+
+## Entscheidungen
+
+Getroffen am 27.09.2026:
+
+1. **Glasfaser zählt zu „Faserverstärkt“.** `carbon` wird in `fiber`
+   umbenannt, in der Oberfläche „Faserverstärkt“; Kohle-, Glas-, Aramid-,
+   Basalt- und Aluminiumfasern gehören dazu.
+2. **Zusammengesetzte Farbnamen werden automatisch mehrfarbig**, sofern
+   mindestens ein Teil bekannt ist; Regeln unter „Zusammengesetzte Namen“.
+3. **Satin bekommt eine eigene Art** (`satin`); „Seidenmatt“ wandert dorthin.
+4. **Beschreibende Farbnamen werden erkannt** („Savanna Yellow“ → Gelb) –
+   über einen größeren Farbwortschatz und die Suche nach dem Farbwort im
+   Namen, nie über einen geratenen Ton.
+5. **Das Farbbild steht am Katalogeintrag**, nicht am Material (Weg A).
 
 ## Offene Fragen
 
-1. **Glasfaser (GF)** als `carbon` (Faser-Chiffre) oder `matte`? Vorschlag
-   `carbon` – „Faser drin“ ist die Aussage, die jemand am Regal sucht.
-2. **Zusammengesetzte Farbnamen** („Rot/Blau“) automatisch als zweifarbig
-   auflösen, wenn jeder Teil bekannt ist? Kein Raten eines Farbtons, aber
-   Raten der Anordnung – und „Blau-Grün“ meint meist Petrol, nicht zwei
-   Farben. Vorschlag: nur mit „/“ als Trenner, Anordnung `coextruded`, und erst
-   nach Phase B entscheiden.
-3. **Satin** als `silk` oder eigene Art? Vorschlag `silk`; eine eigene Art erst,
-   wenn jemand den Unterschied im Regal vermisst.
-4. **Hinweis „abrasiv“** für nachleuchtende und Partikel-Filamente (gehärtete
-   Düse) – gehört eher zu den Druckeinstellungen als zur Farbe. Außerhalb
-   dieses Plans; als Idee festgehalten.
-5. **Farbbild am Material statt am Katalog** (Weg B) – falls sich zeigt, dass
+1. **RAL-Nummern** („RAL 9005“, „Verkehrsrot RAL 3020“) als eigene Stufe
+   erkennen? Einige Hersteller (Extrudr, Filamentworld) benennen so. Die
+   Nummern sind Fakten, die RAL-Farbwerte aber nur als Näherung frei
+   verfügbar; vor einer Tabelle im Code die Rechtslage klären. Pantone bleibt
+   draußen.
+2. **Weitere Sprachen im Farbwortschatz** (Französisch, Italienisch, Spanisch)?
+   Etiketten sind überwiegend englisch; erst mit einer dritten
+   Oberflächensprache.
+3. **Hinweis „abrasiv“** für faserverstärkte, nachleuchtende und
+   Partikel-Filamente (gehärtete Düse) – gehört eher zu den
+   Druckeinstellungen als zur Farbe. Außerhalb dieses Plans; als Idee
+   festgehalten.
+4. **Farbbild am Material statt am Katalog** (Weg B) – falls sich zeigt, dass
    Benutzer je Material ein eigenes Farbbild wollen, ohne sich einen Namen
    auszudenken. Dann als Überschreibung **zusätzlich** zum Katalog, nicht
    statt seiner.
