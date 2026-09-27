@@ -46,6 +46,8 @@ import {
   LOGIN_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
+  MATERIALS_PATH,
+  PRINTS_PATH,
 } from "@/const";
 import {
   Archive,
@@ -54,6 +56,7 @@ import {
   Database,
   Disc3,
   FileUp,
+  History,
   Inbox,
   LayoutDashboard,
   Library,
@@ -120,6 +123,7 @@ const menuItems: {
   path: string;
 }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
+  { icon: History, label: "prints", path: PRINTS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Boxes, label: "lager", path: LAGER_PATH },
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
@@ -166,7 +170,8 @@ function titleForPath(pathname: string, t: Messages): string {
   if (item) return t.nav[item.label] as string;
   if (pathname === RELEASE_NOTES_PATH) return t.nav.releaseNotes;
   if (pathname === SETTINGS_PATH) return t.nav.settings;
-  if (pathname.startsWith("/material/")) return t.nav.material;
+  if (pathname.startsWith(`${MATERIALS_PATH}/`)) return t.nav.material;
+  if (pathname.startsWith(`${PRINTS_PATH}/`)) return t.nav.prints;
   // Eine einzelne Organisation trägt ihren Namen erst nach dem Laden – die
   // Kopfzeile nennt bis dahin den Bereich.
   if (pathname.startsWith(`${ORGANIZATIONS_PATH}/`)) return t.nav.organizations;

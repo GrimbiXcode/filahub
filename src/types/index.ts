@@ -5,6 +5,8 @@ export type RouterOutputs = inferRouterOutputs<AppRouter>;
 
 export type MaterialOverview = RouterOutputs["material"]["list"][number];
 export type MaterialDetail = RouterOutputs["material"]["byId"];
+export type PrintJobItem = RouterOutputs["print"]["list"]["items"][number];
+export type PrintJobDetail = RouterOutputs["print"]["byId"];
 export type ContainerTypeItem = RouterOutputs["containerType"]["list"][number];
 export type StorageBoxItem = RouterOutputs["storageBox"]["list"][number];
 /** Eigene Farben und Oberflächen – die Darstellung, nicht der Bestand */

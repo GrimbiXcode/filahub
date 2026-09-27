@@ -58,6 +58,9 @@ cp .env.example .env
 | `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |
 | `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
 | `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
+| `UPLOAD_DIR`                 | Directory for photos and 3MF files of prints (default `/data/uploads`)      |
+| `STORAGE_DRIVER`             | `local` (default, the directory above) or `s3` — see "File storage" below   |
+| `S3_*`                       | Bucket, region, endpoint and keys when `STORAGE_DRIVER=s3`                  |
 
 ### Multi-line values
 
@@ -128,9 +131,13 @@ docker build -t filahub .
 docker run -d --name filahub \
   --env-file .env \
   -p 3000:3000 \
+  -v filahub-uploads:/data/uploads \
   --restart unless-stopped \
   filahub
 ```
+
+The volume holds the photos and 3MF files attached to prints. Without it
+they live in the container and are gone with the next update.
 
 Prebuilt images are published to the GitHub Container Registry
 (`ghcr.io/grimbixcode/filahub`) whenever a version tag is pushed.
@@ -160,8 +167,61 @@ Notes:
 - Postgres is published on `127.0.0.1:5432` in case you want to inspect the
   database or run drizzle commands from the host; remove that port mapping
   if you don't need it.
+- Uploaded photos and 3MF files live in the `uploads` volume, not in the
+  database. **Back up both** – a database dump alone restores the prints
+  without their files. The admin page `/verwaltung/system` shows whether the
+  directory is writable and how much space the files take.
 - Updating to a new release: `docker compose pull && docker compose up -d`.
 - Put a reverse proxy with HTTPS in front of port 3000 (see section 5).
+
+### File storage: directory or S3
+
+Photos and 3MF files attached to prints are stored outside the database. By
+default they go into a directory (`UPLOAD_DIR`, a volume in the Compose
+template). Since 4.4.0 they can go into any S3-compatible object storage
+instead — AWS S3, Cloudflare R2, Hetzner Object Storage, MinIO, Backblaze B2 …
+
+```bash
+STORAGE_DRIVER=s3
+S3_BUCKET=filahub-files
+S3_ACCESS_KEY_ID=…
+S3_SECRET_ACCESS_KEY=…
+# AWS: region, no endpoint
+S3_REGION=eu-central-1
+# everything else: the endpoint (without the bucket), region as the provider says
+# S3_ENDPOINT=https://<account>.r2.cloudflarestorage.com
+# S3_REGION=auto
+# optional: several instances in one bucket
+# S3_PREFIX=filahub/
+```
+
+- The app checks the settings on start and refuses to start with an
+  incomplete S3 configuration. `/verwaltung/system` shows where files live and
+  whether the app can write there.
+- **Keep the bucket private.** Files are always delivered through the app,
+  which checks who may see them; nothing needs public access, and no presigned
+  links are issued.
+- **Turn bucket versioning off**, or add a lifecycle rule that expires
+  non-current versions after a few days. Otherwise a deleted photo stays in
+  the bucket as an old version — including after an account deletion.
+- The access key needs `s3:PutObject`, `s3:GetObject` and `s3:DeleteObject`
+  on the objects, and `s3:ListBucket` on the bucket **without a prefix
+  condition** — without it, AWS answers a missing file with 403 instead of
+  404, and the app treats that as an error rather than "not there".
+- **Moving from the directory to S3:** the layout inside the bucket is the
+  same as in the directory, so a plain copy is enough. Stop the app, copy,
+  switch the settings, start again:
+
+  ```bash
+  rclone copy /data/uploads remote:filahub-files/ --exclude "*.tmp"
+  # or, with the AWS CLI (add the prefix to the target, if any):
+  aws s3 sync /data/uploads s3://filahub-files/ --exclude "*.tmp" --exclude "lost+found/*"
+  ```
+
+  The same works in the other direction.
+
+- With S3, the uploads volume is no longer needed; back up the bucket instead
+  (or rely on the provider's durability) — still together with the database.
 
 ## 5. Domain & HTTPS (recommended: Caddy as reverse proxy)
 
@@ -327,8 +387,9 @@ a generous baseline; creating material, weighing, logging consumption,
 importing, searching and
 sending catalogue suggestions carry tighter ones.
 
-**Upper bounds** (`contracts/limits.ts`). Per store: 1000 materials. Per
-material: 1000 weigh-ins and 1000 consumptions. Per scope (personal or
+**Upper bounds** (`contracts/limits.ts`). Per store: 1000 containers (spools,
+bottles …; a material exists only with at least one, so this bounds materials
+too). Per container: 1000 weigh-ins and 1000 consumptions. Per scope (personal or
 organization): 200 own colours,
 100 own finishes, 100 own container types, 100 dryboxes. Per account: 20 open
 catalogue suggestions and 50 per day. None of these is enforced by the database —

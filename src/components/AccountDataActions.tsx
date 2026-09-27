@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { LOGIN_PATH } from "@/const";
+import { LOGIN_PATH, PRINT_FILES_EXPORT_URL } from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
@@ -95,6 +95,21 @@ export function AccountDataActions({ children }: { children?: ReactNode }) {
           {exportData.isPending
             ? t.settings.exportPending
             : t.settings.exportAction}
+        </Button>
+        {/*
+          Fotos und 3MF (seit 4.3.0) als eigener Download: Im JSON sprengten
+          sie jede Grenze; das JSON nennt sie per SHA-256. Ein gewöhnlicher
+          Link – der Browser lädt das ZIP gestreamt, ohne dass es erst im
+          Speicher dieser Seite liegt.
+        */}
+        <p className="text-sm text-muted-foreground">
+          {t.settings.exportFilesHint}
+        </p>
+        <Button variant="outline" className="sm:self-start" asChild>
+          <a href={PRINT_FILES_EXPORT_URL} download>
+            <Download className="mr-2 h-4 w-4" />
+            {t.settings.exportFilesAction}
+          </a>
         </Button>
       </div>
 

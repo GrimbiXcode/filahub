@@ -78,6 +78,7 @@ export default function StorageBoxes() {
   const invalidate = () => {
     utils.storageBox.list.invalidate();
     utils.material.list.invalidate();
+    utils.product.invalidate();
     utils.material.byId.invalidate();
   };
 

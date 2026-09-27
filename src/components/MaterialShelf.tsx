@@ -1,7 +1,6 @@
 import { Scale, TriangleAlert } from "lucide-react";
 import type { ResolvedAppearance } from "@contracts/appearance";
 import { Spool } from "@/components/Spool";
-import { LOW_STOCK_PERCENT } from "@/components/StockTiles";
 import { Button } from "@/components/ui/button";
 import { fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
@@ -43,7 +42,13 @@ export function MaterialShelf({
       {groups.map(group => (
         <section key={group.key} className="flex flex-col gap-2">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <h2 className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+              {group.low && (
+                <TriangleAlert
+                  aria-label={t.home.filterLowStock}
+                  className="size-3.5 text-destructive"
+                />
+              )}
               {group.name}
             </h2>
             <span className="text-xs text-muted-foreground/80">
@@ -95,9 +100,8 @@ function SpoolCard({
 }) {
   const t = useT();
   const { formatGrams, formatPercent } = useFormat();
-  const low =
-    material.remainingPercent != null &&
-    material.remainingPercent <= LOW_STOCK_PERCENT;
+  /* Knapp ist das Material über alle seine Gebinde, nicht diese Rolle allein */
+  const low = material.stock.low;
   const tint = appearance.hex
     ? `linear-gradient(180deg, color-mix(in oklch, ${appearance.hex} 28%, hsl(var(--card))), hsl(var(--card)) 75%)`
     : undefined;

@@ -41,3 +41,6 @@ coverage/
 
 # Lokal erzeugte Stückliste (in CI ein Artefakt, kein Repo-Inhalt)
 sbom.cdx.json
+
+# Hochgeladene Dateien der lokalen Entwicklung (UPLOAD_DIR)
+/data/

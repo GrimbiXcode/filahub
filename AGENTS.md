@@ -7,7 +7,9 @@ Leergewicht (Tara), Wägungen und Verbräuche mit automatischer
 Restmengenberechnung,
 Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
-anfragen. Seit 2.5.0 kann ein Lager statt einer Person auch einer
+anfragen. Seit 4.0.0 bündelt ein **Material** (das Produkt) seine **Gebinde**
+(die einzelnen Rollen, Flaschen, Beutel) – Bestand und Warnung zählen je
+Material über alle Lager. Seit 2.5.0 kann ein Lager statt einer Person auch einer
 **Organisation** gehören – gemeinsamer Bestand mehrerer Personen mit vier
 Stufen. Die Oberfläche spricht Deutsch und Englisch (umschaltbar pro
 Benutzer).
@@ -26,7 +28,9 @@ Benutzer).
 
 ```
 src/            React-Frontend
-  pages/        Routen: Home, MaterialDetail, Lager, ContainerTypes, StorageBoxes,
+  pages/        Routen: Home, MaterialDetail (ein Gebinde), ProductDetail (ein
+                Material mit allen Gebinden), PrintJobs und PrintJobDetail
+                (Druckhistorie), Lager, ContainerTypes, StorageBoxes,
                 Appearance (eigene Farben und Oberflächen),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
@@ -41,7 +45,11 @@ src/            React-Frontend
                 (Kacheln), MaterialShelf (Regal, Spulenkarten), MaterialPanel
                 (Detail neben dem Regal), Spool (Spule: Ring = Füllstand, Kern =
                 Farbe/Oberfläche), HistoryChart (Verlaufskurve), textures
-                (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch)
+                (die Zeichnungen je Oberfläche, geteilt mit AppearanceSwatch),
+                ProductGebindeList (die Gebinde eines Materials samt Bestand),
+                PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
+                PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
+                PrintFiles (Fotos und 3MF eines Drucks)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -56,19 +64,22 @@ src/            React-Frontend
                 quickActions.ts (Store der Schnellaktionen),
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
-                shelf.ts (Regal: Gruppierung nach Drybox),
+                shelf.ts (Regal: Gruppierung nach Drybox oder Material),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
-                importPrompt.ts, utils.ts (cn-Helfer)
+                importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
+                entfernen), utils.ts (cn-Helfer)
   release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
                 **Englisch**, eigene AGENTS.md im Verzeichnis
   types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
-  router.ts     appRouter: ping, auth, lager, containerType, storageBox, material,
-                appearance, friend, organization, preset, admin, legal, unblock
-                (admin: preset, proposal, system, user, abuse)
+  fileRoutes.ts /api/files/* – Fotos und 3MF hochladen, ausliefern, exportieren
+  router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
+                (die Gebinde), product (die Materialien), appearance, friend,
+                organization, print (die Druckhistorie), preset, admin, legal,
+                unblock (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
   middleware.ts publicQuery / authedQuery / blockedQuery / adminQuery und
@@ -77,11 +88,18 @@ api/            Hono/tRPC-Backend
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts,
                 vite.ts (Static-Serving samt Cache-Kopfzeilen),
                 clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
-                (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins)
+                (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins),
+                fileStorage.ts (Dateiablage: zufällige Schlüssel, Treiberwahl),
+                s3Storage.ts (S3-Treiber über aws4fetch), storageConfig.ts
+                (STORAGE_DRIVER und S3_* lesen und prüfen)
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
+                products.ts (Materialien: Liste, Zusammenführen, Aufräumen
+                ohne Gebinde), printJobs.ts (Druckhistorie: Schreibpfade samt
+                Verbrauchskopplung, Suche, Seiten), printFiles.ts (Dateizeilen,
+                Kontingent, Titelbild, Aufräumlauf),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -101,6 +119,9 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 Vergleichsform und Schreibweise der Materialart-Bezeichnung),
                 identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
                 nächste freie Nummer),
+                printSettings.ts (Druckeinstellungen je Materialart),
+                printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
+                printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -183,8 +204,9 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   Kopie am Material wäre eine zweite Wahrheit; wer sie braucht, liest sie über
   `lagerId` – die Materialabfragen laden das Lager ohnehin mit. Folge: Ein
   Lagerwechsel verändert die Zweitanzeige eines Materials, und das ist richtig
-  so. Deshalb gibt es in `validateForeignKeys` auch **keine** Konsistenzregel
-  zwischen Material und Lager – es kann nichts auseinanderlaufen.
+  so. Seit 4.0.0 gibt es genau **eine** Konsistenzregel zwischen Gebinde und
+  Lager: Alle Gebinde eines Materials liegen in Lagern gleicher Art und Stärke
+  (siehe „Material und Gebinde“).
 - **`filamentDiameterUm` in Mikrometern** (1750/2850), nicht in Millimetern:
   1,75 mm ist als Integer-Millimeter nicht darstellbar, und ein Gleitkommawert
   für eine Größe, die in die Längenrechnung eingeht, wäre die schlechtere Wahl.
@@ -207,13 +229,13 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   („PLA Silk" trifft „PLA"), sonst nach Materialart. Die Priorität steht an
   genau einer Stelle: `resolveDensity`. Bei Pulver gibt es bewusst keinen Wert –
   Schüttdichte wäre geraten, und eine falsche Zahl ist schlimmer als keine.
-- **`materials.texture`** ist Freitext mit Vorschlagsliste (`COMMON_TEXTURES`),
+- **`material_products.texture`** (bis 3.1.0 `materials.texture`) ist Freitext mit Vorschlagsliste (`COMMON_TEXTURES`),
   kein Enum – aus demselben Grund wie `materialType`. Bis 2.1.0 wurde die
   Oberfläche in `materialType` geschmuggelt („PLA Silk"), was den
   Materialart-Filter zersplitterte: Er vergleicht exakt, also fanden sich „PLA"
   und „PLA Silk" gegenseitig nie.
 - **Die Materialart-Bezeichnung ist case-insensitiv** (seit 2.9.1, #36).
-  `materials.materialType` bleibt Freitext, aber „Pla“ und „PLA“ sind
+  `material_products.materialType` bleibt Freitext, aber „Pla“ und „PLA“ sind
   **dieselbe** Materialart: Verglichen wird über die Vergleichsform
   `normalizeMaterialType` (Leerraum bereinigt, Großbuchstaben), gespeichert
   wird die Schreibweise, die `canonicalMaterialType` liefert – die aus
@@ -256,6 +278,391 @@ Seit 2.2.0 liegt jedes Material in genau einem **Lager** (`materials.lagerId`,
   `lager_shares` nicht. Ohne sie verlöre jeder Freund still, was er sehen durfte.
   Der `DROP COLUMN` steht bewusst am Ende und in derselben Transaktion; er ist
   nicht umkehrbar, der Backfill muss beim ersten Mal stimmen.
+
+## Material und Gebinde
+
+Seit 4.0.0. Bis 3.1.0 war eine Zeile in `materials` zugleich das Produkt
+(„Polymaker PolyTerra PLA, Charcoal Black“) und das Stück im Lager. Zwei Rollen
+desselben Materials wussten nichts voneinander, und die Warnung „knapp“
+meldete die fast leere Rolle, obwohl die volle daneben lag. Der Plan dazu steht
+in `docs/plan-material-gebinde-druckhistorie.md`.
+
+**Achtung, Namen – Oberfläche und Code laufen gegeneinander:**
+
+| Oberfläche DE / EN                        | Tabelle             | Router       | Typ               |
+| ----------------------------------------- | ------------------- | ------------ | ----------------- |
+| **Material** / material (das Produkt)     | `material_products` | `product.*`  | `MaterialProduct` |
+| **Gebinde**, **Rolle** / container, spool | `materials`         | `material.*` | `Material`        |
+
+`materials` wurde nicht umbenannt: Das hätte eine Handmigration über alle
+Indizes und Constraints gekostet (siehe unten „Umbenennungen“), ohne dass ein
+Benutzer etwas davon hat. Wo die Oberfläche eine Gebindeform kennt, sagt sie
+„Rolle“ (Filament), sonst „Gebinde“; ein Harzlager spricht nicht von Rollen.
+
+- **Was wo steht.** Name, Materialart, Hersteller, Farbe, Oberfläche, Dichte
+  und Notizen des Materials stehen **nur** am Material. Am Gebinde bleiben
+  Lager, Kennung, Preis, Kaufdatum, Nennmenge (1-kg-Rolle und 250-g-Probe
+  desselben Materials gibt es), Gebindeart, Drybox, eigene Notizen, Wägungen
+  und Verbräuche. Keine Kopie am Gebinde – eine zweite Wahrheit liefe
+  auseinander.
+- **Die Lesesicht flacht auf.** `computeMaterialStats` reicht die Felder des
+  Materials an der Gebindezeile weiter (`MaterialOverview.name` usw.), damit
+  Suche, Filter, Farbfeld, Kennungssuche und Freundesansicht ihre Form
+  behalten. Geschrieben wird immer das Material.
+- **Ein Material existiert nur, solange es ein Gebinde hat.** Wer das letzte
+  Gebinde löscht, einem anderen Material zuordnet oder das Material
+  zusammenführt, löscht es in derselben Transaktion mit
+  (`deleteProductIfEmpty` in `api/queries/products.ts`). Deshalb gibt es kein
+  `product.create`: Ein Material entsteht mit seinem ersten Gebinde
+  (`material.create` ohne `productId`). Und deshalb braucht es keine eigene
+  Mengenobergrenze – die der Gebinde begrenzt die Materialien mit.
+- **Anlegen und Ändern nehmen die Materialfelder flach.** `material.create`
+  nimmt **entweder** `productId` (weiteres Gebinde) **oder** die Felder eines
+  neuen Materials; beides zugleich ist `BAD_REQUEST`. `material.update` ändert
+  mit mitgeschickten Materialfeldern das Material – und damit **alle** seine
+  Gebinde –, mit `productId` ordnet es das Gebinde um; beides zugleich ist
+  ebenfalls `BAD_REQUEST`.
+- **Eine Konsistenzregel mit dem Lager.** Alle Gebinde eines Materials liegen in
+  Lagern gleicher Materialart und Filamentstärke – eine 2,85-mm-Rolle ist ein
+  anderes Produkt. Geprüft in `assertProductFitsLager` (`api/materialRouter.ts`)
+  gegen die **übrigen** Gebinde (das letzte darf überallhin), beim
+  Zusammenführen in `product.merge`, und von der Gegenseite in `lager.update`:
+  Ein Lager wechselt Art oder Stärke nur, solange keines seiner Materialien auch
+  woanders liegt (`countProductsAlsoElsewhere`).
+- **Knapp ist das Material, nicht die Rolle.** `productStock`
+  (`contracts/materials.ts`) summiert die Restmengen aller Gebinde über alle
+  Lager. Setzt eines der beteiligten Lager eine Schwelle in Gramm
+  (`lager.lowStockGrams`), gilt die **höchste**; sonst `LOW_STOCK_PERCENT` der
+  größten Nennmenge, mit derselben Rundung wie der Füllstand (`fillPercent`).
+  So warnt ein Material mit einem Gebinde exakt wie bis 3.1.0 –
+  `api/productStock.test.ts` prüft das über alle Grammwerte mehrerer
+  Nennmengen. Der Ring der Spule bleibt der Füllstand des Gebindes.
+- **Der Bestand kommt vom Server mit.** `material.list` hängt jeder Zeile
+  `stock` an. Mit `lagerId` lädt `findMaterialsInScope` dafür eine zweite
+  Runde: die Gebinde **derselben Materialien in anderen Lagern** – sonst
+  warnte die Übersicht eines Lagers, obwohl die volle Rolle im anderen liegt.
+- **Zusammenführen legt nie automatisch zusammen**, außer einmal im Backfill.
+  `productKey` (Materialart und Stärke des Lagers, Materialart-Bezeichnung,
+  Hersteller, Farbe, Oberfläche; nur mit Hersteller **und** Farbe) ist die
+  Vergleichsform für den Import und für `mergeCandidates`, die Vorschläge auf
+  Übersicht und Material-Seite. Zusätzlich schlägt `mergeCandidates` bei
+  fehlendem Hersteller gleiche Namen vor – nur als Frage an den Menschen.
+- **Die Migration `0022_material_products.sql` ist von Hand ergänzt.**
+  drizzle-kit erzeugt `ADD COLUMN … NOT NULL` und `DROP COLUMN`, aber keinen
+  Backfill. Sie legt je `productKey` ein Material an (Angaben vom ältesten
+  Gebinde), alles andere 1:1, und löscht die alten Spalten zuletzt. Weil sie
+  die Spalten löscht, aus denen sie liest, lässt sie sich nicht auf den
+  fertigen Stand ein zweites Mal anwenden; `api/materialProducts.integration.test.ts`
+  baut die Datenbank deshalb nur bis 0021 auf (`migrateUntil` in
+  `api/test/integration-db.ts`), legt Altbestand an und wendet 0022 an. Die
+  Tests der Migration `0019` laufen seither ebenso gegen den Stand vor 0019.
+- **Freunde** sehen dieselben Felder wie vorher; `FRIEND_MATERIAL_WITH` lädt sie
+  über das Material, und nur diese Spalten samt Dichte – `notes` des Materials
+  bleibt ungeladen. Die Suche läuft über eine Unterabfrage auf
+  `material_products`. Achtung beim Sortieren: Drizzles relationale Abfrage
+  schreibt jede Spaltenreferenz im `orderBy` auf den Alias der Haupttabelle
+  um, die Unterabfrage für den Namen nennt Tabelle und Spalte deshalb wörtlich.
+- **Oberfläche.** Die Seite eines Gebindes liegt unter
+  `/materialien/gebinde/:id` (`gebindePath`), die eines Materials unter
+  `/materialien/:id` (`materialPath`); `/material/:id` leitet um. Nicht unter
+  `/gebinde/`: Dort stehen seit 2.2.0 die Gebindearten.
+- **Export Version 5**: neuer Abschnitt `materialProducts`, und `materials`
+  verliert Felder – zum ersten Mal ändert sich die Form bestehender Zeilen.
+- **Registriert** ist `material_products` in `COUNTED_TABLES`, der
+  Tabellenliste in `api/postgres.integration.test.ts` und im Export; der
+  DSGVO-Wächter findet `userId` selbst. Gelöscht wird in beiden Kaskaden
+  (Konto, Organisation) **nach** den Gebinden.
+- **Gleichzeitigkeit.** Wer ein Gebinde an ein Material hängt (anlegen,
+  umordnen, zusammenführen) oder ein Material leer löscht, nimmt zuerst
+  `lockProductInScope` (`FOR UPDATE` auf die Materialzeile). Ohne die Sperre
+  konnte ein Gebinde auf ein im selben Moment gelöschtes Material zeigen –
+  Fremdschlüssel gibt es keine. Der Lesepfad überspringt ein solches Gebinde,
+  statt die Liste des ganzen Bereichs abstürzen zu lassen.
+
+### Aufgebraucht (seit 4.1.0)
+
+`materials.archivedAt` – „aufgebraucht seit“, `NULL` = in Gebrauch. Der Weg
+statt Löschen für eine leere Rolle: Verlauf, Material und seine
+Druckeinstellungen bleiben.
+
+- **Zählt nicht zum Bestand** (`productStock` mit `archived`), steht nicht im
+  Regal, nicht in Wiegen/Abbuchen und geht **nicht an Freunde** (alle drei
+  Freundes-Lesepfade filtern `archivedAt IS NULL`). Wiegen und Abbuchen lehnt
+  auch der Server ab (`assertGebindeInUse`) – eine zweite Sitzung sieht die
+  Markierung erst nach dem Neuladen. Die Schnellsuche findet es weiter zum
+  Ansehen, die Kennungssuche führt auf seine Seite.
+- **Sind alle Gebinde aufgebraucht, ist das Material knapp** (`usedUp`,
+  Bestand 0, Schwelle aus den aufgebrauchten Gebinden). Weil es in keinem Regal
+  mehr steht, meldet es die Übersicht eigens (`OutOfStockHint` über
+  `product.list` → `activeCount`).
+- `archived: true` ein zweites Mal behält den ersten Zeitpunkt
+  (`coalesce`).
+- **`material.list` liefert es trotzdem mit**, mit `archivedAt`: Formular und
+  Import berechnen die nächste freie Kennung aus dieser Liste, und die Kennung
+  eines aufgebrauchten Gebindes bleibt belegt, bis es gelöscht wird (der
+  Unique-Index je Lager kennt kein „aufgebraucht“). Gefiltert wird deshalb im
+  Client – in `Home.tsx`, `QuickActions.tsx` und `IdentifierLookup.tsx`.
+- **Die Drybox bleibt zugewiesen.** Die Tara geht in den Verlauf ein; sie beim
+  Aufbrauchen zu lösen, änderte rückwirkend die Nettowerte. Die
+  Belegungszählung der Dryboxen zählt aufgebrauchte Gebinde deshalb mit.
+- Stufe `editor` (`material.setArchived`), wie Ändern.
+
+### Druckeinstellungen (seit 4.1.0)
+
+Je Material eine Zeile in `material_print_settings` (`productId` als
+Primärschlüssel, `settings` jsonb, `notes` Markdown, `schemaVersion`).
+
+- **Eigene Tabelle, keine Spalte am Material** – die Vorbereitung für Freunde:
+  Die Freundes-Lesepfade laden `material_products`; stünden die Einstellungen
+  dort, trennte sie nur die Spaltenauswahl von der Datenpanne.
+  `api/friendVisibility.test.ts` hält fest, dass `api/queries/friends.ts` sie
+  nicht einmal erwähnt. Wer sie Freunden zeigen will, ändert diesen Test mit
+  und baut eine eigene Projektion samt Freigabe je Lager (Plan, Phase 2).
+- **Eine Form je Materialart** (`printSettingsSchema` in
+  `contracts/printSettings.ts`, discriminated union über `kind`), alles
+  ganzzahlig: °C, %, mm/s, Rückzug in 1/100 mm, Belichtung in ms, Schichthöhe
+  in µm, Zeiten in Minuten. Das Formular nimmt mm und s entgegen und rechnet
+  um. `product.setPrintSettings` lehnt eine Art ab, die nicht die des Lagers
+  der Gebinde ist; leer (keine Werte, keine Notizen) heißt: Zeile löschen.
+- **Gespeichertes, das nicht mehr zum Schema passt, wird `null`**
+  (`parseStoredPrintSettings`) statt eines Fehlers – eine Seite, die an einer
+  alten Zeile scheitert, wäre schlimmer als eine leere Karte.
+- **Zusammenführen und Umordnen des letzten Gebindes:** Die Einstellungen des
+  Ziels bleiben; hat es keine, wandern die der Quelle mit (`carryTo` in
+  `deleteProductIfEmpty` – eine Stelle für beide Wege). Feldweise zu mischen
+  hieße, Werte zweier Materialien zu verschneiden.
+- **Die Art wird unter der Sperre geprüft** (`savePrintSettings`). Wandert das
+  letzte Gebinde danach in ein Lager anderer Art, liefert `product.byId` die
+  Werte nicht mehr aus (die Notizen schon) – „Düse 215 °C“ an einem Harz wäre
+  falsch. Gespeichert bleiben sie, bis jemand neue einträgt.
+- **Kaskaden:** mit dem Material (`deleteProductIfEmpty`), bei Konto- und
+  Organisationslöschung vor den Materialien. Kein `userId` – der Besitz folgt
+  aus dem Material, deshalb in der Ausnahmeliste des DSGVO-Wächters; im Export
+  unter `materialPrintSettings` (additiv, Version bleibt 5).
+- **Oberfläche:** `src/components/PrintSettings.tsx` – die kompakte Zeile
+  (`PrintSettingsSummary`) in `ProductGebindeList`, die Karte samt Dialog auf
+  der Material-Seite.
+
+## Druckhistorie (seit 4.2.0)
+
+Was gedruckt wurde, mit welchem Material, samt Links, Tags und Notizen.
+Tabellen `print_jobs` (`ownerXor` wie die übrigen Fachzeilen),
+`print_job_materials` und `print_job_links`; Router `print.*`
+(`api/printJobRouter.ts`), Abfragen in `api/queries/printJobs.ts`, Regeln
+ohne Datenbank in `contracts/printJobs.ts`.
+
+- **Der Verbrauch bleibt die einzige Wahrheit für die Restmenge.** Eine
+  Materialzeile mit Gebinde und Gramm bucht einen gewöhnlichen Verbrauch ab
+  (`consumptions`, Zeitpunkt = `printedAt`, Notiz = Titel) und merkt sich
+  dessen ID in `print_job_materials.consumptionId`. `consumptions` bekommt
+  keine Spalte, und es gibt keine zweite Restmengenrechnung über Drucke.
+  Anlegen, Ändern und Löschen laufen je in **einer** Transaktion.
+- **Ohne Gebinde wird nicht abgebucht.** `materialId` ist nullable: Ein Druck
+  darf Gramm eines Materials nennen, ohne dass feststeht, von welcher Rolle –
+  die Vorarbeit für den Import aus dem Drucker (#41).
+- **Ändern bucht nur um, wenn es muss.** Nur wenn sich Materialzeilen
+  (Material, Gebinde, Gramm) oder `printedAt` ändern, werden die alten
+  Verbräuche gelöscht und neu gebucht; sonst bleiben sie samt IDs stehen –
+  auf die höchste ID schaut die Korrekturregel der Verbräuche. Das Formular
+  schickt deshalb den gespeicherten Zeitpunkt zurück, solange die Minute
+  gleich ist (das Datumsfeld kennt keine Sekunden).
+- **Beim Umbuchen behält jede unveränderte Zeile ihren Zustand**
+  (`planRows`, Vergleich an derselben Stelle): War sie nicht abgebucht – etwa
+  weil jemand den Verbrauch einzeln gelöscht hat –, bleibt sie es; sonst holte
+  jede Datumskorrektur ihn still zurück. Eine unveränderte Zeile darf auch ein
+  inzwischen aufgebrauchtes Gebinde behalten und eines, das inzwischen einem
+  anderen Material gehört (Schnappschuss). Neu hinzukommen darf beides nicht
+  (`PRINT_JOB_USED_UP`, `PRINT_JOB_BAD_MATERIAL`).
+- **Die Verbrauchsgrenze prüft die Transaktion**, nach der Bereichsprüfung und
+  nach dem Zurücknehmen der eigenen alten Buchungen (`ConsumptionRoomCheck`) –
+  sonst verriete „voll“ fremde Gebinde, und eine Titeländerung stieße an die
+  eigenen Verbräuche.
+- **Gebinde werden gesperrt.** Druck, Wägung und Verbrauch halten das Gebinde
+  mit `FOR SHARE`, `deleteMaterial` sperrt es als Erstes mit `FOR UPDATE`.
+  Sonst entstand ein Verbrauch zu einem Gebinde, das im selben Moment gelöscht
+  wurde – und den keine Kontolöschung mehr fand.
+- **Löschen fragt.** `print.delete` mit `revertConsumptions`: ja löscht die
+  verknüpften Verbräuche mit, nein lässt sie stehen. Ein einzeln gelöschter
+  Verbrauch setzt `consumptionId` auf NULL, der Druck bleibt.
+- **Schnappschuss des Materials.** `productId` und `productName` stehen am
+  Druck. Umordnen eines Gebindes zieht den Druck **nicht** nach; Zusammenführen
+  schon (`carryTo` in `deleteProductIfEmpty` setzt `productId` um). Verschwindet
+  das Material mit seinem letzten Gebinde, wird `productId` NULL und der Name
+  aus dem Schnappschuss angezeigt. Solche Zeilen kann das Formular nicht
+  mitschicken (das Schema verlangt ein Material); `updatePrintJob` lässt sie
+  deshalb stehen.
+- **Tags klein, Links nur `https://`.** `normalizeTags` (getrimmt, ohne „#“,
+  klein, ohne Dubletten, höchstens 20) und `isHttpsUrl` – ein `javascript:`-Link wäre
+  Skript im eigenen Ursprung. Links öffnen mit `rel="noopener noreferrer"`.
+- **Suche serverseitig und seitenweise**, anders als die Gebindeliste: Die
+  Historie wächst ohne Grenze. `ILIKE` über Titel, Notizen, Tags, Drucker,
+  Links und Materialnamen (den aktuellen **und** den Schnappschuss), mindestens `PRINT_JOB_SEARCH_MIN_LENGTH` Zeichen,
+  `%`/`_` maskiert. Cursor `printedAt|id` über `printedAt desc, id desc`.
+  Volltext oder `pg_trgm` erst, wenn es langsam wird.
+- **Stufen:** `viewer` sieht und sucht, `weigher` erfasst (ein Druck bucht ab
+  wie ein Verbrauch), `editor` ändert (bucht um) und löscht jeden.
+  `mayDeletePrintJob` ist ein **Alias** von `mayDeleteWeighing` – `weigher`
+  löscht nur den zuletzt erfassten Druck des Bereichs in den ersten 15 Minuten.
+- **Freunde sehen keine Drucke**, auch keine Namen daraus; die
+  Freundes-Lesepfade kennen die Tabellen nicht.
+- **Grenzen:** `MAX_PRINT_JOBS_PER_SCOPE` (20 000), je Druck 16 Materialien,
+  10 Links, 20 Tags; `print.create` 60/min, `print.list` 240/min je Benutzer.
+  Die Verbrauchsobergrenze je Gebinde gilt auch für Drucke. Kein
+  Audit-Ereignis – Nutzung, nicht Sicherheit.
+- **Registriert** in `COUNTED_TABLES`, der Tabellenliste in
+  `api/postgres.integration.test.ts`, im Export (`printJobs`,
+  `printJobMaterials`, `printJobLinks`; additiv, Version bleibt 5) und in den
+  Kaskaden von Konto und Organisation. `print_jobs.userId` findet der
+  DSGVO-Wächter selbst; die beiden Untertabellen stehen in seiner
+  Ausnahmeliste (Personenbezug über den Druck).
+- **Oberfläche:** `/drucke` (`PrintJobs.tsx`, Filter in der Adresse, damit
+  „alle Drucke mit diesem Material“ ein Link ist – `printsForPath`),
+  `/drucke/:id` (`PrintJobDetail.tsx`), das Formular `PrintJobDialog` über
+  `quickActions.openPrintJobForm`/`editPrintJob`, „Letzte Drucke“
+  (`RecentPrints`) auf Material- und Gebindeseite, ein Link im Panel der
+  Übersicht, der Schalter „Als Druck speichern“ im `ConsumptionDialog` und
+  Treffer in der Schnellsuche.
+
+### Fotos und 3MF (seit 4.3.0)
+
+Dateien zu Drucken: Metadaten in `print_job_files`, die Bytes in der Ablage
+(`api/lib/fileStorage.ts`) – einem Verzeichnis (`UPLOAD_DIR`, im Container ein
+eigenes Volume unter `/data/uploads`) oder seit 4.4.0 einem S3-kompatiblen
+Objektspeicher (siehe „S3 als Ablage“). Die erste Stelle der App, an der
+Benutzerdaten außerhalb der Datenbank liegen.
+
+- **Eigene Hono-Routen statt tRPC** (`api/fileRoutes.ts`): superjson taugt
+  nicht für Binärdaten, und ein Foto soll als `<img src>` ladbar sein.
+  `POST /api/files/print-jobs/:id?organizationId=` (multipart, `file` und bei
+  Fotos `thumbnail`), `GET /api/files/:id` und `…/thumbnail`,
+  `GET /api/files/export`. Löschen und Titelbild laufen über tRPC
+  (`print.deleteFile`, `print.setCover`). Die Regeln der Prozeduren gelten von
+  Hand: Sitzung aus dem Cookie, Sperre (außer beim Export, Art. 15/20),
+  `resolveScope`, Zugriffsbegrenzung je Benutzer, Obergrenzen nach der
+  Bereichsprüfung. Eine Datei eines fremden Bereichs ist 404.
+- **Der Typ kommt aus den Bytes** (`detectPrintFile`,
+  `contracts/printFiles.ts`): JPEG, PNG, WebP und 3MF (ein ZIP mit
+  `3D/*.model` – ein Office-Dokument ist auch ein ZIP). Kein SVG, kein HTML.
+  Endung und `Content-Type` der Anfrage zählen nicht; ausgeliefert wird der
+  gespeicherte Typ mit `nosniff`, 3MF immer als `attachment`.
+- **Fotos gehen nie unverändert hinaus.** `prepareImage`
+  (`src/lib/imageUpload.ts`) verkleinert auf 2048 px und kodiert über ein
+  Canvas neu (WebP, sonst JPEG) – das entfernt EXIF samt GPS. Safari schreibt
+  beim JPEG-Kodieren selbst einen EXIF-Block (ohne Ort); `stripJpegMetadata`
+  nimmt ihn heraus, ohne die Bilddaten anzufassen. Der Server lehnt jedes Foto
+  mit Metadaten ab (`hasMetadata`), nicht nur GPS: Die Position kann auch in
+  XMP stehen. Geprüft wird die **ganze** Datei – JPEG über alle Scans bis EOI
+  (EXIF darf zwischen zwei Scans eines progressiven JPEG stehen), APP2 nur mit
+  `ICC_PROFILE`, APP14 nur als `Adobe`, und alles hinter dem Bildende (EOI,
+  IEND, RIFF-Ende) zählt als Metadaten. Maße liest der Server selbst, höchstens
+  65 535 px je Kante.
+- **Der Name auf der Platte ist ein zufälliger Schlüssel** (128 Bit, geprüft
+  gegen `^[0-9a-f]{32}$` vor jedem Zugriff), nie der hochgeladene Name. Der
+  wird nur angezeigt (`sanitizeFileName`) und im `Content-Disposition`
+  genannt.
+- **Reihenfolge:** Hochladen schreibt erst die Datei, dann die Zeile; scheitert
+  die Zeile, geht die Datei sofort. Löschen (Datei, Druck, Konto,
+  Organisation) löscht erst die Zeilen in der Transaktion und die Dateien nach
+  dem Commit (`deleteFileRowsOfJobs` → `removeStoredFiles`). Was dabei
+  liegenbleibt, räumt `sweepOrphanFiles` alle sechs Stunden ab – nur Dateien
+  älter als eine Stunde, damit ein laufender Upload nicht verschwindet. Eine
+  Zeile ohne Datei entsteht so nie, eine Datei ohne Zeile höchstens kurz.
+- **Titelbild** (`print_jobs.coverFileId`): das erste Foto, bis jemand ein
+  anderes wählt; wird es gelöscht, rückt das nächste nach. Nur ein Foto
+  desselben Drucks.
+- **Stufen:** Hochladen und Titelbild `weigher` (nichts geht verloren),
+  Löschen `editor` – `weigher` nur die zuletzt hochgeladene Datei des Drucks
+  in den ersten 15 Minuten (`mayDeletePrintFile`, Alias von
+  `mayDeleteWeighing`).
+- **Grenzen** (`contracts/limits.ts`): 20 Dateien je Druck, Foto 10 MB,
+  Vorschau 1 MB, 3MF 45 MB (unter dem Body-Limit von 50 MB samt Hülle),
+  **1 GB Speicher je Bereich** als Summe über `sizeBytes + thumbnailBytes`.
+  Uploads 30/min, Vorschauen 1200/min, Originale 120/min, Export 5/h je
+  Benutzer. Dazu höchstens 8 gleichzeitige Uploads je Instanz und 2 je
+  Benutzer – ein Upload liegt bis zu 50 MB im Speicher, und die
+  Zugriffsbegrenzung zählt je Minute, nicht je Moment. Originale gehen als
+  Strom hinaus (`storage.open`), nicht über den Speicher. Die Grenzen je Druck
+  und je Bereich prüft `insertPrintFile` ein zweites Mal unter Sperre des
+  Drucks; parallele Uploads auf **verschiedene** Drucke können das Kontingent
+  des Bereichs knapp überschreiten (derselbe Vorbehalt wie überall).
+- **Ablehnungen tragen eine Kennung** (`code`: `has_metadata`,
+  `too_many_files`, `storage_full` …) neben dem deutschen Text; die Oberfläche
+  übersetzt sie (`t.prints.files.errors`).
+- **Export:** Das JSON nennt die Dateien (`printJobFiles`, ohne
+  Speicherschlüssel, mit SHA-256; additiv, Version bleibt 5), die Dateien
+  selbst kommen als ZIP (`/api/files/export`, `fflate`, ohne Kompression,
+  Datei für Datei gestreamt; eine in der Ablage fehlende Datei steht im
+  Verzeichnis mit `path: null`, der Export läuft weiter). Ohne ZIP64 höchstens
+  65 000 Dateien je Export. Nur die eigenen, nicht die der Organisationen –
+  wie beim übrigen Bestand.
+- **Betrieb:** `/verwaltung/system` zeigt, ob die Ablage beschreibbar ist und
+  wie viel belegt ist; der Start schreibt eine Fehlermeldung ins Log, wenn
+  nicht. `/health` bleibt davon unberührt – ohne Ablage läuft alles andere
+  weiter. Gesichert werden müssen jetzt **zwei** Orte (README).
+- **Registriert** in `COUNTED_TABLES`, der Tabellen- und Enum-Liste in
+  `api/postgres.integration.test.ts` und der Ausnahmeliste des
+  DSGVO-Wächters (Personenbezug über den Druck). Eine Organisation mit
+  Drucken gilt nicht mehr als „leer“ (`deleteOrganizationIfEmpty`).
+- **Oberfläche:** `src/components/PrintFiles.tsx` auf `/drucke/:id` (Raster
+  der Vorschauen, Großansicht, Kamera auf dem Telefon, Ziehen und Ablegen),
+  das Titelbild in `PrintJobCard`, der ZIP-Download in
+  `AccountDataActions`.
+
+### S3 als Ablage (seit 4.4.0)
+
+`STORAGE_DRIVER=s3` samt `S3_BUCKET`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY` und bei AWS `S3_REGION` (sonst `S3_ENDPOINT`); dazu
+optional `S3_PREFIX`, `S3_FORCE_PATH_STYLE`, `S3_SESSION_TOKEN`. Gelesen und
+geprüft an **einer** Stelle, `parseStorageConfig` (`api/lib/storageConfig.ts`),
+beim Start über `env.storage` – eine unvollständige Angabe lässt den Start
+scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
+
+- **Eine Schnittstelle, zwei Treiber.** `FileStorage` (`put`, `get`, `open`,
+  `delete`, `list`, `removeStaleTemp`, `isWritable`); `getFileStorage` wählt.
+  Der Rest der App kennt nur die Schnittstelle. Wer einen dritten Treiber
+  baut, hängt ihn an die Testreihe in `api/fileStorage.test.ts` – sie läuft
+  gegen jeden Treiber gleich.
+- **`aws4fetch` statt AWS-SDK.** Gebraucht werden PUT, GET, DELETE und
+  ListObjectsV2; das SDK brächte dafür Dutzende Pakete ins Laufzeit-Abbild
+  (Begründung im `Dockerfile`). `aws4fetch` ist eine Datei ohne
+  Abhängigkeiten und übernimmt Signatur (SigV4) und Wiederholung bei 5xx/429.
+  Das XML der Liste liest `parseListObjects` von Hand.
+- **Dieselbe Schlüsselform wie im Verzeichnis** – `<präfix><ab>/<schlüssel>`.
+  Ein Umzug ist eine Kopie (`rclone copy`, `aws s3 sync`), die Datenbank bleibt
+  unverändert. Die Liste nimmt nur Objekte dieser Form; fremde Objekte im
+  Bucket und die Schreibprobe fasst der Aufräumlauf nie an.
+- **Ausgeliefert wird weiter über die App**, als Strom aus dem GET. Keine
+  vorsignierten Adressen: Sie gälten bis zum Ablauf für jeden, der sie hat,
+  an Bereichsprüfung, Sperre und Zugriffsbegrenzung vorbei, und die CSP müsste
+  einen fremden Host für Bilder erlauben. Der Bucket bleibt privat.
+- **Uploads tragen eine signierte Prüfsumme** (`x-amz-content-sha256` statt
+  `UNSIGNED-PAYLOAD`, der Vorgabe von `aws4fetch` für S3) – der Speicher lehnt
+  ab, was unterwegs verändert wurde.
+- **Senden und Zeitlimit selbst, nicht `AwsClient.fetch`.** Dessen
+  Zwischen-`Request` hält undici nur schwach am Abbruchsignal – das Zeitlimit
+  griff nie. `send` signiert mit `AwsV4Signer`, hängt das Signal an `fetch`
+  selbst und schließt verworfene Antworten vor der Wiederholung. Das Limit
+  (30 s) gilt bis zum Ende der Verarbeitung; nur `open` gibt es nach den
+  Kopfzeilen frei – ein 45-MB-Download über eine langsame Leitung darf
+  dauern. Ohne verlässliche `content-length` puffert `open`, damit die Route
+  die richtige Größe schickt. `isWritable` schreibt und löscht
+  eine Probe (`<präfix>.filahub-schreibprobe`) – ein HEAD auf den Bucket sagte
+  nicht, ob die Schlüssel schreiben dürfen.
+- **Versionierung im Bucket aus** (oder alte Versionen per Lebenszyklus
+  verfallen lassen): Sonst überlebt ein gelöschtes Foto als alte Version, und
+  eine Löschung nach Art. 17 löschte nichts. Steht in README, PRIVACY und
+  COMPLIANCE.
+- **Getestet** an drei Stellen: `api/fileStorage.test.ts` (Testreihe gegen
+  Verzeichnis und den Nachbau `api/test/fakeS3.ts`, der Signaturkopf und
+  Prüfsumme prüft; mit `S3_TEST_ENDPOINT`, `S3_TEST_BUCKET`,
+  `S3_TEST_ACCESS_KEY_ID`, `S3_TEST_SECRET_ACCESS_KEY` zusätzlich gegen einen
+  echten Speicher), `api/storageConfig.test.ts` (Umgebung, Adressen) und der
+  Block „Mit S3-Ablage“ in `api/printFiles.integration.test.ts` (die Routen
+  mit einem Strom aus `fetch`). Achtung beim Test gegen **moto**: Es rechnet
+  die Signatur einer Liste mit `/` im `prefix` falsch nach (boto3 scheitert
+  dort ebenso) – `S3_TEST_PREFIX=` leer setzen. Die Tests räumen nur ab, was
+  sie selbst angelegt haben; trotzdem einen eigenen Test-Bucket nehmen, nie
+  den einer laufenden Instanz.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -372,7 +779,7 @@ Seit 2.7.0 zeigt die Übersicht Farbe und Oberfläche nicht nur als Text, sonder
 als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
 (`src/components/AppearanceSwatch.tsx`, Spalte `appearance`).
 
-- **`materials.color` und `materials.texture` bleiben Freitext.** Es gibt keinen
+- **`material_products.color` und `.texture` bleiben Freitext** (bis 3.1.0 am Gebinde, in `materials`). Es gibt keinen
   Fremdschlüssel auf einen Katalog; die Auflösung Name → Farbcode passiert beim
   Anzeigen über die Vergleichsform (`normalizeAppearanceName`). Der Preis: Ein
   umbenannter Katalogeintrag zieht nichts nach. Der Gewinn: Ein gelöschter
@@ -431,7 +838,9 @@ sonst wäre er eine Benennungsvorschrift statt einer Prüfung, und eine Tabelle,
 die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
 er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
 nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
-über das Material) und `loginCodes` (über die Telegram-ID).
+über das Gebinde), `materialPrintSettings` (über das Material),
+`printJobMaterials`, `printJobLinks` und `printJobFiles` (über den Druck) und
+`loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -483,8 +892,8 @@ eng sind die Regeln. Alles davon steckt in `api/queries/friends.ts`.
   Freitext und kann einen Ort verraten – dieselbe Erwägung, die die Drybox
   ausschließt.
 - **`FriendMaterial` ist handgeschrieben**, nicht aus dem Schema abgeleitet, und
-  `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials` um
-  eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
+  `toFriendMaterial` ist die einzige Stelle, die es erzeugt. Wer `materials`
+  oder `material_products` um eine Spalte erweitert, muss sie hier eintragen – `api/friendVisibility.test.ts`
   nagelt die Schlüsselmenge fest. Draußen bleiben: `priceCents` (immer),
   `notes`, `purchaseDate`, alles zur Drybox, der Wägungs- und
   Verbrauchsverlauf, `lagerId` und
@@ -657,7 +1066,7 @@ statt jedes Leergewicht selbst zu pflegen. Vier Ebenen:
   Nach einer Umbenennung ist nichts nachzuziehen.
 - **Materialarten** (`preset_series_material_types`) und **Gebindeform**
   (`preset_container_versions.form`) sind weiche Sortierhinweise, **kein
-  Filter**: `materials.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),
+  Filter**: `material_products.materialType` ist Freitext („PLA“, „PLA+“, „PLA Silk“),
   und die Form ist eine Angabe des Benutzers. Hartes Filtern würde ein Gebinde
   verstecken, das jemand bewusst so angelegt hat.
 
@@ -920,6 +1329,9 @@ der Instanz, nur für Links in Telegram-Nachrichten; fehlt sie, nennen die
 Nachrichten bloß den Ort in der App. Bewusst konfiguriert und nicht aus den
 Anfrage-Kopfzeilen abgeleitet: Die kann ein Aufrufer setzen, und daraus einen
 Link zu bauen, den wir an Dritte verschicken, wäre eine offene Weiterleitung.
+Optional `UPLOAD_DIR` – das Verzeichnis für Fotos und 3MF-Dateien (Vorgabe
+`/data/uploads` in Produktion, sonst `./data/uploads`); siehe „Fotos und 3MF“.
+Statt dessen `STORAGE_DRIVER=s3` mit `S3_*` – siehe „S3 als Ablage“.
 `drizzle.config.ts` benötigt ebenfalls `DATABASE_URL`.
 
 ## Lokal anmelden ohne Telegram (DEV_LOGIN)
@@ -1026,7 +1438,8 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`,
+  `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
+  `printFiles`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1047,6 +1460,12 @@ Datenbank.
 - `api/staticFiles.test.ts` prüft die Cache-Kopfzeilen der statischen
   Auslieferung gegen ein Wegwerf-Verzeichnis – ohne `npm run build`. Der
   Grund steht unter „Aktualisierung der installierten App“.
+- `api/serverBundle.test.ts` baut das Server-Bündel mit **denselben**
+  Schaltern wie `npm run build` (aus `package.json` gelesen) und lässt Node es
+  parsen. Anlass: In 4.3.0 brachte `fflate` ein eigenes `import { createRequire }`
+  mit, der Banner des Builds deklarierte denselben Namen – `vite build`, `tsc`
+  und alle Tests waren grün, der Container wäre beim Start abgestürzt. Der
+  Banner importiert seither unter einem eigenen Namen.
 - `api/format.test.ts` testet die gemeinsamen Formatierer aus
   `contracts/format.ts` – Tests unterhalb von `src/` würde vitest nicht
   einsammeln.
@@ -1056,7 +1475,10 @@ Datenbank.
 - `api/postgres.integration.test.ts`, `api/account.integration.test.ts`,
   `api/friends.integration.test.ts`, `api/lager.integration.test.ts`,
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
-  `api/abuse.integration.test.ts` und `api/materialType.integration.test.ts`,
+  `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
+  `api/materialProducts.integration.test.ts`,
+  `api/printJobs.integration.test.ts` und
+  `api/printFiles.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

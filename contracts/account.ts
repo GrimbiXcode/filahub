@@ -37,8 +37,14 @@
  *
  * **Bleibt `4` in 2.9.0**: Der Abschnitt `consumptions` kommt dazu, bestehende
  * Zeilen bleiben, wie sie sind – dieselbe Erwägung wie bei `lager` in 2.2.0.
+ *
+ * **`5` seit 4.0.0**: Zum ersten Mal ändert sich die Form bestehender Zeilen.
+ * `materials` verliert Name, Materialart, Hersteller, Farbe, Oberfläche und
+ * Dichte und bekommt `productId`; die Felder stehen im neuen Abschnitt
+ * `materialProducts`. Ein Programm, das Version 4 liest, fände sie sonst
+ * nicht mehr.
  */
-export const ACCOUNT_EXPORT_VERSION = 4;
+export const ACCOUNT_EXPORT_VERSION = 5;
 
 /**
  * Tabellen, die im Export enthalten sein müssen.
@@ -56,8 +62,33 @@ export const ACCOUNT_EXPORT_SECTIONS = [
     die Konfiguration (Materialart, Filamentstärke) beschreibt seinen Bestand.
   */
   "lager",
+  /*
+    Seit 4.0.0 (Exportversion 5): Materialien als Produkt – Name,
+    Materialart, Hersteller, Farbe, Oberfläche, Dichte. Die Gebinde unter
+    `materials` zeigen über `productId` darauf und tragen diese Felder nicht
+    mehr.
+  */
+  "materialProducts",
+  /*
+    Seit 4.1.0: Druckeinstellungen je Material – Werte und Notizen der Person.
+    Additiv, die Exportversion bleibt 5.
+  */
+  "materialPrintSettings",
   "materials",
   "weighings",
+  /*
+    Druckhistorie (seit 4.2.0): Drucke mit Titel, Notizen, Tags, Drucker –
+    und ihre Materialzeilen und Links. Additiv, Version bleibt 5.
+  */
+  "printJobs",
+  "printJobMaterials",
+  "printJobLinks",
+  /*
+    Seit 4.3.0: Fotos und 3MF-Dateien als Verzeichnis (Name, Typ, Größe,
+    SHA-256); die Dateien selbst liefert der ZIP-Download daneben. Additiv,
+    Version bleibt 5.
+  */
+  "printJobFiles",
   /*
     Verbräuche seit 2.9.0 – Abbuchungen in Gramm samt Notiz und Zeitpunkt.
     Personenbezug wie bei den Wägungen über das Material, deshalb in der

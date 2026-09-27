@@ -7,6 +7,8 @@ import {
 } from "@contracts/friends";
 import type { MaterialColumn } from "@contracts/materialColumns";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
+import { PRINT_JOB_STATUSES } from "@contracts/printJobs";
+import { PRINT_FILE_KINDS } from "@contracts/printFiles";
 import {
   ORGANIZATION_INVITATION_STATUSES,
   ORGANIZATION_ROLES,
@@ -248,6 +250,14 @@ export const lager = pgTable(
      * Begründung in `contracts/identifierTemplate.ts`.
      */
     identifierTemplate: varchar("identifierTemplate", { length: 40 }),
+    /**
+     * Warnschwelle in Gramm für jedes Material, das (auch) hier liegt –
+     * `NULL` = Vorgabe (`LOW_STOCK_PERCENT` der größten Nennmenge). Liegt ein
+     * Material in mehreren Lagern, gilt die höchste gesetzte Schwelle. Die
+     * Regel steht an genau einer Stelle: `productStock`
+     * (`contracts/materials.ts`).
+     */
+    lowStockGrams: integer("lowStockGrams"),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
@@ -461,6 +471,117 @@ export type CustomTexture = typeof customTextures.$inferSelect;
 export type InsertCustomTexture = typeof customTextures.$inferInsert;
 
 /** 3D-Druckmaterial (Gebinde in einem Lager) */
+/**
+ * Das **Material** als Produkt („Polymaker PolyTerra PLA, Charcoal Black“) –
+ * seit 4.0.0 die Ebene über den Gebinden.
+ *
+ * Achtung, Namen: In der Oberfläche heißt **diese** Tabelle „Material“, die
+ * Tabelle `materials` darunter dagegen „Gebinde“ bzw. „Rolle“. `materials`
+ * wurde nicht umbenannt – das hätte eine Handmigration über alle Indizes und
+ * Constraints gekostet, ohne dass ein Benutzer etwas davon hat. Die
+ * Abbildung steht in `AGENTS.md` unter „Material und Gebinde“.
+ *
+ * Was hier steht, gilt für **alle** Gebinde des Materials; eine Kopie am
+ * Gebinde gibt es nicht (eine zweite Wahrheit liefe auseinander). Die
+ * Lesepfade flachen die Felder für die Gebindezeile wieder auf
+ * (`withProductFields` in `api/queries/filament.ts`).
+ *
+ * **Ein Material existiert nur, solange es ein Gebinde hat.** Wer das letzte
+ * löscht oder einem anderen Material zuordnet, löscht das Material mit
+ * (`api/queries/products.ts`). Materialart und Stärke kennt das Material
+ * deshalb immer über seine Gebinde – sie stehen am Lager, nicht hier.
+ */
+export const materialProducts = pgTable(
+  "material_products",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    /** Eigentümer bzw. Organisation – genau eines von beiden, siehe `ownerXor` */
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    /**
+     * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
+     * Verglichen wird über `normalizeMaterialType`, und je Bereich steht je
+     * Vergleichsform nur eine Schreibweise. Die legt `canonicalMaterialType`
+     * (`contracts/materials.ts`) in jedem Schreibpfad fest; den Altbestand
+     * hat `0019_material_type_case.sql` zusammengeführt (#36).
+     */
+    materialType: varchar("materialType", { length: 100 }).notNull(),
+    manufacturer: varchar("manufacturer", { length: 255 }),
+    color: varchar("color", { length: 100 }),
+    /**
+     * Oberfläche als Freitext („Matt", „Silk", „Glänzend").
+     *
+     * Freitext und kein Enum, aus demselben Grund wie `materialType`: Der
+     * Hersteller, der sich „Sparkle" ausdenkt, muss eintragbar bleiben.
+     * Vorschläge liefert `COMMON_TEXTURES` (`contracts/materials.ts`).
+     *
+     * Bis 2.1.0 landete das in `materialType` („PLA Silk"). Das hatte einen
+     * sichtbaren Preis: Der Materialart-Filter vergleicht exakt, also waren
+     * „PLA" und „PLA Silk" zwei Einträge, die sich nie fanden.
+     */
+    texture: varchar("texture", { length: 100 }),
+    /**
+     * Dichte in Gramm je Liter. `NULL` = Vorgabe benutzen, siehe
+     * `resolveDensity` (`contracts/materials.ts`).
+     *
+     * Ausschließlich für die Zweitanzeige (Meter beim Filament, Liter beim
+     * Harz). Geht **nie** in die Restmengenrechnung ein – die bleibt bei
+     * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
+     */
+    densityGramsPerLiter: integer("densityGramsPerLiter"),
+    /** Notizen zum Material; das Gebinde hat eigene */
+    notes: text("notes"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    ownerXor("material_products_owner_xor"),
+    index("material_products_user_idx").on(t.userId),
+    index("material_products_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type MaterialProduct = typeof materialProducts.$inferSelect;
+export type InsertMaterialProduct = typeof materialProducts.$inferInsert;
+
+/**
+ * Druckeinstellungen je Material (seit 4.1.0) – eine Zeile je Material.
+ *
+ * **Eine eigene Tabelle und keine Spalte an `material_products`**, und das ist
+ * die Vorbereitung für Freunde: Die Freundes-Lesepfade laden das Material für
+ * Name und Farbe (`FRIEND_MATERIAL_WITH`); stünden die Einstellungen dort als
+ * Spalte, trennte sie nur die Spaltenauswahl von der Datenpanne. So müsste man
+ * sie ausdrücklich laden – `api/friendVisibility.test.ts` hält fest, dass
+ * `api/queries/friends.ts` es nicht tut.
+ *
+ * Kein `userId`: Der Besitz folgt aus dem Material, wie bei den Wägungen aus
+ * dem Gebinde. Die Form von `settings` prüft `printSettingsSchema`
+ * (`contracts/printSettings.ts`).
+ */
+export const materialPrintSettings = pgTable("material_print_settings", {
+  productId: bigint("productId", { mode: "number" }).primaryKey(),
+  /** Version der Form von `settings`, siehe `PRINT_SETTINGS_SCHEMA_VERSION` */
+  schemaVersion: integer("schemaVersion").notNull(),
+  settings: jsonb("settings").notNull(),
+  /** Freitext in Markdown – was in keine Zahl passt */
+  notes: text("notes"),
+  updatedAt: tsColumn("updatedAt")
+    .defaultNow()
+    .notNull()
+    .$onUpdate(() => new Date()),
+});
+
+export type MaterialPrintSettings = typeof materialPrintSettings.$inferSelect;
+
+/**
+ * Das **Gebinde** – die einzelne Rolle, Flasche, der Beutel im Lager, mit
+ * Kennung, Wägungen und Verbräuchen. Der Tabellenname stammt aus der Zeit vor
+ * 4.0.0, als Produkt und Stück eine Zeile waren; siehe `materialProducts`.
+ */
 export const materials = pgTable(
   "materials",
   {
@@ -485,49 +606,26 @@ export const materials = pgTable(
      * ein Rückschritt.
      */
     lagerId: bigint("lagerId", { mode: "number" }).notNull(),
-    name: varchar("name", { length: 255 }).notNull(),
+    /**
+     * Das Material, zu dem dieses Gebinde gehört – Pflicht seit 4.0.0. Name,
+     * Materialart, Hersteller, Farbe, Oberfläche und Dichte stehen **dort**.
+     * Den Altbestand hat `0022_material_products.sql` zugeordnet.
+     */
+    productId: bigint("productId", { mode: "number" }).notNull(),
     /**
      * Kurz-Kennung zum schnellen Wiederfinden / Beschriften (z. B. „P01“).
      * Je Lager eindeutig, siehe `materials_identifier_per_lager_unique`.
      */
     identifier: varchar("identifier", { length: 50 }),
-    /**
-     * Materialart, z. B. PLA, PETG, ABS – Freitext, aber case-insensitiv:
-     * Verglichen wird über `normalizeMaterialType`, und je Bereich steht je
-     * Vergleichsform nur eine Schreibweise. Die legt `canonicalMaterialType`
-     * (`contracts/materials.ts`) in jedem Schreibpfad fest; den Altbestand
-     * hat `0019_material_type_case.sql` zusammengeführt (#36).
-     */
-    materialType: varchar("materialType", { length: 100 }).notNull(),
-    manufacturer: varchar("manufacturer", { length: 255 }),
-    color: varchar("color", { length: 100 }),
-    /**
-     * Oberfläche als Freitext („Matt", „Silk", „Glänzend").
-     *
-     * Freitext und kein Enum, aus demselben Grund wie `materialType`: Der
-     * Hersteller, der sich „Sparkle" ausdenkt, muss eintragbar bleiben.
-     * Vorschläge liefert `COMMON_TEXTURES` (`contracts/materials.ts`).
-     *
-     * Bis 2.1.0 landete das in `materialType` („PLA Silk"). Das hatte einen
-     * sichtbaren Preis: Der Materialart-Filter vergleicht exakt, also waren
-     * „PLA" und „PLA Silk" zwei Einträge, die sich nie fanden.
-     */
-    texture: varchar("texture", { length: 100 }),
     /** Preis in Cent (z. B. 2499 = 24,99 €) */
     priceCents: integer("priceCents"),
     /** Kaufdatum als ISO-String YYYY-MM-DD */
     purchaseDate: date("purchaseDate", { mode: "string" }),
-    /** Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000) */
-    nominalWeight: integer("nominalWeight").notNull(),
     /**
-     * Dichte in Gramm je Liter. `NULL` = Vorgabe benutzen, siehe
-     * `resolveDensity` (`contracts/materials.ts`).
-     *
-     * Ausschließlich für die Zweitanzeige (Meter beim Filament, Liter beim
-     * Harz). Geht **nie** in die Restmengenrechnung ein – die bleibt bei
-     * „Brutto minus Tara" in Gramm, weil nur das gewogen wird.
+     * Nenn-Füllmenge laut Hersteller in Gramm (z. B. 1000). Am Gebinde, nicht
+     * am Material: 1-kg-Rolle und 250-g-Probe desselben Materials gibt es.
      */
-    densityGramsPerLiter: integer("densityGramsPerLiter"),
+    nominalWeight: integer("nominalWeight").notNull(),
     /** Gewählte eigene Gebindeart (Leergewicht) */
     containerTypeId: bigint("containerTypeId", { mode: "number" }),
     /**
@@ -539,6 +637,14 @@ export const materials = pgTable(
     }),
     /** Zugewiesene Lagerbox/Drybox (Leergewicht) */
     storageBoxId: bigint("storageBoxId", { mode: "number" }),
+    /**
+     * „Aufgebraucht“ seit (4.1.0) – `NULL` = in Gebrauch. Ein aufgebrauchtes
+     * Gebinde bleibt stehen, statt gelöscht zu werden: Sein Material behält
+     * Druckeinstellungen und Verlauf, und Drucke können darauf zeigen. Es
+     * zählt nicht zum Bestand (`productStock`), steht nicht im Regal und geht
+     * nicht an Freunde; seine Kennung bleibt belegt, bis es gelöscht wird.
+     */
+    archivedAt: tsColumn("archivedAt"),
     notes: text("notes"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
     updatedAt: tsColumn("updatedAt")
@@ -558,6 +664,8 @@ export const materials = pgTable(
       Full Scan über den gesamten Bestand aller Benutzer.
     */
     index("materials_lager_idx").on(t.lagerId),
+    /* „Weitere Gebinde dieses Materials“ und der Bestand je Material */
+    index("materials_product_idx").on(t.productId),
     /*
       Seit 3.1.0: Eine Kennung kommt je Lager nur einmal vor, ohne Rücksicht
       auf Groß-/Kleinschreibung (`normalizeIdentifier` in
@@ -625,6 +733,159 @@ export const consumptions = pgTable(
 
 export type Consumption = typeof consumptions.$inferSelect;
 export type InsertConsumption = typeof consumptions.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Druckhistorie (seit 4.2.0)
+// ---------------------------------------------------------------------------
+
+export const printJobStatusEnum = pgEnum(
+  "print_job_status",
+  PRINT_JOB_STATUSES
+);
+
+/**
+ * Ein Druckauftrag: Titel, Zeitpunkt, Ergebnis, Drucker, Notizen, Tags – und
+ * über `print_job_materials` die Materialien samt Verbrauch.
+ *
+ * Eigentum wie überall (`ownerXor`). Kein `createdByUserId` an Org-Zeilen –
+ * dieselbe Grenze wie beim Bestand (siehe `AGENTS.md`, „Organisationen“).
+ */
+export const printJobs = pgTable(
+  "print_jobs",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    printedAt: tsColumn("printedAt").defaultNow().notNull(),
+    status: printJobStatusEnum("status").default("success").notNull(),
+    durationMinutes: integer("durationMinutes"),
+    /** Freitext mit Vorschlagsliste – wie `materialType` */
+    printer: varchar("printer", { length: 100 }),
+    /** Markdown */
+    notes: text("notes"),
+    /** Klein geschrieben und ohne Dubletten, siehe `normalizeTags` */
+    tags: text("tags")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /**
+     * Titelbild (seit 4.3.0) – ein Foto aus `print_job_files`. Kein
+     * Fremdschlüssel wie überall; wer das Foto löscht, setzt die Spalte
+     * zurück (`deletePrintFile`).
+     */
+    coverFileId: bigint("coverFileId", { mode: "number" }),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    ownerXor("print_jobs_owner_xor"),
+    index("print_jobs_user_printed_idx").on(t.userId, t.printedAt),
+    index("print_jobs_organization_printed_idx").on(
+      t.organizationId,
+      t.printedAt
+    ),
+    index("print_jobs_tags_idx").using("gin", t.tags),
+  ]
+);
+
+export type PrintJob = typeof printJobs.$inferSelect;
+
+/**
+ * Die Materialien eines Drucks – einer kann mehrere nutzen (AMS, MMU).
+ *
+ * - `productName` ist ein **Schnappschuss**: Ein Material verschwindet mit
+ *   seinem letzten Gebinde, der Druck soll trotzdem lesbar bleiben.
+ *   `productId` wird dann `NULL`; beim Zusammenführen zieht es mit.
+ * - `materialId` (das Gebinde) ist optional – Gramm eines Materials ohne
+ *   feststehende Rolle, etwa für einen späteren Import aus dem Drucker (#41).
+ * - `consumptionId` zeigt auf den Verbrauch, den der Druck abgebucht hat. Der
+ *   Verbrauch bleibt die einzige Wahrheit für die Restmenge; `grams` hier ist
+ *   die Angabe des Drucks. Wird der Verbrauch gelöscht, wird die Spalte `NULL`.
+ *
+ * Kein Besitzer – er folgt aus dem Druck (Ausnahmeliste des DSGVO-Wächters).
+ */
+export const printJobMaterials = pgTable(
+  "print_job_materials",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    productId: bigint("productId", { mode: "number" }),
+    productName: varchar("productName", { length: 255 }).notNull(),
+    materialId: bigint("materialId", { mode: "number" }),
+    grams: integer("grams").notNull(),
+    consumptionId: bigint("consumptionId", { mode: "number" }),
+    position: integer("position").notNull(),
+  },
+  t => [
+    index("print_job_materials_job_idx").on(t.printJobId),
+    index("print_job_materials_product_idx").on(t.productId),
+    index("print_job_materials_material_idx").on(t.materialId),
+    index("print_job_materials_consumption_idx").on(t.consumptionId),
+  ]
+);
+
+export type PrintJobMaterial = typeof printJobMaterials.$inferSelect;
+
+/** Links zum Modell – nur `https://`, siehe `printJobLinkSchema` */
+export const printJobLinks = pgTable(
+  "print_job_links",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    url: varchar("url", { length: 2000 }).notNull(),
+    label: varchar("label", { length: 100 }),
+    position: integer("position").notNull(),
+  },
+  t => [index("print_job_links_job_idx").on(t.printJobId)]
+);
+
+export type PrintJobLink = typeof printJobLinks.$inferSelect;
+
+export const printFileKindEnum = pgEnum("print_file_kind", PRINT_FILE_KINDS);
+
+/**
+ * Fotos und 3MF-Dateien zu einem Druck (seit 4.3.0). Die Datei selbst liegt
+ * in der Ablage (`api/lib/fileStorage.ts`) unter `storageKey`, einem
+ * zufälligen Schlüssel – nie unter dem hochgeladenen Namen.
+ *
+ * - `kind`, `mimeType`, `width`/`height` bestimmt der **Server** aus den
+ *   Bytes (`detectPrintFile`), nicht aus Endung oder Kopfzeile.
+ * - Fotos haben eine Vorschau (`thumbnailKey`); ihre Größe zählt mit zum
+ *   Speicherkontingent des Bereichs.
+ * - `sha256` macht den Export prüfbar: Das JSON nennt die Prüfsumme, das
+ *   ZIP daneben die Datei.
+ *
+ * Kein Besitzer – er folgt aus dem Druck (Ausnahmeliste des DSGVO-Wächters).
+ */
+export const printJobFiles = pgTable(
+  "print_job_files",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    printJobId: bigint("printJobId", { mode: "number" }).notNull(),
+    kind: printFileKindEnum("kind").notNull(),
+    originalName: varchar("originalName", { length: 255 }).notNull(),
+    mimeType: varchar("mimeType", { length: 100 }).notNull(),
+    sizeBytes: integer("sizeBytes").notNull(),
+    sha256: varchar("sha256", { length: 64 }).notNull(),
+    storageKey: varchar("storageKey", { length: 32 }).notNull(),
+    thumbnailKey: varchar("thumbnailKey", { length: 32 }),
+    thumbnailBytes: integer("thumbnailBytes").default(0).notNull(),
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    index("print_job_files_job_idx").on(t.printJobId),
+    uniqueIndex("print_job_files_storage_key_unique").on(t.storageKey),
+    uniqueIndex("print_job_files_thumbnail_key_unique").on(t.thumbnailKey),
+  ]
+);
+
+export type PrintJobFile = typeof printJobFiles.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde

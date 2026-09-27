@@ -135,6 +135,7 @@ export default function Import() {
     onSuccess: async data => {
       toast.success(`${data.created} Materialien importiert`);
       await utils.material.list.invalidate();
+      await utils.product.invalidate();
       navigate("/");
     },
     onError: e => toast.error(e.message),

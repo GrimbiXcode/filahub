@@ -67,9 +67,15 @@ describe("Migrationen", () => {
     for (const table of [
       "users",
       "lager",
+      "material_products",
+      "material_print_settings",
       "materials",
       "weighings",
       "consumptions",
+      "print_jobs",
+      "print_job_materials",
+      "print_job_links",
+      "print_job_files",
       "container_types",
       "storage_boxes",
       "custom_colors",
@@ -133,6 +139,8 @@ describe("Migrationen", () => {
       "texture_kind",
       "organization_role",
       "organization_invitation_status",
+      "print_job_status",
+      "print_file_kind",
     ]) {
       expect(names).toContain(type);
     }
@@ -853,10 +861,9 @@ describe("Postgres-Eigenheiten", () => {
     await expect(
       db().insert(schema.materials).values({
         userId: admin.id,
-        // Beliebige ID – geprüft wird der int-Überlauf, nicht die Zuordnung.
+        // Beliebige IDs – geprüft wird der int-Überlauf, nicht die Zuordnung.
         lagerId: 1,
-        name: "Überlauf",
-        materialType: "PLA",
+        productId: 1,
         nominalWeight: 2_147_483_648,
       })
     ).rejects.toThrow();

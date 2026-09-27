@@ -11,11 +11,26 @@ function material(
     id: 1,
     userId: 1,
     organizationId: null,
-    name: "Testfilament",
+    productId: 1,
+    /*
+      Seit 4.0.0 stehen Name, Materialart, Farbe, Oberfläche und Dichte am
+      Material; `computeMaterialStats` flacht sie auf die Gebindezeile auf.
+    */
+    product: {
+      id: 1,
+      userId: 1,
+      organizationId: null,
+      name: "Testfilament",
+      materialType: "PLA",
+      manufacturer: null,
+      color: null,
+      texture: null,
+      densityGramsPerLiter: null,
+      notes: null,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    },
     identifier: null,
-    materialType: "PLA",
-    manufacturer: null,
-    color: null,
     priceCents: null,
     purchaseDate: null,
     nominalWeight: 1000,
@@ -35,8 +50,6 @@ function material(
       abschließende Cast verbirgt das Fehlen, statt es zu melden.
     */
     lagerId: 1,
-    texture: null,
-    densityGramsPerLiter: null,
     lager: {
       id: 1,
       userId: 1,
@@ -44,6 +57,8 @@ function material(
       name: "Mein Lager",
       materialKind: "filament",
       filamentDiameterUm: 1750,
+      identifierTemplate: null,
+      lowStockGrams: null,
       notes: null,
       createdAt: new Date("2026-01-01"),
       updatedAt: new Date("2026-01-01"),
@@ -282,6 +297,7 @@ describe("computeMaterialStats", () => {
           materialKind: "powder",
           filamentDiameterUm: null,
           identifierTemplate: null,
+          lowStockGrams: null,
           notes: null,
           createdAt: new Date("2026-01-01"),
           updatedAt: new Date("2026-01-01"),

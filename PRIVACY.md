@@ -27,25 +27,26 @@ details into the Markdown** — the next person to pull the image would ship the
 
 ## What the application stores
 
-| Data                                                                                                                                                                  | Where                      | How long                                         |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------ |
-| Telegram ID, display name, Telegram username                                                                                                                          | `users`                    | until the account is deleted                     |
-| Last sign-in timestamp                                                                                                                                                | `users`                    | until the account is deleted                     |
-| Display settings (language, currency, format)                                                                                                                         | `users`                    | until the account is deleted                     |
-| Stores (name, material kind, filament diameter, free-text notes)                                                                                                      | `lager`                    | until the account is deleted                     |
-| Materials, weigh-ins, consumptions, container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes                       | own tables                 | until the account is deleted                     |
-| Friendships: who is connected to whom and who asked                                                                                                                   | `friendships`              | until either account is deleted                  |
-| Store sharing: which of a user's stores a given friend may see, and how much                                                                                          | `lager_shares`             | until either account is deleted                  |
-| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                                                       | `loan_requests`            | until either account is deleted                  |
-| Friend code — a shareable identifier, created only when a user opens the friends page                                                                                 | `users`                    | until the account is deleted                     |
-| Organizations: name and free-text notes. **No owner column** — who administers one is a membership, not a property of the organization                                | `organizations`            | until the last member's account is deleted       |
-| Memberships: who belongs to which organization, at which level, since when                                                                                            | `organization_members`     | until the account or the organization is deleted |
-| Invitations: who invited whom into which organization, at which level, and the answer                                                                                 | `organization_invitations` | until either account is deleted                  |
-| Preset proposals with reasoning and moderation record                                                                                                                 | `preset_proposals`         | see "Deletion" below                             |
-| Sign-in codes with Telegram ID and name                                                                                                                               | `login_codes`              | **purged automatically after 24 h**              |
-| Security log: sign-ins, failed attempts, deletions, moderation decisions, rejected requests and blocks — with an HMAC of the client address, never the address itself | `audit_log`                | **purged automatically after 90 days**           |
-| Block state: whether an account is blocked, since when, by which administrator and for which of five fixed reasons (no free text)                                     | `users`                    | until the account is deleted                     |
-| Unblock requests: the free-text case a blocked person makes, the decision and its reason                                                                              | `unblock_requests`         | until the account is deleted                     |
+| Data                                                                                                                                                                                                                                                                                                                                      | Where                                                            | How long                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------ |
+| Telegram ID, display name, Telegram username                                                                                                                                                                                                                                                                                              | `users`                                                          | until the account is deleted                     |
+| Last sign-in timestamp                                                                                                                                                                                                                                                                                                                    | `users`                                                          | until the account is deleted                     |
+| Display settings (language, currency, format)                                                                                                                                                                                                                                                                                             | `users`                                                          | until the account is deleted                     |
+| Stores (name, material kind, filament diameter, free-text notes)                                                                                                                                                                                                                                                                          | `lager`                                                          | until the account is deleted                     |
+| Materials, containers, weigh-ins, consumptions, print settings, print history (titles, notes, tags, printer names and links to models), container types, dryboxes — including prices, purchase dates, locations, surface finish and free-text notes                                                                                       | own tables                                                       | until the account is deleted                     |
+| Uploaded files: photos and 3MF projects attached to prints — the file itself, its name, type, size and a SHA-256 checksum. Photos are resized and re-encoded **in the browser** before they are sent, which strips EXIF, XMP and other metadata including the GPS position; the server rejects any photo that still carries such metadata | `print_job_files` + upload directory (`UPLOAD_DIR`) or S3 bucket | until the print or the account is deleted        |
+| Friendships: who is connected to whom and who asked                                                                                                                                                                                                                                                                                       | `friendships`                                                    | until either account is deleted                  |
+| Store sharing: which of a user's stores a given friend may see, and how much                                                                                                                                                                                                                                                              | `lager_shares`                                                   | until either account is deleted                  |
+| Loan requests: who asked whom for which material, its name at the time, and a free-text message                                                                                                                                                                                                                                           | `loan_requests`                                                  | until either account is deleted                  |
+| Friend code — a shareable identifier, created only when a user opens the friends page                                                                                                                                                                                                                                                     | `users`                                                          | until the account is deleted                     |
+| Organizations: name and free-text notes. **No owner column** — who administers one is a membership, not a property of the organization                                                                                                                                                                                                    | `organizations`                                                  | until the last member's account is deleted       |
+| Memberships: who belongs to which organization, at which level, since when                                                                                                                                                                                                                                                                | `organization_members`                                           | until the account or the organization is deleted |
+| Invitations: who invited whom into which organization, at which level, and the answer                                                                                                                                                                                                                                                     | `organization_invitations`                                       | until either account is deleted                  |
+| Preset proposals with reasoning and moderation record                                                                                                                                                                                                                                                                                     | `preset_proposals`                                               | see "Deletion" below                             |
+| Sign-in codes with Telegram ID and name                                                                                                                                                                                                                                                                                                   | `login_codes`                                                    | **purged automatically after 24 h**              |
+| Security log: sign-ins, failed attempts, deletions, moderation decisions, rejected requests and blocks — with an HMAC of the client address, never the address itself                                                                                                                                                                     | `audit_log`                                                      | **purged automatically after 90 days**           |
+| Block state: whether an account is blocked, since when, by which administrator and for which of five fixed reasons (no free text)                                                                                                                                                                                                         | `users`                                                          | until the account is deleted                     |
+| Unblock requests: the free-text case a blocked person makes, the decision and its reason                                                                                                                                                                                                                                                  | `unblock_requests`                                               | until the account is deleted                     |
 
 Abuse protection (rate limits, upper bounds, registration limits) keeps its
 counters **in memory only** and writes nothing per user. What reaches the
@@ -79,6 +80,15 @@ is currently no login method that avoids Telegram.
 **Your hosting provider** processes everything else on your behalf. You need a
 data processing agreement with them (Art. 28(3) GDPR). Most providers offer one
 in their account settings; concluding it is your job, not the software's.
+
+**An object storage provider**, if you set `STORAGE_DRIVER=s3` (since 4.4.0),
+holds the uploaded photos and 3MF files. It is a processor in its own right
+(Art. 28 GDPR): you need a data processing agreement with it, and its region
+decides whether the files leave the EU or Switzerland — name it next to your
+hosting provider in `LEGAL_OPERATOR_HOSTING`. The provider sees the files, not
+who they belong to: object names are random, and the link to an account exists
+only in your database. Keep the bucket private and without versioning (see
+README, "File storage").
 
 **Other users**, but only the ones a user has accepted as a friend, and only as
 much as that user chose. Since 2.1.0 filahub is not purely single-tenant any
@@ -179,13 +189,21 @@ Both of the awkward ones are built in and need no work from you:
 
 - **Access and portability** — users export everything under Settings → "Data
   and account". The format is JSON, machine-readable as Art. 20 requires, and
-  carries a `formatVersion` (4 since 2.4.1, when the sharing a user _received_
+  carries a `formatVersion` (5 since 4.0.0, when name, type, manufacturer,
+  colour, finish and density moved from each container in `materials` to the
+  new `materialProducts` section; 4 since 2.4.1, when the sharing a user _received_
   was compressed to one level per owner; 3 since 2.4.0, when the sharing levels
   moved out of the friendship rows into their own `lagerShares` section; 2 since
   2.3.0, when two section names changed). Note it is **not** the format the
   import page reads
   — that one takes a short list of positions, not a full account dump.
-- **Erasure** — same place. Deletes the account and the entire stock.
+  Photos and 3MF files of prints (since 4.3.0) come as a second download next
+  to it, a ZIP with an index (`dateien.json`); the JSON export lists the same
+  files with their SHA-256 checksum in `printJobFiles`.
+- **Erasure** — same place. Deletes the account and the entire stock,
+  including uploaded files. The database rows go in the same transaction; the
+  files follow right after it, and a periodic sweep removes any file whose row
+  is gone, should that step fail.
 
 Correction is just editing. For restriction and objection you will have to act
 manually; there is no tooling for those.

@@ -1,4 +1,5 @@
 import "dotenv/config";
+import { parseStorageConfig } from "./storageConfig";
 
 /**
  * Macht aus einem Umgebungswert einen mehrzeiligen Text – egal, wie die
@@ -102,6 +103,15 @@ export const env = {
    * Anmeldung ohne Telegram für die lokale Entwicklung (`DEV_LOGIN=1`).
    * Wirkt nur außerhalb von NODE_ENV=production – siehe api/devLogin.ts.
    */
+  /*
+    Dateiablage für Fotos und 3MF zu Drucken (seit 4.3.0): ein Verzeichnis
+    (`UPLOAD_DIR`, Vorgabe `/data/uploads` im Container, sonst ein Ordner im
+    Projekt) oder seit 4.4.0 ein S3-kompatibler Objektspeicher
+    (`STORAGE_DRIVER=s3` samt `S3_*`). Beim Start gelesen – eine
+    unvollständige S3-Angabe lässt den Start scheitern, nicht den ersten
+    Upload. Einzelheiten in `api/lib/storageConfig.ts`.
+  */
+  storage: parseStorageConfig(process.env),
   devLogin: ["1", "true"].includes((process.env.DEV_LOGIN ?? "").toLowerCase()),
   /** Anzeigename des Entwickler-Kontos */
   devLoginName: process.env.DEV_LOGIN_NAME || "Dev-Benutzer",

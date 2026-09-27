@@ -39,6 +39,7 @@ export const en: Messages = {
     apply: "Use this",
     create: "Create",
     add: "Add",
+    imageMissing: (vars: { src: string }) => `Image not found: ${vars.src}`,
     nothingFound: "Nothing found.",
     unknownError: "Unknown error",
     nameRequired: "Please enter a name",
@@ -70,8 +71,9 @@ export const en: Messages = {
     releaseNotes: "What's new",
     settings: "Settings",
     material: "Material",
+    prints: "Prints",
     weigh: "Weigh",
-    weighMaterial: "Weigh material",
+    weighMaterial: "Weigh a container",
     consume: "Log usage",
     consumeMaterial: "Log material usage",
     searchWithShortcut: (vars: { shortcut: string }) =>
@@ -135,20 +137,20 @@ export const en: Messages = {
   },
 
   quick: {
-    weighTitle: "Weigh material",
-    weighDescription: "Pick the material you want to weigh",
+    weighTitle: "Weigh a container",
+    weighDescription: "Pick the container you want to weigh",
     consumeTitle: "Log usage",
-    consumeDescription: "Pick the material a print used",
+    consumeDescription: "Pick the container a print used",
     searchTitle: "Quick search",
     searchDescription: "Find materials, open pages and run actions",
     weighPlaceholder: "Identifier or name of the material …",
     consumePlaceholder: "Identifier or name of the material …",
     searchPlaceholder: "Search: identifier, material, page or action …",
-    groupWeigh: "Material to weigh",
-    groupConsume: "Material to log usage for",
+    groupWeigh: "Containers to weigh",
+    groupConsume: "Containers to log usage for",
     groupActions: "Actions",
     groupJumpTo: "Jump to",
-    groupMaterials: "Materials",
+    groupMaterials: "Containers",
     newMaterial: "Add a material",
     remaining: (vars: { amount: string }) => `${vars.amount} left`,
     keywordsWeigh: "weigh weighing scale material",
@@ -156,6 +158,9 @@ export const en: Messages = {
     keywordsNewMaterial: "new material add filament create",
     keywordsGoTo: (vars: { label: string }) => `go to ${vars.label}`,
     keywordsAdmin: (vars: { label: string }) => `administration ${vars.label}`,
+    newPrint: "Log a print",
+    groupPrints: "Prints",
+    keywordsNewPrint: "log print history printed model",
     keywordsThemeLight: "colour scheme light",
     keywordsThemeDark: "colour scheme dark night mode",
     keywordsThemeSystem: "colour scheme system automatic",
@@ -200,8 +205,11 @@ export const en: Messages = {
     installHowUnknown:
       "Look for “Install app”, “Add to home screen” or “Add to dock” in your browser's menu. What the entry is called is up to the browser.",
     dataAndAccount: "Data and account",
+    exportFilesHint:
+      "Photos and 3MF files of your prints come as a separate ZIP – the JSON lists them with a checksum.",
+    exportFilesAction: "Download files (ZIP)",
     exportHint:
-      "Download everything stored for your account: profile, stores, materials, weigh-ins, container types, dryboxes, friendships, loan requests, hidden presets, submitted suggestions, pending login codes and the security log. A JSON file to read and keep — the importer on the import page expects a different, shorter format.",
+      "Download everything stored for your account: profile, stores, materials, containers, weigh-ins, container types, dryboxes, friendships, loan requests, hidden presets, submitted suggestions, pending login codes and the security log. A JSON file to read and keep — the importer on the import page expects a different, shorter format.",
     exportAction: "Download my data",
     exportPending: "Collecting …",
     exportDone: "Export downloaded",
@@ -266,7 +274,9 @@ export const en: Messages = {
     lookupPlaceholder: "Enter an identifier, e.g. F01",
     lookupAria: "Identifier for quick access",
     lookupNotFound: (vars: { query: string }) =>
-      `No material found for “${vars.query}”`,
+      `No container found for “${vars.query}”`,
+    lookupUsedUp: (vars: { identifier: string }) =>
+      `${vars.identifier} is marked as used up – here is its page.`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Several matches for “${vars.query}” – please enter the exact identifier`,
     statMaterials: "Materials",
@@ -277,7 +287,7 @@ export const en: Messages = {
     statValue: "Remaining value",
     statValueHint: "pro rata by remaining quantity",
     statInBox: "In a drybox",
-    statInBoxHint: "materials in a drybox",
+    statInBoxHint: "containers in a drybox",
     searchAria: "Search materials",
     clearSearch: "Clear the search",
     filters: "Filters",
@@ -289,7 +299,7 @@ export const en: Messages = {
     removeFilter: (vars: { label: string }) =>
       `Remove the “${vars.label}” filter`,
     filterSearch: (vars: { query: string }) => `Search: “${vars.query}”`,
-    filterLowStock: (vars: { percent: number }) => `≤ ${vars.percent} % left`,
+    filterLowStock: "Running low",
     materialType: "Material type",
     allMaterialTypes: "All material types",
     texture: "Finish",
@@ -301,8 +311,7 @@ export const en: Messages = {
     sorting: "Sort by",
     sortAsc: "Sorted ascending",
     sortDesc: "Sorted descending",
-    onlyLowStock: (vars: { percent: number }) =>
-      `Running low only (≤ ${vars.percent} %)`,
+    onlyLowStock: "Only materials running low",
     sortIdentifier: "Identifier",
     sortName: "Name",
     sortPercent: "Fill level",
@@ -315,7 +324,7 @@ export const en: Messages = {
     emptyFilteredHint: "Adjust the search or the filters.",
     emptyAction: "Add your first material",
     countOf: (vars: { shown: number; total: number }) =>
-      `${vars.shown} of ${vars.total} materials`,
+      `${vars.shown} of ${vars.total} containers`,
     colIdentifier: "Identifier",
     colAppearance: "Look",
     colMaterial: "Material",
@@ -336,23 +345,150 @@ export const en: Messages = {
     listView: "List",
     viewLabel: "View",
     summary: (vars: { count: number; remaining: string; low: number }) =>
-      `${vars.count} materials · ${vars.remaining} left · ${vars.low} running low`,
-    groupCount: (vars: { count: number }) => `${vars.count} materials`,
+      `${vars.count} containers · ${vars.remaining} left · ${vars.low} running low`,
+    groupCount: (vars: { count: number }) => `${vars.count} containers`,
     groupTare: (vars: { amount: string }) => `tare ${vars.amount}`,
+    outOfStock: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Out of stock – every spool used up:"
+        : `${vars.count} materials out of stock – every spool used up:`,
+    mergeHint: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Two materials look like the same one. Merged, their stock counts together."
+        : `${vars.count} groups of materials look like the same one. Merged, their stock counts together.`,
+    mergeHintAction: "Take a look",
+    mergeHintDismiss: "Dismiss",
+    shelfGroupingLabel: "Group the shelf",
+    shelfGroupByBox: "By drybox",
+    shelfGroupByProduct: "By material",
     tileRemainingTitle: "Remaining",
     tileLowTitle: "Running low",
-    tileLowSub: (vars: { percent: number }) => `under ${vars.percent} %`,
+    tileLowSub: "below the warning threshold",
     tileLowOf: (vars: { count: number; total: number }) =>
       `${vars.count} of ${vars.total}`,
     tileValueTitle: "Remaining value",
     tileInBoxTitle: "In a drybox",
     moreMaterials: (vars: { count: number }) => `+ ${vars.count} more`,
-    noSelection: "Tap a material on the shelf to see it here.",
+    noSelection: "Tap a spool on the shelf to see it here.",
     details: "Details",
     weighNamed: (vars: { name: string }) => `Weigh ${vars.name}`,
     selectNamed: (vars: { name: string }) => `Select ${vars.name}`,
   },
 
+  /**
+   * Material (the product) above its containers, since 4.0.0.
+   */
+  product: {
+    notFound: "Material not found",
+    editTitle: "Edit material",
+    spoolsTitle: "Spools",
+    gebindeTitle: "Containers",
+    otherSpools: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 spool of this material"
+        : `${vars.count} spools of this material`,
+    otherGebinde: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 container of this material"
+        : `${vars.count} containers of this material`,
+    saved: "Material saved",
+    archivedToggle: (vars: { count: number }) => `${vars.count} used up`,
+    toMaterial: "Go to material",
+    thisOne: "this one",
+    stockOk: "in stock, enough",
+    stockLow: "in stock, running low",
+    stockUsedUp: "out of stock – all used up",
+    thresholdLager: (vars: { amount: string }) =>
+      `warning below ${vars.amount} (store)`,
+    thresholdDefault: (vars: { amount: string }) =>
+      `warning below ${vars.amount} (default)`,
+    addSpool: "Add another spool",
+    addGebinde: "Add another container",
+    densityDefault: "Default for the material type",
+    mergeTitle: "Merge",
+    mergeHint:
+      "Two entries that are really the same material? Merging moves every container of the other one here and removes the other. Name, colour and the other details stay the ones from this material – so do the print settings; if this one has none, those of the other are taken over.",
+    mergeSuggestions: "Looks like the same material",
+    mergeOther: "Other material",
+    mergeChoose: "Choose a material",
+    mergeHere: "Merge into this one",
+    mergeConfirmTitle: "Merge materials?",
+    mergeConfirmDescription: (vars: {
+      source: string;
+      target: string;
+      count: number;
+    }) =>
+      `${vars.count === 1 ? "The container" : `The ${vars.count} containers`} of “${vars.source}” will move to “${vars.target}”, and “${vars.source}” is deleted afterwards. This can only be undone by hand.`,
+    merged: (vars: { count: number }) =>
+      vars.count === 1 ? "1 container moved" : `${vars.count} containers moved`,
+  },
+  /** Print settings per material (since 4.1.0) */
+  printSettings: {
+    title: "Print settings",
+    add: "Add",
+    empty:
+      "Nothing stored yet. Nozzle, bed, drying and notes then apply to every spool of this material.",
+    editTitle: "Edit print settings",
+    editDescription:
+      "Applies to every container of this material. Empty fields stay empty – only fill in what you know.",
+    saved: "Print settings saved",
+    invalid: (vars: { field: string }) =>
+      `“${vars.field}” is invalid or outside the usual range.`,
+    rangeInvalid: (vars: { field: string }) =>
+      `“${vars.field}” is lower than the “from” value.`,
+    hoursUnit: "h",
+    enclosureRequired: "Needs an enclosed printer",
+    notesLabel: "Notes (Markdown)",
+    notesPlaceholder:
+      "e.g. slow first layer, glue stick on glass, slicer profile “PolyTerra”",
+    short: {
+      nozzle: "Nozzle",
+      bed: "Bed",
+      drying: "Dry",
+      enclosure: "enclosed",
+      exposure: "Exposure",
+      bottom: "Bottom",
+      refresh: "Fresh",
+    },
+    fields: {
+      nozzleMinC: "Nozzle from",
+      nozzleMaxC: "Nozzle to",
+      bedMinC: "Bed from",
+      bedMaxC: "Bed to",
+      chamberC: "Chamber",
+      fanPercent: "Fan",
+      speedMaxMmS: "Maximum speed",
+      flowPercent: "Flow",
+      retractionHundredthsMm: "Retraction",
+      dryingC: "Dry at",
+      dryingMinutes: "Dry for",
+      exposureMs: "Exposure",
+      bottomExposureMs: "Bottom layer exposure",
+      bottomLayers: "Bottom layers",
+      layerHeightUm: "Layer height",
+      postCureMinutes: "Post-cure",
+      refreshPercent: "Share of fresh powder",
+    },
+    units: {
+      nozzleMinC: "°C",
+      nozzleMaxC: "°C",
+      bedMinC: "°C",
+      bedMaxC: "°C",
+      chamberC: "°C",
+      fanPercent: "%",
+      speedMaxMmS: "mm/s",
+      flowPercent: "%",
+      retractionHundredthsMm: "mm",
+      dryingC: "°C",
+      dryingMinutes: "min",
+      exposureMs: "s",
+      bottomExposureMs: "s",
+      bottomLayers: "count",
+      layerHeightUm: "µm",
+      postCureMinutes: "min",
+      refreshPercent: "%",
+    },
+  },
   materialDetail: {
     notFound: "Material not found",
     toOverview: "Back to the overview",
@@ -396,11 +532,19 @@ export const en: Messages = {
     trendFlat: "Trend: nothing used in this period",
     purchasedOn: (vars: { date: string }) => `bought ${vars.date}`,
     fullHistory: "Full history",
-    deleteMaterial: "Delete material",
-    deleteMaterialTitle: "Delete this material?",
+    deleteMaterial: "Delete container",
+    deleteMaterialTitle: "Delete this container?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `“${vars.name}” and every weigh-in and usage entry that belongs to it will be deleted for good.`,
-    materialDeleted: "Material deleted",
+      `This container of “${vars.name}” and every weigh-in and usage entry that belongs to it will be deleted for good. If it was the last container of the material, the material goes too.`,
+    archive: "Used up",
+    unarchive: "Back in use",
+    archivedBadge: "Used up",
+    archivedDone: "Marked as used up",
+    unarchivedDone: "Back in use",
+    archiveInstead: "Mark as used up instead",
+    deleteArchiveHint:
+      "If the spool is just empty, better mark it as used up – its history and the material stay.",
+    materialDeleted: "Container deleted",
     deleteWeighing: "Delete weigh-in",
     deleteWeighingTitle: "Delete this weigh-in?",
     deleteWeighingDescription:
@@ -421,10 +565,10 @@ export const en: Messages = {
     firstBox: "Add your first drybox",
     emptyTitle: "No dryboxes yet",
     emptyDescription:
-      "Weigh your empty drybox, enter the empty weight and assign it to a material – filahub takes the box tare out of the result for you.",
+      "Weigh your empty drybox, enter the empty weight and assign it to a container – filahub takes the box tare out of the result for you.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} tare`,
     assigned: (vars: { count: number }) =>
-      vars.count === 1 ? "1 material" : `${vars.count} materials`,
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
     free: "free",
     location: "Location",
     occupancy: "In use",
@@ -432,7 +576,7 @@ export const en: Messages = {
     deleteBox: "Delete drybox",
     deleteTitle: "Delete this drybox?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. It must not be assigned to any material.`,
+      `“${vars.name}” will be deleted. It must not be assigned to any container.`,
     namePlaceholder: "e.g. Drybox 1",
     locationPlaceholder: "e.g. left shelf, workshop",
     tareLabel: "Empty weight (g) *",
@@ -461,7 +605,7 @@ export const en: Messages = {
     editType: "Edit container type",
     deleteTitle: "Delete this container type?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. Materials using it have to be moved to another type first.`,
+      `“${vars.name}” will be deleted. Containers of this type have to be moved to another type first.`,
     dialogDescription:
       "Name, form and empty weight of the container. The empty weight is subtracted from every weigh-in.",
     formLabel: "Form *",
@@ -546,11 +690,11 @@ export const en: Messages = {
 
   materialForm: {
     createTitle: "New material",
-    editTitle: "Edit material",
+    editTitle: "Edit container",
     createDescription:
       "Add a new material. The name is suggested from manufacturer, type and colour.",
     editDescription:
-      "Adjust the material's properties. The remaining quantity comes from the weigh-ins.",
+      "Adjust this container and its material. The remaining quantity comes from the weigh-ins.",
     materialTypeLabel: "Material type *",
     materialTypePlaceholder: "e.g. PLA, PETG, ABS",
     manufacturerPlaceholder: "e.g. Prusament, eSun",
@@ -565,6 +709,15 @@ export const en: Messages = {
       `“${vars.identifier}” was taken in the meantime – the next free identifier is filled in. Please save again.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Next free one from the template “${vars.template}” – change it if you like`,
+    addGebindeTitle: "Add another container",
+    addGebindeDescription:
+      "Another spool, bottle or bag of a material you already keep. Name, type, manufacturer and colour come from the material.",
+    productLabel: "Material",
+    productNew: "Create a new material",
+    productGebindeCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
+    productSharedHint: (vars: { count: number }) =>
+      `Name, type, manufacturer, colour, finish and density belong to the material – changes apply to all ${vars.count} containers.`,
     nameLabel: "Name *",
     namePlaceholder: "Filled in from manufacturer + type + colour",
     priceLabel: (vars: { symbol: string }) => `Price (${vars.symbol})`,
@@ -595,7 +748,8 @@ export const en: Messages = {
       })`,
     notesPlaceholder: "Printing temperature, quirks …",
     created: "Material created",
-    saved: "Material saved",
+    gebindeCreated: "Container created",
+    saved: "Container saved",
     nameRequired:
       "Please enter a name (or fill in manufacturer / type / colour)",
     typeRequired: "Please enter a material type",
@@ -690,7 +844,7 @@ export const en: Messages = {
     invalidJson: "That is not valid JSON. Please check the LLM's output.",
     step3: "3. Review and import",
     step3Description:
-      "Correct anything that is off and delete broken lines. One material is created per line and per unit.",
+      "Correct anything that is off and delete broken lines. One container is created per line and per unit; the containers of one line share a material.",
     targetLagerLabel: "Target store",
     identifiersFromTemplate: (vars: { template: string; range: string }) =>
       `Identifiers from the template “${vars.template}”: ${vars.range}`,
@@ -708,7 +862,7 @@ export const en: Messages = {
     pricePlaceholder: "e.g. 29.99",
     countLabel: "Quantity",
     importing: "Importing …",
-    importCount: (vars: { count: number }) => `Import ${vars.count} materials`,
+    importCount: (vars: { count: number }) => `Import ${vars.count} containers`,
     fixErrors: "Please fix the highlighted errors first.",
     errTypeMissing: "type missing",
     errNominal: "invalid nominal weight",
@@ -792,7 +946,7 @@ export const en: Messages = {
     deleted: "Entry deleted",
     deleteTitle: "Delete this entry?",
     deleteDescription: (vars: { label: string }) =>
-      `“${vars.label}” will be removed for good. Entries that have sub-entries, or that materials still use, cannot be deleted – deactivate them instead.`,
+      `“${vars.label}” will be removed for good. Entries that have sub-entries, or that containers still use, cannot be deleted – deactivate them instead.`,
   },
 
   adminProposals: {
@@ -846,6 +1000,13 @@ export const en: Messages = {
     seedRevision: (vars: { revision: number; rows: string }) =>
       `Revision ${vars.revision} · ${vars.rows} entries from the starter catalogue`,
     source: "Source",
+    storage: "File storage",
+    storageWritable: "Writable",
+    storageNotWritable: "Not writable",
+    storageLocation: "Location",
+    storageUsed: "Used",
+    storageUsedValue: (vars: { size: string; files: string }) =>
+      `${vars.size} in ${vars.files} files`,
     tables: "Tables",
     colTable: "Table",
   },
@@ -952,7 +1113,7 @@ export const en: Messages = {
   },
 
   weighing: {
-    title: "Weigh material",
+    title: "Weigh a container",
     description: (vars: { name: string; withBox: boolean }) =>
       `Weigh “${vars.name}” as a whole – container${
         vars.withBox ? " and drybox" : ""
@@ -968,6 +1129,174 @@ export const en: Messages = {
     submit: "Save weigh-in",
     saved: "Weigh-in saved",
     invalidWeight: "Please enter a valid weight in grams",
+  },
+
+  prints: {
+    title: "Prints",
+    description:
+      "What you printed – with material, links, tags and notes. Grams taken from a container are logged as usage.",
+    add: "Log a print",
+    empty: "No prints logged yet.",
+    emptyHint:
+      "Log a print here or while logging usage – so you can find out later what was printed with which material.",
+    emptyFiltered: "No prints match these filters.",
+    searchPlaceholder: "Title, notes, tags, links, material …",
+    searchTooShort: "Search starts at two characters.",
+    filterAllStatus: "Any status",
+    filterAllMaterials: "Any material",
+    filterAllPrinters: "Any printer",
+    filterAllTags: "Any tag",
+    filterFrom: "From",
+    filterTo: "To",
+    filterGebinde: (vars: { name: string }) => `Only container ${vars.name}`,
+    resetFilters: "Reset filters",
+    loadMore: "Load more",
+    status: {
+      success: "Success",
+      failed: "Failed",
+      cancelled: "Cancelled",
+    },
+    totalGrams: (vars: { amount: string }) => `${vars.amount} in total`,
+    booked: "logged",
+    notBooked: "not logged",
+    gebindeUsedUp: "used up",
+    materialGone: "Material deleted",
+    notFound: "Print not found.",
+    toList: "To the print list",
+    materialsTitle: "Material",
+    materialsEmpty: "No material entered.",
+    linksTitle: "Links",
+    notesTitle: "Notes",
+    detailsTitle: "Details",
+    printedAt: "Printed on",
+    duration: "Duration",
+    printer: "Printer",
+    tags: "Tags",
+    durationValue: (vars: { hours: number; minutes: number }) =>
+      vars.hours > 0
+        ? `${vars.hours} h ${vars.minutes} min`
+        : `${vars.minutes} min`,
+    deleteTitle: "Delete print?",
+    deleteDescription: (vars: { title: string }) =>
+      `“${vars.title}” will be deleted permanently.`,
+    revertConsumptions: "Give the used amounts back",
+    revertHint:
+      "The usage entries of this print are deleted as well and the remaining quantity goes back up. Unticked, they stay – the material counts as used anyway.",
+    deleted: "Print deleted",
+    saved: "Print saved",
+    created: "Print logged",
+    recentTitle: "Recent prints",
+    recentEmpty: "No prints with this material yet.",
+    recentEmptyGebinde: "No prints with this container yet.",
+    panelLink: "Prints",
+    printsWithMaterial: "All prints with this material",
+    showAll: "Show all",
+    open: "Open",
+    files: {
+      title: "Photos and files",
+      empty: "No photos or 3MF files yet.",
+      addPhotos: "Add photos",
+      takePhoto: "Take a photo",
+      add3mf: "Add 3MF",
+      dropHint:
+        "Drop photos or 3MF files here. Photos are resized and stored without location or other metadata.",
+      uploading: (vars: { name: string }) => `Uploading: ${vars.name}`,
+      uploaded: (vars: { count: number }) =>
+        vars.count === 1 ? "File uploaded" : `${vars.count} files uploaded`,
+      unsupported: (vars: { name: string }) =>
+        `“${vars.name}” is neither a photo nor a 3MF file`,
+      tooLarge: (vars: { name: string; max: string }) =>
+        `“${vars.name}” is larger than ${vars.max}`,
+      imageFailed: (vars: { name: string }) =>
+        `“${vars.name}” could not be opened as a photo`,
+      cover: "Cover",
+      setCover: "Make cover",
+      coverSet: "Cover set",
+      download: "Download",
+      openOriginal: "Open original",
+      deleteTitle: "Delete file?",
+      deleteDescription: (vars: { name: string }) =>
+        `“${vars.name}” will be deleted permanently.`,
+      deleted: "File deleted",
+      previous: "Previous photo",
+      next: "Next photo",
+      photoAlt: (vars: { title: string; index: number }) =>
+        `Photo ${vars.index} of “${vars.title}”`,
+      modelLabel: "3MF project",
+      /** Server rejections, by `code` from `api/fileRoutes.ts` */
+      errors: {
+        unsupported_type:
+          "This file type is not accepted. Photos (JPEG, PNG, WebP) and 3MF projects are.",
+        has_metadata:
+          "The photo still carries metadata such as where it was taken and was not saved.",
+        invalid_thumbnail: "The photo's preview is invalid.",
+        too_large: "The file is too large.",
+        too_many_files: "A print holds at most 20 files.",
+        storage_full:
+          "The storage for files is full. Please delete old photos or projects.",
+        rate_limited: "Too many uploads. Please wait a moment.",
+        blocked: "Your account is blocked.",
+        forbidden: "You don't have the rights for that.",
+        not_found: "This print no longer exists.",
+        busy: "Too many uploads are running right now. Please try again shortly.",
+        save_failed: "The file could not be saved.",
+      },
+    },
+    form: {
+      titleNew: "Log a print",
+      titleEdit: "Edit print",
+      description:
+        "Grams taken from a container are logged as usage – just like logging usage directly.",
+      titleLabel: "Title *",
+      titleRequired: "Please enter a title",
+      titlePlaceholder: "e.g. Benchy, enclosure v2",
+      printedAtLabel: "Printed on *",
+      statusLabel: "Status",
+      durationLabel: "Duration",
+      hours: "h",
+      minutes: "min",
+      printerLabel: "Printer",
+      printerPlaceholder: "e.g. Prusa MK4",
+      tagsLabel: "Tags",
+      tagsPlaceholder: "e.g. vase, gift",
+      tagsHint: "Separate with commas. Tags are stored in lower case.",
+      linksLabel: "Links to the model",
+      linkUrlPlaceholder: "https://www.printables.com/model/…",
+      linkLabelPlaceholder: "Label (optional)",
+      addLink: "Add link",
+      removeLink: "Remove link",
+      materialsLabel: "Material",
+      materialsHint:
+        "With a container and grams, usage is logged. Without a container the material is only noted on the print.",
+      addMaterial: "Add material",
+      removeMaterial: "Remove material",
+      pickMaterial: "Pick a container or material …",
+      searchMaterial: "Identifier or name …",
+      groupGebinde: "Containers – usage is logged",
+      groupProducts: "Material only – no usage logged",
+      withoutGebinde: "no container",
+      gramsLabel: "Grams",
+      notesLabel: "Notes",
+      notesPlaceholder:
+        "Markdown: settings, problems, what to do differently next time …",
+      invalidLink: "Please enter a link starting with https://",
+      invalidDate: "Please enter date and time",
+      invalidGrams: "Please enter a valid amount in grams",
+      invalidDuration: "The duration is too long – at most 720 hours",
+      tooManyTags: (vars: { max: number }) =>
+        `At most ${vars.max} different tags per print`,
+      materialMissing: "Please pick a material for every row",
+      usedUpGebinde:
+        "This container is used up – nothing more can be logged from it.",
+      rebookHint:
+        "If material, container, grams or date change, the usage entries are rebooked on saving.",
+      orphanHint:
+        "The material of this row no longer exists. The row is kept as a record.",
+    },
+    saveAsPrint: "Save as a print",
+    saveAsPrintHint:
+      "Also adds an entry to the print history – with a title and a link to the model.",
+    printLinkLabel: "Link to the model (optional)",
   },
 
   consumption: {
@@ -1073,10 +1402,18 @@ export const en: Messages = {
     diameterLabel: "Filament diameter *",
     diameterHint:
       "Applies to everything in this store. If you keep both diameters, create two stores.",
+    lowStockLabel: "Warn below (g, optional)",
+    lowStockPlaceholder: (vars: { percent: number }) =>
+      `empty = ${vars.percent} % of the largest spool`,
+    lowStockHint:
+      "A material counts as running low when all of its containers together – including those in other stores – hold at most this much. If it sits in several stores, the highest threshold applies.",
+    lowStockBadge: (vars: { amount: string }) => `warn < ${vars.amount}`,
+    lowStockInvalid:
+      "The warning threshold is a whole number of grams, 0 or more.",
     identifierTemplateLabel: "Identifier template (optional)",
     identifierTemplatePlaceholder: "e.g. ID: {n} or F{nn}",
     identifierTemplateHint:
-      "{n} becomes the next free number, {nn} pads to two digits (F01). New materials get the identifier filled in.",
+      "{n} becomes the next free number, {nn} pads to two digits (F01). New containers get the identifier filled in.",
     identifierTemplateExample: (vars: { first: string; second: string }) =>
       `Becomes ${vars.first}, ${vars.second} …`,
     identifierTemplateInvalid: "Use exactly one {n} placeholder",
@@ -1092,13 +1429,13 @@ export const en: Messages = {
     deleteLager: "Delete store",
     deleteTitle: "Delete this store?",
     deleteDescription: (vars: { name: string }) =>
-      `“${vars.name}” will be deleted. It must not contain any material.`,
+      `“${vars.name}” will be deleted. It must not contain any container.`,
     created: "Store created",
     saved: "Store saved",
     deleted: "Store deleted",
 
     materialCount: (vars: { count: number }) =>
-      vars.count === 1 ? "1 material" : `${vars.count} materials`,
+      vars.count === 1 ? "1 container" : `${vars.count} containers`,
     sharedWith: (vars: { count: number }) =>
       vars.count === 1
         ? "shared with 1 friend"

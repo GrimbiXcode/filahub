@@ -1,4 +1,14 @@
-import { and, count, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  ne,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import {
   buildVariantDisplayName,
   resolveName,
@@ -7,13 +17,17 @@ import {
 import { FALLBACK_LANGUAGE, type LanguageCode } from "@contracts/i18n";
 import {
   consumedSince,
+  productStock,
   remainingAmount,
   type ContainerForm,
+  type ProductStock,
   type SecondaryAmount,
 } from "@contracts/materials";
 import {
   consumptions,
   materials,
+  printJobMaterials,
+  type MaterialProduct,
   presetContainerVariants,
   containerTypes,
   storageBoxes,
@@ -31,6 +45,14 @@ import {
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 import { hasChanges } from "./patch";
+import {
+  PRODUCT_GONE,
+  deleteProductIfEmpty,
+  insertProduct,
+  lockProductInScope,
+  updateProduct,
+  type ProductData,
+} from "./products";
 
 // ---------------------------------------------------------------------------
 // Rollentypen (Verpackung / Spule mit Leergewicht)
@@ -231,6 +253,12 @@ export async function deleteStorageBox(scope: Scope, id: number) {
 // ---------------------------------------------------------------------------
 
 export type MaterialWithRelations = Material & {
+  /**
+   * Das Material (Produkt), zu dem das Gebinde gehört. Seine Felder werden in
+   * `computeMaterialStats` auf die Gebindezeile aufgeflacht – siehe
+   * `MaterialOverview`.
+   */
+  product: MaterialProduct;
   containerType: ContainerType | null;
   storageBox: StorageBox | null;
   /**
@@ -260,41 +288,60 @@ const withPresetPath = {
   },
 } as const;
 
-export type MaterialOverview = MaterialWithRelations & {
-  /** Summe der Leergewichte (Rolle + Box) in Gramm */
-  tareWeight: number;
-  /** Leergewicht nur der Rolle/Verpackung in Gramm (eigen oder Preset) */
-  containerTareWeight: number;
-  /** Anzeigename der gewählten Rolle, null wenn keine gewählt ist */
-  containerLabel: string | null;
-  /** Effektiv übrige Materialmenge in Gramm */
-  remainingWeight: number;
-  /** Verbleibend in Prozent der Nennmenge (0–100), null ohne Nennmenge */
-  remainingPercent: number | null;
-  /** Letzte Wägung (falls vorhanden) */
-  lastWeighing: Weighing | null;
-  /** Anzahl aller Wägungen */
-  weighingCount: number;
-  /**
-   * Seit der letzten Wägung abgebuchte Verbräuche in Gramm – ohne Wägung alle
-   * (siehe `consumedSince` in `contracts/materials.ts`). Für die Kachel „seitdem
-   * abgebucht“ auf der Detailseite; in `remainingWeight` ist der Wert schon
-   * abgezogen.
-   */
-  consumedSinceWeighing: number;
-  /**
-   * Restmenge in der Zweiteinheit der Materialart: Meter beim Filament, Liter
-   * beim Harz, `null` beim Pulver und immer dann, wenn eine nötige Angabe
-   * fehlt.
-   *
-   * Serverseitig gerechnet, weil die Rechnung Materialart und Stärke braucht
-   * und beide am Lager hängen – der Client müsste sich sonst beides zusätzlich
-   * holen. Reine Anzeige; `remainingWeight` in Gramm bleibt die Wahrheit.
-   */
-  secondary: SecondaryAmount | null;
-  /** Verwendete Dichte in g/l – für den Hinweis, woher die Zweitanzeige kommt */
-  densityUsed: number | null;
-};
+/**
+ * Die Felder des Materials, die auf die Gebindezeile aufgeflacht werden.
+ *
+ * Gespeichert sind sie seit 4.0.0 **nur** am Material (`material_products`);
+ * die Lesesicht reicht sie am Gebinde weiter, damit Suche, Filter, Farbfeld
+ * und Freundesansicht dieselbe Form behalten. Eine Kopie in der Datenbank ist
+ * das nicht – geschrieben wird immer das Material.
+ */
+type ProductFields = Pick<
+  MaterialProduct,
+  | "name"
+  | "materialType"
+  | "manufacturer"
+  | "color"
+  | "texture"
+  | "densityGramsPerLiter"
+>;
+
+export type MaterialOverview = Omit<MaterialWithRelations, "product"> &
+  ProductFields & {
+    /** Summe der Leergewichte (Rolle + Box) in Gramm */
+    tareWeight: number;
+    /** Leergewicht nur der Rolle/Verpackung in Gramm (eigen oder Preset) */
+    containerTareWeight: number;
+    /** Anzeigename der gewählten Rolle, null wenn keine gewählt ist */
+    containerLabel: string | null;
+    /** Effektiv übrige Materialmenge in Gramm */
+    remainingWeight: number;
+    /** Verbleibend in Prozent der Nennmenge (0–100), null ohne Nennmenge */
+    remainingPercent: number | null;
+    /** Letzte Wägung (falls vorhanden) */
+    lastWeighing: Weighing | null;
+    /** Anzahl aller Wägungen */
+    weighingCount: number;
+    /**
+     * Seit der letzten Wägung abgebuchte Verbräuche in Gramm – ohne Wägung alle
+     * (siehe `consumedSince` in `contracts/materials.ts`). Für die Kachel „seitdem
+     * abgebucht“ auf der Detailseite; in `remainingWeight` ist der Wert schon
+     * abgezogen.
+     */
+    consumedSinceWeighing: number;
+    /**
+     * Restmenge in der Zweiteinheit der Materialart: Meter beim Filament, Liter
+     * beim Harz, `null` beim Pulver und immer dann, wenn eine nötige Angabe
+     * fehlt.
+     *
+     * Serverseitig gerechnet, weil die Rechnung Materialart und Stärke braucht
+     * und beide am Lager hängen – der Client müsste sich sonst beides zusätzlich
+     * holen. Reine Anzeige; `remainingWeight` in Gramm bleibt die Wahrheit.
+     */
+    secondary: SecondaryAmount | null;
+    /** Verwendete Dichte in g/l – für den Hinweis, woher die Zweitanzeige kommt */
+    densityUsed: number | null;
+  };
 
 /**
  * Drizzle liefert bei LEFT JOINs ohne Treffer ein Objekt mit lauter
@@ -344,13 +391,20 @@ export function computeMaterialStats(
       boxTareWeight: material.storageBox?.tareWeight,
       grossWeight: lastWeighing?.grossWeight,
       consumedSinceWeighing,
-      materialType: material.materialType,
+      materialType: material.product.materialType,
       kind: material.lager?.materialKind,
-      densityGramsPerLiter: material.densityGramsPerLiter,
+      densityGramsPerLiter: material.product.densityGramsPerLiter,
       diameterUm: material.lager?.filamentDiameterUm,
     });
+  const { product, ...gebinde } = material;
   return {
-    ...material,
+    ...gebinde,
+    name: product.name,
+    materialType: product.materialType,
+    manufacturer: product.manufacturer,
+    color: product.color,
+    texture: product.texture,
+    densityGramsPerLiter: product.densityGramsPerLiter,
     tareWeight,
     containerTareWeight,
     containerLabel,
@@ -364,6 +418,114 @@ export function computeMaterialStats(
   };
 }
 
+/** Ein Gebinde in der Übersicht: Werte des Gebindes plus Bestand seines Materials */
+export type MaterialListItem = MaterialOverview & {
+  /**
+   * Bestand des **Materials** über alle seine Gebinde und Lager, samt der
+   * geltenden Warnschwelle (`productStock` in `contracts/materials.ts`). Für
+   * alle Gebinde desselben Materials derselbe Wert.
+   */
+  stock: ProductStock;
+};
+
+/** Lade-Vorschrift für die Gebindezeile samt allem, was die Restmenge braucht */
+const GEBINDE_WITH = {
+  product: true,
+  containerType: true,
+  storageBox: true,
+  containerPresetVariant: withPresetPath,
+  lager: true,
+  weighings: true,
+  /*
+    Nur die zwei Spalten, die `consumedSince` braucht: Die Übersicht ist
+    die teuerste Leseprozedur, und der Verlauf gehört auf die Detailseite.
+  */
+  consumptions: { columns: { weight: true, consumedAt: true } },
+} as const;
+
+/** Gebindezeilen nach `where`, mit Restmenge – aber noch ohne Bestand. */
+async function loadGebindeOverviews(
+  where: SQL,
+  language: LanguageCode
+): Promise<MaterialOverview[]> {
+  const rows = await getDb().query.materials.findMany({
+    where,
+    with: GEBINDE_WITH,
+    orderBy: (t, { desc: d }) => [d(t.createdAt), d(t.id)],
+  });
+  /*
+    Ein Gebinde ohne Material dürfte es nicht geben (`lockProductInScope`).
+    Gäbe es doch eines, soll es die Liste nicht für den ganzen Bereich
+    abstürzen lassen – es fehlt dann in der Übersicht, statt alles zu blockieren.
+  */
+  return rows.flatMap(row => {
+    if (!row.product) {
+      console.error(`Gebinde ${row.id} ohne Material ${row.productId}`);
+      return [];
+    }
+    const sorted = [...row.weighings].sort(
+      (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id
+    );
+    const last = sorted[0] ?? null;
+    const { weighings: _omit, consumptions: _omitToo, ...rest } = row;
+    return [
+      computeMaterialStats(
+        {
+          ...rest,
+          product: row.product,
+          containerType: normalizeRelation(row.containerType),
+          storageBox: normalizeRelation(row.storageBox),
+          containerPresetVariant: normalizeRelation(row.containerPresetVariant),
+          lager: normalizeRelation(row.lager),
+        },
+        last,
+        row.weighings.length,
+        language,
+        consumedSince(last?.weighedAt ?? null, row.consumptions)
+      ),
+    ];
+  });
+}
+
+/**
+ * Bestand je Material aus den Gebindezeilen. Die Schwelle des Lagers kommt
+ * aus dem mitgeladenen Lager jedes Gebindes.
+ */
+function stockByProduct(
+  gebinde: readonly MaterialOverview[]
+): Map<number, ProductStock> {
+  const groups = new Map<number, MaterialOverview[]>();
+  for (const g of gebinde) {
+    const list = groups.get(g.productId);
+    if (list) list.push(g);
+    else groups.set(g.productId, [g]);
+  }
+  const result = new Map<number, ProductStock>();
+  for (const [productId, list] of groups) {
+    result.set(
+      productId,
+      productStock(
+        list.map(g => ({
+          remainingWeight: g.remainingWeight,
+          nominalWeight: g.nominalWeight,
+          lagerLowStockGrams: g.lager?.lowStockGrams,
+          // Aufgebrauchte zählen nicht zum Bestand (seit 4.1.0)
+          archived: g.archivedAt != null,
+        }))
+      )
+    );
+  }
+  return result;
+}
+
+/**
+ * Gebinde des Bereichs samt Bestand ihres Materials.
+ *
+ * Mit `lagerId` kommen nur die Gebinde dieses Lagers – der Bestand zählt aber
+ * trotzdem **alle** Gebinde der betroffenen Materialien, auch die in anderen
+ * Lagern. Dafür eine zweite Abfrage auf genau diese; ohne sie warnte die
+ * Übersicht des einen Lagers, obwohl die volle Rolle im anderen liegt.
+ */
 export async function findMaterialsInScope(
   scope: Scope,
   language: LanguageCode = FALLBACK_LANGUAGE,
@@ -373,47 +535,47 @@ export async function findMaterialsInScope(
    * Übersicht auf das gewählte Lager filtert.
    */
   lagerId?: number
-): Promise<MaterialOverview[]> {
-  const db = getDb();
-  const rows = await db.query.materials.findMany({
-    where:
-      lagerId != null
-        ? and(scopeWhere(materials, scope), eq(materials.lagerId, lagerId))
-        : scopeWhere(materials, scope),
-    with: {
-      containerType: true,
-      storageBox: true,
-      containerPresetVariant: withPresetPath,
-      lager: true,
-      weighings: true,
-      /*
-        Nur die zwei Spalten, die `consumedSince` braucht: Die Übersicht ist
-        die teuerste Leseprozedur, und der Verlauf gehört auf die Detailseite.
-      */
-      consumptions: { columns: { weight: true, consumedAt: true } },
-    },
-    orderBy: (t, { desc: d }) => [d(t.createdAt)],
-  });
-  return rows.map(row => {
-    const sorted = [...row.weighings].sort(
-      (a, b) => b.weighedAt.getTime() - a.weighedAt.getTime() || b.id - a.id
-    );
-    const last = sorted[0] ?? null;
-    const { weighings: _omit, consumptions: _omitToo, ...rest } = row;
-    return computeMaterialStats(
-      {
-        ...rest,
-        containerType: normalizeRelation(row.containerType),
-        storageBox: normalizeRelation(row.storageBox),
-        containerPresetVariant: normalizeRelation(row.containerPresetVariant),
-        lager: normalizeRelation(row.lager),
-      },
-      last,
-      row.weighings.length,
-      language,
-      consumedSince(last?.weighedAt ?? null, row.consumptions)
-    );
-  });
+): Promise<MaterialListItem[]> {
+  const list = await loadGebindeOverviews(
+    lagerId != null
+      ? and(scopeWhere(materials, scope), eq(materials.lagerId, lagerId))!
+      : scopeWhere(materials, scope),
+    language
+  );
+  const productIds = [...new Set(list.map(g => g.productId))];
+  const elsewhere =
+    lagerId != null && productIds.length > 0
+      ? await loadGebindeOverviews(
+          and(
+            scopeWhere(materials, scope),
+            inArray(materials.productId, productIds),
+            ne(materials.lagerId, lagerId)
+          )!,
+          language
+        )
+      : [];
+  const stock = stockByProduct([...list, ...elsewhere]);
+  return list.map(g => ({
+    ...g,
+    stock: stock.get(g.productId) ?? productStock([]),
+  }));
+}
+
+/**
+ * Alle Gebinde eines Materials im Bereich, über alle Lager, samt Bestand –
+ * für „Weitere Rollen von diesem Material“ und die Material-Seite.
+ */
+export async function findGebindeOfProduct(
+  scope: Scope,
+  productId: number,
+  language: LanguageCode = FALLBACK_LANGUAGE
+): Promise<{ gebinde: MaterialListItem[]; stock: ProductStock }> {
+  const list = await loadGebindeOverviews(
+    and(scopeWhere(materials, scope), eq(materials.productId, productId))!,
+    language
+  );
+  const stock = stockByProduct(list).get(productId) ?? productStock([]);
+  return { gebinde: list.map(g => ({ ...g, stock })), stock };
 }
 
 export async function findMaterialInScope(
@@ -424,6 +586,7 @@ export async function findMaterialInScope(
   const row = await getDb().query.materials.findFirst({
     where: and(eq(materials.id, id), scopeWhere(materials, scope)),
     with: {
+      product: true,
       containerType: true,
       storageBox: true,
       containerPresetVariant: withPresetPath,
@@ -434,13 +597,16 @@ export async function findMaterialInScope(
       },
     },
   });
-  if (!row) return null;
+  if (!row?.product) return null;
+  const product = row.product;
   const last = row.weighings[0] ?? null;
   const { weighings: list, consumptions: consumed, ...rest } = row;
+  const { stock } = await findGebindeOfProduct(scope, row.productId, language);
   return {
     ...computeMaterialStats(
       {
         ...rest,
+        product,
         containerType: normalizeRelation(row.containerType),
         storageBox: normalizeRelation(row.storageBox),
         containerPresetVariant: normalizeRelation(row.containerPresetVariant),
@@ -451,29 +617,12 @@ export async function findMaterialInScope(
       language,
       consumedSince(last?.weighedAt ?? null, consumed)
     ),
+    /** Notizen des Materials – die Gebindezeile hat ihre eigenen */
+    productNotes: product.notes,
+    stock,
     weighings: list,
     consumptions: consumed,
   };
-}
-
-/**
- * Alle Materialarten des Bereichs, jede Schreibweise einmal.
- *
- * Futter für `canonicalMaterialType`: Was hier steht, ist die Schreibweise,
- * die eine neue Eingabe derselben Vergleichsform bekommt. Seit der Migration
- * `0019_material_type_case.sql` führt ein Bereich je Vergleichsform nur noch
- * eine Schreibweise; sollten es durch zwei gleichzeitige Anfragen doch einmal
- * zwei sein, sorgt die Sortierung dafür, dass stets dieselbe gewinnt.
- */
-export async function findMaterialTypesInScope(
-  scope: Scope
-): Promise<string[]> {
-  const rows = await getDb()
-    .selectDistinct({ materialType: materials.materialType })
-    .from(materials)
-    .where(scopeWhere(materials, scope))
-    .orderBy(materials.materialType);
-  return rows.map(row => row.materialType);
 }
 
 /**
@@ -495,74 +644,113 @@ function rethrowIdentifierTaken(error: unknown): never {
   throw error;
 }
 
+/** Was am Gebinde selbst eingegeben wird */
+export type GebindeData = {
+  lagerId: number;
+  identifier?: string | null;
+  priceCents?: number | null;
+  purchaseDate?: string | null;
+  nominalWeight: number;
+  containerTypeId?: number | null;
+  containerPresetVariantId?: number | null;
+  storageBoxId?: number | null;
+  notes?: string | null;
+};
+
+/**
+ * Legt ein Gebinde an – zu einem bestehenden Material (`product` ist eine ID)
+ * oder zu einem neuen (`product` sind dessen Angaben). Beides in **einer**
+ * Transaktion samt Erstwägung: Scheitert das Gebinde an der Kennung, bleibt
+ * kein Material ohne Gebinde zurück.
+ *
+ * Liefert die ID des Gebindes und die des Materials.
+ */
 export async function createMaterial(
   scope: Scope,
-  data: {
-    lagerId: number;
-    name: string;
-    identifier?: string | null;
-    materialType: string;
-    manufacturer?: string;
-    color?: string;
-    texture?: string | null;
-    priceCents?: number | null;
-    purchaseDate?: string | null;
-    nominalWeight: number;
-    densityGramsPerLiter?: number | null;
-    containerTypeId?: number | null;
-    containerPresetVariantId?: number | null;
-    storageBoxId?: number | null;
-    notes?: string;
-  },
+  data: GebindeData,
+  product: number | ProductData,
   initialGrossWeight?: number | null
-) {
-  const db = getDb();
-  const [{ id }] = await db
-    .insert(materials)
-    /*
-      Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe – und der
-      Bereich stammt aus dem **Lager**, das `validateForeignKeys` vorher
-      aufgelöst hat. Damit kann die Kopie am Material nicht vom Lager abweichen,
-      und ein Material wechselt seinen Bereich nicht dadurch, dass jemand eine
-      fremde `lagerId` mitschickt.
-    */
-    .values({ ...data, ...scopeOwner(scope) })
-    .returning({ id: materials.id })
+): Promise<{ id: number; productId: number }> {
+  return getDb()
+    .transaction(async tx => {
+      if (
+        typeof product === "number" &&
+        !(await lockProductInScope(tx, scope, product))
+      )
+        throw new Error(PRODUCT_GONE);
+      const productId =
+        typeof product === "number"
+          ? product
+          : await insertProduct(tx, scope, product);
+      const [{ id }] = await tx
+        .insert(materials)
+        /*
+          Der Eigentümer kommt aus dem Bereich, nie aus der Eingabe – und der
+          Bereich stammt aus dem **Lager**, das `validateForeignKeys` vorher
+          aufgelöst hat. Damit kann die Kopie am Gebinde nicht vom Lager
+          abweichen, und ein Gebinde wechselt seinen Bereich nicht dadurch,
+          dass jemand eine fremde `lagerId` mitschickt.
+        */
+        .values({ ...data, productId, ...scopeOwner(scope) })
+        .returning({ id: materials.id });
+      if (initialGrossWeight != null) {
+        await tx
+          .insert(weighings)
+          .values({ materialId: id, grossWeight: initialGrossWeight });
+      }
+      return { id, productId };
+    })
     .catch(rethrowIdentifierTaken);
-  if (initialGrossWeight != null) {
-    await db
-      .insert(weighings)
-      .values({ materialId: id, grossWeight: initialGrossWeight });
-  }
-  return id;
 }
 
+/**
+ * Ändert ein Gebinde und – falls mitgeschickt – sein Material, in einer
+ * Transaktion.
+ *
+ * - `data.productId` ordnet das Gebinde einem anderen Material zu; war es das
+ *   letzte Gebinde des alten, wird das alte gelöscht.
+ * - `productPatch` ändert das **Material** und damit alle seine Gebinde.
+ */
 export async function updateMaterial(
   scope: Scope,
   id: number,
-  data: Partial<{
-    lagerId: number;
-    name: string;
-    identifier: string | null;
-    materialType: string;
-    manufacturer: string | null;
-    color: string | null;
-    texture: string | null;
-    priceCents: number | null;
-    purchaseDate: string | null;
-    nominalWeight: number;
-    densityGramsPerLiter: number | null;
-    containerTypeId: number | null;
-    containerPresetVariantId: number | null;
-    storageBoxId: number | null;
-    notes: string | null;
-  }>
+  data: Partial<GebindeData & { productId: number }>,
+  productPatch: { productId: number; data: Partial<ProductData> } | null,
+  previousProductId: number
 ) {
-  if (!hasChanges(data)) return;
   await getDb()
-    .update(materials)
-    .set(data)
-    .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+    .transaction(async tx => {
+      if (
+        data.productId != null &&
+        data.productId !== previousProductId &&
+        !(await lockProductInScope(tx, scope, data.productId))
+      )
+        throw new Error(PRODUCT_GONE);
+      if (productPatch) {
+        await updateProduct(
+          tx,
+          scope,
+          productPatch.productId,
+          productPatch.data
+        );
+      }
+      if (hasChanges(data)) {
+        await tx
+          .update(materials)
+          .set(data)
+          .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+      }
+      if (data.productId != null && data.productId !== previousProductId) {
+        // War es das letzte Gebinde, nimmt das neue Material die
+        // Druckeinstellungen mit, sofern es keine eigenen hat.
+        await deleteProductIfEmpty(
+          tx,
+          scope,
+          previousProductId,
+          data.productId
+        );
+      }
+    })
     .catch(rethrowIdentifierTaken);
 }
 
@@ -590,6 +778,18 @@ export async function findIdentifiersInScope(scope: Scope): Promise<string[]> {
  */
 export async function deleteMaterial(scope: Scope, id: number) {
   await getDb().transaction(async tx => {
+    /*
+      Das Gebinde zuerst sperren, dann seine Verbräuche löschen. Wer
+      gleichzeitig auf dasselbe Gebinde bucht (Verbrauch, Wägung, Druck),
+      sperrt es mit `FOR SHARE` und wartet damit hier – andersherum entstünde
+      ein Verbrauch zu einem Gebinde, das es nicht mehr gibt, und den keine
+      Kontolöschung mehr fände.
+    */
+    await tx
+      .select({ id: materials.id })
+      .from(materials)
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+      .for("update");
     const scoped = tx
       .select({ id: materials.id })
       .from(materials)
@@ -598,23 +798,56 @@ export async function deleteMaterial(scope: Scope, id: number) {
     await tx
       .delete(consumptions)
       .where(inArray(consumptions.materialId, scoped));
+    /*
+      Drucke bleiben, verlieren aber den Bezug auf das Gebinde und seine eben
+      gelöschten Verbräuche (4.2.0). Das Material nennen sie weiter.
+    */
     await tx
+      .update(printJobMaterials)
+      .set({ materialId: null, consumptionId: null })
+      .where(inArray(printJobMaterials.materialId, scoped));
+    const deleted = await tx
       .delete(materials)
-      .where(and(eq(materials.id, id), scopeWhere(materials, scope)));
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+      .returning({ productId: materials.productId });
+    /*
+      Das letzte Gebinde eines Materials nimmt das Material mit – ein
+      Material existiert nur, solange es ein Gebinde hat (`api/queries/products.ts`).
+    */
+    for (const { productId } of deleted) {
+      await deleteProductIfEmpty(tx, scope, productId);
+    }
   });
 }
 
+/**
+ * Sperrt ein Gebinde für die Dauer der Transaktion gegen Löschen
+ * (`FOR SHARE`) – siehe `deleteMaterial`. `false`, wenn es nicht (mehr) da ist.
+ */
+async function holdGebinde(
+  tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
+  materialId: number
+): Promise<boolean> {
+  const rows = await tx
+    .select({ id: materials.id })
+    .from(materials)
+    .where(eq(materials.id, materialId))
+    .for("share");
+  return rows.length > 0;
+}
+
+/** Legt eine Wägung an; `null`, wenn das Gebinde inzwischen gelöscht ist. */
 export async function addWeighing(data: {
   materialId: number;
   grossWeight: number;
   weighedAt?: Date;
   note?: string;
 }) {
-  const [{ id }] = await getDb()
-    .insert(weighings)
-    .values(data)
-    .returning({ id: weighings.id });
-  return getDb().query.weighings.findFirst({ where: eq(weighings.id, id) });
+  return getDb().transaction(async tx => {
+    if (!(await holdGebinde(tx, data.materialId))) return null;
+    const [row] = await tx.insert(weighings).values(data).returning();
+    return row;
+  });
 }
 
 /**
@@ -669,18 +902,17 @@ export async function findLatestWeighingId(
 // Verbräuche – Spiegel der Wägungsfunktionen oben, mit denselben Begründungen
 // ---------------------------------------------------------------------------
 
+/** Wie `addWeighing` – `null`, wenn das Gebinde inzwischen gelöscht ist. */
 export async function addConsumption(data: {
   materialId: number;
   weight: number;
   consumedAt?: Date;
   note?: string;
 }) {
-  const [{ id }] = await getDb()
-    .insert(consumptions)
-    .values(data)
-    .returning({ id: consumptions.id });
-  return getDb().query.consumptions.findFirst({
-    where: eq(consumptions.id, id),
+  return getDb().transaction(async tx => {
+    if (!(await holdGebinde(tx, data.materialId))) return null;
+    const [row] = await tx.insert(consumptions).values(data).returning();
+    return row;
   });
 }
 
@@ -702,7 +934,14 @@ export async function findConsumption(id: number) {
 }
 
 export async function deleteConsumption(id: number) {
-  await getDb().delete(consumptions).where(eq(consumptions.id, id));
+  await getDb().transaction(async tx => {
+    await tx.delete(consumptions).where(eq(consumptions.id, id));
+    // Ein Druck, der ihn gebucht hatte, bleibt – nur ohne Buchung (4.2.0)
+    await tx
+      .update(printJobMaterials)
+      .set({ consumptionId: null })
+      .where(eq(printJobMaterials.consumptionId, id));
+  });
 }
 
 /**
@@ -795,4 +1034,40 @@ export async function findRecentWeighings(scope: Scope, limit = 10) {
     with: { material: true },
   });
   return rows;
+}
+
+/**
+ * Die blanke Gebindezeile im Bereich, ohne Relationen und Rechnung – für
+ * Schreibpfade, die nur Lager, Material und Kennung des Bestands brauchen.
+ * `findMaterialInScope` lädt dafür alle Gebinde des Materials samt Wägungen.
+ */
+export function findMaterialRowInScope(scope: Scope, id: number) {
+  return getDb().query.materials.findFirst({
+    where: and(eq(materials.id, id), scopeWhere(materials, scope)),
+  });
+}
+
+/**
+ * Markiert ein Gebinde als aufgebraucht bzw. nimmt die Markierung zurück.
+ * Liefert `false`, wenn es das Gebinde im Bereich nicht gibt.
+ */
+export async function setMaterialArchived(
+  scope: Scope,
+  id: number,
+  archived: boolean
+): Promise<boolean> {
+  const rows = await getDb()
+    .update(materials)
+    /*
+      Ein zweiter Aufruf mit `archived: true` behält den ersten Zeitpunkt –
+      „aufgebraucht seit“ soll nicht durch einen Doppelklick wandern.
+    */
+    .set({
+      archivedAt: archived
+        ? sql`coalesce(${materials.archivedAt}, now())`
+        : null,
+    })
+    .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+    .returning({ id: materials.id });
+  return rows.length > 0;
 }

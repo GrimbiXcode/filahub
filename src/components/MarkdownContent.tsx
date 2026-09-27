@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Separator } from "@/components/ui/separator";
+import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 
 /**
@@ -20,7 +21,10 @@ import { cn } from "@/lib/utils";
 /** Löst eine Bildreferenz in eine gebaute Asset-URL auf. */
 export type ImageResolver = (src: string) => string | undefined;
 
-function buildComponents(resolveImage?: ImageResolver): Components {
+function buildComponents(
+  resolveImage: ImageResolver | undefined,
+  imageMissing: (vars: { src: string }) => string
+): Components {
   return {
     h1: ({ children }) => (
       <h2 className="mt-6 text-lg font-semibold tracking-tight first:mt-0">
@@ -81,7 +85,12 @@ function buildComponents(resolveImage?: ImageResolver): Components {
         bleiben im selben Tab und ohne `rel`: Ein neuer Tab wäre hier eine
         Zumutung, und `noreferrer` gegen die eigene Seite ergibt keinen Sinn.
       */
-      const isInternal = typeof href === "string" && href.startsWith("/");
+      /*
+        `//host` und `/\host` sind keine internen Pfade, sondern Adressen
+        fremder Seiten ohne Schema – seit 4.2.0 rendert diese Komponente auch
+        Notizen, die andere Mitglieder einer Organisation geschrieben haben.
+      */
+      const isInternal = typeof href === "string" && /^\/(?![/\\])/.test(href);
       return (
         <a
           href={href}
@@ -114,7 +123,7 @@ function buildComponents(resolveImage?: ImageResolver): Components {
         // Lieber sichtbar als unsichtbar kaputt.
         return (
           <span className="mt-3 block rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-            Bild nicht gefunden: {String(src)}
+            {imageMissing({ src: String(src) })}
           </span>
         );
       }
@@ -143,9 +152,11 @@ export function MarkdownContent({
   resolveImage?: ImageResolver;
   className?: string;
 }) {
+  const t = useT();
+  const imageMissing = t.common.imageMissing;
   const components = useMemo(
-    () => buildComponents(resolveImage),
-    [resolveImage]
+    () => buildComponents(resolveImage, imageMissing),
+    [resolveImage, imageMissing]
   );
   return (
     <div

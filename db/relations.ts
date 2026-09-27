@@ -2,7 +2,12 @@ import { relations } from "drizzle-orm";
 import {
   consumptions,
   lager,
+  materialProducts,
   materials,
+  printJobFiles,
+  printJobLinks,
+  printJobMaterials,
+  printJobs,
   organizationMembers,
   organizations,
   presetManufacturers,
@@ -18,6 +23,7 @@ import {
 
 export const usersRelations = relations(users, ({ many }) => ({
   materials: many(materials),
+  materialProducts: many(materialProducts),
   containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   lager: many(lager),
@@ -53,6 +59,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   containerTypes: many(containerTypes),
   storageBoxes: many(storageBoxes),
   materials: many(materials),
+  materialProducts: many(materialProducts),
 }));
 
 export const organizationMembersRelations = relations(
@@ -105,11 +112,38 @@ export const storageBoxesRelations = relations(
   })
 );
 
+/*
+  Material (Produkt) und Gebinde – die Oberfläche nennt `materialProducts`
+  „Material“ und `materials` „Gebinde“, siehe den Kommentar in `db/schema.ts`.
+*/
+export const materialProductsRelations = relations(
+  materialProducts,
+  ({ one, many }) => ({
+    user: one(users, {
+      fields: [materialProducts.userId],
+      references: [users.id],
+    }),
+    organization: one(organizations, {
+      fields: [materialProducts.organizationId],
+      references: [organizations.id],
+    }),
+    materials: many(materials),
+  })
+);
+
 export const materialsRelations = relations(materials, ({ one, many }) => ({
   user: one(users, { fields: [materials.userId], references: [users.id] }),
   organization: one(organizations, {
     fields: [materials.organizationId],
     references: [organizations.id],
+  }),
+  /*
+    Das Material, zu dem das Gebinde gehört: Name, Materialart, Hersteller,
+    Farbe, Oberfläche und Dichte stehen dort.
+  */
+  product: one(materialProducts, {
+    fields: [materials.productId],
+    references: [materialProducts.id],
   }),
   /*
     Wird mitgeladen, wo die Zweitanzeige gebraucht wird: Materialart und
@@ -196,3 +230,45 @@ export const presetContainerVariantsRelations = relations(
     materials: many(materials),
   })
 );
+
+// ---------------------------------------------------------------------------
+// Druckhistorie (seit 4.2.0)
+// ---------------------------------------------------------------------------
+
+export const printJobsRelations = relations(printJobs, ({ many }) => ({
+  materials: many(printJobMaterials),
+  links: many(printJobLinks),
+  files: many(printJobFiles),
+}));
+
+export const printJobMaterialsRelations = relations(
+  printJobMaterials,
+  ({ one }) => ({
+    printJob: one(printJobs, {
+      fields: [printJobMaterials.printJobId],
+      references: [printJobs.id],
+    }),
+    product: one(materialProducts, {
+      fields: [printJobMaterials.productId],
+      references: [materialProducts.id],
+    }),
+    material: one(materials, {
+      fields: [printJobMaterials.materialId],
+      references: [materials.id],
+    }),
+  })
+);
+
+export const printJobLinksRelations = relations(printJobLinks, ({ one }) => ({
+  printJob: one(printJobs, {
+    fields: [printJobLinks.printJobId],
+    references: [printJobs.id],
+  }),
+}));
+
+export const printJobFilesRelations = relations(printJobFiles, ({ one }) => ({
+  printJob: one(printJobs, {
+    fields: [printJobFiles.printJobId],
+    references: [printJobs.id],
+  }),
+}));

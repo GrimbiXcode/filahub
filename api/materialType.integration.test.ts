@@ -7,12 +7,16 @@
  */
 import { readFile } from "node:fs/promises";
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { getDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
-import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { callerFor, closeDb, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  migrateUntil,
+  resetSchema,
+} from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -174,17 +178,62 @@ describe("Migration 0019 – Backfill", () => {
    * Hand – am Router vorbei, der die Dubletten seit 2.9.1 gar nicht mehr
    * zuließe –, und die Datei wird ein zweites Mal angewendet. Sie ist darauf
    * ausgelegt (ein zweiter Lauf findet nichts mehr), und genau das prüft der
-   * letzte Test.
+   * vorletzte Test.
+   *
+   * Seit 4.0.0 steht die Materialart nicht mehr am Gebinde, sondern am
+   * Material (`0022_material_products.sql`). Die Datenbank wird deshalb nur
+   * bis vor 0019 aufgebaut (`migrateUntil`), und alles läuft über rohes SQL
+   * gegen die Form von damals.
    */
   const MIGRATION = new URL(
     "../db/migrations/0019_material_type_case.sql",
     import.meta.url
   );
 
+  let annaId: number;
+  let bertId: number;
+
+  beforeEach(async () => {
+    await migrateUntil(19);
+    annaId = await legacyUser("anna-1");
+    bertId = await legacyUser("bert-1");
+  });
+
+  afterAll(async () => {
+    await resetSchema();
+  });
+
   async function applyMigration() {
     const content = await readFile(MIGRATION, "utf8");
     const result = await db().execute(sql.raw(content));
     return result.rowCount ?? 0;
+  }
+
+  async function legacyUser(unionId: string): Promise<number> {
+    const result = await db().execute<{ id: string }>(sql`
+      INSERT INTO "users" ("unionId", "name") VALUES (${unionId}, ${unionId})
+      RETURNING "id"`);
+    return Number(result.rows[0].id);
+  }
+
+  async function legacyOrganization(name: string): Promise<number> {
+    const result = await db().execute<{ id: string }>(sql`
+      INSERT INTO "organizations" ("name") VALUES (${name}) RETURNING "id"`);
+    return Number(result.rows[0].id);
+  }
+
+  async function legacyLager(
+    owner: { userId: number } | { organizationId: number }
+  ): Promise<number> {
+    const userId = "userId" in owner ? owner.userId : null;
+    const organizationId =
+      "organizationId" in owner ? owner.organizationId : null;
+    const result = await db().execute<{ id: string }>(sql`
+      INSERT INTO "lager" (
+        "userId", "organizationId", "name", "materialKind", "filamentDiameterUm"
+      ) VALUES (${userId}, ${organizationId}, 'Filament', 'filament', 1750)
+      RETURNING "id"`);
+    return Number(result.rows[0].id);
   }
 
   /** Materialien in der Reihenfolge ihrer Anlage – die älteste zuerst. */
@@ -193,32 +242,32 @@ describe("Migration 0019 – Backfill", () => {
     lagerId: number,
     materialTypes: string[]
   ) {
+    const userId = "userId" in owner ? owner.userId : null;
+    const organizationId =
+      "organizationId" in owner ? owner.organizationId : null;
     for (const materialType of materialTypes) {
-      await db()
-        .insert(schema.materials)
-        .values({
-          ...owner,
-          lagerId,
-          name: "Altbestand",
-          materialType,
-          nominalWeight: 1000,
-        });
+      await db().execute(sql`
+        INSERT INTO "materials" (
+          "userId", "organizationId", "lagerId", "name", "materialType",
+          "nominalWeight"
+        ) VALUES (
+          ${userId}, ${organizationId}, ${lagerId}, 'Altbestand',
+          ${materialType}, 1000
+        )`);
     }
   }
 
   async function storedTypes(lagerId: number) {
-    const rows = await db()
-      .select({ materialType: schema.materials.materialType })
-      .from(schema.materials)
-      .where(eq(schema.materials.lagerId, lagerId))
-      .orderBy(schema.materials.id);
-    return rows.map(row => row.materialType);
+    const result = await db().execute<{ materialType: string }>(sql`
+      SELECT "materialType" FROM "materials"
+      WHERE "lagerId" = ${lagerId} ORDER BY "id"`);
+    return result.rows.map(row => row.materialType);
   }
 
   it("führt auf die Schreibweise der Vorschlagsliste zusammen", async () => {
-    const lagerId = await lagerFor(anna);
+    const lagerId = await legacyLager({ userId: annaId });
     // „Pla“ ist die häufigste und die älteste – die Liste gewinnt trotzdem.
-    await insertLegacy({ userId: anna.id }, lagerId, [
+    await insertLegacy({ userId: annaId }, lagerId, [
       "Pla",
       "pla",
       "Pla",
@@ -236,8 +285,8 @@ describe("Migration 0019 – Backfill", () => {
   });
 
   it("nimmt sonst die häufigste Schreibweise", async () => {
-    const lagerId = await lagerFor(anna);
-    await insertLegacy({ userId: anna.id }, lagerId, [
+    const lagerId = await legacyLager({ userId: annaId });
+    await insertLegacy({ userId: annaId }, lagerId, [
       "nylon",
       "Nylon",
       "NYLON",
@@ -253,29 +302,27 @@ describe("Migration 0019 – Backfill", () => {
   });
 
   it("nimmt bei Gleichstand die des ältesten Materials", async () => {
-    const lagerId = await lagerFor(anna);
-    await insertLegacy({ userId: anna.id }, lagerId, ["Wood", "wood"]);
+    const lagerId = await legacyLager({ userId: annaId });
+    await insertLegacy({ userId: annaId }, lagerId, ["Wood", "wood"]);
     await applyMigration();
     expect(await storedTypes(lagerId)).toEqual(["Wood", "Wood"]);
   });
 
   it("bereinigt Leerraum auch ohne Dublette", async () => {
-    const lagerId = await lagerFor(anna);
-    await insertLegacy({ userId: anna.id }, lagerId, [" Wood  Fill "]);
+    const lagerId = await legacyLager({ userId: annaId });
+    await insertLegacy({ userId: annaId }, lagerId, [" Wood  Fill "]);
     await applyMigration();
     expect(await storedTypes(lagerId)).toEqual(["Wood Fill"]);
   });
 
   it("führt nur innerhalb eines Bereichs zusammen", async () => {
-    const annaLager = await lagerFor(anna);
-    const bertLager = await lagerFor(bert);
-    const org = await callerFor(anna).organization.create({
-      name: "Werkstatt",
-    });
-    const orgLager = await lagerFor(anna, org.id);
-    await insertLegacy({ userId: anna.id }, annaLager, ["Wood", "Wood"]);
-    await insertLegacy({ userId: bert.id }, bertLager, ["wood"]);
-    await insertLegacy({ organizationId: org.id }, orgLager, ["WOOD"]);
+    const annaLager = await legacyLager({ userId: annaId });
+    const bertLager = await legacyLager({ userId: bertId });
+    const orgId = await legacyOrganization("Werkstatt");
+    const orgLager = await legacyLager({ organizationId: orgId });
+    await insertLegacy({ userId: annaId }, annaLager, ["Wood", "Wood"]);
+    await insertLegacy({ userId: bertId }, bertLager, ["wood"]);
+    await insertLegacy({ organizationId: orgId }, orgLager, ["WOOD"]);
     await applyMigration();
     expect(await storedTypes(annaLager)).toEqual(["Wood", "Wood"]);
     expect(await storedTypes(bertLager)).toEqual(["wood"]);
@@ -283,16 +330,16 @@ describe("Migration 0019 – Backfill", () => {
   });
 
   it("ändert beim zweiten Lauf nichts mehr", async () => {
-    const lagerId = await lagerFor(anna);
-    await insertLegacy({ userId: anna.id }, lagerId, ["pla", "Nylon", "nylon"]);
+    const lagerId = await legacyLager({ userId: annaId });
+    await insertLegacy({ userId: annaId }, lagerId, ["pla", "Nylon", "nylon"]);
     expect(await applyMigration()).toBe(2);
     expect(await applyMigration()).toBe(0);
     expect(await storedTypes(lagerId)).toEqual(["PLA", "Nylon", "Nylon"]);
   });
 
   it("hinterlässt je Bereich und Vergleichsform eine Schreibweise", async () => {
-    const lagerId = await lagerFor(anna);
-    await insertLegacy({ userId: anna.id }, lagerId, [
+    const lagerId = await legacyLager({ userId: annaId });
+    await insertLegacy({ userId: annaId }, lagerId, [
       "PLA",
       "pla",
       "Wood",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   Archive,
@@ -6,6 +6,7 @@ import {
   Boxes,
   Disc3,
   FileUp,
+  History,
   LayoutDashboard,
   Library,
   Monitor,
@@ -23,10 +24,12 @@ import {
   Users,
 } from "lucide-react";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import { PRINT_JOB_SEARCH_MIN_LENGTH } from "@contracts/printJobs";
 import { roleAllows } from "@contracts/organizations";
 import { ConsumptionDialog } from "@/components/ConsumptionDialog";
 import { LoanRequestDialog } from "@/components/LoanRequestDialog";
 import { MaterialFormDialog } from "@/components/MaterialFormDialog";
+import { PrintJobDialog } from "@/components/PrintJobDialog";
 import { WeighingDialog } from "@/components/WeighingDialog";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -50,8 +53,11 @@ import {
   FRIENDS_PATH,
   LAGER_PATH,
   ORGANIZATIONS_PATH,
+  PRINTS_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
+  gebindePath,
+  printJobPath,
 } from "@/const";
 import { useAuth } from "@/hooks/useAuth";
 import { useDebounced } from "@/hooks/useDebounced";
@@ -97,6 +103,15 @@ export function QuickActionsHost() {
           open={current.formOpen}
           onOpenChange={open => setQuickActionsState({ formOpen: open })}
           material={current.editing}
+          productId={current.formProductId}
+        />
+      )}
+      {current.printFormMounted && (
+        <PrintJobDialog
+          open={current.printFormOpen}
+          onOpenChange={open => setQuickActionsState({ printFormOpen: open })}
+          editing={current.printEditing}
+          prefill={current.printPrefill}
         />
       )}
       <WeighingDialog
@@ -138,6 +153,7 @@ type NavKey = TextKey<"nav">;
 
 const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
+  { icon: History, label: "prints", path: PRINTS_PATH },
   /*
     Beide Einträge sind in 2.2.0 hinter der Seitenleiste hergelaufen: Das Lager
     fehlte hier ganz, und die Dryboxen zeigten noch auf den alten Pfad, der nur
@@ -177,15 +193,27 @@ function CommandPalette({
 }: PaletteProps) {
   const navigate = useNavigate();
   const { isAdmin } = useAuth();
-  const { formatGrams } = useFormat();
+  const { formatDate, formatGrams } = useFormat();
   const { theme, setTheme } = useAppTheme();
   const t = useT();
   const scope = useActiveScope();
   const role = useScopeRole();
   // Erst laden, wenn die Suche wirklich geöffnet wird
-  const { data: materials } = trpc.material.list.useQuery(scope, {
+  const { data: allMaterials } = trpc.material.list.useQuery(scope, {
     enabled: open,
   });
+  /*
+    Aufgebrauchte Gebinde wiegt und bebucht niemand mehr (seit 4.1.0) – zum
+    Ansehen bleiben sie in der Suche: Die Kennung ist weiter belegt, und wer
+    sie sucht, will den Verlauf sehen.
+  */
+  const materials = useMemo(
+    () =>
+      mode === "palette"
+        ? allMaterials
+        : allMaterials?.filter(m => m.archivedAt == null),
+    [allMaterials, mode]
+  );
 
   /*
     Der Suchbegriff liegt im Zustand, weil das eigene Lager und das der Freunde
@@ -200,6 +228,21 @@ function CommandPalette({
     { query: debounced },
     {
       enabled: open && debounced.length >= FRIEND_SEARCH_MIN_LENGTH,
+      staleTime: 1000 * 30,
+    }
+  );
+
+  /*
+    Drucke findet die Palette nach Titel & Co. – über den Server wie bei den
+    Freunden, weil die Druckhistorie nicht vollständig im Browser liegt.
+  */
+  const { data: printResults } = trpc.print.list.useQuery(
+    { ...scope, query: debounced, limit: 5 },
+    {
+      enabled:
+        open &&
+        mode === "palette" &&
+        debounced.length >= PRINT_JOB_SEARCH_MIN_LENGTH,
       staleTime: 1000 * 30,
     }
   );
@@ -234,7 +277,7 @@ function CommandPalette({
         run(() => {
           if (mode === "weigh") quickActions.openWeighing(material);
           else if (mode === "consume") quickActions.openConsumption(material);
-          else navigate(`/material/${material.id}`);
+          else navigate(gebindePath(material.id));
         })
       }
     >
@@ -291,6 +334,27 @@ function CommandPalette({
       <Badge variant="secondary" className="ml-2 shrink-0 text-xs">
         {t.loan.ask}
       </Badge>
+    </CommandItem>
+  ));
+
+  const printItems = (printResults?.items ?? []).map(job => (
+    <CommandItem
+      key={`print-${job.id}`}
+      value={[debounced, job.title, job.printer, ...job.tags]
+        .filter(Boolean)
+        .join(" ")}
+      onSelect={() => run(() => navigate(printJobPath(job.id)))}
+    >
+      <History className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate leading-tight">{job.title}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {formatDate(job.printedAt)}
+          {job.materials.length > 0
+            ? ` · ${job.materials.map(m => m.name).join(", ")}`
+            : ""}
+        </span>
+      </div>
     </CommandItem>
   ));
 
@@ -360,6 +424,13 @@ function CommandPalette({
                 >
                   <Printer className="mr-2 h-4 w-4" />
                   {t.quick.consumeTitle}
+                </CommandItem>
+                <CommandItem
+                  value={t.quick.keywordsNewPrint}
+                  onSelect={() => run(() => quickActions.openPrintJobForm())}
+                >
+                  <History className="mr-2 h-4 w-4" />
+                  {t.quick.newPrint}
                 </CommandItem>
                 {roleAllows(role, "editor") && (
                   <CommandItem
@@ -441,6 +512,15 @@ function CommandPalette({
                 <CommandSeparator />
                 <CommandGroup heading={t.quick.groupMaterials}>
                   {materialItems}
+                </CommandGroup>
+              </>
+            )}
+
+            {printItems.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading={t.quick.groupPrints}>
+                  {printItems}
                 </CommandGroup>
               </>
             )}

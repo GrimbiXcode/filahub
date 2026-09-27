@@ -91,28 +91,54 @@ describe("visibilityAllows", () => {
 /** Fester Zeitpunkt der Wägung in den Fixtures – Verbräuche liegen davor oder danach. */
 const WEIGHED_AT = new Date("2026-03-01T12:00:00Z");
 
+/** Die Felder, die seit 4.0.0 am Material stehen – in den Fixtures flach überschreibbar */
+type ProductOverrides = Partial<FriendMaterialRow["product"]>;
+
 function materialRow(
-  overrides: Partial<FriendMaterialRow> = {}
+  overrides: Partial<Omit<FriendMaterialRow, "product">> & ProductOverrides = {}
 ): FriendMaterialRow {
-  return {
-    id: 7,
-    userId: 1,
-    lagerId: 3,
+  const {
+    name,
+    materialType,
+    manufacturer,
+    color,
+    texture,
+    densityGramsPerLiter,
+    ...rest
+  } = overrides;
+  const product: FriendMaterialRow["product"] = {
     name: "PolyTerra PLA Schwarz",
-    identifier: "P01",
     materialType: "PLA",
     manufacturer: "Polymaker",
     color: "Schwarz",
     texture: null,
-    nominalWeight: 1000,
     densityGramsPerLiter: null,
+  };
+  const given: ProductOverrides = {
+    name,
+    materialType,
+    manufacturer,
+    color,
+    texture,
+    densityGramsPerLiter,
+  };
+  for (const key of Object.keys(given) as (keyof ProductOverrides)[]) {
+    if (key in overrides) Object.assign(product, { [key]: given[key] });
+  }
+  return {
+    id: 7,
+    userId: 1,
+    lagerId: 3,
+    identifier: "P01",
+    nominalWeight: 1000,
+    product,
     containerType: { tareWeight: 140 },
     containerPresetVariant: null,
     storageBox: null,
     lager: { materialKind: "filament", filamentDiameterUm: 1750 },
     weighings: [],
     consumptions: [],
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -323,5 +349,25 @@ describe("toFriendMaterial", () => {
       "Alex"
     );
     expect(result.remainingPercent).toBeNull();
+  });
+});
+
+/**
+ * Druckeinstellungen gehen vorerst nicht an Freunde (4.1.0). Sie stehen in
+ * einer eigenen Tabelle, damit sie nur hinausgehen können, wenn jemand sie
+ * **ausdrücklich** lädt. Diese Zusicherung ist der Riegel dagegen, dass das
+ * nebenbei geschieht: Wer sie für Freunde freigeben will, ändert diesen Test
+ * mit – und schreibt dazu eine eigene Projektion samt Freigabe je Lager
+ * (siehe `docs/plan-material-gebinde-druckhistorie.md`, Phase 2).
+ */
+describe("Druckeinstellungen bei Freunden", () => {
+  it("werden in den Freundes-Lesepfaden nicht geladen", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const source = await readFile(
+      new URL("./queries/friends.ts", import.meta.url),
+      "utf8"
+    );
+    expect(source).not.toMatch(/materialPrintSettings|material_print_settings/);
+    expect(source).not.toMatch(/printSettings/);
   });
 });

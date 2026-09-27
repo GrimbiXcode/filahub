@@ -4,7 +4,7 @@ import {
   type AppearanceCatalog,
   type TextureKind,
 } from "@contracts/appearance";
-import { customColors, customTextures, materials } from "@db/schema";
+import { customColors, customTextures, materialProducts } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
 import { hasChanges } from "./patch";
@@ -257,10 +257,15 @@ export async function countMaterialsWithAppearanceName(
 ): Promise<number> {
   const key = normalizeAppearanceName(name);
   if (!key) return 0;
+  /*
+    Seit 4.0.0 stehen Farbe und Oberfläche am Material (`material_products`),
+    nicht mehr am Gebinde – gezählt werden also Materialien, wie die Rückfrage
+    sie nennt.
+  */
   const rows = await getDb()
-    .select({ value: materials[column] })
-    .from(materials)
-    .where(scopeWhere(materials, scope));
+    .select({ value: materialProducts[column] })
+    .from(materialProducts)
+    .where(scopeWhere(materialProducts, scope));
   return rows.filter(
     row => row.value != null && normalizeAppearanceName(row.value) === key
   ).length;

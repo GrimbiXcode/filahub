@@ -48,6 +48,7 @@ export const de = {
     apply: "Übernehmen",
     create: "Anlegen",
     add: "Hinzufügen",
+    imageMissing: (vars: { src: string }) => `Bild nicht gefunden: ${vars.src}`,
     nothingFound: "Nichts gefunden.",
     unknownError: "Unbekannter Fehler",
     nameRequired: "Bitte einen Namen angeben",
@@ -79,8 +80,9 @@ export const de = {
     releaseNotes: "Neuerungen",
     settings: "Einstellungen",
     material: "Material",
+    prints: "Drucke",
     weigh: "Wiegen",
-    weighMaterial: "Material wiegen",
+    weighMaterial: "Gebinde wiegen",
     consume: "Verbrauch",
     consumeMaterial: "Verbrauch abbuchen",
     searchWithShortcut: (vars: { shortcut: string }) =>
@@ -147,21 +149,21 @@ export const de = {
   },
 
   quick: {
-    weighTitle: "Material wiegen",
-    weighDescription: "Material auswählen, das gewogen werden soll",
+    weighTitle: "Gebinde wiegen",
+    weighDescription: "Gebinde auswählen, das gewogen werden soll",
     consumeTitle: "Verbrauch abbuchen",
-    consumeDescription: "Material auswählen, von dem abgebucht werden soll",
+    consumeDescription: "Gebinde auswählen, von dem abgebucht werden soll",
     searchTitle: "Schnellsuche",
     searchDescription:
       "Materialien finden, Seiten öffnen und Aktionen ausführen",
-    weighPlaceholder: "Kennung oder Bezeichnung des Materials …",
-    consumePlaceholder: "Kennung oder Bezeichnung des Materials …",
+    weighPlaceholder: "Kennung oder Name des Materials …",
+    consumePlaceholder: "Kennung oder Name des Materials …",
     searchPlaceholder: "Suchen: Kennung, Material, Seite oder Aktion …",
-    groupWeigh: "Material zum Wiegen",
-    groupConsume: "Material zum Abbuchen",
+    groupWeigh: "Gebinde zum Wiegen",
+    groupConsume: "Gebinde zum Abbuchen",
     groupActions: "Aktionen",
     groupJumpTo: "Springe zu",
-    groupMaterials: "Materialien",
+    groupMaterials: "Gebinde",
     newMaterial: "Neues Material anlegen",
     remaining: (vars: { amount: string }) => `${vars.amount} übrig`,
     /** Suchbegriffe, unter denen ein Eintrag gefunden werden soll */
@@ -170,6 +172,9 @@ export const de = {
     keywordsNewMaterial: "neues material anlegen filament hinzufügen",
     keywordsGoTo: (vars: { label: string }) => `gehe zu ${vars.label}`,
     keywordsAdmin: (vars: { label: string }) => `verwaltung ${vars.label}`,
+    newPrint: "Druck erfassen",
+    groupPrints: "Drucke",
+    keywordsNewPrint: "druck erfassen druckhistorie gedruckt modell",
     keywordsThemeLight: "farbschema hell light",
     keywordsThemeDark: "farbschema dunkel dark nachtmodus",
     keywordsThemeSystem: "farbschema system automatisch",
@@ -214,8 +219,11 @@ export const de = {
     installHowUnknown:
       "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
     dataAndAccount: "Daten und Konto",
+    exportFilesHint:
+      "Fotos und 3MF-Dateien deiner Drucke gibt es als eigenes ZIP – das JSON nennt sie mit Prüfsumme.",
+    exportFilesAction: "Dateien herunterladen (ZIP)",
     exportHint:
-      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
+      "Lade alles herunter, was zu deinem Konto gespeichert ist: Profil, Lager, Materialien, Gebinde, Wägungen, Gebindearten, Dryboxen, Freundschaften, Ausleih-Anfragen, ausgeblendete Presets, eingereichte Vorschläge, offene Login-Codes und das Sicherheitsprotokoll. Eine JSON-Datei zum Nachlesen und Aufbewahren – der Import auf der Importseite erwartet ein anderes, kürzeres Format.",
     exportAction: "Daten herunterladen",
     exportPending: "Wird zusammengestellt …",
     exportDone: "Export heruntergeladen",
@@ -279,7 +287,9 @@ export const de = {
     lookupPlaceholder: "Kennung eingeben, z. B. F01",
     lookupAria: "Kennung für Schnellzugriff",
     lookupNotFound: (vars: { query: string }) =>
-      `Kein Material zu „${vars.query}“ gefunden`,
+      `Kein Gebinde zu „${vars.query}“ gefunden`,
+    lookupUsedUp: (vars: { identifier: string }) =>
+      `${vars.identifier} ist als aufgebraucht markiert – hier ist seine Seite.`,
     lookupAmbiguous: (vars: { query: string }) =>
       `Mehrere Treffer für „${vars.query}“ – bitte die genaue Kennung eingeben`,
     statMaterials: "Materialien",
@@ -291,7 +301,7 @@ export const de = {
     statValue: "Restwert",
     statValueHint: "anteilig nach Restmenge",
     statInBox: "In Drybox",
-    statInBoxHint: "Materialien mit Drybox",
+    statInBoxHint: "Gebinde mit Drybox",
     searchAria: "Materialien durchsuchen",
     clearSearch: "Suche leeren",
     filters: "Filter",
@@ -303,8 +313,7 @@ export const de = {
     removeFilter: (vars: { label: string }) =>
       `Filter „${vars.label}“ entfernen`,
     filterSearch: (vars: { query: string }) => `Suche: „${vars.query}“`,
-    filterLowStock: (vars: { percent: number }) =>
-      `≤ ${vars.percent} % Restbestand`,
+    filterLowStock: "Knapper Bestand",
     materialType: "Materialart",
     allMaterialTypes: "Alle Materialarten",
     texture: "Oberfläche",
@@ -316,8 +325,7 @@ export const de = {
     sorting: "Sortierung",
     sortAsc: "Aufsteigend sortiert",
     sortDesc: "Absteigend sortiert",
-    onlyLowStock: (vars: { percent: number }) =>
-      `Nur niedriger Bestand (≤ ${vars.percent} %)`,
+    onlyLowStock: "Nur Materialien mit knappem Bestand",
     sortIdentifier: "Kennung",
     sortName: "Bezeichnung",
     sortPercent: "Füllstand",
@@ -329,7 +337,7 @@ export const de = {
     emptyFilteredHint: "Passe Suche oder Filter an.",
     emptyAction: "Erstes Material anlegen",
     countOf: (vars: { shown: number; total: number }) =>
-      `${vars.shown} von ${vars.total} Materialien`,
+      `${vars.shown} von ${vars.total} Gebinden`,
     colIdentifier: "Kennung",
     colAppearance: "Optik",
     colMaterial: "Material",
@@ -351,23 +359,154 @@ export const de = {
     listView: "Liste",
     viewLabel: "Ansicht",
     summary: (vars: { count: number; remaining: string; low: number }) =>
-      `${vars.count} Materialien · ${vars.remaining} übrig · ${vars.low} knapp`,
-    groupCount: (vars: { count: number }) => `${vars.count} Materialien`,
+      `${vars.count} Gebinde · ${vars.remaining} übrig · ${vars.low} knapp`,
+    groupCount: (vars: { count: number }) => `${vars.count} Gebinde`,
     groupTare: (vars: { amount: string }) => `Tara ${vars.amount}`,
+    outOfStock: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Ausgegangen – alle Rollen aufgebraucht:"
+        : `${vars.count} Materialien ausgegangen – alle Rollen aufgebraucht:`,
+    mergeHint: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Zwei Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam."
+        : `${vars.count} Gruppen von Materialien sehen aus wie dasselbe. Zusammengeführt zählt ihr Bestand gemeinsam.`,
+    mergeHintAction: "Ansehen",
+    mergeHintDismiss: "Ausblenden",
+    shelfGroupingLabel: "Regal gruppieren",
+    shelfGroupByBox: "Nach Drybox",
+    shelfGroupByProduct: "Nach Material",
     tileRemainingTitle: "Restmenge",
     tileLowTitle: "Knapp",
-    tileLowSub: (vars: { percent: number }) => `unter ${vars.percent} %`,
+    tileLowSub: "unter der Warnschwelle",
     tileLowOf: (vars: { count: number; total: number }) =>
       `${vars.count} von ${vars.total}`,
     tileValueTitle: "Restwert",
     tileInBoxTitle: "In Drybox",
     moreMaterials: (vars: { count: number }) => `+ ${vars.count} weitere`,
-    noSelection: "Ein Material im Regal antippen, um es hier zu sehen.",
+    noSelection: "Eine Rolle im Regal antippen, um sie hier zu sehen.",
     details: "Details",
     weighNamed: (vars: { name: string }) => `${vars.name} wiegen`,
     selectNamed: (vars: { name: string }) => `${vars.name} auswählen`,
   },
 
+  /**
+   * Material (Produkt) über den Gebinden, seit 4.0.0. „Material“ meint hier
+   * das Produkt, „Gebinde“/„Rolle“ das einzelne Stück.
+   */
+  product: {
+    notFound: "Material nicht gefunden",
+    editTitle: "Material bearbeiten",
+    spoolsTitle: "Rollen",
+    gebindeTitle: "Gebinde",
+    otherSpools: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Rolle von diesem Material"
+        : `${vars.count} Rollen von diesem Material`,
+    otherGebinde: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Gebinde von diesem Material"
+        : `${vars.count} Gebinde von diesem Material`,
+    saved: "Material gespeichert",
+    archivedToggle: (vars: { count: number }) =>
+      vars.count === 1 ? "1 aufgebraucht" : `${vars.count} aufgebraucht`,
+    toMaterial: "Zum Material",
+    thisOne: "dieses",
+    stockOk: "Bestand, ausreichend",
+    stockLow: "Bestand, knapp",
+    stockUsedUp: "ausgegangen – alle aufgebraucht",
+    thresholdLager: (vars: { amount: string }) =>
+      `Warnschwelle ${vars.amount} (Lager)`,
+    thresholdDefault: (vars: { amount: string }) =>
+      `Warnschwelle ${vars.amount} (Vorgabe)`,
+    addSpool: "Weitere Rolle anlegen",
+    addGebinde: "Weiteres Gebinde anlegen",
+    densityDefault: "Vorgabe der Materialart",
+    mergeTitle: "Zusammenführen",
+    mergeHint:
+      "Zwei Einträge, die dasselbe Material sind? Beim Zusammenführen wandern alle Gebinde des anderen hierher, und das andere verschwindet. Name, Farbe und die übrigen Angaben bleiben die von diesem hier – ebenso die Druckeinstellungen; hat dieses keine, werden die des anderen übernommen.",
+    mergeSuggestions: "Sieht aus wie dasselbe Material",
+    mergeOther: "Anderes Material",
+    mergeChoose: "Material wählen",
+    mergeHere: "Hierher zusammenführen",
+    mergeConfirmTitle: "Materialien zusammenführen?",
+    mergeConfirmDescription: (vars: {
+      source: string;
+      target: string;
+      count: number;
+    }) =>
+      `${vars.count === 1 ? "Das Gebinde" : `Die ${vars.count} Gebinde`} von „${vars.source}“ ${vars.count === 1 ? "wandert" : "wandern"} zu „${vars.target}“; „${vars.source}“ wird danach gelöscht. Rückgängig machen lässt sich das nur von Hand.`,
+    merged: (vars: { count: number }) =>
+      vars.count === 1
+        ? "1 Gebinde übernommen"
+        : `${vars.count} Gebinde übernommen`,
+  },
+  /** Druckeinstellungen je Material (seit 4.1.0) */
+  printSettings: {
+    title: "Druckeinstellungen",
+    add: "Hinterlegen",
+    empty:
+      "Noch nichts hinterlegt. Düse, Bett, Trocknen und Notizen gelten dann für alle Rollen dieses Materials.",
+    editTitle: "Druckeinstellungen bearbeiten",
+    editDescription:
+      "Gilt für alle Gebinde dieses Materials. Leere Felder bleiben leer – nur eintragen, was du weißt.",
+    saved: "Druckeinstellungen gespeichert",
+    invalid: (vars: { field: string }) =>
+      `„${vars.field}“ ist ungültig oder liegt außerhalb des üblichen Bereichs.`,
+    rangeInvalid: (vars: { field: string }) =>
+      `„${vars.field}“ liegt unter dem Wert „von“.`,
+    hoursUnit: "h",
+    enclosureRequired: "Braucht einen geschlossenen Bauraum",
+    notesLabel: "Notizen (Markdown)",
+    notesPlaceholder:
+      "z. B. erste Schicht langsam, Klebestift auf Glas, im Slicer-Profil „PolyTerra“",
+    short: {
+      nozzle: "Düse",
+      bed: "Bett",
+      drying: "Trocknen",
+      enclosure: "geschlossen",
+      exposure: "Belichtung",
+      bottom: "Boden",
+      refresh: "Frisch",
+    },
+    fields: {
+      nozzleMinC: "Düse von",
+      nozzleMaxC: "Düse bis",
+      bedMinC: "Bett von",
+      bedMaxC: "Bett bis",
+      chamberC: "Bauraum",
+      fanPercent: "Lüfter",
+      speedMaxMmS: "Höchstgeschwindigkeit",
+      flowPercent: "Fluss",
+      retractionHundredthsMm: "Rückzug",
+      dryingC: "Trocknen bei",
+      dryingMinutes: "Trocknen für",
+      exposureMs: "Belichtung",
+      bottomExposureMs: "Belichtung Bodenschichten",
+      bottomLayers: "Bodenschichten",
+      layerHeightUm: "Schichthöhe",
+      postCureMinutes: "Nachhärten",
+      refreshPercent: "Anteil frisches Pulver",
+    },
+    units: {
+      nozzleMinC: "°C",
+      nozzleMaxC: "°C",
+      bedMinC: "°C",
+      bedMaxC: "°C",
+      chamberC: "°C",
+      fanPercent: "%",
+      speedMaxMmS: "mm/s",
+      flowPercent: "%",
+      retractionHundredthsMm: "mm",
+      dryingC: "°C",
+      dryingMinutes: "min",
+      exposureMs: "s",
+      bottomExposureMs: "s",
+      bottomLayers: "Anzahl",
+      layerHeightUm: "µm",
+      postCureMinutes: "min",
+      refreshPercent: "%",
+    },
+  },
   materialDetail: {
     notFound: "Material nicht gefunden",
     toOverview: "Zur Übersicht",
@@ -413,11 +552,19 @@ export const de = {
     trendFlat: "Tendenz: kein Verbrauch im Zeitraum",
     purchasedOn: (vars: { date: string }) => `gekauft ${vars.date}`,
     fullHistory: "Ganzer Verlauf",
-    deleteMaterial: "Material löschen",
-    deleteMaterialTitle: "Material löschen?",
+    deleteMaterial: "Gebinde löschen",
+    deleteMaterialTitle: "Gebinde löschen?",
     deleteMaterialDescription: (vars: { name: string }) =>
-      `„${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht.`,
-    materialDeleted: "Material gelöscht",
+      `Dieses Gebinde von „${vars.name}“ und alle zugehörigen Wägungen und Verbräuche werden endgültig gelöscht. War es das letzte Gebinde des Materials, verschwindet auch das Material.`,
+    archive: "Aufgebraucht",
+    unarchive: "Wieder in Gebrauch",
+    archivedBadge: "Aufgebraucht",
+    archivedDone: "Als aufgebraucht markiert",
+    unarchivedDone: "Wieder in Gebrauch",
+    archiveInstead: "Stattdessen als aufgebraucht markieren",
+    deleteArchiveHint:
+      "Ist die Rolle nur leer, markiere sie besser als aufgebraucht – dann bleiben Verlauf und Material erhalten.",
+    materialDeleted: "Gebinde gelöscht",
     deleteWeighing: "Wägung löschen",
     deleteWeighingTitle: "Wägung löschen?",
     deleteWeighingDescription:
@@ -438,10 +585,10 @@ export const de = {
     firstBox: "Erste Drybox anlegen",
     emptyTitle: "Noch keine Dryboxen angelegt",
     emptyDescription:
-      "Wiege deine leere Drybox, trage das Leergewicht ein und weise sie einem Material zu – die App rechnet die Box-Tara automatisch heraus.",
+      "Wiege deine leere Drybox, trage das Leergewicht ein und weise sie einem Gebinde zu – die App rechnet die Box-Tara automatisch heraus.",
     tareSuffix: (vars: { amount: string }) => `${vars.amount} Tara`,
     assigned: (vars: { count: number }) =>
-      vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
     free: "frei",
     location: "Standort",
     occupancy: "Belegung",
@@ -449,7 +596,7 @@ export const de = {
     deleteBox: "Drybox löschen",
     deleteTitle: "Drybox löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Sie darf aktuell keinem Material zugewiesen sein.`,
+      `„${vars.name}“ wird gelöscht. Sie darf aktuell keinem Gebinde zugewiesen sein.`,
     namePlaceholder: "z. B. Drybox 1",
     locationPlaceholder: "z. B. Regal links, Werkstatt",
     tareLabel: "Leergewicht (g) *",
@@ -478,7 +625,7 @@ export const de = {
     editType: "Gebindeart bearbeiten",
     deleteTitle: "Gebindeart löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Materialien, die diese Gebindeart verwenden, müssen vorher umgehängt werden.`,
+      `„${vars.name}“ wird gelöscht. Gebinde dieser Art müssen vorher umgehängt werden.`,
     dialogDescription:
       "Name, Form und Leergewicht des leeren Gebindes. Das Leergewicht wird bei jeder Wägung abgezogen.",
     formLabel: "Form *",
@@ -563,11 +710,11 @@ export const de = {
 
   materialForm: {
     createTitle: "Neues Material",
-    editTitle: "Material bearbeiten",
+    editTitle: "Gebinde bearbeiten",
     createDescription:
       "Lege ein neues Material an. Die Bezeichnung wird automatisch aus Hersteller, Typ und Farbe vorgeschlagen.",
     editDescription:
-      "Eigenschaften des Materials anpassen. Die Restmenge wird aus den Wägungen berechnet.",
+      "Angaben zu diesem Gebinde und seinem Material anpassen. Die Restmenge wird aus den Wägungen berechnet.",
     materialTypeLabel: "Materialart *",
     materialTypePlaceholder: "z. B. PLA, PETG, ABS",
     manufacturerPlaceholder: "z. B. Prusament, eSun",
@@ -582,6 +729,15 @@ export const de = {
       `„${vars.identifier}“ wurde inzwischen vergeben – die nächste freie Kennung ist eingetragen. Bitte noch einmal speichern.`,
     identifierFromTemplate: (vars: { template: string }) =>
       `Nächste freie nach der Vorlage „${vars.template}“ – frei änderbar`,
+    addGebindeTitle: "Weiteres Gebinde anlegen",
+    addGebindeDescription:
+      "Eine weitere Rolle, Flasche oder ein weiterer Beutel eines Materials, das du schon führst. Name, Materialart, Hersteller und Farbe kommen vom Material.",
+    productLabel: "Material",
+    productNew: "Neues Material anlegen",
+    productGebindeCount: (vars: { count: number }) =>
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
+    productSharedHint: (vars: { count: number }) =>
+      `Name, Materialart, Hersteller, Farbe, Oberfläche und Dichte gehören dem Material – Änderungen gelten für alle ${vars.count} Gebinde.`,
     nameLabel: "Bezeichnung *",
     namePlaceholder: "Wird automatisch aus Hersteller + Typ + Farbe befüllt",
     priceLabel: (vars: { symbol: string }) => `Preis (${vars.symbol})`,
@@ -612,7 +768,8 @@ export const de = {
       })`,
     notesPlaceholder: "Drucktemperatur, Besonderheiten …",
     created: "Material angelegt",
-    saved: "Material gespeichert",
+    gebindeCreated: "Gebinde angelegt",
+    saved: "Gebinde gespeichert",
     nameRequired:
       "Bitte eine Bezeichnung angeben (oder Hersteller/Typ/Farbe ausfüllen)",
     typeRequired: "Bitte eine Materialart angeben",
@@ -708,7 +865,7 @@ export const de = {
       "Das ist kein gültiges JSON. Bitte die Ausgabe des LLM prüfen.",
     step3: "3. Prüfen und importieren",
     step3Description:
-      "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl wird ein eigenes Material angelegt.",
+      "Angaben bei Bedarf korrigieren, fehlerhafte Positionen löschen. Pro Position und Stückzahl entsteht ein Gebinde; die Gebinde einer Position gehören zu einem Material.",
     targetLagerLabel: "Ziel-Lager",
     identifiersFromTemplate: (vars: { template: string; range: string }) =>
       `Kennungen nach der Vorlage „${vars.template}“: ${vars.range}`,
@@ -728,7 +885,7 @@ export const de = {
     countLabel: "Anzahl",
     importing: "Importiere …",
     importCount: (vars: { count: number }) =>
-      `${vars.count} Materialien importieren`,
+      `${vars.count} Gebinde importieren`,
     fixErrors: "Bitte zuerst die markierten Fehler beheben.",
     errTypeMissing: "Typ fehlt",
     errNominal: "Nenngewicht ungültig",
@@ -812,7 +969,7 @@ export const de = {
     deleted: "Eintrag gelöscht",
     deleteTitle: "Eintrag löschen?",
     deleteDescription: (vars: { label: string }) =>
-      `„${vars.label}“ wird endgültig entfernt. Einträge mit Untereinträgen oder mit Materialien, die sie verwenden, lassen sich nicht löschen – deaktiviere sie in dem Fall stattdessen.`,
+      `„${vars.label}“ wird endgültig entfernt. Einträge mit Untereinträgen oder mit Gebinden, die sie verwenden, lassen sich nicht löschen – deaktiviere sie in dem Fall stattdessen.`,
   },
 
   adminProposals: {
@@ -866,6 +1023,13 @@ export const de = {
     seedRevision: (vars: { revision: number; rows: string }) =>
       `Revision ${vars.revision} · ${vars.rows} Einträge aus dem Startkatalog`,
     source: "Quelle",
+    storage: "Dateiablage",
+    storageWritable: "Beschreibbar",
+    storageNotWritable: "Nicht beschreibbar",
+    storageLocation: "Ort",
+    storageUsed: "Belegt",
+    storageUsedValue: (vars: { size: string; files: string }) =>
+      `${vars.size} in ${vars.files} Dateien`,
     tables: "Tabellen",
     colTable: "Tabelle",
   },
@@ -984,7 +1148,7 @@ export const de = {
   },
 
   weighing: {
-    title: "Material wiegen",
+    title: "Gebinde wiegen",
     description: (vars: { name: string; withBox: boolean }) =>
       `Wiege „${vars.name}“ komplett – inklusive Gebinde${
         vars.withBox ? " und Drybox" : ""
@@ -1000,6 +1164,176 @@ export const de = {
     submit: "Wägung speichern",
     saved: "Wägung gespeichert",
     invalidWeight: "Bitte ein gültiges Gewicht in Gramm angeben",
+  },
+
+  prints: {
+    title: "Drucke",
+    description:
+      "Was du gedruckt hast – mit Material, Links, Tags und Notizen. Gramm mit Gebinde werden abgebucht.",
+    add: "Druck erfassen",
+    empty: "Noch keine Drucke erfasst.",
+    emptyHint:
+      "Erfasse einen Druck hier oder beim Abbuchen eines Verbrauchs – so findest du später wieder, was mit welchem Material gedruckt wurde.",
+    emptyFiltered: "Keine Drucke passen zu diesen Filtern.",
+    searchPlaceholder: "Titel, Notizen, Tags, Links, Material …",
+    searchTooShort: "Gesucht wird ab zwei Zeichen.",
+    filterAllStatus: "Jeder Status",
+    filterAllMaterials: "Jedes Material",
+    filterAllPrinters: "Jeder Drucker",
+    filterAllTags: "Jeder Tag",
+    filterFrom: "Von",
+    filterTo: "Bis",
+    filterGebinde: (vars: { name: string }) => `Nur Gebinde ${vars.name}`,
+    resetFilters: "Filter zurücksetzen",
+    loadMore: "Weitere laden",
+    status: {
+      success: "Gelungen",
+      failed: "Fehlgeschlagen",
+      cancelled: "Abgebrochen",
+    },
+    totalGrams: (vars: { amount: string }) => `${vars.amount} gesamt`,
+    booked: "abgebucht",
+    notBooked: "nicht abgebucht",
+    gebindeUsedUp: "aufgebraucht",
+    materialGone: "Material gelöscht",
+    notFound: "Druck nicht gefunden.",
+    toList: "Zur Druckliste",
+    materialsTitle: "Material",
+    materialsEmpty: "Kein Material eingetragen.",
+    linksTitle: "Links",
+    notesTitle: "Notizen",
+    detailsTitle: "Angaben",
+    printedAt: "Gedruckt am",
+    duration: "Dauer",
+    printer: "Drucker",
+    tags: "Tags",
+    durationValue: (vars: { hours: number; minutes: number }) =>
+      vars.hours > 0
+        ? `${vars.hours} h ${vars.minutes} min`
+        : `${vars.minutes} min`,
+    deleteTitle: "Druck löschen?",
+    deleteDescription: (vars: { title: string }) =>
+      `„${vars.title}“ wird endgültig gelöscht.`,
+    revertConsumptions: "Abgebuchte Mengen zurückbuchen",
+    revertHint:
+      "Die Verbräuche dieses Drucks werden mit gelöscht, die Restmenge steigt wieder. Ohne Haken bleiben sie stehen – das Material ist dann trotzdem verbraucht.",
+    deleted: "Druck gelöscht",
+    saved: "Druck gespeichert",
+    created: "Druck erfasst",
+    recentTitle: "Letzte Drucke",
+    recentEmpty: "Noch keine Drucke mit diesem Material.",
+    recentEmptyGebinde: "Noch keine Drucke mit diesem Gebinde.",
+    panelLink: "Drucke",
+    printsWithMaterial: "Alle Drucke mit diesem Material",
+    showAll: "Alle anzeigen",
+    open: "Öffnen",
+    files: {
+      title: "Fotos und Dateien",
+      empty: "Noch keine Fotos oder 3MF-Dateien.",
+      addPhotos: "Fotos hinzufügen",
+      takePhoto: "Foto aufnehmen",
+      add3mf: "3MF hinzufügen",
+      dropHint:
+        "Fotos oder 3MF-Dateien hierher ziehen. Fotos werden verkleinert und ohne Standort und andere Metadaten gespeichert.",
+      uploading: (vars: { name: string }) => `Lädt hoch: ${vars.name}`,
+      uploaded: (vars: { count: number }) =>
+        vars.count === 1
+          ? "Datei hochgeladen"
+          : `${vars.count} Dateien hochgeladen`,
+      unsupported: (vars: { name: string }) =>
+        `„${vars.name}“ ist weder Foto noch 3MF-Datei`,
+      tooLarge: (vars: { name: string; max: string }) =>
+        `„${vars.name}“ ist größer als ${vars.max}`,
+      imageFailed: (vars: { name: string }) =>
+        `„${vars.name}“ ließ sich nicht als Foto öffnen`,
+      cover: "Titelbild",
+      setCover: "Als Titelbild",
+      coverSet: "Titelbild gesetzt",
+      download: "Herunterladen",
+      openOriginal: "Original öffnen",
+      deleteTitle: "Datei löschen?",
+      deleteDescription: (vars: { name: string }) =>
+        `„${vars.name}“ wird endgültig gelöscht.`,
+      deleted: "Datei gelöscht",
+      previous: "Vorheriges Foto",
+      next: "Nächstes Foto",
+      photoAlt: (vars: { title: string; index: number }) =>
+        `Foto ${vars.index} zu „${vars.title}“`,
+      modelLabel: "3MF-Projekt",
+      /** Ablehnungen des Servers, nach `code` aus `api/fileRoutes.ts` */
+      errors: {
+        unsupported_type:
+          "Dieser Dateityp wird nicht angenommen. Möglich sind Fotos (JPEG, PNG, WebP) und 3MF-Projekte.",
+        has_metadata:
+          "Das Foto enthält noch Metadaten wie den Aufnahmeort und wurde nicht gespeichert.",
+        invalid_thumbnail: "Die Vorschau des Fotos ist ungültig.",
+        too_large: "Die Datei ist zu groß.",
+        too_many_files: "Ein Druck trägt höchstens 20 Dateien.",
+        storage_full:
+          "Der Speicherplatz für Dateien ist aufgebraucht. Bitte alte Fotos oder Projekte löschen.",
+        rate_limited: "Zu viele Uploads. Bitte kurz warten.",
+        blocked: "Dein Konto ist gesperrt.",
+        forbidden: "Dafür reichen deine Rechte nicht.",
+        not_found: "Den Druck gibt es nicht (mehr).",
+        busy: "Gerade laufen zu viele Uploads. Bitte gleich noch einmal versuchen.",
+        save_failed: "Die Datei ließ sich nicht speichern.",
+      },
+    },
+    form: {
+      titleNew: "Druck erfassen",
+      titleEdit: "Druck bearbeiten",
+      description:
+        "Gramm mit Gebinde werden als Verbrauch abgebucht – wie beim Abbuchen.",
+      titleLabel: "Titel *",
+      titleRequired: "Bitte einen Titel angeben",
+      titlePlaceholder: "z. B. Benchy, Gehäuse v2",
+      printedAtLabel: "Gedruckt am *",
+      statusLabel: "Status",
+      durationLabel: "Dauer",
+      hours: "Std.",
+      minutes: "Min.",
+      printerLabel: "Drucker",
+      printerPlaceholder: "z. B. Prusa MK4",
+      tagsLabel: "Tags",
+      tagsPlaceholder: "z. B. vase, geschenk",
+      tagsHint: "Mit Komma trennen. Tags werden klein geschrieben.",
+      linksLabel: "Links zum Modell",
+      linkUrlPlaceholder: "https://www.printables.com/model/…",
+      linkLabelPlaceholder: "Beschriftung (optional)",
+      addLink: "Link hinzufügen",
+      removeLink: "Link entfernen",
+      materialsLabel: "Material",
+      materialsHint:
+        "Mit Gebinde und Gramm wird abgebucht. Ohne Gebinde steht das Material nur im Druck.",
+      addMaterial: "Material hinzufügen",
+      removeMaterial: "Material entfernen",
+      pickMaterial: "Gebinde oder Material wählen …",
+      searchMaterial: "Kennung oder Name …",
+      groupGebinde: "Gebinde – wird abgebucht",
+      groupProducts: "Nur Material – nicht abbuchen",
+      withoutGebinde: "ohne Gebinde",
+      gramsLabel: "Gramm",
+      notesLabel: "Notizen",
+      notesPlaceholder:
+        "Markdown: Einstellungen, Probleme, was du beim nächsten Mal anders machst …",
+      invalidLink: "Bitte einen Link mit https:// angeben",
+      invalidDate: "Bitte Datum und Uhrzeit angeben",
+      invalidGrams: "Bitte eine gültige Menge in Gramm angeben",
+      invalidDuration: "Die Dauer ist zu lang – höchstens 720 Stunden",
+      tooManyTags: (vars: { max: number }) =>
+        `Höchstens ${vars.max} verschiedene Tags je Druck`,
+      materialMissing: "Bitte für jede Zeile ein Material wählen",
+      usedUpGebinde:
+        "Dieses Gebinde ist aufgebraucht – davon lässt sich nichts mehr abbuchen.",
+      rebookHint:
+        "Ändern sich Material, Gebinde, Gramm oder Datum, werden die Verbräuche beim Speichern neu gebucht.",
+      orphanHint:
+        "Das Material dieser Zeile gibt es nicht mehr. Die Zeile bleibt als Eintrag erhalten.",
+    },
+    saveAsPrint: "Als Druck speichern",
+    saveAsPrintHint:
+      "Legt zusätzlich einen Eintrag in der Druckhistorie an – mit Titel und Link zum Modell.",
+    printLinkLabel: "Link zum Modell (optional)",
   },
 
   consumption: {
@@ -1107,10 +1441,17 @@ export const de = {
     diameterLabel: "Filamentstärke *",
     diameterHint:
       "Gilt für alles in diesem Lager. Wer beide Stärken führt, legt zwei Lager an.",
+    lowStockLabel: "Warnen unter (g, optional)",
+    lowStockPlaceholder: (vars: { percent: number }) =>
+      `leer = ${vars.percent} % der größten Rolle`,
+    lowStockHint:
+      "Ein Material gilt als knapp, wenn alle seine Gebinde zusammen – auch die in anderen Lagern – höchstens so viel enthalten. Liegt es in mehreren Lagern, gilt die höchste Schwelle.",
+    lowStockBadge: (vars: { amount: string }) => `Warnen < ${vars.amount}`,
+    lowStockInvalid: "Die Warnschwelle ist eine ganze Zahl in Gramm ab 0.",
     identifierTemplateLabel: "Kennungsvorlage (optional)",
     identifierTemplatePlaceholder: "z. B. ID: {n} oder F{nn}",
     identifierTemplateHint:
-      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Materialien bekommen die Kennung vorab eingetragen.",
+      "{n} wird zur nächsten freien Nummer, {nn} füllt auf zwei Stellen auf (F01). Neue Gebinde bekommen die Kennung vorab eingetragen.",
     identifierTemplateExample: (vars: { first: string; second: string }) =>
       `Wird zu ${vars.first}, ${vars.second} …`,
     identifierTemplateInvalid: "Genau einen Platzhalter {n} verwenden",
@@ -1126,13 +1467,13 @@ export const de = {
     deleteLager: "Lager löschen",
     deleteTitle: "Lager löschen?",
     deleteDescription: (vars: { name: string }) =>
-      `„${vars.name}“ wird gelöscht. Es darf kein Material mehr enthalten.`,
+      `„${vars.name}“ wird gelöscht. Es darf kein Gebinde mehr enthalten.`,
     created: "Lager angelegt",
     saved: "Lager gespeichert",
     deleted: "Lager gelöscht",
 
     materialCount: (vars: { count: number }) =>
-      vars.count === 1 ? "1 Material" : `${vars.count} Materialien`,
+      vars.count === 1 ? "1 Gebinde" : `${vars.count} Gebinde`,
     /*
       Nur die Anzahl, kein Name: Wer wem etwas freigibt, steht auf der
       Freundesseite. Hier zählt die Frage „geht dieses Lager überhaupt

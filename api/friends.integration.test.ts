@@ -22,7 +22,13 @@ import { getDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { callerFor, closeDb, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  insertMaterial,
+  resetSchema,
+  setProductOf,
+} from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -123,24 +129,21 @@ beforeEach(async () => {
       tareWeight: 800,
     })
     .returning();
-  const [material] = await db()
-    .insert(schema.materials)
-    .values({
-      userId: alex.id,
-      lagerId: alexLager.id,
-      name: "PolyTerra PLA Schwarz",
-      identifier: "P01",
-      materialType: "PLA",
-      manufacturer: "Polymaker",
-      color: "Schwarz",
-      nominalWeight: 1000,
-      priceCents: 2499,
-      purchaseDate: "2026-01-15",
-      containerTypeId: containerType.id,
-      storageBoxId: box.id,
-      notes: "Freitext mit Personenbezug",
-    })
-    .returning();
+  const material = await insertMaterial({
+    userId: alex.id,
+    lagerId: alexLager.id,
+    name: "PolyTerra PLA Schwarz",
+    identifier: "P01",
+    materialType: "PLA",
+    manufacturer: "Polymaker",
+    color: "Schwarz",
+    nominalWeight: 1000,
+    priceCents: 2499,
+    purchaseDate: "2026-01-15",
+    containerTypeId: containerType.id,
+    storageBoxId: box.id,
+    notes: "Freitext mit Personenbezug",
+  });
   alexMaterialId = material.id;
   // 1440 g brutto − 140 g Rolle − 800 g Box = 500 g Material
   await db()
@@ -148,7 +151,7 @@ beforeEach(async () => {
     .values({ materialId: material.id, grossWeight: 1440 });
 
   // Ein zweites Material, das auf „PETG“ hört – für die Trennschärfe der Suche
-  await db().insert(schema.materials).values({
+  await insertMaterial({
     userId: alex.id,
     lagerId: alexLager.id,
     name: "Prusament PETG Orange",
@@ -168,16 +171,13 @@ beforeEach(async () => {
     .values({ userId: alex.id, name: "Harz", materialKind: "resin" })
     .returning();
   alexResinLagerId = resinLager.id;
-  const [resinMaterial] = await db()
-    .insert(schema.materials)
-    .values({
-      userId: alex.id,
-      lagerId: resinLager.id,
-      name: "Anycubic Resin Klar",
-      materialType: "Standard-Resin",
-      nominalWeight: 1000,
-    })
-    .returning();
+  const resinMaterial = await insertMaterial({
+    userId: alex.id,
+    lagerId: resinLager.id,
+    name: "Anycubic Resin Klar",
+    materialType: "Standard-Resin",
+    nominalWeight: 1000,
+  });
   alexResinMaterialId = resinMaterial.id;
 });
 
@@ -862,10 +862,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    */
   it("färbt fremdes Material mit dem Katalog seines Besitzers", async () => {
     await befriend({ main: "full" });
-    await db()
-      .update(schema.materials)
-      .set({ color: "Signalrot" })
-      .where(eq(schema.materials.id, alexMaterialId));
+    await setProductOf(alexMaterialId, { color: "Signalrot" });
     await db()
       .insert(schema.customColors)
       .values([
@@ -913,10 +910,7 @@ describe("Was ein Freund zu sehen bekommt", () => {
    */
   it("findet fremdes Material über die Oberfläche", async () => {
     await befriend({ main: "search" });
-    await db()
-      .update(schema.materials)
-      .set({ texture: "Silk" })
-      .where(eq(schema.materials.id, alexMaterialId));
+    await setProductOf(alexMaterialId, { texture: "Silk" });
 
     const hits = await callerFor(bea).friend.searchMaterials({ query: "Silk" });
     expect(hits.map(h => h.id)).toEqual([alexMaterialId]);

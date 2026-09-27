@@ -16,7 +16,12 @@ import { getDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { callerFor, closeDb, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  insertMaterial,
+  resetSchema,
+} from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -849,7 +854,7 @@ describe("Migration 0021 – Dubletten", () => {
       [a!.id, "X".repeat(50)],
     ];
     for (const [lagerId, identifier] of legacy) {
-      await db().insert(schema.materials).values({
+      await insertMaterial({
         userId: anna.id,
         lagerId,
         name: "Altbestand",
@@ -880,7 +885,7 @@ describe("Migration 0021 – Dubletten", () => {
 
     // Der Index steht wieder, und ein zweiter Lauf ändert nichts.
     await expect(
-      db().insert(schema.materials).values({
+      insertMaterial({
         userId: anna.id,
         lagerId: a!.id,
         name: "Neu",

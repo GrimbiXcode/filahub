@@ -5,6 +5,7 @@ import {
 } from "@contracts/account";
 import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
+import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 import { getDb } from "./connection";
 import {
   handleAdminAccountDeletion,
@@ -46,9 +47,54 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     where: eq(schema.lager.userId, userId),
   });
 
+  /*
+    Seit 4.0.0 zweigeteilt: die Materialien (Produkt – Name, Materialart,
+    Hersteller, Farbe …) und die Gebinde darunter, die weiter unter
+    `materials` stehen und über `productId` darauf zeigen.
+  */
+  const materialProducts = await db.query.materialProducts.findMany({
+    where: eq(schema.materialProducts.userId, userId),
+  });
+  /* Druckeinstellungen hängen am Material – derselbe Wächter wie bei den Wägungen. */
+  const productIds = materialProducts.map(p => p.id);
+  const materialPrintSettings =
+    productIds.length === 0
+      ? []
+      : await db.query.materialPrintSettings.findMany({
+          where: inArray(schema.materialPrintSettings.productId, productIds),
+        });
+
   const materials = await db.query.materials.findMany({
     where: eq(schema.materials.userId, userId),
   });
+
+  /* Druckhistorie (seit 4.2.0): Drucke, ihre Materialzeilen und Links */
+  const printJobs = await db.query.printJobs.findMany({
+    where: eq(schema.printJobs.userId, userId),
+  });
+  const printJobIds = printJobs.map(j => j.id);
+  const [printJobMaterials, printJobLinks, printJobFiles] =
+    printJobIds.length === 0
+      ? [[], [], []]
+      : await Promise.all([
+          db.query.printJobMaterials.findMany({
+            where: inArray(schema.printJobMaterials.printJobId, printJobIds),
+          }),
+          db.query.printJobLinks.findMany({
+            where: inArray(schema.printJobLinks.printJobId, printJobIds),
+          }),
+          /*
+            Fotos und 3MF (seit 4.3.0) als Verzeichnis: Name, Typ, Größe,
+            Prüfsumme. Die Dateien selbst stehen im ZIP-Download daneben
+            (`/api/files/export`) – im JSON sprengten sie jede Grenze. Die
+            Speicherschlüssel bleiben draußen: Sie sind Interna der Ablage
+            und nützen außerhalb dieser Instanz niemandem.
+          */
+          db.query.printJobFiles.findMany({
+            where: inArray(schema.printJobFiles.printJobId, printJobIds),
+            columns: { storageKey: false, thumbnailKey: false },
+          }),
+        ]);
 
   /*
     Wägungen hängen am Material, nicht am Benutzer. Ohne eigene Rollen gibt es
@@ -288,8 +334,14 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     exportedAt: new Date().toISOString(),
     profile,
     lager,
+    materialProducts,
+    materialPrintSettings,
     materials,
     weighings,
+    printJobs,
+    printJobMaterials,
+    printJobLinks,
+    printJobFiles,
     consumptions,
     containerTypes,
     storageBoxes,
@@ -363,8 +415,14 @@ export async function deleteUserAccount(
   userId: number
 ): Promise<AccountDeletionResult> {
   const db = getDb();
+  /*
+    Speicherschlüssel der Fotos und 3MF-Dateien (seit 4.3.0): In der
+    Transaktion gehen nur die Zeilen, die Dateien erst nach dem Commit – eine
+    zurückgerollte Löschung ließe sonst Zeilen ohne Datei zurück.
+  */
+  const removedKeys: string[] = [];
 
-  return db.transaction(async tx => {
+  const result = await db.transaction(async tx => {
     const user = await tx.query.users.findFirst({
       where: eq(schema.users.id, userId),
       columns: { id: true, unionId: true },
@@ -388,13 +446,33 @@ export async function deleteUserAccount(
       Die Mitgliedschaften selbst gehen erst danach (Schritt 10b) – vorher
       werden sie noch gelesen.
     */
-    const organizations = await handleAdminAccountDeletion(tx, userId);
+    const organizations = await handleAdminAccountDeletion(
+      tx,
+      userId,
+      removedKeys
+    );
 
     // 1. Verweise auf eigene Rollentypen lösen, bevor diese gelöscht werden
     await tx
       .update(schema.presetProposals)
       .set({ sourceContainerTypeId: null })
       .where(eq(schema.presetProposals.userId, userId));
+
+    // 1b. Druckhistorie (seit 4.2.0) – vor den Verbräuchen, auf die sie zeigt
+    const ownPrintJobIds = tx
+      .select({ id: schema.printJobs.id })
+      .from(schema.printJobs)
+      .where(eq(schema.printJobs.userId, userId));
+    await tx
+      .delete(schema.printJobMaterials)
+      .where(inArray(schema.printJobMaterials.printJobId, ownPrintJobIds));
+    await tx
+      .delete(schema.printJobLinks)
+      .where(inArray(schema.printJobLinks.printJobId, ownPrintJobIds));
+    removedKeys.push(...(await deleteFileRowsOfJobs(tx, ownPrintJobIds)));
+    await tx
+      .delete(schema.printJobs)
+      .where(eq(schema.printJobs.userId, userId));
 
     // 2. Wägungen und Verbräuche der eigenen Rollen
     const ownMaterialIds = tx
@@ -412,6 +490,21 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.materials)
       .where(eq(schema.materials.userId, userId));
+    // Die Materialien nach ihren Gebinden – dieselbe Reihenfolge wie beim Löschen eines Gebindes.
+    await tx
+      .delete(schema.materialPrintSettings)
+      .where(
+        inArray(
+          schema.materialPrintSettings.productId,
+          tx
+            .select({ id: schema.materialProducts.id })
+            .from(schema.materialProducts)
+            .where(eq(schema.materialProducts.userId, userId))
+        )
+      );
+    await tx
+      .delete(schema.materialProducts)
+      .where(eq(schema.materialProducts.userId, userId));
     /*
       Freigaben in **beiden** Richtungen, und zwar **vor** den Lagern: die
       erteilten (die Unterabfrage liest die Lagerzeilen, die es gleich nicht
@@ -630,4 +723,6 @@ export async function deleteUserAccount(
       leftOrganizationIds: leftOrganizations.map(row => row.organizationId),
     };
   });
+  await removeStoredFiles(removedKeys);
+  return result;
 }

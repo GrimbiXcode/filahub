@@ -27,7 +27,12 @@ import { blockUser, unblockUser } from "./queries/blocking";
 import { getDb } from "./queries/connection";
 import { exportUserData } from "./queries/account";
 import { findUserByUnionId, upsertUser } from "./queries/users";
-import { callerFor, closeDb, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  insertMaterials,
+  resetSchema,
+} from "./test/integration-db";
 
 const db = () => getDb();
 const PERSONAL = { organizationId: null } as const;
@@ -82,7 +87,7 @@ async function fuelleMaterialien(
     materialType: "PLA",
     nominalWeight: 1000,
   }));
-  await db().insert(schema.materials).values(rows);
+  await insertMaterials(rows);
 }
 
 describe("Mengenobergrenzen", () => {

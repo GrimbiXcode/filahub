@@ -23,6 +23,78 @@ export const FRIENDS_PATH = "/freunde";
 export const LAGER_PATH = "/lager";
 export const ORGANIZATIONS_PATH = "/organisationen";
 
+/**
+ * Material und Gebinde (seit 4.0.0). Die Oberfläche nennt das Produkt
+ * „Material“ und das einzelne Stück „Gebinde“ bzw. „Rolle“ – siehe
+ * `AGENTS.md`, „Material und Gebinde“.
+ *
+ * Das Gebinde liegt **unter** den Materialien und nicht unter `/gebinde`:
+ * Dort stehen seit 2.2.0 die Gebindearten, und `/gebinde/42` sähe aus wie
+ * die Gebindeart 42. Bis 3.1.0 lag die Detailseite eines Gebindes unter
+ * `/material/:id`; der alte Pfad leitet weiter, damit Lesezeichen gehen.
+ */
+export const MATERIALS_PATH = "/materialien";
+export const LEGACY_GEBINDE_PATH = "/material/:id";
+
+/** Ein Material (Produkt) mit allen seinen Gebinden */
+export function materialPath(productId: number): string {
+  return `${MATERIALS_PATH}/${productId}`;
+}
+
+/** Ein einzelnes Gebinde: Wägungen, Verbräuche, Verlauf */
+export function gebindePath(id: number): string {
+  return `${MATERIALS_PATH}/gebinde/${id}`;
+}
+
+/**
+ * Druckhistorie (seit 4.2.0). Die Liste nimmt ihre Filter aus der Adresse
+ * (`?material=`, `?gebinde=`, …), damit „Alle Drucke mit diesem Material“ ein
+ * gewöhnlicher Link ist und ein Lesezeichen die Filter behält.
+ */
+export const PRINTS_PATH = "/drucke";
+
+export function printJobPath(id: number): string {
+  return `${PRINTS_PATH}/${id}`;
+}
+
+/** Die Druckliste, gefiltert auf ein Material oder ein einzelnes Gebinde */
+export function printsForPath(filter: {
+  productId?: number;
+  materialId?: number;
+}): string {
+  const params = new URLSearchParams();
+  if (filter.productId != null)
+    params.set("material", String(filter.productId));
+  if (filter.materialId != null)
+    params.set("gebinde", String(filter.materialId));
+  const query = params.toString();
+  return query ? `${PRINTS_PATH}?${query}` : PRINTS_PATH;
+}
+
+/**
+ * Dateien zu Drucken (seit 4.3.0) – eigene Routen neben tRPC, siehe
+ * `api/fileRoutes.ts`. Als `<img src>` ladbar; der Server prüft Sitzung und
+ * Bereich selbst.
+ */
+export function printFileUrl(id: number): string {
+  return `/api/files/${id}`;
+}
+
+export function printFileThumbnailUrl(id: number): string {
+  return `/api/files/${id}/thumbnail`;
+}
+
+export function printFileUploadUrl(
+  printJobId: number,
+  organizationId: number | null
+): string {
+  const query = organizationId ? `?organizationId=${organizationId}` : "";
+  return `/api/files/print-jobs/${printJobId}${query}`;
+}
+
+/** Alle eigenen Dateien als ZIP – neben dem JSON-Export */
+export const PRINT_FILES_EXPORT_URL = "/api/files/export";
+
 /** Eine einzelne Organisation: Mitglieder, Rollen, Beitrittscode. */
 export function organizationPath(id: number): string {
   return `${ORGANIZATIONS_PATH}/${id}`;
