@@ -47,14 +47,14 @@ vorhandene Achse.
 
 ### Anordnung – wie mehrere Farben im Strang liegen
 
-| Anordnung                           | Was es ist                                                                                                                                     | Handelsnamen (Beispiele)                                                         | Farben                 |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------- |
-| **Einfarbig**                       | Der Normalfall, heute schon abgedeckt                                                                                                          | –                                                                                | 1                      |
-| **Koextrudiert** (zwei-/dreifarbig) | Der Querschnitt ist geteilt – zwei Hälften bzw. drei Keile. Welche Farbe man sieht, hängt von der Wandrichtung und dem Blickwinkel ab („Flip“) | Dual Color, Tri Color, Silk Dual, Silk Tri, Magic, Silk Multi-Color, Coextrusion | 2–3 (selten 4)         |
-| **Farbverlauf**                     | Das Pigment wechselt fließend über mehrere Meter; ein Druck wird in der Höhe verlaufend                                                        | Gradient, Rainbow Gradient, Silk Gradient, Farbverlauf                           | 2–6                    |
-| **Segmentiert**                     | Harte Wechsel in festen Abschnitten entlang des Strangs – deutliche Streifen im Druck                                                          | Rainbow, Multicolor, Segmentfilament                                             | 2–8                    |
-| **Meliert / marmoriert**            | Zwei oder mehr Farben im Strang verwirbelt, ergibt Adern oder Wolken                                                                           | Marble, Marmor, Granit (auch Oberfläche, siehe unten)                            | 2–3                    |
-| **Basis mit Farbpartikeln**         | Einfarbige Basis mit andersfarbigen Einsprengseln                                                                                              | Terrazzo, Sprinkle, Konfetti, stoneFill, Speckled                                | 1 + 1–4 Partikelfarben |
+| Anordnung                               | Was es ist                                                                                                                                                   | Handelsnamen (Beispiele)                                                                                | Farben                 |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------- |
+| **Einfarbig**                           | Der Normalfall, heute schon abgedeckt                                                                                                                        | –                                                                                                       | 1                      |
+| **Koextrudiert** (zwei- bis vierfarbig) | Der Querschnitt ist geteilt – zwei Hälften, drei Keile oder vier Viertel. Welche Farbe man sieht, hängt von der Wandrichtung und dem Blickwinkel ab („Flip“) | Dual Color, Tri Color, Quad Color, Silk Dual, Silk Tri, Silk Quad, Magic, Silk Multi-Color, Coextrusion | 2–4                    |
+| **Farbverlauf**                         | Das Pigment wechselt fließend über mehrere Meter; ein Druck wird in der Höhe verlaufend                                                                      | Gradient, Rainbow Gradient, Silk Gradient, Farbverlauf                                                  | 2–6                    |
+| **Segmentiert**                         | Harte Wechsel in festen Abschnitten entlang des Strangs – deutliche Streifen im Druck                                                                        | Rainbow, Multicolor, Segmentfilament                                                                    | 2–8                    |
+| **Meliert / marmoriert**                | Zwei oder mehr Farben im Strang verwirbelt, ergibt Adern oder Wolken                                                                                         | Marble, Marmor, Granit (auch Oberfläche, siehe unten)                                                   | 2–3                    |
+| **Basis mit Farbpartikeln**             | Einfarbige Basis mit andersfarbigen Einsprengseln                                                                                                            | Terrazzo, Sprinkle, Konfetti, stoneFill, Speckled                                                       | 1 + 1–4 Partikelfarben |
 
 **Folgerung:** Eine Liste von Farben plus **eine** Anordnung. Meliert und
 Partikel sind eher Oberfläche als Anordnung (die Verteilung ist zufällig, nicht
@@ -64,15 +64,15 @@ benutzen darf.
 
 ### Wirkung – Farbe, die sich unter Einwirkung ändert
 
-| Wirkung                               | Auslöser                                             | Typisches Verhalten                                                                           | Handelsnamen                                             |
-| ------------------------------------- | ---------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Photochrom**                        | UV / Sonnenlicht                                     | Wechselt draußen auf eine zweite Farbe (oft Weiß → Violett/Blau), zurück im Haus              | UV Color Change, UV Shift, Sonnenlicht-Farbwechsel       |
-| **Thermochrom**                       | Wärme                                                | Wechselt ab einer Schwelle (meist rund 30 °C, auch 22 °C, 45 °C) – Handwärme genügt           | Temperature Color Change, Temp Shift, Chameleon (thermo) |
-| **Nachleuchtend** (phosphoreszierend) | Lädt unter Licht, leuchtet im Dunkeln nach           | Leuchtfarbe weicht oft von der Tagfarbe ab (weiß → grün, beige → aqua); Füllstoff ist abrasiv | Glow in the Dark, Luminous, Nachtleuchtend               |
-| **Fluoreszierend**                    | UV-A / Schwarzlicht                                  | Leuchtet grell unter Schwarzlicht, am Tag „Neon“; leuchtet **nicht** nach                     | Neon, Fluorescent, UV Reactive, Blacklight               |
-| **Blickwinkelabhängig**               | Blickwinkel (Interferenzpigment, nicht koextrudiert) | Farbton kippt mit dem Winkel (Violett ↔ Grün), meist mit Silk-Glanz                           | Chameleon, Iridescent, Color Shift, Perlmutt-Effekt      |
-| **Infrarot**                          | IR-Strahlung                                         | Sichtbar dunkel, für IR durchlässig (Sensorfenster, Fernbedienungen) – oder IR-reflektierend  | IR-transparent, IR-durchlässig                           |
-| **Sonstige**                          | z. B. Wasser (hydrochrom), Druck                     | Selten; freie Beschreibung                                                                    | –                                                        |
+| Wirkung                               | Auslöser                                             | Typisches Verhalten                                                                          | Handelsnamen                                             |
+| ------------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Photochrom**                        | UV / Sonnenlicht                                     | Wechselt draußen auf eine zweite Farbe (oft Weiß → Violett/Blau), zurück im Haus             | UV Color Change, UV Shift, Sonnenlicht-Farbwechsel       |
+| **Thermochrom**                       | Wärme                                                | Wechselt ab einer Schwelle (meist rund 30 °C, auch 22 °C, 45 °C) – Handwärme genügt          | Temperature Color Change, Temp Shift, Chameleon (thermo) |
+| **Nachleuchtend** (phosphoreszierend) | Lädt unter Licht, leuchtet im Dunkeln nach           | Leuchtfarbe weicht oft von der Tagfarbe ab (weiß → grün, beige → aqua)                       | Glow in the Dark, Luminous, Nachtleuchtend               |
+| **Fluoreszierend**                    | UV-A / Schwarzlicht                                  | Leuchtet grell unter Schwarzlicht, am Tag „Neon“; leuchtet **nicht** nach                    | Neon, Fluorescent, UV Reactive, Blacklight               |
+| **Blickwinkelabhängig**               | Blickwinkel (Interferenzpigment, nicht koextrudiert) | Farbton kippt mit dem Winkel (Violett ↔ Grün), meist mit Silk-Glanz                          | Chameleon, Iridescent, Color Shift, Perlmutt-Effekt      |
+| **Infrarot**                          | IR-Strahlung                                         | Sichtbar dunkel, für IR durchlässig (Sensorfenster, Fernbedienungen) – oder IR-reflektierend | IR-transparent, IR-durchlässig                           |
+| **Sonstige**                          | z. B. Wasser (hydrochrom), Druck                     | Selten; freie Beschreibung                                                                   | –                                                        |
 
 Mehrere Wirkungen zugleich kommen vor – etwa „Glow + UV Color Change“ oder
 „Starlight“ (nachleuchtend **und** glitzernd).
@@ -92,8 +92,7 @@ nachleuchtend – und wird in Phase D korrigiert (siehe dort).
 
 **`carbon` wird zu `fiber` – „Faserverstärkt“.** Kohlefaser ist nur eine von
 mehreren Verstärkungen; Glas-, Aramid-(Kevlar-), Basalt- und Aluminiumfasern
-sehen im Regal gleich aus und sind für den Drucker dieselbe Aussage („Faser
-drin, abrasiv“). Die Art heißt in der Oberfläche **Faserverstärkt / Fibre
+sehen im Regal gleich aus und sind dieselbe Aussage („Faser drin“). Die Art heißt in der Oberfläche **Faserverstärkt / Fibre
 reinforced** und findet:
 
 | Namen (DE / EN)                                                                                                                    |
@@ -197,19 +196,25 @@ erste Stufe mit Treffer gewinnt:
 | Stufe | Was                                                  | Beispiel                                     | Herkunft   |
 | ----- | ---------------------------------------------------- | -------------------------------------------- | ---------- |
 | 1     | Ganzer Name, eigener Katalog                         | „Savanne“ → eigener Eintrag                  | `custom`   |
-| 2     | Ganzer Name, mitgelieferter Katalog samt Farbwörtern | „Charcoal“, „Oliv“, „Petrol“                 | `builtin`  |
-| 3     | Zusammengesetzter Name (siehe unten)                 | „Rot/Blau“, „Savanna Yellow & Earth Brown“   | `compound` |
-| 4     | Längster bekannter Teilausdruck                      | „Savanna **Yellow**“, „Matte **Dark Green**“ | `word`     |
-| 5     | Deutsches Kompositum über die Endung                 | „Himmel**blau**“, „Signal**rot**“            | `word`     |
+| 2     | Ganzer Name, mitgelieferter Katalog samt Farbwörtern | „Charcoal“, „Oliv“, „Petrol“, „Verkehrsrot“  | `builtin`  |
+| 3     | RAL-Nummer im Namen (siehe „RAL-Farben“)             | „RAL 9005“, „Signalgelb RAL 1003“            | `ral`      |
+| 4     | Zusammengesetzter Name (siehe unten)                 | „Rot/Blau“, „Savanna Yellow & Earth Brown“   | `compound` |
+| 5     | Längster bekannter Teilausdruck                      | „Savanna **Yellow**“, „Matte **Dark Green**“ | `word`     |
+| 6     | Deutsches Kompositum über die Endung                 | „Himmel**blau**“, „Signal**rot**“            | `word`     |
 | –     | nichts gefunden                                      | „Dawn Radiance“                              | `null`     |
 
-- **Stufe 4:** Der Name wird in Wörter zerlegt (Leerraum, Bindestrich, Punkt,
+- **Stufe 3 vor 4:** Eine RAL-Nummer ist eine genaue Angabe und schlägt jede
+  Wortsuche („Rot RAL 5002“ ist Blau). Stufe 3 greift aber nur, wenn der Name
+  **genau eine** Nummer enthält; bei zwei und mehr („RAL 9005 / RAL 1003“)
+  übernimmt Stufe 4 und löst jeden Teil einzeln über Stufe 3 auf – sonst
+  gewänne die erste Nummer, und das Filament wäre einfarbig.
+- **Stufe 5:** Der Name wird in Wörter zerlegt (Leerraum, Bindestrich, Punkt,
   Klammern); gesucht wird über alle zusammenhängenden Wortfolgen, **die
   längste gewinnt**, bei Gleichstand die **hinterste** – im Deutschen wie im
   Englischen steht das Farbwort am Ende („Earth Brown“, nicht „Brown Earth“).
   Eigene Einträge gehen bei gleicher Länge vor. So findet „Matte Dark Green“
   den Katalogeintrag „Dark green“ und nicht bloß „Green“.
-- **Stufe 5:** Ein einzelnes Wort, das in keiner Stufe passt, wird auf das
+- **Stufe 6:** Ein einzelnes Wort, das in keiner Stufe passt, wird auf das
   längste bekannte Farbwort am **Ende** geprüft; der Rest muss mindestens drei
   Buchstaben haben. „Himmelblau“ → Blau, „Weinrot“ → Rot. Steht davor ein
   Helligkeitswort („Pastellgrün“, „Dunkeltürkis“), gilt es wie unten.
@@ -246,6 +251,9 @@ englischem Namen je Eintrag. Quellen:
   Pfirsich, Aprikose, Senf, Ocker, Zitronengelb, Minze, Salbei, Jade,
   Smaragd, Moosgrün, Olivgrün, Himmelblau, Eisblau, Königsblau, Kobaltblau,
   Mitternachtsblau, Flieder, Lavendel, Pflaume, Blaugrün (Petrol) …
+- **Nur Deutsch und Englisch.** Weitere Sprachen bleiben vorerst offen (siehe
+  „Offene Fragen“); die Einträge sind so gebaut, dass eine dritte Sprache nur
+  Namen anhängt.
 - **Eine Zusicherung** in `api/appearance.test.ts`: eine Tabelle echter
   Herstellerfarben (Bambu, Polymaker, Prusament, eSUN, Sunlu, Elegoo, Extrudr,
   colorFabb) mit dem erwarteten Katalogschlüssel – „Savanna Yellow“ →
@@ -253,7 +261,43 @@ englischem Namen je Eintrag. Quellen:
   zweite mit Namen, die **nichts** finden dürfen („Dawn Radiance“, „Galaxy“,
   „Stone“). Wer den Wortschatz erweitert, sieht dort, was sich verschiebt.
 
-### Zusammengesetzte Namen (Stufe 3)
+### RAL-Farben (Stufe 3)
+
+Einige Hersteller benennen nach RAL (Extrudr, Filamentworld, Formfutura bei
+Industriefarben), und wer Teile zu einem Gehäuse oder einer Maschine druckt,
+sucht genau danach. Zwei Register, beide im Code, ohne Migration:
+
+- **RAL Classic** (rund 215 Farben, vierstellig: „RAL 3020“). Eine Tabelle
+  `RAL_CLASSIC` in eigener Datei `contracts/ral.ts`: Nummer, deutscher und
+  englischer Name, sRGB-Näherung. Die Namen („Verkehrsrot“ / „Traffic red“)
+  gehen zusätzlich in den Farbwortschatz – „Verkehrsrot“ ohne Nummer findet
+  damit Stufe 2.
+- **RAL Design System+** (siebenstellig, „RAL 210 50 15“ = Farbton, Helligkeit,
+  Buntheit). Braucht **keine Tabelle**: Die drei Zahlen sind die CIE-LCh-Werte
+  der Farbe, der Farbcode wird gerechnet (LCh → Lab → XYZ → sRGB, D65).
+  `ralDesignToHex` samt Test gegen eine Handvoll veröffentlichter Werte.
+- **RAL Effect** (Metallic-Farbtöne, dreistellig + Zusatz) bleibt draußen –
+  auf Filament kaum anzutreffen, und die Werte gibt es nur als Tabelle.
+- **Erkennung:** `RAL` (Groß/klein egal) gefolgt von vier Ziffern bzw. drei
+  Dreiergruppen, mit oder ohne Leerraum („RAL9005“, „ral 9005“, „RAL
+  210-50-15“), irgendwo im Namen. Eine unbekannte Classic-Nummer findet
+  nichts und läuft weiter in die Wortsuche – „RAL 3020 Verkehrsrot“ trifft
+  dann eben über „Verkehrsrot“ oder „rot“.
+- **Näherung, und das wird gesagt.** RAL-Farben sind als Farbmuster
+  definiert, jeder sRGB-Wert ist eine Umrechnung. Das Formular zeigt „RAL
+  3020 Verkehrsrot“ ohne „ungefähr“ – genauer als die Tabelle geht es am
+  Bildschirm nicht –, die Verwaltung erklärt es in einem Satz.
+- **Rechtslage vor der Umsetzung prüfen:** „RAL“ ist eine Marke der RAL
+  gGmbH. Nummern und Farbnamen als Bezeichnung zu verwenden ist üblich
+  (Lackhersteller, Wikipedia führt die Tabelle); die sRGB-Werte stammen aus
+  frei verfügbaren Umrechnungen, nicht aus lizenzierten RAL-Daten. Die Quelle
+  steht als Kommentar über der Tabelle. Pantone bleibt draußen – dort sind
+  die Werte selbst lizenziert.
+- **Im Farb-Dialog** ein Feld „RAL-Nummer“: Eingabe „3020“ füllt Farbcode und
+  Vorschlag für den Namen. Die eigene Farbe speichert wie immer nur Name und
+  Farbcode – die Nummer ist Eingabehilfe, keine Spalte.
+
+### Zusammengesetzte Namen (Stufe 4)
 
 „Sofern möglich“ heißt konkret:
 
@@ -263,20 +307,28 @@ englischem Namen je Eintrag. Quellen:
   nie hier an, „Rot-Blau“ schon.
 - **Verlaufswörter:** „ zu “, „ to “, „→“, „ in “ („Red to Blue“, „Blau in
   Violett“) trennen ebenfalls und ergeben einen **Verlauf**.
-- **Jeder Teil** wird über die Stufen 1, 2, 4 und 5 aufgelöst („Savanna Yellow
-  / Earth Brown“ geht also).
+- **Jeder Teil** wird über die Stufen 1, 2, 3, 5 und 6 aufgelöst („Savanna
+  Yellow / Earth Brown“ und „RAL 9005 / RAL 1003“ gehen also).
 - **Anordnung** aus Schlüsselwörtern in Farb- **oder** Oberflächenname:
-  Dual, Zweifarbig, Bicolor, Tri, Dreifarbig, Tricolor, Magic, Coextrusion →
-  koextrudiert; Gradient, Verlauf, Farbverlauf, Ombre → Verlauf; Segment,
-  Multicolor → segmentiert. Ohne Schlüsselwort: zwei oder drei Teile →
-  koextrudiert, vier und mehr → segmentiert. Die Schlüsselwörter werden vor
-  dem Zerlegen entfernt („Dual Rot/Blau“ hat zwei Teile, nicht drei).
+  - koextrudiert: Dual, Zweifarbig, Bicolor, Tri, Dreifarbig, Tricolor,
+    Quad, Vierfarbig, Quadcolor, Tetra, Magic, Coextrusion, „2-Color“,
+    „3-Color“, „4-Color“ (auch „2-farbig“ usw.)
+  - Verlauf: Gradient, Verlauf, Farbverlauf, Ombre
+  - segmentiert: Segment, Multicolor
+
+  Ohne Schlüsselwort: **zwei bis vier Teile → koextrudiert**, fünf und mehr →
+  segmentiert. Die Schlüsselwörter werden vor dem Zerlegen entfernt („Dual
+  Rot/Blau“ hat zwei Teile, nicht drei).
+
+- **Passt die Zahl nicht zum Schlüsselwort** („Tri“ mit zwei Teilen), gilt die
+  Zahl der Teile – das Schlüsselwort bestimmt nur die Anordnung, nicht wie
+  viele Farben es gibt.
 - **Mindestens ein Teil muss bekannt sein.** Ein unbekannter Teil erscheint
   als schraffiertes Stück im Feld – die ehrliche Lücke wie bisher, nur
-  kleiner. Kein Teil bekannt → weiter mit Stufe 4.
+  kleiner. Kein Teil bekannt → weiter mit Stufe 5.
 - Das Ergebnis ist ein **berechnetes Farbbild** (`ColorSpec` ohne Namen,
   Leitfarbe = erster bekannter Teil). Es wird nie gespeichert; wer es anders
-  will, legt den Namen als eigene Farbe an und schlägt damit Stufe 3.
+  will, legt den Namen als eigene Farbe an und schlägt damit Stufe 4.
 
 ### Oberfläche
 
@@ -287,8 +339,9 @@ englischem Namen je Eintrag. Quellen:
   öffnet den Farb-Dialog, vorbelegt mit dem erkannten Ton (ab Phase C den
   Farbbild-Dialog, vorbelegt mit dem berechneten Farbbild).
   Bisher erschien „Farbe anlegen“ nur ohne Farbcode (`MaterialFormDialog`,
-  `appearance.hex == null`); diese Bedingung wird zu „Herkunft ist nicht
-  `custom`/`builtin`“.
+  `appearance.hex == null`); diese Bedingung wird zu „Herkunft ist `word`,
+  `compound` oder keine“. Bei `ral` steht statt dessen die Nummer samt Namen
+  („RAL 3020 Verkehrsrot“), ohne Aufforderung.
 - Die Beschriftung für Hilfstechnik bleibt beim Namen („Farbe Savanna
   Yellow“); dass der Ton geschätzt ist, sagt nur das Formular.
 - Freunde: Der Server löst mit derselben Funktion auf, `colorHex` kommt also
@@ -361,6 +414,11 @@ export const colorSpecSchema = z
      infrared/other; thresholdC nur bei thermochromic */);
 ```
 
+- **Drei- und vierfarbig sind gleichwertig zu zweifarbig**: `coextruded`
+  nimmt zwei bis vier Farben, Verlauf und Segmente bis acht. Die Grenzen stehen
+  an genau einer Stelle (`COLOR_LAYOUT_LIMITS`), Schema, Editor und
+  Namensauflösung lesen sie von dort; ein Test prüft je Anordnung die
+  Untergrenze, die Obergrenze und eins darüber.
 - **Alles ganzzahlig bzw. als `#rrggbb`**, wie die übrigen Werte.
 - **`schemaVersion`** wie bei den Druckeinstellungen; ein gespeichertes Farbbild,
   das nicht mehr passt, wird beim Lesen `null` (`parseStoredColorSpec`, Vorbild
@@ -374,7 +432,7 @@ export const colorSpecSchema = z
 `ResolvedAppearance` wächst:
 
 ```ts
-export type ColorSource = "custom" | "builtin" | "compound" | "word";
+export type ColorSource = "custom" | "builtin" | "ral" | "compound" | "word";
 
 export type ResolvedAppearance = {
   hex: string | null; // Leitfarbe, wie bisher
@@ -405,7 +463,7 @@ export type ResolvedAppearance = {
 
 Nicht mehr: Verläufe und Duals sind **Herstellerfarben** („Dawn Radiance“)
 und gehören in den eigenen Katalog – oder sie ergeben sich aus dem Namen
-(„Gold/Silber“, Stufe 3). Der mitgelieferte folgt weiter dem, was auf
+(„Gold/Silber“, Stufe 4). Der mitgelieferte folgt weiter dem, was auf
 Etiketten steht, nicht einer Farbenlehre; dazu kommt der Farbwortschatz aus
 „Farbnamen erkennen“.
 
@@ -451,15 +509,17 @@ Alles in `src/components/textures.tsx` bzw. einer neuen Nachbardatei
 
 ### Grundfläche nach Anordnung
 
-| Anordnung    | Feld (24 px)                                          | Spulenkern                                    |
-| ------------ | ----------------------------------------------------- | --------------------------------------------- |
-| `solid`      | wie heute                                             | wie heute                                     |
-| `coextruded` | Tortenstücke (2 Hälften / 3 Keile) als Pfade          | dieselben Keile – der Querschnitt des Strangs |
-| `gradient`   | `linearGradient` diagonal, weiche Stopps              | dasselbe                                      |
-| `segmented`  | harte Stopps (je Farbe zwei gleiche Stopps), diagonal | dasselbe                                      |
+| Anordnung    | Feld (24 px)                                             | Spulenkern                                    |
+| ------------ | -------------------------------------------------------- | --------------------------------------------- |
+| `solid`      | wie heute                                                | wie heute                                     |
+| `coextruded` | Tortenstücke (2 Hälften / 3 Keile / 4 Viertel) als Pfade | dieselben Keile – der Querschnitt des Strangs |
+| `gradient`   | `linearGradient` diagonal, weiche Stopps                 | dasselbe                                      |
+| `segmented`  | harte Stopps (je Farbe zwei gleiche Stopps), diagonal    | dasselbe                                      |
 
 SVG kennt keinen konischen Verlauf; die Keile sind Kreissektoren als `<path>`,
-geschnitten auf das Feld. Bei mehr als sechs Farben werden im 24er-Feld die
+geschnitten auf das Feld. Auch vier Viertel bleiben auf 24 px lesbar (je
+Viertel 12 × 12 px); ein Test rendert zwei-, drei- und vierfarbig und prüft
+die Zahl der Sektoren. Bei mehr als sechs Farben werden im 24er-Feld die
 ersten sechs gezeigt, die Beschriftung nennt alle.
 
 ### Musterfarbe auf mehrfarbigem Grund
@@ -537,10 +597,11 @@ Texte in `src/messages/de.ts`/`en.ts` unter `appearance.layouts`,
 ### `/farben` (`src/pages/Appearance.tsx`)
 
 - Der Dialog „Eigene Farbe“ bekommt oben die **Anordnung** als
-  Segment-Auswahl (Einfarbig · Zweifarbig/Dreifarbig · Verlauf ·
-  Segmente). Darunter die Farbliste: je Zeile Farbwähler (`<input
+  Segment-Auswahl (Einfarbig · Mehrfarbig (2–4) · Verlauf · Segmente). Darunter die Farbliste: je Zeile Farbwähler (`<input
 type="color">` wie heute) plus optionaler Name, Ziehen zum Umordnen,
-  „Farbe hinzufügen“ bis zur Grenze der Anordnung.
+  „Farbe hinzufügen“ bis zur Grenze der Anordnung (mehrfarbig: vier). Die
+  Anzeige nennt die Zahl („dreifarbig“, „vierfarbig“), keine eigene Auswahl je
+  Zahl.
 - Aufklappbar „Partikel/Adern“ (Akzentfarben) und „Wirkungen“ (je Wirkung:
   Art, Farbe danach, bei Wärme die Schwelle, Notiz).
 - Eine **große Vorschau** (Spule, 120 px) mit dem Vorschau-Umschalter, dazu
@@ -630,17 +691,23 @@ Klein, ohne Farbbild, sofort nützlich.
 Ohne Schema, ohne Migration – reine Logik in `contracts/appearance.ts`.
 
 1. Farbwortschatz in `BUILTIN_COLORS` (rund 150 Einträge, DE + EN).
-2. `resolveColor` mit den Stufen 1, 2, 4 und 5 samt Helligkeitswörtern;
-   `ResolvedAppearance.source`/`matched`. Stufe 3 (zusammengesetzt) folgt in
+2. `resolveColor` mit den Stufen 1, 2, 3, 5 und 6 samt Helligkeitswörtern;
+   `ResolvedAppearance.source`/`matched`. Stufe 4 (zusammengesetzt) folgt in
    Phase C, weil sie das Farbbild zum Zeichnen braucht.
-3. Zwischenspeicher je Vergleichsform im Resolver (Client) und je Anfrage
+3. RAL: `contracts/ral.ts` mit `RAL_CLASSIC` (Quelle als Kommentar),
+   `ralDesignToHex`, Erkennung im Namen, RAL-Namen im Farbwortschatz, Feld
+   „RAL-Nummer“ im Farb-Dialog.
+4. Zwischenspeicher je Vergleichsform im Resolver (Client) und je Anfrage
    (Server, Freundesliste).
-4. Materialformular: Hinweis „Erkannt aus ‚…‘ – ungefähr“ mit „Genau
-   festlegen“.
-5. Tests: die Tabelle echter Herstellerfarben, die Negativliste, längster und
+5. Materialformular: Hinweis „Erkannt aus ‚…‘ – ungefähr“ mit „Genau
+   festlegen“, bei RAL die Nummer samt Namen.
+6. Tests: die Tabelle echter Herstellerfarben, die Negativliste, längster und
    hinterster Treffer, Komposita samt Mindestrest, Helligkeitswörter, eigene
-   Einträge schlagen Farbwörter, Oberflächenwörter finden keine Farbe.
-6. `AGENTS.md`: „Ohne Farbcode wird nicht geraten“ wird „Ohne Farbwort wird
+   Einträge schlagen Farbwörter, Oberflächenwörter finden keine Farbe; RAL:
+   jede Tabellennummer eindeutig und mit gültigem Farbcode, Schreibweisen der
+   Nummer, unbekannte Nummer fällt durch, `ralDesignToHex` gegen
+   veröffentlichte Werte, Nummer schlägt Farbwort („Rot RAL 5002“ → Blau).
+7. `AGENTS.md`: „Ohne Farbcode wird nicht geraten“ wird „Ohne Farbwort wird
    nicht geraten“, mit Begründung.
 
 ### Phase C – Farbbild und zusammengesetzte Namen (4.7.0)
@@ -654,7 +721,7 @@ Ohne Schema, ohne Migration – reine Logik in `contracts/appearance.ts`.
 4. Katalog im Client (`useAppearanceCatalog`) und für Freunde mit `spec`.
 5. Grundflächen je Anordnung in Feld und Spule; Muster je Teilfläche;
    schraffiertes Stück für einen unbekannten Teil.
-6. **Stufe 3** der Namensauflösung: Trenner, Verlaufswörter,
+6. **Stufe 4** der Namensauflösung: Trenner, Verlaufswörter,
    Anordnungs-Schlüsselwörter, „mindestens ein Teil bekannt“.
 7. `ColorSpecEditor` auf `/farben` und im Materialformular („Genau festlegen“
    übernimmt ein berechnetes Farbbild als Vorlage).
@@ -663,8 +730,10 @@ Ohne Schema, ohne Migration – reine Logik in `contracts/appearance.ts`.
 9. Mitgeliefert: `rainbow`.
 10. Tests: Schema (Grenzen je Anordnung, `hex` xor `spec`), Rückfall bei
     unlesbarem Farbbild, Kontrastzusicherung für Verläufe, zusammengesetzte
-    Namen („Rot/Blau“, „Dual Rot/Blau“, „Red to Blue“, „Rot-Blau“ gegen
-    „Blau-Grün“, „Savanna Yellow / Earth Brown“, „Rot/Xyz“), Integrationstest
+    Namen („Rot/Blau“, „Rot/Gelb/Blau“, „Rot/Gelb/Grün/Blau“, „Quad
+    Rot/Gelb/Grün/Blau“, fünf Teile → Segmente, „Dual Rot/Blau“, „Red to
+    Blue“, „Rot-Blau“ gegen „Blau-Grün“, „Savanna Yellow / Earth Brown“, „RAL
+    9005 / RAL 1003“, „Rot/Xyz“), Integrationstest
     Anlegen/Ändern/Freundesansicht.
 
 ### Phase D – Wirkungen (4.8.0)
@@ -676,31 +745,67 @@ Ohne Schema, ohne Migration – reine Logik in `contracts/appearance.ts`.
 4. Mitgeliefert: die Neon- und Nachtleucht-Einträge.
 5. **„Neon“ verlässt `glow`.** Als Oberfläche löst „Neon“ danach auf `plain`
    auf, als **Farbe** gibt es die fluoreszierenden Katalogeinträge (und über
-   Stufe 4 findet „Neon Green“ den Eintrag „Neongrün“). Das ändert die
+   Stufe 5 findet „Neon Green“ den Eintrag „Neongrün“). Das ändert die
    Darstellung bestehender Materialien mit Oberfläche „Neon“ (Hof
    verschwindet) – in der Release Note erwähnen. `COMMON_TEXTURES` führt
    „Neon“ nicht, die Zusicherung in `api/appearance.test.ts` bleibt grün.
 6. `note` wird in der Freundes-Projektion entfernt – Test dafür.
 
-### Phase E (optional) – Zwei Oberflächen zugleich
+### Phase E – Zwei Oberflächen zugleich (4.9.0)
 
-„Silk Glitter“, „Matt Galaxy“, „Marmor glänzend“ sind heute **eine** Art. Wenn
-die Nachfrage kommt: `custom_textures.secondKind texture_kind NULL`, mit der
-Regel „eine Glanz-Art (`matte`, `satin`, `glossy`, `silk`, `metallic`,
-`transparent`) plus eine Struktur-Art (`speckle`, `sparkle`, `marble`,
-`fiber`, `wood`)“. Gezeichnet wird Struktur unter Glanz.
-`ResolvedAppearance.kind` wird zu `kinds: TextureKind[]`. Dieselbe
-Wortsuche wie bei den Farben (Stufe 4) fände dann in „Silk Glitter“ beide.
-Nicht vorher – jede Stelle, die heute eine Art nimmt, müsste mit.
+„Silk Glitter“, „Matt Galaxy“, „Marmor glänzend“, „Satin Faserverstärkt“ sind
+bis dahin **eine** Art – die zweite fällt unter den Tisch. Fest eingeplant.
+
+**Zwei Ebenen, je höchstens eine Art:**
+
+| Ebene    | Arten                                                              | Gezeichnet        |
+| -------- | ------------------------------------------------------------------ | ----------------- |
+| Struktur | `speckle`, `sparkle`, `marble`, `fiber`, `wood`                    | unten             |
+| Glanz    | `matte`, `satin`, `glossy`, `silk`, `metallic`, `transparent`      | darüber           |
+| –        | `glow` (bis Phase D Oberfläche, danach Rückfall für alte Einträge) | wie eine Glanzart |
+
+Die Zuordnung steht als `TEXTURE_LAYER` in `contracts/appearance.ts`, eine
+Stelle; ein Test prüft, dass jede Art genau eine Ebene hat.
+
+1. **Datenmodell:** `custom_textures.secondKind texture_kind NULL`, Prüfung im
+   Schema „zwei verschiedene Ebenen“ (zwei Glanzarten zugleich ergeben keinen
+   Sinn). Nullable, kein Backfill, drizzle-kit erzeugt die Migration.
+2. **Auflösung:** `ResolvedAppearance.kind` wird zu `kinds: TextureKind[]`
+   (null bis zwei, sortiert Struktur vor Glanz). Ohne ganzen Treffer sucht die
+   Oberfläche wie die Farbe nach bekannten Teilausdrücken (Stufe 5 der
+   Farben, gleiche Regeln) und nimmt je Ebene den längsten, hintersten:
+   „Silk Glitter“ → `sparkle` + `silk`, „Matte Galaxy“ → `sparkle` + `matte`.
+3. **Mitgeliefert:** Kombinationsnamen, die Hersteller wörtlich führen –
+   „Galaxy“ allein bleibt `sparkle`, „Silk Galaxy“ entsteht aus der Suche.
+4. **Zeichnung:** `textureDefs`/`textureOverlay` je Art unverändert, die Spule
+   und das Feld zeichnen die Liste in Ebenenreihenfolge. Die Kontrastregel gilt
+   je Ebene; die Glanzebene wird über einer Struktur etwas zurückgenommen,
+   damit die Partikel sichtbar bleiben (Prüfung am Bildschirm, beide Schemata).
+5. **Verwaltung** `/farben`: zweites, optionales Auswahlfeld „Struktur“ neben
+   „Glanz“; die Vorschau zeigt beides.
+6. **Freunde:** `FriendMaterial.textureKind` bleibt (erste Art, für alte
+   Clients während des Neuladens), dazu `textureKinds`; Schlüsselmenge in
+   `api/friendVisibility.test.ts` erweitern.
+7. **Filter „Oberfläche“** in der Übersicht vergleicht weiter den Freitext –
+   unverändert.
+8. **Export:** `customTextures.secondKind` (additiv, Version bleibt 5).
+9. **Tests:** Ebenenzuordnung vollständig, Kombinationen aus der Suche, keine
+   zwei Arten derselben Ebene, Rückfall bei nur einer Art wie bisher,
+   Integrationstest Anlegen/Ändern mit `secondKind`.
+
+Jede Stelle, die heute eine Art nimmt (`Spool`, `AppearanceSwatch`,
+`useTextureKindLabel`, `toFriendMaterial`, `api/appearance.test.ts`), zieht
+mit – der Grund, warum die Phase zuletzt kommt und nicht in A.
 
 ## Was sonst mitzieht (leicht vergessen)
 
 - `AGENTS.md`: Abschnitt „Farbe und Oberfläche als Darstellung“ um Farbwörter,
   Farbbild, Leitfarbe, Wirkungen und die angepasste Kontrastregel ergänzen;
-  Projektstruktur (`colorSpec.tsx`); die Handmigration `0026` unter den
+  Projektstruktur (`colorSpec.tsx`, `contracts/ral.ts`); die Handmigration `0026` unter den
   Umbenennungen erwähnen.
 - `api/postgres.integration.test.ts`: Enum-Werte von `texture_kind`.
-- `api/friendVisibility.test.ts`: Schlüsselmenge (Phase C), `note` (Phase D).
+- `api/friendVisibility.test.ts`: Schlüsselmenge (Phase C und E), `note`
+  (Phase D).
 - `api/account.integration.test.ts`: nichts – keine neue Tabelle, keine neue
   Benutzerspalte.
 - `COUNTED_TABLES`: nichts – keine neue Tabelle.
@@ -710,12 +815,23 @@ Nicht vorher – jede Stelle, die heute eine Art nimmt, müsste mit.
 
 ## Tests (Übersicht)
 
-| Test                                 | Phase | Prüft                                                                                                      |
-| ------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------- |
-| `api/appearance.test.ts`             | A–D   | neue Arten, Namen, Farbwörter (Herstellertabelle + Negativliste), zusammengesetzte Namen, Schema, Kontrast |
-| `api/friendVisibility.test.ts`       | C, D  | `colorSpec` drin, `note` draußen                                                                           |
-| `api/appearance.integration.test.ts` | A, C  | `carbon` → `fiber` über die Migration; `hex` xor `spec`, abgeleitete Leitfarbe, Bereichsgrenze             |
-| `api/postgres.integration.test.ts`   | A     | Enum-Werte                                                                                                 |
+| Test                                 | Phase   | Prüft                                                                                                                                  |
+| ------------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `api/appearance.test.ts`             | A–E     | neue Arten, Namen, Farbwörter (Herstellertabelle + Negativliste), RAL, zusammengesetzte Namen mit 2–5 Teilen, Schema, Kontrast, Ebenen |
+| `api/friendVisibility.test.ts`       | C, D, E | `colorSpec` und `textureKinds` drin, `note` draußen                                                                                    |
+| `api/appearance.integration.test.ts` | A, C, E | `carbon` → `fiber` über die Migration; `hex` xor `spec`, abgeleitete Leitfarbe, Bereichsgrenze; `secondKind`                           |
+| `api/postgres.integration.test.ts`   | A       | Enum-Werte                                                                                                                             |
+
+## Nicht Teil dieses Plans
+
+- **Abrasiv.** Ob ein Material die Düse angreift (Fasern, Nachleuchtpigment,
+  Metall- und Steinfüllung), wird später eine **eigene Eigenschaft** am
+  Material – gepflegt, nicht abgeleitet. Oberfläche und Farbe sagen darüber
+  bewusst nichts aus: „Faserverstärkt“ ist die Darstellung, nicht die
+  Warnung, und ein Material mit Oberfläche „Matt“ kann trotzdem abrasiv sein.
+  Nichts in diesem Plan darf aus einer Musterart eine solche Aussage machen.
+- **Weitere Sprachen** im Farbwortschatz – siehe „Offene Fragen“.
+- **RAL Effect** und **Pantone** – siehe „RAL-Farben“.
 
 ## Entscheidungen
 
@@ -731,22 +847,23 @@ Getroffen am 27.09.2026:
    über einen größeren Farbwortschatz und die Suche nach dem Farbwort im
    Namen, nie über einen geratenen Ton.
 5. **Das Farbbild steht am Katalogeintrag**, nicht am Material (Weg A).
+6. **Phase E ist fest eingeplant** (zwei Oberflächen zugleich, 4.9.0).
+7. **Drei- und vierfarbige Filamente** sind vollwertig: Koextrudiert nimmt
+   zwei bis vier Farben, zusammengesetzte Namen mit bis zu vier Teilen werden
+   koextrudiert, Schlüsselwörter wie „Tri“ und „Quad“ werden erkannt.
+8. **RAL-Farben werden erfasst**: RAL Classic als Tabelle, RAL Design
+   gerechnet, erkannt im Namen und wählbar im Farb-Dialog (Phase B).
+9. **Weitere Sprachen bleiben vorerst offen.**
+10. **„Abrasiv“ gehört nicht in diesen Plan**, sondern wird später eine
+    eigene Eigenschaft.
 
 ## Offene Fragen
 
-1. **RAL-Nummern** („RAL 9005“, „Verkehrsrot RAL 3020“) als eigene Stufe
-   erkennen? Einige Hersteller (Extrudr, Filamentworld) benennen so. Die
-   Nummern sind Fakten, die RAL-Farbwerte aber nur als Näherung frei
-   verfügbar; vor einer Tabelle im Code die Rechtslage klären. Pantone bleibt
-   draußen.
-2. **Weitere Sprachen im Farbwortschatz** (Französisch, Italienisch, Spanisch)?
-   Etiketten sind überwiegend englisch; erst mit einer dritten
-   Oberflächensprache.
-3. **Hinweis „abrasiv“** für faserverstärkte, nachleuchtende und
-   Partikel-Filamente (gehärtete Düse) – gehört eher zu den
-   Druckeinstellungen als zur Farbe. Außerhalb dieses Plans; als Idee
-   festgehalten.
-4. **Farbbild am Material statt am Katalog** (Weg B) – falls sich zeigt, dass
+1. **Weitere Sprachen im Farbwortschatz** (Französisch, Italienisch,
+   Spanisch) – vorerst offen; Etiketten sind überwiegend englisch.
+2. **Rechtslage RAL** kurz prüfen, bevor die Tabelle in den Code geht (siehe
+   „RAL-Farben“) – keine Frage des Ob, nur der Quelle.
+3. **Farbbild am Material statt am Katalog** (Weg B) – falls sich zeigt, dass
    Benutzer je Material ein eigenes Farbbild wollen, ohne sich einen Namen
    auszudenken. Dann als Überschreibung **zusätzlich** zum Katalog, nicht
    statt seiner.
