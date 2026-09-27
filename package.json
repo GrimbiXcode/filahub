@@ -64,7 +64,7 @@
     "drizzle-orm": "^0.45.1",
     "embla-carousel-react": "^8.6.0",
     "fflate": "^0.8.3",
-    "hono": "^4.13.7",
+    "hono": "^4.13.9",
     "input-otp": "^1.4.2",
     "jose": "6.2.8",
     "lucide-react": "^1.44.0",
