@@ -1,9 +1,12 @@
 import {
   COLOR_ACCENTS_MAX,
+  COLOR_EFFECT_KINDS,
+  COLOR_EFFECTS_MAX,
   COLOR_LAYOUT_LIMITS,
   COLOR_SPEC_VERSION,
   normalizeHex,
   type ColorEffect,
+  type ColorEffectKind,
   type ColorLayout,
   type ColorSpec,
   type ColorSpecInput,
@@ -165,5 +168,64 @@ export function editorPreview(value: ColorEditorValue): {
       accents,
       effects: value.effects,
     },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Wirkungen (seit 4.8.0)
+// ---------------------------------------------------------------------------
+
+/** Ausgangsfarbe einer neuen Wirkung – violett, wie die meisten UV-Filamente */
+const DEFAULT_EFFECT_HEX = "#7b3fb8";
+
+/** Wirkungen ohne Zielfarbe: Infrarot hat keine, „Sonstiges“ darf keine haben */
+export function effectNeedsTarget(kind: ColorEffectKind): boolean {
+  return kind !== "infrared" && kind !== "other";
+}
+
+/** Die Arten, die noch nicht vergeben sind – jede Wirkung höchstens einmal */
+export function freeEffectKinds(
+  value: ColorEditorValue,
+  except?: ColorEffectKind
+): ColorEffectKind[] {
+  const used = new Set(value.effects.map(effect => effect.kind));
+  return COLOR_EFFECT_KINDS.filter(kind => kind === except || !used.has(kind));
+}
+
+export function canAddEffect(value: ColorEditorValue): boolean {
+  return (
+    value.effects.length < COLOR_EFFECTS_MAX &&
+    freeEffectKinds(value).length > 0
+  );
+}
+
+/** Die nächste freie Wirkung, mit Zielfarbe, wo sie eine braucht */
+export function newEffect(value: ColorEditorValue): ColorEffect {
+  const kind = freeEffectKinds(value)[0];
+  return effectNeedsTarget(kind)
+    ? { kind, to: { hex: DEFAULT_EFFECT_HEX } }
+    : { kind };
+}
+
+/**
+ * Art einer Wirkung wechseln: Die Zielfarbe bleibt, wo es eine gibt, und
+ * entfällt bei Infrarot; die Schwelle gilt nur bei Wärme.
+ */
+export function withEffectKind(
+  effect: ColorEffect,
+  kind: ColorEffectKind
+): ColorEffect {
+  const to =
+    kind === "infrared"
+      ? undefined
+      : (effect.to ??
+        (effectNeedsTarget(kind) ? { hex: DEFAULT_EFFECT_HEX } : undefined));
+  return {
+    kind,
+    ...(to ? { to } : {}),
+    ...(kind === "thermochromic" && effect.thresholdC !== undefined
+      ? { thresholdC: effect.thresholdC }
+      : {}),
+    ...(effect.note ? { note: effect.note } : {}),
   };
 }

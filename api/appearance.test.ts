@@ -34,6 +34,10 @@ import {
   overlayInkFor,
   parseStoredColorSpec,
   type ColorSpec,
+  availableConditions,
+  displayUnder,
+  effectKindsOf,
+  type ResolvedColorSpec,
 } from "@contracts/appearance";
 
 function catalog(
@@ -911,5 +915,111 @@ describe("Musterfarbe über mehreren Grundfarben", () => {
         }
       }
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wirkungen (seit 4.8.0)
+// ---------------------------------------------------------------------------
+
+describe("Wirkungen zeigen", () => {
+  const uvWhite: ResolvedColorSpec = {
+    layout: "solid",
+    colors: [{ hex: "#f5f5f5" }],
+    accents: [],
+    effects: [
+      { kind: "photochromic", to: { hex: "#7b3fb8", name: "Violett" } },
+      { kind: "phosphorescent", to: { hex: "#7dff6a" } },
+      { kind: "infrared" },
+    ],
+  };
+
+  it("bietet nur Bedingungen mit Zielfarbe an, „normal“ immer", () => {
+    expect(availableConditions(uvWhite)).toEqual(["normal", "uv", "dark"]);
+    expect(availableConditions(null)).toEqual(["normal"]);
+  });
+
+  it("zeigt unter UV die Zielfarbe", () => {
+    expect(displayUnder("#f5f5f5", uvWhite, "uv")).toEqual({
+      hex: "#7b3fb8",
+      spec: null,
+      glow: null,
+    });
+  });
+
+  it("dunkelt im Dunkeln ab und leuchtet in der Leuchtfarbe", () => {
+    const dark = displayUnder("#f5f5f5", uvWhite, "dark");
+    expect(dark.glow).toBe("#7dff6a");
+    expect(relativeLuminance(dark.hex!)).toBeLessThan(
+      relativeLuminance("#f5f5f5") / 4
+    );
+  });
+
+  it("behält Partikelfarben unter UV", () => {
+    const spec: ResolvedColorSpec = { ...uvWhite, accents: ["#000000"] };
+    expect(displayUnder("#f5f5f5", spec, "uv").spec?.accents).toEqual([
+      "#000000",
+    ]);
+  });
+
+  it("bleibt ohne passende Wirkung beim Normalzustand", () => {
+    expect(displayUnder("#f5f5f5", uvWhite, "heat")).toEqual({
+      hex: "#f5f5f5",
+      spec: uvWhite,
+      glow: null,
+    });
+  });
+
+  it("zeigt eine blickwinkelabhängige Farbe als Verlauf", () => {
+    const chameleon: ResolvedColorSpec = {
+      layout: "solid",
+      colors: [{ hex: "#7b3fb8" }],
+      accents: [],
+      effects: [{ kind: "goniochromic", to: { hex: "#2e9e46" } }],
+    };
+    const shown = displayUnder("#7b3fb8", chameleon, "normal");
+    expect(shown.spec?.layout).toBe("gradient");
+    expect(shown.spec?.colors.map(stop => stop.hex)).toEqual([
+      "#7b3fb8",
+      "#2e9e46",
+    ]);
+  });
+
+  it("nennt die Wirkungsarten in fester Reihenfolge", () => {
+    expect(effectKindsOf(uvWhite)).toEqual([
+      "photochromic",
+      "phosphorescent",
+      "infrared",
+    ]);
+  });
+});
+
+describe("Neon und Nachleuchten", () => {
+  /*
+    Bis 4.7.0 stand „Neon“ als Oberfläche bei „Leuchtend“ (nachleuchtend) –
+    fachlich falsch. Seit 4.8.0 zeichnet es als Oberfläche nichts mehr, und
+    die Neonfarben sind Farben mit fluoreszierender Wirkung.
+  */
+  it("zeichnet „Neon“ als Oberfläche nicht mehr als Leuchten", () => {
+    expect(resolveTextureKind("Neon")).toBe("plain");
+    expect(resolveTextureKind("Glow in the dark")).toBe("glow");
+    expect(resolveTextureKind("Nachleuchtend")).toBe("glow");
+  });
+
+  it("führt Neonfarben als fluoreszierend", () => {
+    for (const name of ["Neongelb", "Neon green", "Neonorange", "Neon pink"]) {
+      const resolved = resolveColor(name);
+      expect(resolved.source, name).toBe("builtin");
+      expect(effectKindsOf(resolved.spec), name).toEqual(["fluorescent"]);
+    }
+    expect(resolveColor("Neon Green PLA").spec?.effects[0].kind).toBe(
+      "fluorescent"
+    );
+  });
+
+  it("führt Nachleuchtendes mit Tagfarbe und Leuchtfarbe", () => {
+    const glow = resolveColor("Glow in the dark green");
+    expect(glow.hex).toBe(builtinHex("natural"));
+    expect(availableConditions(glow.spec)).toEqual(["normal", "dark"]);
   });
 });

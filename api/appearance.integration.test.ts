@@ -478,3 +478,42 @@ describe("Farbbild (seit 4.7.0)", () => {
     expect(colors).toHaveLength(0);
   });
 });
+
+describe("Wirkungen (seit 4.8.0)", () => {
+  it("speichert eine einfarbige Farbe mit Wirkung als Farbbild", async () => {
+    const created = await callerFor(anna).appearance.createColor({
+      ...PERSONAL,
+      name: "UV Weiß",
+      spec: {
+        schemaVersion: 1,
+        layout: "solid",
+        colors: [{ hex: "#f5f5f5" }],
+        effects: [
+          { kind: "photochromic", to: { hex: "#7b3fb8", name: "Violett" } },
+          { kind: "thermochromic", to: { hex: "#ffffff" }, thresholdC: 31 },
+        ],
+      },
+    });
+    // Eine Farbe, aber mit Wirkung: kein bloßer Farbcode.
+    expect(created?.spec?.effects.map(effect => effect.kind)).toEqual([
+      "photochromic",
+      "thermochromic",
+    ]);
+    expect(created?.hex).toBe("#f5f5f5");
+  });
+
+  it("lehnt eine Wirkung ohne Zielfarbe ab", async () => {
+    await expect(
+      callerFor(anna).appearance.createColor({
+        ...PERSONAL,
+        name: "UV ohne Ziel",
+        spec: {
+          schemaVersion: 1,
+          layout: "solid",
+          colors: [{ hex: "#f5f5f5" }],
+          effects: [{ kind: "photochromic" }],
+        },
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
+});

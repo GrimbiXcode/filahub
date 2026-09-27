@@ -692,6 +692,7 @@ export const en: Messages = {
     colorsLabel: "Colours",
     colorStopLabel: (vars: { n: number }) => `Colour ${vars.n}`,
     colorStopName: "Name (optional)",
+    colorStopNameLabel: (vars: { n: number }) => `Name of colour ${vars.n}`,
     addColorStop: "Add colour",
     removeColorStop: (vars: { n: number }) => `Remove colour ${vars.n}`,
     moveColorStopUp: (vars: { n: number }) => `Move colour ${vars.n} forward`,
@@ -718,6 +719,53 @@ export const en: Messages = {
     labelColorCount: (vars: { count: number }) => `${vars.count} colours`,
     labelAnd: "and",
     labelUnknownPart: "unknown",
+    conditions: {
+      normal: "Normal",
+      uv: "UV",
+      heat: "Heat",
+      dark: "Dark",
+      blacklight: "Blacklight",
+    },
+    conditionsAria: "View under",
+    effectsLabel: "Effects",
+    effectsHint:
+      "How the colour changes \u2013 shown as a sign on the spool and in the preview on the material and spool pages.",
+    effectKinds: {
+      photochromic: "UV / sunlight",
+      thermochromic: "Heat",
+      phosphorescent: "Glow in the dark",
+      fluorescent: "Blacklight / neon",
+      goniochromic: "Viewing angle (chameleon)",
+      infrared: "Infrared",
+      other: "Other",
+    },
+    effectKindLabel: "Kind",
+    effectTo: "Colour then",
+    effectToName: "Name of that colour (optional)",
+    effectThreshold: "From \u00b0C",
+    celsiusUnit: "\u00b0C",
+    effectNote: "Note (optional)",
+    addEffect: "Add effect",
+    removeEffect: (vars: { n: number }) => `Remove effect ${vars.n}`,
+    effectFilter: "Effect",
+    allEffects: "All effects",
+    labelOtherColor: "another colour",
+    labelEffect: {
+      photochromic: (vars: { to: string; threshold: string | null }) =>
+        `turns ${vars.to} under UV`,
+      thermochromic: (vars: { to: string; threshold: string | null }) =>
+        vars.threshold
+          ? `turns ${vars.to} from ${vars.threshold}`
+          : `turns ${vars.to} when warm`,
+      phosphorescent: (vars: { to: string; threshold: string | null }) =>
+        `glows ${vars.to} in the dark`,
+      fluorescent: (vars: { to: string; threshold: string | null }) =>
+        `glows ${vars.to} under blacklight`,
+      goniochromic: (vars: { to: string; threshold: string | null }) =>
+        `shifts to ${vars.to} with the viewing angle`,
+      infrared: () => "reacts to infrared",
+      other: () => "with a special effect",
+    },
     setExactColorFor: (vars: { name: string }) =>
       `Set exact colour for \u201c${vars.name}\u201d`,
     labelColor: (vars: { color: string }) => `Colour ${vars.color}`,

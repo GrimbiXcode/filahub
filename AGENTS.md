@@ -49,6 +49,8 @@ src/            React-Frontend
                 colorFace (Fläche im 24er-Raum: einfarbig, Keile, Streifen,
                 Verlauf – geteilt von Feld und Spule), ColorSpecEditor
                 (Farbbild bearbeiten, auf /optik und im Materialformular),
+                EffectPreview (große Spule mit Umschalter Normal/UV/Wärme/
+                Dunkel/Schwarzlicht),
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
@@ -69,6 +71,7 @@ src/            React-Frontend
                 Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox oder Material),
                 colorSpecEditor.ts (Zustand des Farbbild-Editors, Umwandlung),
+                effectIcons.ts (ein Zeichen je Wirkung),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
@@ -942,6 +945,43 @@ im Schema, bearbeitet ab Phase D des Plans).
   Auflösung erkannt hat (auch einem berechneten Farbbild). Reihenfolge per
   Knopf „nach vorn“ statt Ziehen; Wirkungen werden erhalten, nicht
   bearbeitet.
+
+### Wirkungen seit 4.8.0
+
+Farbwechsel unter Einwirkung: photochrom (UV), thermochrom (Wärme, optional
+Schwelle in °C), nachleuchtend, fluoreszierend (Schwarzlicht/Neon),
+goniochrom (Blickwinkel), Infrarot, Sonstiges. Sie stehen seit 4.7.0 im
+Schema (`effects` im Farbbild) und werden seit 4.8.0 bearbeitet und gezeigt.
+
+- **Die Rechnung steht in `contracts/appearance.ts`:** `availableConditions`
+  (welche Ansichten ein Farbbild hat – nur Wirkungen mit Zielfarbe),
+  `displayUnder` (Farbe und Leuchten unter „normal“, „uv“, „heat“, „dark“,
+  „blacklight“), `effectKindsOf`. Unter UV und Wärme wird die Fläche zur
+  Zielfarbe (Partikelfarben bleiben), unter Schwarzlicht leuchtet sie, im
+  Dunkeln wird die Grundfarbe fast schwarz und ein Hof in der Leuchtfarbe
+  liegt darüber (`glow` in `colorFace`, Mitte heller als die Leuchtfarbe –
+  sonst sähe Neon unter Schwarzlicht aus wie am Tag).
+- **Goniochrom steht überall als Verlauf zur zweiten Farbe** – `colorFace`
+  wendet `displayUnder(…, "normal")` selbst an, damit Regal und Vorschau
+  nicht auseinanderlaufen.
+- **Zeichen an der Spule** (`EffectBadges` in `Spool.tsx`, Zeichen aus
+  `src/lib/effectIcons.ts`) erst ab 56 px Kantenlänge, höchstens zwei, dann
+  „+n“; für Hilfstechnik verborgen, die Beschriftung sagt es in Worten
+  (`useEffectDescriptions`: „wechselt unter UV zu Violett“ – die Zielfarbe
+  beim Namen, nie der Code, die Schwelle über `useFormat`). In der Vorschau
+  kommen die Zeichen aus dem ursprünglichen Farbbild (`effectsFrom`), sonst
+  verschwänden sie unter UV.
+- **`EffectPreview`** auf Gebindeseite (statt der Füllstand-Spule) und
+  Material-Seite (in den Stammdaten, nur mit Wirkungen). Nichts wird
+  gespeichert.
+- **Filter „Wirkung“** in der Übersicht, im Browser über den Katalog
+  aufgelöst; erscheint nur, wenn der Bestand eine Wirkung kennt.
+- **„Neon“ ist keine Oberfläche mehr.** Bis 4.7.0 zeichnete es als
+  „Leuchtend“ (nachleuchtend) – fachlich falsch. Neon ist jetzt eine Farbe
+  mit fluoreszierender Wirkung (`neonYellow` … `neonPink` in
+  `contracts/colorNames.ts`), dazu `glowGreen`/`glowBlue` als nachleuchtende
+  Farben. „Nachleuchtend“ ist als Oberfläche dazugekommen.
+- **Wirkungsnotizen gehen nie an Freunde** (seit 4.7.0, `withoutEffectNotes`).
 
 ## Namenslisten, die kein Compiler prüft
 

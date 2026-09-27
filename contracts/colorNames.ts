@@ -541,6 +541,61 @@ export const BUILTIN_COLORS: readonly BuiltinColor[] = [
     },
   },
 
+  // --- Mit Wirkung (seit 4.8.0) ---------------------------------------------
+  /*
+    Neonfarben sind fluoreszierend: grell am Tag, leuchtend unter
+    Schwarzlicht – die Leuchtfarbe ist die Farbe selbst. Bis 4.7.0 stand
+    „Neon“ als Oberfläche bei „Leuchtend“, was nachleuchtend meint und falsch
+    war.
+  */
+  ...(
+    [
+      ["neonYellow", "#e6ff1f", ["Neongelb", "Neon yellow"]],
+      ["neonGreen", "#39ff14", ["Neongrün", "Neon green"]],
+      ["neonOrange", "#ff6a13", ["Neonorange", "Neon orange"]],
+      ["neonPink", "#ff2e97", ["Neonpink", "Neon pink"]],
+    ] as const
+  ).map(([key, hex, names]): BuiltinColor => ({
+    key,
+    hex,
+    names,
+    spec: {
+      schemaVersion: 1,
+      layout: "solid",
+      colors: [{ hex }],
+      accents: [],
+      effects: [{ kind: "fluorescent", to: { hex } }],
+    },
+  })),
+  /*
+    Nachleuchtend: tagsüber fast weiß bis naturfarben, im Dunkeln grün oder
+    blau. Die Tagfarbe ist die von „Natur“.
+  */
+  {
+    key: "glowGreen",
+    hex: "#e8e0cf",
+    names: ["Nachleuchtend grün", "Glow green", "Glow in the dark green"],
+    spec: {
+      schemaVersion: 1,
+      layout: "solid",
+      colors: [{ hex: "#e8e0cf" }],
+      accents: [],
+      effects: [{ kind: "phosphorescent", to: { hex: "#7dff6a" } }],
+    },
+  },
+  {
+    key: "glowBlue",
+    hex: "#e3e8e6",
+    names: ["Nachleuchtend blau", "Glow blue", "Glow in the dark blue"],
+    spec: {
+      schemaVersion: 1,
+      layout: "solid",
+      colors: [{ hex: "#e3e8e6" }],
+      accents: [],
+      effects: [{ kind: "phosphorescent", to: { hex: "#4fd1ff" } }],
+    },
+  },
+
   // --- Durchsichtig -----------------------------------------------------------
   {
     key: "clear",

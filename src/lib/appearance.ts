@@ -9,6 +9,7 @@ import {
 import { useActiveScope } from "@/lib/activeScope";
 import { trpc } from "@/lib/trpc";
 import { useT } from "@/lib/i18nContext";
+import { useFormat } from "@/lib/formatContext";
 
 /**
  * Die eigenen Farben und Oberflächen des aktiven Bereichs.
@@ -69,6 +70,34 @@ export function useAppearanceResolver(): (
 }
 
 /**
+ * Die Wirkungen eines Farbbilds in Worten (seit 4.8.0): „wechselt unter UV zu
+ * Violett“, „leuchtet im Dunkeln in Grün“. Für die Beschriftung der Spule und
+ * die Liste auf der Material-Seite – eine Formulierung für beide.
+ *
+ * Die Zielfarbe beim Namen, sonst „einer anderen Farbe“ – nie der Farbcode.
+ * Die Schwelle über `useFormat`, weil sie eine Zahl ist.
+ */
+export function useEffectDescriptions(): (
+  spec: ResolvedColorSpec | null | undefined
+) => string[] {
+  const t = useT();
+  const { formatNumber } = useFormat();
+  return useMemo(
+    () => spec =>
+      (spec?.effects ?? []).map(effect =>
+        t.appearance.labelEffect[effect.kind]({
+          to: effect.to?.name ?? t.appearance.labelOtherColor,
+          threshold:
+            effect.thresholdC == null
+              ? null
+              : `${formatNumber(effect.thresholdC)} °C`,
+        })
+      ),
+    [t, formatNumber]
+  );
+}
+
+/**
  * Beschriftung eines Felds – mit den **echten** Texten, nicht mit der
  * Musterart.
  *
@@ -84,6 +113,7 @@ export function useSwatchLabel(): (
   spec?: ResolvedColorSpec | null
 ) => string {
   const t = useT();
+  const describeEffects = useEffectDescriptions();
   return useMemo(
     () => (color, texture, hex, spec) => {
       const parts: string[] = [];
@@ -119,11 +149,12 @@ export function useSwatchLabel(): (
           })
         );
       }
+      parts.push(...describeEffects(spec));
       if (texture) parts.push(t.appearance.labelTexture({ texture }));
       if (color && !hex) parts.push(t.appearance.labelNoColorCode);
       return parts.join(", ");
     },
-    [t]
+    [t, describeEffects]
   );
 }
 

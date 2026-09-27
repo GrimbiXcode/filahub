@@ -253,7 +253,16 @@ export const BUILTIN_TEXTURES: readonly BuiltinTexture[] = [
       "Crystal",
     ],
   },
-  { kind: "glow", names: ["Leuchtend", "Glow", "Glow in the dark", "Neon"] },
+  /*
+    „Neon“ stand bis 4.7.0 hier. Neon ist fluoreszierend – grell am Tag,
+    leuchtend unter Schwarzlicht –, nicht nachleuchtend. Seit 4.8.0 ist es
+    eine Farbe mit Wirkung („Neongelb“, „Neon green“ in
+    `contracts/colorNames.ts`), als Oberfläche zeichnet es nichts mehr.
+  */
+  {
+    kind: "glow",
+    names: ["Leuchtend", "Nachleuchtend", "Glow", "Glow in the dark"],
+  },
   {
     kind: "wood",
     names: ["Holzoptik", "Holz", "Wood", "Kork", "Cork", "Bambus", "Bamboo"],
@@ -1171,4 +1180,143 @@ export function overlayInkFor(colors: readonly (string | null)[]): OverlayInk {
   const worst = (ink: string) =>
     Math.min(...known.map(hex => contrastRatio(hex, ink)));
   return worst(INK_LIGHT) >= worst(INK_DARK) ? INK_LIGHT : INK_DARK;
+}
+
+// ---------------------------------------------------------------------------
+// Wirkungen zeigen (seit 4.8.0)
+// ---------------------------------------------------------------------------
+
+/*
+  Eine Wirkung ändert die Farbe unter einer Bedingung – im Regal sieht man
+  den Normalzustand, auf Material- und Gebindeseite lässt sich umschalten
+  („Normal · UV · Wärme · Dunkel · Schwarzlicht“). Rein zum Ansehen; nichts
+  wird gespeichert. Die Rechnung steht hier, damit Feld, Spule und Tests
+  dieselbe benutzen.
+*/
+
+export const EFFECT_CONDITIONS = [
+  "normal",
+  "uv",
+  "heat",
+  "dark",
+  "blacklight",
+] as const;
+
+export type EffectCondition = (typeof EFFECT_CONDITIONS)[number];
+
+/** Welche Wirkung eine Bedingung zeigt */
+const CONDITION_EFFECT: Readonly<
+  Record<Exclude<EffectCondition, "normal">, ColorEffectKind>
+> = {
+  uv: "photochromic",
+  heat: "thermochromic",
+  dark: "phosphorescent",
+  blacklight: "fluorescent",
+};
+
+/** Anteil Schwarz, mit dem „im Dunkeln“ die Grundfarbe abgedunkelt wird */
+const DARK_MIX = 0.75;
+
+function effectOf(
+  spec: ResolvedColorSpec | null | undefined,
+  kind: ColorEffectKind
+): ColorEffect | undefined {
+  return spec?.effects.find(effect => effect.kind === kind);
+}
+
+/**
+ * Die Bedingungen, unter denen sich dieses Farbbild zeigen lässt – immer
+ * „normal“, dazu jede Wirkung mit Zielfarbe. Infrarot und „Sonstiges“ haben
+ * keine Ansicht, nur ein Abzeichen und die Beschriftung.
+ */
+export function availableConditions(
+  spec: ResolvedColorSpec | null | undefined
+): EffectCondition[] {
+  return EFFECT_CONDITIONS.filter(
+    condition =>
+      condition === "normal" || effectOf(spec, CONDITION_EFFECT[condition])?.to
+  );
+}
+
+export type DisplayedColor = {
+  /** Leitfarbe unter der Bedingung */
+  readonly hex: string | null;
+  readonly spec: ResolvedColorSpec | null;
+  /** Leuchtfarbe, wenn das Stück unter der Bedingung selbst leuchtet */
+  readonly glow: string | null;
+};
+
+/**
+ * Wie ein Farbbild unter einer Bedingung aussieht.
+ *
+ * - **normal:** wie gespeichert. Einzige Ausnahme: Eine Farbe, die mit dem
+ *   Blickwinkel kippt (goniochrom), steht als weicher Verlauf zur zweiten da –
+ *   dem Eindruck am nächsten, den so eine Spule im Regal macht.
+ * - **UV, Wärme:** die ganze Fläche in der Zielfarbe; Partikelfarben bleiben.
+ * - **Schwarzlicht:** die Zielfarbe, und sie leuchtet.
+ * - **Dunkel:** die Grundfarbe fast schwarz, darüber das Leuchten in der
+ *   Leuchtfarbe. Ohne Wirkung dieser Art bliebe es beim Normalzustand –
+ *   `availableConditions` bietet die Bedingung dann gar nicht erst an.
+ */
+export function displayUnder(
+  hex: string | null,
+  spec: ResolvedColorSpec | null | undefined,
+  condition: EffectCondition
+): DisplayedColor {
+  const base = spec ?? null;
+  if (condition === "normal") {
+    const angle = effectOf(base, "goniochromic");
+    const single = !base || base.layout === "solid";
+    if (hex && angle?.to && single) {
+      return {
+        hex,
+        spec: {
+          layout: "gradient",
+          colors: [{ hex }, { hex: angle.to.hex, name: angle.to.name }],
+          accents: base?.accents ?? [],
+          effects: base?.effects ?? [],
+        },
+        glow: null,
+      };
+    }
+    return { hex, spec: base, glow: null };
+  }
+
+  const effect = effectOf(base, CONDITION_EFFECT[condition]);
+  if (!effect?.to) return { hex, spec: base, glow: null };
+  const to = effect.to.hex;
+  const accents = base?.accents ?? [];
+
+  if (condition === "dark") {
+    const darken = (value: string) => mixHex(value, INK_DARK, DARK_MIX);
+    return {
+      hex: hex && darken(hex),
+      spec: base && {
+        ...base,
+        colors: base.colors.map(stop => ({
+          ...stop,
+          hex: stop.hex && darken(stop.hex),
+        })),
+        accents: base.accents.map(darken),
+      },
+      glow: to,
+    };
+  }
+
+  return {
+    hex: to,
+    spec:
+      accents.length > 0
+        ? { layout: "solid", colors: [{ hex: to }], accents, effects: [] }
+        : null,
+    glow: condition === "blacklight" ? to : null,
+  };
+}
+
+/** Die Arten der Wirkungen eines Farbbilds, in der Reihenfolge der Liste */
+export function effectKindsOf(
+  spec: ResolvedColorSpec | null | undefined
+): ColorEffectKind[] {
+  const present = new Set(spec?.effects.map(effect => effect.kind));
+  return COLOR_EFFECT_KINDS.filter(kind => present.has(kind));
 }

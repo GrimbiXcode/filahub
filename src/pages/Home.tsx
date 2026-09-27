@@ -99,7 +99,12 @@ import { cn } from "@/lib/utils";
 import type { MaterialOverview } from "@/types";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
-import type { ResolvedAppearance } from "@contracts/appearance";
+import {
+  COLOR_EFFECT_KINDS,
+  effectKindsOf,
+  type ColorEffectKind,
+  type ResolvedAppearance,
+} from "@contracts/appearance";
 
 const ALL = "__all__";
 const NO_BOX = "none";
@@ -214,6 +219,8 @@ export default function Home() {
   const [typeFilter, setTypeFilter] = useState(ALL);
   const [manufacturerFilter, setManufacturerFilter] = useState(ALL);
   const [textureFilter, setTextureFilter] = useState(ALL);
+  /** Filter nach Wirkung (seit 4.8.0): UV, Wärme, nachleuchtend … */
+  const [effectFilter, setEffectFilter] = useState(ALL);
   const [boxFilter, setBoxFilter] = useState(ALL);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
@@ -347,6 +354,22 @@ export default function Home() {
       ].sort(),
     [materials]
   );
+  /*
+    Die Wirkungen im Bestand – aufgelöst im Browser über den Katalog wie die
+    Farben, weil sie am Farbbild hängen und nicht am Material. Der Filter
+    erscheint nur, wenn es mindestens eine gibt.
+  */
+  const effectKinds = useMemo(() => {
+    const present = new Set<ColorEffectKind>();
+    for (const m of materials ?? []) {
+      for (const kind of effectKindsOf(
+        resolveAppearance(m.color, m.texture).spec
+      )) {
+        present.add(kind);
+      }
+    }
+    return COLOR_EFFECT_KINDS.filter(kind => present.has(kind));
+  }, [materials, resolveAppearance]);
 
   const boxes = useMemo(() => {
     const map = new Map<number, string>();
@@ -379,6 +402,13 @@ export default function Home() {
       if (typeKey !== null && normalizeMaterialType(m.materialType) !== typeKey)
         return false;
       if (textureFilter !== ALL && m.texture !== textureFilter) return false;
+      if (
+        effectFilter !== ALL &&
+        !effectKindsOf(resolveAppearance(m.color, m.texture).spec).includes(
+          effectFilter as ColorEffectKind
+        )
+      )
+        return false;
       if (manufacturerFilter !== ALL && m.manufacturer !== manufacturerFilter)
         return false;
       if (boxFilter === NO_BOX && m.storageBoxId != null) return false;
@@ -397,6 +427,8 @@ export default function Home() {
     search,
     typeFilter,
     textureFilter,
+    effectFilter,
+    resolveAppearance,
     manufacturerFilter,
     boxFilter,
     onlyLowStock,
@@ -476,6 +508,12 @@ export default function Home() {
       label: textureFilter,
       clear: () => setTextureFilter(ALL),
     });
+  if (effectFilter !== ALL)
+    activeFilters.push({
+      key: "effect",
+      label: t.appearance.effectKinds[effectFilter as ColorEffectKind],
+      clear: () => setEffectFilter(ALL),
+    });
   if (manufacturerFilter !== ALL)
     activeFilters.push({
       key: "manufacturer",
@@ -550,6 +588,24 @@ export default function Home() {
               {textures.map(value => (
                 <SelectItem key={value} value={value}>
                   {value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      {effectKinds.length > 0 && (
+        <div className="grid gap-2">
+          <Label htmlFor="f-effect">{t.appearance.effectFilter}</Label>
+          <Select value={effectFilter} onValueChange={setEffectFilter}>
+            <SelectTrigger id="f-effect" className="w-full min-w-0">
+              <SelectValue placeholder={t.appearance.effectFilter} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>{t.appearance.allEffects}</SelectItem>
+              {effectKinds.map(kind => (
+                <SelectItem key={kind} value={kind}>
+                  {t.appearance.effectKinds[kind]}
                 </SelectItem>
               ))}
             </SelectContent>

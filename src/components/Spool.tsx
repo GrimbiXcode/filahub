@@ -1,5 +1,10 @@
 import { useId, type CSSProperties } from "react";
-import type { ResolvedColorSpec, TextureKind } from "@contracts/appearance";
+import {
+  effectKindsOf,
+  type ResolvedColorSpec,
+  type TextureKind,
+} from "@contracts/appearance";
+import { EFFECT_ICONS } from "@/lib/effectIcons";
 import { colorFace, faceInk } from "./colorFace";
 import { hatchDefs } from "./textures";
 import { fillLevelStroke } from "@/lib/format";
@@ -31,12 +36,22 @@ import { cn } from "@/lib/utils";
 const CORE_INSET = 12 - 36 / 5;
 
 /** Umfang des Füllrings – Radius 52 im 120er-Raum. */
+/**
+ * Die Zeichen der Wirkungen (seit 4.8.0) sitzen oben rechts am Rand der
+ * Spule, wie Aufkleber. Unter 56 Pixeln Kantenlänge wären es Krümel; dort
+ * sagt es nur die Beschriftung.
+ */
+const BADGE_MIN_SIZE = 56;
+/** Höchstens so viele Zeichen; ab dem nächsten steht „+n“ */
+const BADGES_MAX = 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * 52;
 
 export function Spool({
   hex,
   kind,
   spec,
+  glow,
+  effectsFrom,
   percent,
   label,
   size = 72,
@@ -48,6 +63,14 @@ export function Spool({
   kind: TextureKind;
   /** Farbbild (seit 4.7.0): mehrere Farben, Partikelfarben */
   spec?: ResolvedColorSpec | null;
+  /** Leuchtfarbe, wenn das Stück in der gezeigten Ansicht leuchtet (4.8.0) */
+  glow?: string | null;
+  /**
+   * Woher die Zeichen der Wirkungen kommen, wenn nicht aus `spec` – in der
+   * Vorschau unter UV zeigt `spec` die Zielfarbe ohne Wirkungen, die Zeichen
+   * beschreiben aber das Material und bleiben stehen.
+   */
+  effectsFrom?: ResolvedColorSpec | null;
   /** Füllstand 0–100, `null` ohne Nennmenge */
   percent: number | null;
   /** Für Hilfstechnik – die Spule ersetzt die Wörter nicht */
@@ -109,7 +132,7 @@ export function Spool({
       <g clipPath={`url(#${uid}-core)`}>
         {hex ? (
           <g transform="scale(5)">
-            {colorFace({ hex, kind, spec, uid, inset: CORE_INSET })}
+            {colorFace({ hex, kind, spec, uid, inset: CORE_INSET, glow })}
           </g>
         ) : (
           <>
@@ -149,6 +172,66 @@ export function Spool({
           {Math.round(percent)} %
         </text>
       )}
+      {size >= BADGE_MIN_SIZE && <EffectBadges spec={effectsFrom ?? spec} />}
     </svg>
+  );
+}
+
+/**
+ * Die Zeichen der Wirkungen, senkrecht am rechten oberen Rand. Nur zur
+ * Orientierung – was sie bedeuten, steht in der Beschriftung der Spule, und
+ * die Zeichen selbst sind für Hilfstechnik verborgen.
+ */
+function EffectBadges({ spec }: { spec?: ResolvedColorSpec | null }) {
+  const kinds = effectKindsOf(spec);
+  if (kinds.length === 0) return null;
+  const shown =
+    kinds.length > BADGES_MAX ? kinds.slice(0, BADGES_MAX - 1) : kinds;
+  const rest = kinds.length - shown.length;
+  return (
+    <g aria-hidden="true">
+      {shown.map((kind, index) => {
+        const Icon = EFFECT_ICONS[kind];
+        const cy = 13 + index * 27;
+        return (
+          <g key={kind}>
+            <circle
+              cx="107"
+              cy={cy}
+              r="12"
+              className="fill-background stroke-border"
+              strokeWidth="1.5"
+            />
+            <Icon
+              x={107 - 8}
+              y={cy - 8}
+              width={16}
+              height={16}
+              strokeWidth={2.5}
+              className="text-foreground"
+            />
+          </g>
+        );
+      })}
+      {rest > 0 && (
+        <g>
+          <circle
+            cx="107"
+            cy={13 + shown.length * 27}
+            r="12"
+            className="fill-background stroke-border"
+            strokeWidth="1.5"
+          />
+          <text
+            x="107"
+            y={13 + shown.length * 27 + 4}
+            textAnchor="middle"
+            className="fill-foreground font-mono text-[11px] font-semibold"
+          >
+            +{rest}
+          </text>
+        </g>
+      )}
+    </g>
   );
 }

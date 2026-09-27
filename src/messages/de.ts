@@ -712,6 +712,7 @@ export const de = {
     colorsLabel: "Farben",
     colorStopLabel: (vars: { n: number }) => `Farbe ${vars.n}`,
     colorStopName: "Name (optional)",
+    colorStopNameLabel: (vars: { n: number }) => `Name der Farbe ${vars.n}`,
     addColorStop: "Farbe hinzufügen",
     removeColorStop: (vars: { n: number }) => `Farbe ${vars.n} entfernen`,
     moveColorStopUp: (vars: { n: number }) => `Farbe ${vars.n} nach vorn`,
@@ -738,6 +739,58 @@ export const de = {
     labelColorCount: (vars: { count: number }) => `${vars.count} Farben`,
     labelAnd: "und",
     labelUnknownPart: "unbekannt",
+    conditions: {
+      normal: "Normal",
+      uv: "UV",
+      heat: "Wärme",
+      dark: "Dunkel",
+      blacklight: "Schwarzlicht",
+    },
+    conditionsAria: "Ansicht unter Einwirkung",
+    effectsLabel: "Wirkungen",
+    effectsHint:
+      "Wie sich die Farbe unter Einwirkung ändert – als Zeichen an der Spule und in der Vorschau auf Material- und Rollenseite.",
+    effectKinds: {
+      photochromic: "UV / Sonnenlicht",
+      thermochromic: "Wärme",
+      phosphorescent: "Nachleuchtend",
+      fluorescent: "Schwarzlicht / Neon",
+      goniochromic: "Blickwinkel (Chamäleon)",
+      infrared: "Infrarot",
+      other: "Sonstige",
+    },
+    effectKindLabel: "Art",
+    effectTo: "Farbe danach",
+    effectToName: "Name der Farbe danach (optional)",
+    effectThreshold: "Ab °C",
+    celsiusUnit: "°C",
+    effectNote: "Notiz (optional)",
+    addEffect: "Wirkung hinzufügen",
+    removeEffect: (vars: { n: number }) => `Wirkung ${vars.n} entfernen`,
+    effectFilter: "Wirkung",
+    allEffects: "Alle Wirkungen",
+    labelOtherColor: "einer anderen Farbe",
+    labelEffect: {
+      photochromic: (vars: { to: string; threshold: string | null }): string =>
+        `wechselt unter UV zu ${vars.to}`,
+      thermochromic: (vars: {
+        to: string;
+        threshold: string | null;
+      }): string =>
+        vars.threshold
+          ? `wechselt ab ${vars.threshold} zu ${vars.to}`
+          : `wechselt bei Wärme zu ${vars.to}`,
+      phosphorescent: (vars: {
+        to: string;
+        threshold: string | null;
+      }): string => `leuchtet im Dunkeln in ${vars.to}`,
+      fluorescent: (vars: { to: string; threshold: string | null }): string =>
+        `leuchtet unter Schwarzlicht in ${vars.to}`,
+      goniochromic: (vars: { to: string; threshold: string | null }): string =>
+        `wechselt je nach Blickwinkel zu ${vars.to}`,
+      infrared: (): string => "reagiert auf Infrarot",
+      other: (): string => "mit besonderer Wirkung",
+    },
     setExactColorFor: (vars: { name: string }) =>
       `„${vars.name}“ genau festlegen`,
     labelColor: (vars: { color: string }) => `Farbe ${vars.color}`,

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   counterInk,
+  displayUnder,
   overlayInk,
   overlayInkFor,
   type ResolvedColorSpec,
@@ -102,7 +103,7 @@ type Region = {
   readonly shape: ReactNode;
 };
 
-export function colorFace({
+function faceBody({
   hex,
   kind,
   spec,
@@ -241,6 +242,72 @@ export function colorFace({
           </g>
         );
       })}
+    </>
+  );
+}
+
+/** Eine Farbe halb zu Weiß gemischt – die Mitte eines Leuchthofs */
+function towardWhite(hex: string): string {
+  const channel = (index: number) =>
+    parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16);
+  return (
+    "#" +
+    [0, 1, 2]
+      .map(index =>
+        Math.round(channel(index) + (255 - channel(index)) * 0.5)
+          .toString(16)
+          .padStart(2, "0")
+      )
+      .join("")
+  );
+}
+
+/**
+ * Die Fläche samt Muster – und, wenn das Stück unter der gezeigten Bedingung
+ * selbst leuchtet (seit 4.8.0: nachleuchtend im Dunkeln, fluoreszierend unter
+ * Schwarzlicht), ein Hof in der Leuchtfarbe darüber. Anders als die
+ * Oberfläche „Leuchtend“ (ein Ring in der Tinte, weil die Leuchtfarbe dort
+ * unbekannt ist) kennt ein Farbbild die echte Farbe des Leuchtens.
+ */
+export function colorFace({
+  glow,
+  ...face
+}: {
+  hex: string;
+  kind: TextureKind;
+  spec?: ResolvedColorSpec | null;
+  uid: string;
+  inset?: number;
+  /** Leuchtfarbe unter der gezeigten Bedingung, sonst nichts */
+  glow?: string | null;
+}): ReactNode {
+  /*
+    Eine Farbe, die mit dem Blickwinkel kippt, steht überall als weicher
+    Verlauf zur zweiten da – dieselbe Regel wie im Umschalter der Vorschau
+    (`displayUnder`), damit Regal und Vorschau nicht auseinanderlaufen.
+  */
+  const normal = glow ? null : displayUnder(face.hex, face.spec, "normal");
+  return (
+    <>
+      {faceBody(normal?.spec ? { ...face, spec: normal.spec } : face)}
+      {glow && (
+        <>
+          <defs>
+            <radialGradient id={`${face.uid}-halo`} cx="50%" cy="50%" r="60%">
+              {/* Die Mitte heller als die Leuchtfarbe – sonst sähe ein
+                  Neon unter Schwarzlicht aus wie am Tag. */}
+              <stop
+                offset="0%"
+                stopColor={towardWhite(glow)}
+                stopOpacity="0.95"
+              />
+              <stop offset="55%" stopColor={glow} stopOpacity="0.6" />
+              <stop offset="100%" stopColor={glow} stopOpacity="0.25" />
+            </radialGradient>
+          </defs>
+          <rect width="24" height="24" fill={`url(#${face.uid}-halo)`} />
+        </>
+      )}
     </>
   );
 }

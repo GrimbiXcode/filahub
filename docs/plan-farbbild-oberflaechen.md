@@ -2,8 +2,8 @@
 
 Stand: 4.5.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
 Ende); offen sind nur noch die Punkte unter „Offene Fragen“. **Phase A ist
-umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0), **Phase C** (4.7.0); RAL,
-D und E stehen aus.
+umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0), **Phase C** (4.7.0),
+**Phase D** (4.8.0); RAL und E stehen aus.
 
 ## Stand der Umsetzung
 
@@ -79,6 +79,26 @@ sobald die Quelle der Farbwerte geklärt ist (Entscheidung vom 27.09.2026:
   statt Ziehen.
 - **Der Regenbogen hört auf „Regenbogen“ und „Rainbow“**, nicht auf
   „Multicolor“ – das ist ein Schlüsselwort der Anordnung.
+
+**Phase D (4.8.0)** – Abweichungen und was der Entwurf offenließ:
+
+- **Die Wirkungsnotizen verließen den Server schon seit 4.7.0 nicht**
+  (Punkt 6 des Entwurfs war damit vorgezogen).
+- **Die Zeichen bleiben in jeder Ansicht stehen** (`effectsFrom`): Unter UV
+  zeigt die Spule die Zielfarbe ohne Wirkungen, die Zeichen beschreiben aber
+  das Material. In der ersten Fassung verschwanden sie.
+- **Die Mitte des Leuchthofs ist heller als die Leuchtfarbe** – sonst sah
+  Neon unter Schwarzlicht aus wie am Tag, weil die Leuchtfarbe dort die
+  Farbe selbst ist.
+- **Goniochrom als Verlauf überall**, nicht nur im Normalzustand der
+  Vorschau: `colorFace` wendet die Regel selbst an.
+- **Mitgeliefert** sind vier Neonfarben (fluoreszierend in ihrer eigenen
+  Farbe) und zwei nachleuchtende (`glowGreen`, `glowBlue`, Tagfarbe wie
+  „Natur“). „Nachleuchtend“ kam als Oberflächenname dazu.
+- **Material-Seite:** Wirkungen stehen in den Stammdaten als Zeile in Worten,
+  die Vorschau darunter – keine eigene Karte für eine optionale Angabe.
+- **Das Feld für die Schwelle** trägt die Einheit fest daneben; der
+  Platzhalter allein verschwand beim Tippen.
 
 ## Ziel
 

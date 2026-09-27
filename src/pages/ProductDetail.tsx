@@ -12,6 +12,7 @@ import {
 import { roleAllows } from "@contracts/organizations";
 import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { EffectPreview } from "@/components/EffectPreview";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
 import { PageHeader } from "@/components/PageHeader";
 import { PrintSettingsCard } from "@/components/PrintSettings";
@@ -51,7 +52,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { materialPath } from "@/const";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
-import { useAppearanceResolver, useSwatchLabel } from "@/lib/appearance";
+import {
+  useAppearanceResolver,
+  useEffectDescriptions,
+  useSwatchLabel,
+} from "@/lib/appearance";
 import { formKeys } from "@/lib/formKeyboard";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
@@ -77,6 +82,7 @@ export default function ProductDetail() {
   const role = useScopeRole();
   const resolveAppearance = useAppearanceResolver();
   const swatchLabel = useSwatchLabel();
+  const describeEffects = useEffectDescriptions();
   const [editOpen, setEditOpen] = useState(false);
 
   const { data: product, isLoading } = trpc.product.byId.useQuery(
@@ -109,6 +115,7 @@ export default function ProductDetail() {
   }
 
   const appearance = resolveAppearance(product.color, product.texture);
+  const effects = describeEffects(appearance.spec);
   const canEdit = roleAllows(role, "editor");
 
   return (
@@ -192,6 +199,20 @@ export default function ProductDetail() {
                   {t.materialDetail.texture}
                 </dt>
                 <dd>{product.texture ?? "–"}</dd>
+                {effects.length > 0 && (
+                  <>
+                    <dt className="text-muted-foreground">
+                      {t.appearance.effectsLabel}
+                    </dt>
+                    <dd>
+                      <ul className="space-y-0.5">
+                        {effects.map((text, index) => (
+                          <li key={index}>{text}</li>
+                        ))}
+                      </ul>
+                    </dd>
+                  </>
+                )}
                 {product.kind !== "powder" && (
                   <>
                     <dt className="text-muted-foreground">
@@ -219,6 +240,22 @@ export default function ProductDetail() {
                   </>
                 )}
               </dl>
+              {effects.length > 0 && (
+                <EffectPreview
+                  hex={appearance.hex}
+                  kind={appearance.kind}
+                  spec={appearance.spec}
+                  percent={null}
+                  label={swatchLabel(
+                    product.color,
+                    product.texture,
+                    appearance.hex,
+                    appearance.spec
+                  )}
+                  size={120}
+                  className="mt-4"
+                />
+              )}
             </CardContent>
           </Card>
         </div>

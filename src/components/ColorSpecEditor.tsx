@@ -1,4 +1,9 @@
-import { COLOR_LAYOUTS, type TextureKind } from "@contracts/appearance";
+import {
+  COLOR_LAYOUTS,
+  type ColorEffect,
+  type ColorEffectKind,
+  type TextureKind,
+} from "@contracts/appearance";
 import { ArrowUp, Plus, X } from "lucide-react";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { Spool } from "@/components/Spool";
@@ -15,11 +20,16 @@ import {
 import {
   canAddAccent,
   canAddColor,
+  canAddEffect,
+  freeEffectKinds,
+  newEffect,
+  withEffectKind,
   canRemoveColor,
   editorPreview,
   withLayout,
   type ColorEditorValue,
 } from "@/lib/colorSpecEditor";
+import { EFFECT_ICONS } from "@/lib/effectIcons";
 import { useT } from "@/lib/i18nContext";
 import { cn } from "@/lib/utils";
 
@@ -160,7 +170,7 @@ export function ColorSpecEditor({
               {multi && (
                 <>
                   <Input
-                    aria-label={`${t.appearance.colorStopLabel({ n })}, ${t.appearance.colorStopName}`}
+                    aria-label={t.appearance.colorStopNameLabel({ n })}
                     value={color.name}
                     onChange={e => setColor(index, { name: e.target.value })}
                     placeholder={t.appearance.colorStopName}
@@ -292,6 +302,158 @@ export function ColorSpecEditor({
             </Button>
           )}
         </div>
+      </fieldset>
+
+      <fieldset className="grid min-w-0 gap-3">
+        <legend className="mb-1 text-sm font-medium">
+          {t.appearance.effectsLabel}
+        </legend>
+        {!compact && (
+          <p className="text-xs text-muted-foreground">
+            {t.appearance.effectsHint}
+          </p>
+        )}
+        {value.effects.map((effect, index) => {
+          const n = index + 1;
+          const Icon = EFFECT_ICONS[effect.kind];
+          const setEffect = (next: ColorEffect) =>
+            onChange({
+              ...value,
+              effects: value.effects.map((e, i) => (i === index ? next : e)),
+            });
+          return (
+            <div
+              key={index}
+              className="grid min-w-0 gap-2 rounded-md border p-2"
+            >
+              <div className="flex min-w-0 items-center gap-2">
+                <Icon className="size-4 shrink-0 text-muted-foreground" />
+                <Select
+                  value={effect.kind}
+                  onValueChange={kind =>
+                    setEffect(withEffectKind(effect, kind as ColorEffectKind))
+                  }
+                >
+                  <SelectTrigger
+                    aria-label={t.appearance.effectKindLabel}
+                    className="min-w-0 flex-1"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {freeEffectKinds(value, effect.kind).map(kind => (
+                      <SelectItem key={kind} value={kind}>
+                        {t.appearance.effectKinds[kind]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  onClick={() =>
+                    onChange({
+                      ...value,
+                      effects: value.effects.filter((_, i) => i !== index),
+                    })
+                  }
+                  aria-label={t.appearance.removeEffect({ n })}
+                  title={t.appearance.removeEffect({ n })}
+                >
+                  <X className="size-4" />
+                </Button>
+              </div>
+              {effect.kind !== "infrared" && (
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <Input
+                    type="color"
+                    aria-label={t.appearance.effectTo}
+                    value={effect.to?.hex ?? "#000000"}
+                    onChange={e =>
+                      setEffect({
+                        ...effect,
+                        to: { ...effect.to, hex: e.target.value },
+                      })
+                    }
+                    className="h-9 w-12 shrink-0 p-1"
+                  />
+                  <Input
+                    aria-label={t.appearance.effectToName}
+                    placeholder={t.appearance.effectToName}
+                    value={effect.to?.name ?? ""}
+                    disabled={!effect.to}
+                    onChange={e =>
+                      effect.to &&
+                      setEffect({
+                        ...effect,
+                        to: {
+                          hex: effect.to.hex,
+                          ...(e.target.value ? { name: e.target.value } : {}),
+                        },
+                      })
+                    }
+                    className="min-w-0 flex-1 basis-40"
+                  />
+                  {effect.kind === "thermochromic" && (
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      aria-label={t.appearance.effectThreshold}
+                      placeholder={t.appearance.effectThreshold}
+                      value={effect.thresholdC ?? ""}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const next = { ...effect };
+                        if (raw === "") delete next.thresholdC;
+                        else next.thresholdC = Math.round(Number(raw));
+                        setEffect(next);
+                      }}
+                      className="w-24 shrink-0 font-mono"
+                    />
+                  )}
+                  {effect.kind === "thermochromic" && (
+                    // Die Einheit bleibt stehen, wenn der Platzhalter weicht.
+                    <span className="text-sm text-muted-foreground">
+                      {t.appearance.celsiusUnit}
+                    </span>
+                  )}
+                </div>
+              )}
+              {!compact && (
+                <Input
+                  aria-label={t.appearance.effectNote}
+                  placeholder={t.appearance.effectNote}
+                  value={effect.note ?? ""}
+                  maxLength={200}
+                  onChange={e => {
+                    const next = { ...effect };
+                    if (e.target.value) next.note = e.target.value;
+                    else delete next.note;
+                    setEffect(next);
+                  }}
+                />
+              )}
+            </div>
+          );
+        })}
+        {canAddEffect(value) && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-self-start"
+            onClick={() =>
+              onChange({
+                ...value,
+                effects: [...value.effects, newEffect(value)],
+              })
+            }
+          >
+            <Plus className="mr-1 size-4" /> {t.appearance.addEffect}
+          </Button>
+        )}
       </fieldset>
     </div>
   );

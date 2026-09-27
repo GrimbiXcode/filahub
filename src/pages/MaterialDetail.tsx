@@ -52,7 +52,7 @@ import { HistoryChart } from "@/components/HistoryChart";
 import { ProductGebindeList } from "@/components/ProductGebindeList";
 import { RecentPrints } from "@/components/RecentPrints";
 import { describeTrend } from "@/lib/trend";
-import { Spool } from "@/components/Spool";
+import { EffectPreview } from "@/components/EffectPreview";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
 import { trpc } from "@/lib/trpc";
@@ -356,7 +356,7 @@ export default function MaterialDetail() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
-              <Spool
+              <EffectPreview
                 size={140}
                 hex={swatch.hex}
                 kind={swatch.kind}
