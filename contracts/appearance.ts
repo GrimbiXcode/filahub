@@ -1,4 +1,10 @@
 import { z } from "zod";
+import {
+  BUILTIN_COLORS,
+  COMPOUND_BASE_WORDS,
+  DARKER_WORDS,
+  LIGHTER_WORDS,
+} from "./colorNames";
 
 /**
  * Farbe und Oberfläche als **Darstellung** statt als Text.
@@ -149,91 +155,12 @@ export function normalizeAppearanceName(raw: string): string {
 // Mitgelieferter Katalog
 // ---------------------------------------------------------------------------
 
-export type BuiltinColor = {
-  /** Stabile Kennung, unabhängig von den Namen – für Tests und Sortierung */
-  readonly key: string;
-  readonly hex: string;
-  /** Namen, unter denen dieser Eintrag gefunden wird; deutsch und englisch */
-  readonly names: readonly string[];
-};
-
-/**
- * Farben, die ohne Zutun erkannt werden.
- *
- * Die Auswahl folgt dem, was auf Filamentetiketten steht, nicht einer
- * Farbenlehre: „Naturweiß" und „Anthrazit" kommen vor, „Ultramarin" nicht. Die
- * Codes sind mittlere, gesättigte Vertreter ihres Namens – wer es genauer will,
- * legt sich die Farbe selbst an, und der eigene Eintrag schlägt diesen hier.
- *
- * Zu jedem Eintrag gehören der deutsche und der englische Name; die
- * Vergleichsform kommt aus `normalizeAppearanceName`, Akzente und
- * Groß-/Kleinschreibung müssen hier also nicht doppelt geführt werden.
- */
-export const BUILTIN_COLORS: readonly BuiltinColor[] = [
-  { key: "black", hex: "#1c1c1e", names: ["Schwarz", "Black"] },
-  /*
-    Kein „Weiss" neben „Weiß": Die Vergleichsform macht daraus ohnehin dasselbe,
-    ein zweiter Eintrag wäre nur eine Zeile, die niemand mehr nachzieht.
-  */
-  { key: "white", hex: "#f5f5f5", names: ["Weiß", "White"] },
-  {
-    key: "natural",
-    hex: "#e8e0cf",
-    names: ["Natur", "Naturweiß", "Natural"],
-  },
-  { key: "grey", hex: "#8a8a8f", names: ["Grau", "Grey", "Gray"] },
-  {
-    key: "darkGrey",
-    hex: "#3a3d42",
-    names: ["Anthrazit", "Dunkelgrau", "Anthracite", "Dark grey"],
-  },
-  {
-    key: "lightGrey",
-    hex: "#c6c6cb",
-    names: ["Hellgrau", "Light grey", "Light gray"],
-  },
-  { key: "silver", hex: "#b6bcc4", names: ["Silber", "Silver"] },
-  { key: "gold", hex: "#c8a02c", names: ["Gold", "Golden"] },
-  { key: "copper", hex: "#a45c33", names: ["Kupfer", "Copper"] },
-  { key: "bronze", hex: "#8a6a3d", names: ["Bronze"] },
-  { key: "red", hex: "#d02c2c", names: ["Rot", "Red"] },
-  {
-    key: "darkRed",
-    hex: "#8c1c22",
-    names: ["Dunkelrot", "Bordeaux", "Maroon"],
-  },
-  { key: "orange", hex: "#e8721c", names: ["Orange"] },
-  { key: "yellow", hex: "#e8c018", names: ["Gelb", "Yellow"] },
-  { key: "green", hex: "#2e9e46", names: ["Grün", "Green"] },
-  {
-    key: "lightGreen",
-    hex: "#7ec850",
-    names: ["Hellgrün", "Limette", "Light green", "Lime"],
-  },
-  {
-    key: "darkGreen",
-    hex: "#1d5c30",
-    names: ["Dunkelgrün", "Tannengrün", "Dark green"],
-  },
-  { key: "turquoise", hex: "#1fa8a0", names: ["Türkis", "Cyan", "Turquoise"] },
-  { key: "lightBlue", hex: "#4aa8e0", names: ["Hellblau", "Light blue"] },
-  { key: "blue", hex: "#2158c8", names: ["Blau", "Blue"] },
-  {
-    key: "darkBlue",
-    hex: "#16306e",
-    names: ["Dunkelblau", "Marineblau", "Dark blue", "Navy"],
-  },
-  { key: "purple", hex: "#7b3fb8", names: ["Violett", "Lila", "Purple"] },
-  { key: "magenta", hex: "#c02888", names: ["Magenta"] },
-  { key: "pink", hex: "#e878a8", names: ["Rosa", "Pink"] },
-  { key: "brown", hex: "#6f4a2e", names: ["Braun", "Brown"] },
-  { key: "beige", hex: "#d8c4a0", names: ["Beige", "Sand"] },
-  {
-    key: "clear",
-    hex: "#dfe6ea",
-    names: ["Transparent", "Klar", "Clear", "Glasklar"],
-  },
-];
+/*
+  Die Farben stehen seit 4.6.0 in `contracts/colorNames.ts` – mit dem
+  Farbwortschatz sind es zu viele Zeilen für diese Datei. Weitergereicht, damit
+  kein Aufrufer seinen Import ändern muss.
+*/
+export { BUILTIN_COLORS, type BuiltinColor } from "./colorNames";
 
 export type BuiltinTexture = {
   readonly kind: TextureKind;
@@ -410,22 +337,309 @@ export const EMPTY_APPEARANCE_CATALOG: AppearanceCatalog = {
   textures: new Map(),
 };
 
-export type ResolvedAppearance = {
+// ---------------------------------------------------------------------------
+// Farbwörter in längeren Namen (seit 4.6.0)
+// ---------------------------------------------------------------------------
+
+/*
+  Herstellerfarben sind fast immer ein Bild plus ein Farbwort: „Savanna
+  Yellow“, „Earth Brown“, „Charcoal Black“, „Tannengrün“. Bis 4.5.0 fand die
+  Auflösung nur den ganzen Namen, und all das blieb schraffiert.
+
+  Die Regel „ohne Farbcode wird nicht geraten“ gilt weiter, nur genauer: Ein
+  Ton entsteht ausschließlich aus einem Farbwort, das **im Namen steht**. Ein
+  Name ohne bekanntes Farbwort („Dawn Radiance“) bleibt schraffiert – kein
+  Hash, kein Zufall.
+
+  Die Stufen, die erste mit Treffer gewinnt:
+
+  1. ganzer Name im eigenen Katalog                → `custom`
+  2. ganzer Name im mitgelieferten Katalog        → `builtin`
+  5. längster bekannter Teilausdruck              → `word`
+  6. deutsches Kompositum über die Endung         → `word`
+
+  Die Lücken in der Zählung sind Absicht: Stufe 3 (RAL-Nummern) und Stufe 4
+  (zusammengesetzte Namen wie „Rot/Blau“) folgen, siehe
+  `docs/plan-farbbild-oberflaechen.md`. Die Nummern bleiben die des Plans,
+  damit Code und Plan dieselbe Sprache sprechen.
+*/
+
+/** Trennzeichen zwischen Wörtern eines Farbnamens */
+const WORD_SEPARATORS = /[\s\-_/+&|,;:.()[\]{}"'„“”‚‘’«»]+/;
+
+/** Längste Wortfolge, die als Farbname gesucht wird („Dark Slate Grey“) */
+const MAX_PHRASE_WORDS = 3;
+
+/** Anteil Weiß bzw. Schwarz, den ein Helligkeitswort beimischt */
+const LIGHTER_MIX = 0.4;
+const DARKER_MIX = 0.35;
+
+/**
+ * Mindestlänge des Worts **vor** einer erkannten Endung: „Himmelblau“ ja,
+ * „Brot“ nicht – dort bliebe nur „b“, und aus Brot würde Rot.
+ */
+const COMPOUND_MIN_PREFIX = 3;
+
+type Word = { readonly raw: string; readonly key: string };
+
+/**
+ * Zerlegt einen Namen in Wörter und merkt sich zu jedem die Schreibweise der
+ * Eingabe – die Oberfläche nennt das gefundene Wort so, wie es dasteht
+ * („Erkannt aus ‚Yellow‘“), nicht in der Vergleichsform.
+ */
+function splitWords(raw: string): Word[] {
+  return raw
+    .split(WORD_SEPARATORS)
+    .map(part => ({ raw: part, key: normalizeAppearanceName(part) }))
+    .filter(word => word.key.length > 0);
+}
+
+/** Vergleichsform eines Namens als Wortfolge: „Blau-Grün“ → „blau grun“ */
+function phraseKey(name: string): string {
+  return splitWords(name)
+    .map(word => word.key)
+    .join(" ");
+}
+
+type BuiltinWordEntry = { readonly hex: string; readonly weak: boolean };
+
+const BUILTIN_COLOR_BY_PHRASE = new Map<string, BuiltinWordEntry>(
+  BUILTIN_COLORS.flatMap(color =>
+    color.names.map(
+      name =>
+        [
+          phraseKey(name),
+          { hex: color.hex, weak: color.weak === true },
+        ] as const
+    )
+  )
+);
+
+/**
+ * Die Endungen, längste zuerst – „weiss“ vor „ss“ gäbe es nicht, aber
+ * „violett“ muss vor einem denkbaren „ett“ geprüft werden, und die Reihenfolge
+ * soll nicht davon abhängen, wie jemand die Liste sortiert.
+ */
+const COMPOUND_BASES: readonly (readonly [string, string])[] =
+  COMPOUND_BASE_WORDS.flatMap(word => {
+    const hex = BUILTIN_COLOR_BY_NAME.get(word);
+    return hex ? [[word, hex] as const] : [];
+  }).sort((a, b) => b[0].length - a[0].length);
+
+const LIGHTER = new Set(LIGHTER_WORDS);
+const DARKER = new Set(DARKER_WORDS);
+
+/** Mischt `hex` zum Anteil `share` mit `toward` – beides `#rrggbb` */
+function mixHex(hex: string, toward: string, share: number): string {
+  const channel = (value: string, index: number) =>
+    parseInt(value.slice(1 + index * 2, 3 + index * 2), 16);
+  return (
+    "#" +
+    [0, 1, 2]
+      .map(index => {
+        const from = channel(hex, index);
+        const mixed = Math.round(
+          from + (channel(toward, index) - from) * share
+        );
+        return mixed.toString(16).padStart(2, "0");
+      })
+      .join("")
+  );
+}
+
+/** Heller oder dunkler, wenn das Wort davor es sagt; sonst unverändert */
+function shade(hex: string, modifier: string | undefined) {
+  if (modifier && LIGHTER.has(modifier)) {
+    return { hex: mixHex(hex, INK_LIGHT, LIGHTER_MIX), shaded: true };
+  }
+  if (modifier && DARKER.has(modifier)) {
+    return { hex: mixHex(hex, INK_DARK, DARKER_MIX), shaded: true };
+  }
+  return { hex, shaded: false };
+}
+
+/** Die eigenen Einträge als Wortfolgen – je Katalog einmal gebaut */
+const customPhraseCache = new WeakMap<
+  ReadonlyMap<string, string>,
+  ReadonlyMap<string, string>
+>();
+
+function customByPhrase(
+  colors: ReadonlyMap<string, string>
+): ReadonlyMap<string, string> {
+  const cached = customPhraseCache.get(colors);
+  if (cached) return cached;
+  const built = new Map<string, string>();
+  for (const [nameKey, hex] of colors) {
+    const key = phraseKey(nameKey);
+    if (key && !built.has(key)) built.set(key, hex);
+  }
+  customPhraseCache.set(colors, built);
+  return built;
+}
+
+/**
+ * Woher ein Farbcode kommt. `word` heißt „aus einem Teil des Namens“ – der Ton
+ * ist dann ungefähr, und das Formular bietet an, ihn genau festzulegen.
+ */
+export type ColorSource = "custom" | "builtin" | "word";
+
+export type ResolvedColor = {
   /** `null` = kein Farbcode bekannt; die Anzeige fällt auf das Rückfallfeld */
-  hex: string | null;
-  kind: TextureKind;
+  readonly hex: string | null;
+  readonly source: ColorSource | null;
+  /** Das gefundene Farbwort in der Schreibweise der Eingabe, nur bei `word` */
+  readonly matched: string | null;
 };
 
-/** Farbcode zu einem Freitext-Farbnamen, eigene Einträge zuerst */
+const UNKNOWN_COLOR: ResolvedColor = { hex: null, source: null, matched: null };
+
+/**
+ * Stufe 5: der längste bekannte Teilausdruck, bei gleicher Länge eigene
+ * Einträge vor mitgelieferten, dann der **hinterste** – im Deutschen wie im
+ * Englischen steht das Farbwort am Ende („Earth Brown“, nicht „Brown Earth“).
+ * „Matte Dark Green“ findet so „Dark green“ und nicht bloß „Green“.
+ *
+ * Schwache Farbwörter (Transparent, Natur) zählen erst im zweiten Durchgang,
+ * wenn sonst nichts passt: „Red Transparent“ ist rot.
+ */
+function findColorWord(
+  words: readonly Word[],
+  catalog: AppearanceCatalog
+): ResolvedColor | null {
+  const own = customByPhrase(catalog.colors);
+  for (const allowWeak of [false, true]) {
+    for (
+      let length = Math.min(words.length, MAX_PHRASE_WORDS);
+      length > 0;
+      length--
+    ) {
+      for (const source of ["custom", "builtin"] as const) {
+        if (source === "custom" && allowWeak) continue;
+        for (let start = words.length - length; start >= 0; start--) {
+          const phrase = words.slice(start, start + length);
+          const key = phrase.map(word => word.key).join(" ");
+          const entry =
+            source === "custom"
+              ? own.get(key)
+              : (() => {
+                  const found = BUILTIN_COLOR_BY_PHRASE.get(key);
+                  return found && (allowWeak || !found.weak)
+                    ? found.hex
+                    : undefined;
+                })();
+          if (!entry) continue;
+          /*
+            Deckt die Wortfolge den ganzen Namen ab („Dark-Green“ statt „Dark
+            green“), ist es kein Teiltreffer, sondern nur eine andere
+            Schreibweise – dann auch keine Rückfrage im Formular.
+          */
+          if (length === words.length) {
+            return { hex: entry, source, matched: null };
+          }
+          const before = words[start - 1];
+          const shaded = shade(entry, before?.key);
+          const used = shaded.shaded ? [before, ...phrase] : phrase;
+          return {
+            hex: shaded.hex,
+            source: "word",
+            matched: used.map(word => word.raw).join(" "),
+          };
+        }
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Stufe 6: ein zusammengeschriebenes deutsches Wort mit einer Grundfarbe am
+ * Ende – „Himmelblau“, „Abendrot“, „Weißgold“. Steht davor ein
+ * Helligkeitswort („Dunkeltürkis“, „Pastellgrün“), wirkt es wie in Stufe 5.
+ * Hinterstes Wort zuerst, aus demselben Grund.
+ */
+function findCompoundWord(words: readonly Word[]): ResolvedColor | null {
+  for (let index = words.length - 1; index >= 0; index--) {
+    const word = words[index];
+    for (const [base, hex] of COMPOUND_BASES) {
+      if (!word.key.endsWith(base)) continue;
+      const prefix = word.key.slice(0, -base.length);
+      if (prefix.length < COMPOUND_MIN_PREFIX) continue;
+      return {
+        hex: shade(hex, prefix).hex,
+        source: "word",
+        matched: word.raw,
+      };
+    }
+  }
+  return null;
+}
+
+function computeColor(
+  color: string,
+  catalog: AppearanceCatalog
+): ResolvedColor {
+  const key = normalizeAppearanceName(color);
+  if (!key) return UNKNOWN_COLOR;
+  const own = catalog.colors.get(key);
+  if (own) return { hex: own, source: "custom", matched: null };
+  const builtin = BUILTIN_COLOR_BY_NAME.get(key);
+  if (builtin) return { hex: builtin, source: "builtin", matched: null };
+  const words = splitWords(color);
+  return (
+    findColorWord(words, catalog) ?? findCompoundWord(words) ?? UNKNOWN_COLOR
+  );
+}
+
+/*
+  Zwischenspeicher je Katalog: Die Übersicht fragt je Zeile und je Rendern,
+  die Wortsuche ist teurer als ein Nachschlagen. Geschlüsselt am Objekt der
+  eigenen Farben – ein neu geladener Katalog ist ein neues Objekt, der alte
+  Speicher fällt mit ihm weg. Die Obergrenze fängt das Formular ab, das bei
+  jedem Tastendruck einen neuen Namen fragt.
+*/
+const RESOLVED_CACHE_LIMIT = 2000;
+const resolvedCache = new WeakMap<
+  ReadonlyMap<string, string>,
+  Map<string, ResolvedColor>
+>();
+
+/** Farbcode samt Herkunft zu einem Freitext-Farbnamen, eigene Einträge zuerst */
+export function resolveColor(
+  color: string | null | undefined,
+  catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
+): ResolvedColor {
+  if (!color) return UNKNOWN_COLOR;
+  let cache = resolvedCache.get(catalog.colors);
+  if (!cache) {
+    cache = new Map();
+    resolvedCache.set(catalog.colors, cache);
+  }
+  const cached = cache.get(color);
+  if (cached) return cached;
+  const resolved = computeColor(color, catalog);
+  if (cache.size >= RESOLVED_CACHE_LIMIT) cache.clear();
+  cache.set(color, resolved);
+  return resolved;
+}
+
+/** Nur der Farbcode – für Aufrufer, die die Herkunft nicht brauchen */
 export function resolveColorHex(
   color: string | null | undefined,
   catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
 ): string | null {
-  if (!color) return null;
-  const key = normalizeAppearanceName(color);
-  if (!key) return null;
-  return catalog.colors.get(key) ?? BUILTIN_COLOR_BY_NAME.get(key) ?? null;
+  return resolveColor(color, catalog).hex;
 }
+
+export type ResolvedAppearance = {
+  /** `null` = kein Farbcode bekannt; die Anzeige fällt auf das Rückfallfeld */
+  hex: string | null;
+  kind: TextureKind;
+  /** Woher der Farbcode kommt; `null`, wenn es keinen gibt */
+  source: ColorSource | null;
+  /** Das gefundene Farbwort, nur bei `source === "word"` */
+  matched: string | null;
+};
 
 /**
  * Musterart zu einem Freitext-Oberflächennamen, eigene Einträge zuerst.
@@ -456,9 +670,12 @@ export function resolveAppearance(
   texture: string | null | undefined,
   catalog: AppearanceCatalog = EMPTY_APPEARANCE_CATALOG
 ): ResolvedAppearance {
+  const resolved = resolveColor(color, catalog);
   return {
-    hex: resolveColorHex(color, catalog),
+    hex: resolved.hex,
     kind: resolveTextureKind(texture, catalog),
+    source: resolved.source,
+    matched: resolved.matched,
   };
 }
 

@@ -125,6 +125,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
+                colorNames.ts (mitgelieferte Farben und Farbwortschatz),
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
@@ -801,8 +802,11 @@ als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
   mindestens 4,5:1, und es gibt keine Grundfarbe, auf der die Zeichnung
   verschwindet (weißer Glanzstrich auf weißem Filament). Abgesichert über ein
   Raster durch den ganzen Farbraum, ebenfalls in `api/appearance.test.ts`.
-- **Ohne Farbcode wird nicht geraten**, sondern ein schraffiertes Feld gezeigt.
-  Ein aus dem Namen gehashter Ton machte aus „Feuerrot“ irgendwann Grün.
+- **Ohne Farbwort wird nicht geraten**, sondern ein schraffiertes Feld gezeigt.
+  Ein aus dem Namen gehashter Ton machte aus „Feuerrot“ irgendwann Grün. Bis
+  4.5.0 hieß die Regel „ohne Farbcode“; seit 4.6.0 entsteht ein Ton auch aus
+  einem Farbwort, das **im Namen steht** („Yellow“ in „Savanna Yellow“) – nie
+  aus einem Namen ohne bekanntes Farbwort („Dawn Radiance“ bleibt schraffiert).
 - **Bei Freunden löst der Server auf** (`toFriendMaterial`), weil der Katalog des
   Betrachters die Farben des Freundes nicht kennt. `FriendMaterial` trägt dafür
   `colorHex` und `textureKind`; die festgenagelte Schlüsselmenge in
@@ -838,6 +842,44 @@ zwei Oberflächen zugleich) steht in `docs/plan-farbbild-oberflaechen.md`.
   Übersetzung. Die alten Faser-Namen („Carbon“, „CF“) treffen weiter.
 - `textureOverlay` nimmt seit 4.5.0 den Gegenton mit (Sprenkel in beiden
   Tönen, wie Stein ihn hat).
+
+### Farbwörter seit 4.6.0
+
+Herstellerfarben sind fast immer Bild plus Farbwort („Earth Brown“, „Charcoal
+Black“, „Tannengrün“). `resolveColor` (`contracts/appearance.ts`) findet das
+Farbwort, der Wortschatz steht in `contracts/colorNames.ts` (rund 150
+Einträge, deutsch und englisch). Stufen, die erste mit Treffer gewinnt: ganzer
+Name eigen → ganzer Name mitgeliefert → längster Teilausdruck → deutsches
+Kompositum über die Endung. Die Nummern im Code (1, 2, 5, 6) sind die des
+Plans; 3 (RAL) und 4 (zusammengesetzte Namen wie „Rot/Blau“) folgen.
+
+- **Längster Teilausdruck, bei gleicher Länge eigene Einträge vor
+  mitgelieferten, dann der hinterste** – das Farbwort steht im Deutschen wie
+  im Englischen am Ende. „Matte Dark Green“ findet „Dark green“.
+- **Schwache Farbwörter** (`weak: true`: Transparent, Klar, Natur) zählen in
+  einem längeren Namen nur, wenn sonst nichts passt – sonst wäre „Red
+  Transparent“ nach der Regel „hinterstes Wort“ klar statt rot.
+- **Die Endungssuche nimmt nur `COMPOUND_BASE_WORDS`**, deutsche Grundfarben,
+  und verlangt vor der Endung mindestens drei Buchstaben. Mit allen Namen
+  träfe das englische „Tan“ in „Sultan“, ohne Mindestlänge würde aus „Brot“
+  Rot. Beide Riegel sind in `api/appearance.test.ts` gegengeprüft.
+- **Helligkeitswörter** (`LIGHTER_WORDS`, `DARKER_WORDS`) direkt davor mischen
+  40 % Weiß bzw. 35 % Schwarz bei – nur, wenn die Kombination nicht selbst im
+  Katalog steht („Light pink“ ja, „Pastel pink“ gerechnet).
+- **Keine Oberflächenwörter im Wortschatz** (Stone, Galaxy, Silk …), sonst
+  färbte „Stone Grey“ steinfarben. Ein Test hält beide Listen auseinander
+  (Metalle ausgenommen – die sind beides).
+- **Herkunft kommt mit** (`ResolvedAppearance.source`, `matched`). Bei `word`
+  sagt das Materialformular „Erkannt aus ‚Yellow‘ – ungefähr“ und bietet an,
+  den Ton genau festzulegen (legt wie bisher eine eigene Farbe an, der
+  Farbwähler steht auf dem erkannten Ton). Die Übersicht zeigt keinen Hinweis.
+- **Zwischengespeichert** je Katalog (`WeakMap` am Objekt der eigenen Farben,
+  höchstens 2000 Namen) – die Übersicht fragt je Zeile und Rendern.
+- Freunde: Der Server löst mit derselben Funktion auf, `colorHex` kommt also
+  auch dort gefüllt an; `FriendMaterial` bekam kein Feld.
+- Die Zusicherung ist eine Tabelle echter Herstellerfarben samt Negativliste
+  in `api/appearance.test.ts` – wer Wortschatz oder Regel ändert, sieht dort,
+  was sich verschiebt.
 
 ## Namenslisten, die kein Compiler prüft
 

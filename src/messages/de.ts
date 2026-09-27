@@ -691,6 +691,10 @@ export const de = {
     invalidHex: "Bitte einen Farbcode wie #1a2b3c angeben",
     addColorFor: (vars: { name: string }) => `„${vars.name}“ hinterlegen`,
     unknownColor: "Für diese Farbe ist kein Farbcode hinterlegt",
+    recognizedColor: (vars: { word: string }) =>
+      `Erkannt aus „${vars.word}“ – der Farbton ist ungefähr`,
+    setExactColorFor: (vars: { name: string }) =>
+      `„${vars.name}“ genau festlegen`,
     labelColor: (vars: { color: string }) => `Farbe ${vars.color}`,
     labelColorUnknown: "Keine Farbe angegeben",
     labelTexture: (vars: { texture: string }) => `Oberfläche ${vars.texture}`,

@@ -200,10 +200,10 @@ describe("toFriendMaterial", () => {
   */
   it("löst Farbe und Oberfläche mit dem Katalog des Besitzers auf", () => {
     const eigene = toFriendMaterial(
-      materialRow({ color: "Signalrot", texture: "Wolkenschimmer" }),
+      materialRow({ color: "Morgenglanz", texture: "Wolkenschimmer" }),
       "Alex",
       {
-        colors: new Map([["signalrot", "#ff0000"]]),
+        colors: new Map([["morgenglanz", "#ff0000"]]),
         textures: new Map([["wolkenschimmer", "metallic"]]),
       }
     );
@@ -211,7 +211,7 @@ describe("toFriendMaterial", () => {
     expect(eigene.textureKind).toBe("metallic");
 
     const ohne = toFriendMaterial(
-      materialRow({ color: "Signalrot", texture: "Wolkenschimmer" }),
+      materialRow({ color: "Morgenglanz", texture: "Wolkenschimmer" }),
       "Alex"
     );
     expect(ohne.colorHex).toBeNull();

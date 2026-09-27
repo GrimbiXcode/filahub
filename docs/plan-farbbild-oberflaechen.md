@@ -2,7 +2,7 @@
 
 Stand: 4.5.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
 Ende); offen sind nur noch die Punkte unter „Offene Fragen“. **Phase A ist
-umgesetzt** (4.5.0), B bis E stehen aus.
+umgesetzt** (4.5.0), **Phase B ohne RAL** (4.6.0); RAL und C bis E stehen aus.
 
 ## Stand der Umsetzung
 
@@ -28,6 +28,26 @@ texture_kind: "carbon"`.
   sieben Grundfarben in beiden Farbschemata angesehen.
 - `COMMON_TEXTURES` führt „Faserverstärkt“ statt „Carbon“, dazu Satin,
   Gesprenkelt, Stein, Glitzer, Galaxy und Marmor.
+
+**Phase B (4.6.0), ohne RAL** – RAL (Stufe 3) kommt als eigener Schritt,
+sobald die Quelle der Farbwerte geklärt ist (Entscheidung vom 27.09.2026:
+„erst ohne RAL“). Abweichungen und was der Entwurf offenließ:
+
+- **Wortschatz in eigener Datei** `contracts/colorNames.ts`;
+  `contracts/appearance.ts` reicht `BUILTIN_COLORS` weiter. 27 → 150 Einträge.
+- **Schwache Farbwörter** (`weak`), im Entwurf nicht bedacht: Transparent,
+  Klar und Natur stehen auf Etiketten auch als Beschreibung. Ohne die Regel
+  wäre „Red Transparent“ klar statt rot.
+- **Eigene Einträge vor mitgelieferten bei gleicher Länge**, vor der Regel
+  „hinterstes Wort“: Wer „Savanne“ selbst angelegt hat, meint in „Savanne
+  Gelb“ seinen Eintrag.
+- **Deckt ein Teilausdruck den ganzen Namen ab** („Dark-Green“), gilt er als
+  ganzer Name (`builtin`/`custom`) und löst keine Rückfrage aus.
+- **Das Formular sagt „‚X‘ genau festlegen“** statt „hinterlegen“, wenn der
+  Ton erkannt wurde; der Farbwähler steht auf dem erkannten Ton. Gespeichert
+  wird wie bisher eine eigene Farbe – Stufe 1 schlägt danach die Wortsuche.
+- **Bis Phase C** ergibt „Rot/Blau“ über die Wortsuche Blau (hinterstes Wort),
+  nicht zwei Farben.
 
 ## Ziel
 

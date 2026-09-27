@@ -671,6 +671,10 @@ export const en: Messages = {
     invalidHex: "Please enter a colour code such as #1a2b3c",
     addColorFor: (vars: { name: string }) => `Add \u201c${vars.name}\u201d`,
     unknownColor: "No colour code stored for this colour",
+    recognizedColor: (vars: { word: string }) =>
+      `Recognised from \u201c${vars.word}\u201d \u2013 the shade is approximate`,
+    setExactColorFor: (vars: { name: string }) =>
+      `Set exact colour for \u201c${vars.name}\u201d`,
     labelColor: (vars: { color: string }) => `Colour ${vars.color}`,
     labelColorUnknown: "No colour given",
     labelTexture: (vars: { texture: string }) => `Finish ${vars.texture}`,

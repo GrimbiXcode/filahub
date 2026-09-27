@@ -276,8 +276,11 @@ export default function Home() {
   const appearanceFor = (
     m: MaterialOverview
   ): ResolvedAppearance & { label: string } => {
-    const { hex, kind } = resolveAppearance(m.color, m.texture);
-    return { hex, kind, label: swatchLabel(m.color, m.texture, hex) };
+    const resolved = resolveAppearance(m.color, m.texture);
+    return {
+      ...resolved,
+      label: swatchLabel(m.color, m.texture, resolved.hex),
+    };
   };
 
   const updateSettings = trpc.auth.updateSettings.useMutation({

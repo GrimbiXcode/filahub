@@ -73,6 +73,9 @@ const NEW_PRODUCT = "new";
 /** Übliche Netto-Füllmengen einer Spule in Gramm */
 const COMMON_NOMINAL_WEIGHTS = [250, 500, 750, 1000] as const;
 
+/** Ausgangston des Farbwählers, wenn aus dem Namen nichts erkannt wurde */
+const DEFAULT_NEW_HEX = "#3b82f6";
+
 /** Baut die Bezeichnung aus Hersteller + Typ + Farbe. */
 function buildAutoName(manufacturer: string, type: string, color: string) {
   return [manufacturer, type, color]
@@ -121,8 +124,13 @@ export function MaterialFormDialog({
   const [manufacturer, setManufacturer] = useState("");
   const [color, setColor] = useState("");
   const [texture, setTexture] = useState("");
-  /** Vorbelegung des Farbwählers, wenn eine Farbe noch nicht hinterlegt ist */
-  const [newHex, setNewHex] = useState("#3b82f6");
+  /*
+    Vorbelegung des Farbwählers, wenn eine Farbe nicht genau hinterlegt ist.
+    `null` = unberührt: Dann zeigt der Farbwähler den erkannten Ton („Savanna
+    Yellow“ → Gelb) als Ausgangspunkt, sonst die Vorgabe. Wer ihn anfasst,
+    behält seine Wahl, bis sich der Farbname ändert.
+  */
+  const [newHex, setNewHex] = useState<string | null>(null);
   const [lagerId, setLagerId] = useState<string>("");
   const [density, setDensity] = useState("");
   const [price, setPrice] = useState("");
@@ -170,6 +178,7 @@ export function MaterialFormDialog({
       setMaterialType(material?.materialType ?? "");
       setManufacturer(material?.manufacturer ?? "");
       setColor(material?.color ?? "");
+      setNewHex(null);
       setTexture(material?.texture ?? "");
       /*
         Beim Anlegen bleibt das Feld leer und `effectiveLagerId` unten setzt das
@@ -276,8 +285,17 @@ export function MaterialFormDialog({
     in den Unique-Index und käme als Fehlermeldung zurück. Das Feld daneben darf
     solange das Rückfallmuster zeigen; es fordert zu nichts auf.
   */
+  /*
+    Seit 4.6.0 auch dann, wenn der Ton nur aus einem Farbwort im Namen stammt
+    („Savanna Yellow“ → Gelb): Er ist dann ungefähr, und der Kasten bietet an,
+    ihn genau festzulegen – vorbelegt mit dem erkannten Ton.
+  */
   const needsColorCode =
-    !catalogPending && color.trim().length > 0 && appearance.hex == null;
+    !catalogPending &&
+    color.trim().length > 0 &&
+    (appearance.hex == null || appearance.source === "word");
+  const approximateColor = appearance.source === "word" && appearance.matched;
+  const pickerHex = newHex ?? appearance.hex ?? DEFAULT_NEW_HEX;
 
   const addColor = trpc.appearance.createColor.useMutation({
     onSuccess: () => {
@@ -837,7 +855,10 @@ export function MaterialFormDialog({
                       <AutocompleteInput
                         id="m-color"
                         value={color}
-                        onChange={setColor}
+                        onChange={value => {
+                          setColor(value);
+                          setNewHex(null);
+                        }}
                         suggestions={colorSuggestions}
                         placeholder={t.materialForm.colorPlaceholder}
                       />
@@ -866,13 +887,17 @@ export function MaterialFormDialog({
                 */
                     <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
                       <span className="text-xs text-muted-foreground">
-                        {t.appearance.unknownColor}
+                        {approximateColor
+                          ? t.appearance.recognizedColor({
+                              word: approximateColor,
+                            })
+                          : t.appearance.unknownColor}
                       </span>
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <Input
                           type="color"
                           aria-label={t.appearance.hexLabel}
-                          value={newHex}
+                          value={pickerHex}
                           onChange={e => setNewHex(e.target.value)}
                           className="h-9 w-12 shrink-0 p-1"
                         />
@@ -886,13 +911,19 @@ export function MaterialFormDialog({
                             addColor.mutate({
                               ...scope,
                               name: color.trim(),
-                              hex: newHex,
+                              hex: pickerHex,
                             })
                           }
                         >
                           {/* Lange Farbnamen kürzen statt den Kasten sprengen */}
                           <span className="truncate">
-                            {t.appearance.addColorFor({ name: color.trim() })}
+                            {approximateColor
+                              ? t.appearance.setExactColorFor({
+                                  name: color.trim(),
+                                })
+                              : t.appearance.addColorFor({
+                                  name: color.trim(),
+                                })}
                           </span>
                         </Button>
                       </div>
