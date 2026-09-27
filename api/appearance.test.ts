@@ -17,6 +17,8 @@ import {
   resolveAppearance,
   resolveColorHex,
   resolveTextureKind,
+  TEXTURE_KIND_CHOICES,
+  TEXTURE_KINDS,
   textureKindSchema,
   type AppearanceCatalog,
 } from "@contracts/appearance";
@@ -172,20 +174,92 @@ describe("Auflösung", () => {
   });
 
   it("hält eine unbekannte Oberfläche für „ohne Muster“", () => {
-    expect(resolveTextureKind("Sparkle")).toBe("plain");
+    expect(resolveTextureKind("Wolkenschimmer")).toBe("plain");
     expect(resolveTextureKind(null)).toBe("plain");
   });
 
   it("ordnet eine eigene Oberfläche einer mitgelieferten Musterart zu", () => {
+    const own = catalog({}, { wolkenschimmer: "silk" });
+    expect(resolveTextureKind("Wolkenschimmer", own)).toBe("silk");
+  });
+
+  it("lässt eine eigene Oberfläche den Katalog schlagen", () => {
     const own = catalog({}, { sparkle: "metallic" });
+    expect(resolveTextureKind("Sparkle")).toBe("sparkle");
     expect(resolveTextureKind("Sparkle", own)).toBe("metallic");
   });
 
   it("löst Farbe und Oberfläche in einem Zug auf", () => {
     expect(resolveAppearance("Rot", "Carbon")).toEqual({
       hex: "#d02c2c",
-      kind: "carbon",
+      kind: "fiber",
     });
+  });
+});
+
+describe("Musterarten seit 4.5.0", () => {
+  it("bietet jede Musterart genau einmal zur Auswahl an", () => {
+    expect([...TEXTURE_KIND_CHOICES].sort()).toEqual([...TEXTURE_KINDS].sort());
+    expect(new Set(TEXTURE_KIND_CHOICES).size).toBe(TEXTURE_KINDS.length);
+  });
+
+  it("kennt „carbon“ nicht mehr als Musterart", () => {
+    expect(textureKindSchema.safeParse("carbon").success).toBe(false);
+    expect(textureKindSchema.safeParse("fiber").success).toBe(true);
+  });
+
+  /*
+    Faserverstärkt ist mehr als Kohlefaser: Glas-, Aramid-, Basalt- und
+    Aluminiumfasern sehen im Regal gleich aus. Die alten Namen („Carbon“, „CF“)
+    müssen weiter treffen – sie stehen in bestehenden Materialien.
+  */
+  it("fasst alle Faserverstärkungen unter „Faserverstärkt“", () => {
+    for (const name of [
+      "Faserverstärkt",
+      "Carbon",
+      "CF",
+      "Kohlefaser",
+      "Glasfaser",
+      "GF",
+      "Aramid",
+      "Kevlar",
+      "Aluminiumfaser",
+      "Fibre reinforced",
+      "Glass fiber",
+    ]) {
+      expect(resolveTextureKind(name), name).toBe("fiber");
+    }
+  });
+
+  it("führt „Seidenmatt“ als Satin, nicht mehr als Matt", () => {
+    expect(resolveTextureKind("Seidenmatt")).toBe("satin");
+    expect(resolveTextureKind("Satin")).toBe("satin");
+    expect(resolveTextureKind("Matt")).toBe("matte");
+  });
+
+  it("erkennt Stein, Glitzer und Marmor", () => {
+    expect(resolveTextureKind("Stonefill")).toBe("speckle");
+    expect(resolveTextureKind("Gesprenkelt")).toBe("speckle");
+    expect(resolveTextureKind("Terrazzo")).toBe("speckle");
+    expect(resolveTextureKind("Galaxy")).toBe("sparkle");
+    expect(resolveTextureKind("Glitzer")).toBe("sparkle");
+    expect(resolveTextureKind("Marmor")).toBe("marble");
+    expect(resolveTextureKind("Marble")).toBe("marble");
+  });
+
+  it("ordnet verwandte Namen den vorhandenen Arten zu", () => {
+    expect(resolveTextureKind("Perlmutt")).toBe("silk");
+    expect(resolveTextureKind("Transluzent")).toBe("transparent");
+    expect(resolveTextureKind("Kork")).toBe("wood");
+    expect(resolveTextureKind("Bronzefill")).toBe("metallic");
+  });
+
+  it("zeichnet jede Musterart außer „plain“ über einen Katalognamen", () => {
+    const drawn = new Set(BUILTIN_TEXTURES.map(t => t.kind));
+    for (const kind of TEXTURE_KINDS) {
+      if (kind === "plain") continue;
+      expect(drawn.has(kind), kind).toBe(true);
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { roleAllows } from "@contracts/organizations";
 import {
-  TEXTURE_KINDS,
+  TEXTURE_KIND_CHOICES,
   normalizeHex,
   type TextureKind,
 } from "@contracts/appearance";
@@ -410,7 +410,7 @@ export default function Appearance() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {TEXTURE_KINDS.map(value => (
+                    {TEXTURE_KIND_CHOICES.map(value => (
                       <SelectItem key={value} value={value}>
                         {kindLabel(value)}
                       </SelectItem>

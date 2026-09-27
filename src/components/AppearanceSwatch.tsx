@@ -95,7 +95,7 @@ function ColorSwatch({
     <svg viewBox="0 0 24 24" className="h-full w-full" aria-hidden="true">
       <defs>{textureDefs(kind, uid, ink, counter)}</defs>
       <rect width="24" height="24" fill={hex} />
-      {textureOverlay(kind, uid, ink)}
+      {textureOverlay(kind, uid, ink, counter)}
     </svg>
   );
 }

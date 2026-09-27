@@ -1,8 +1,33 @@
 # Plan: Farbbild und neue Oberflächen
 
-Stand: 4.4.0. **Entwurf** – nichts davon ist umgesetzt. Die Grundsatzfragen
-sind entschieden (siehe „Entscheidungen“ am Ende); offen sind nur noch die
-Punkte unter „Offene Fragen“.
+Stand: 4.5.0. Die Grundsatzfragen sind entschieden (siehe „Entscheidungen“ am
+Ende); offen sind nur noch die Punkte unter „Offene Fragen“. **Phase A ist
+umgesetzt** (4.5.0), B bis E stehen aus.
+
+## Stand der Umsetzung
+
+**Phase A (4.5.0)** – Abweichungen vom Entwurf und was er offenließ:
+
+- **`TEXTURE_KIND_CHOICES`** für die Auswahl auf `/farben`: `TEXTURE_KINDS`
+  folgt dem Postgres-Enum, und dort hängen neue Werte hinten an – Satin stünde
+  sonst hinter Marmor statt zwischen Matt und Silk.
+- **Die Enum-Werte prüft `api/appearance.integration.test.ts`**, nicht
+  `api/postgres.integration.test.ts`: Letzterer führt nur Enum-**Namen**. Der
+  neue Test vergleicht die Werte der Datenbank mit `TEXTURE_KINDS` und legt
+  vor 0026 eine `carbon`-Zeile an. Gegengeprüft: Mit der von drizzle-kit
+  erzeugten Fassung scheitert er an `invalid input value for enum
+texture_kind: "carbon"`.
+- **`textureOverlay` bekommt den Gegenton** als vierten Parameter – der
+  Sprenkel zeichnet dunkle und helle Punkte zugleich.
+- **Die Sterne von `sparkle` liegen im Ring zwischen Nabe und Kernrand** –
+  der erste Entwurf hatte einen Stern in der Mitte, den die Nabe verdeckte.
+- **Test „jede Art hat Defs oder Overlay“ entfällt.** Er müsste
+  `src/components/textures.tsx` aus `api/` laden, das dortige TypeScript-Projekt
+  kennt kein JSX. Ersatz: Jede Art außer `plain` hat mindestens einen
+  Katalognamen (Unit-Test), und die Zeichnungen wurden für alle 13 Arten auf
+  sieben Grundfarben in beiden Farbschemata angesehen.
+- `COMMON_TEXTURES` führt „Faserverstärkt“ statt „Carbon“, dazu Satin,
+  Gesprenkelt, Stein, Glitzer, Galaxy und Marmor.
 
 ## Ziel
 
@@ -409,9 +434,11 @@ export const colorSpecSchema = z
     accents: z.array(specColorSchema).max(4).default([]),
     effects: z.array(colorEffectSchema).max(4).default([]),
   })
-  .superRefine(/* solid: genau 1 Farbe; coextruded: 2–4; gradient und
+  .superRefine(
+    /* solid: genau 1 Farbe; coextruded: 2–4; gradient und
      segmented: 2–8; jede Wirkungsart höchstens einmal; `to` Pflicht außer bei
-     infrared/other; thresholdC nur bei thermochromic */);
+     infrared/other; thresholdC nur bei thermochromic */
+  );
 ```
 
 - **Drei- und vierfarbig sind gleichwertig zu zweifarbig**: `coextruded`

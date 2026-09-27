@@ -183,6 +183,13 @@
       "when": 1790407292311,
       "tag": "0025_print_files",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790529441424,
+      "tag": "0026_texture_kinds",
+      "breakpoints": true
     }
   ]
 }

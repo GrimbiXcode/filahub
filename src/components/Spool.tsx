@@ -104,7 +104,9 @@ export function Spool({
         {hex && ink ? (
           <>
             <rect width="120" height="120" fill={hex} />
-            <g transform="scale(5)">{textureOverlay(kind, uid, ink)}</g>
+            <g transform="scale(5)">
+              {textureOverlay(kind, uid, ink, counterInk(ink))}
+            </g>
           </>
         ) : (
           <>

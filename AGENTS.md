@@ -809,6 +809,36 @@ als ein Feld: die Farbe als Fläche, die Oberfläche als Muster darüber
   `api/friendVisibility.test.ts` wurde dafür bewusst erweitert. Überall sonst
   löst der Browser auf – ein Katalogaufruf je Seite, nicht zwei Felder je Zeile.
 
+### Musterarten seit 4.5.0
+
+Vier neue Arten – `speckle` (gesprenkelt: Stein, Terrazzo), `sparkle`
+(glitzernd: Glitter, Galaxy), `marble` (marmoriert) und `satin` –, und
+`carbon` heißt `fiber` („Faserverstärkt“: Kohle-, Glas-, Aramid-, Basalt- und
+Aluminiumfasern). Der weitere Ausbau (Farbwörter, RAL, mehrfarbig, Wirkungen,
+zwei Oberflächen zugleich) steht in `docs/plan-farbbild-oberflaechen.md`.
+
+- **`TEXTURE_KINDS` ist die Reihenfolge des Postgres-Enums** und damit nicht
+  frei: Neue Werte nur ans Ende (`ALTER TYPE … ADD VALUE` hängt dort an).
+  Auswahllisten nehmen `TEXTURE_KIND_CHOICES`; ein Test prüft, dass darin jede
+  Art genau einmal steht, ein Integrationstest, dass der Enum der Datenbank
+  `TEXTURE_KINDS` gleicht.
+- **Die Migration `0026_texture_kinds.sql` ist von Hand geschrieben.**
+  drizzle-kit erkennt die Umbenennung eines Enum-Werts nicht und gießt die
+  Spalte über `text` in einen neu angelegten Typ um – das scheitert an jeder
+  vorhandenen `carbon`-Zeile. `RENAME VALUE` benennt nur im Katalog um. Der
+  Test „Migration 0026“ in `api/appearance.integration.test.ts` legt eine
+  solche Zeile vor 0026 an; mit der erzeugten Fassung wird er rot
+  (gegengeprüft).
+- **Die Streumuster haben feste Positionen** (`FIBERS`, `SPECKS`,
+  `SPARKLE_STARS` in `src/components/textures.tsx`), kein Zufall zur
+  Laufzeit – sonst flackerten sie. Und sie brauchen Elemente **in der Mitte**:
+  Die Spule zeigt vom 24er-Raum nur den Kreis um (12, 12) mit Radius 7,2, die
+  Nabe deckt die innersten 1,8 ab.
+- **„Seidenmatt“ steht bei `satin`**, nicht mehr bei `matte` – die wörtliche
+  Übersetzung. Die alten Faser-Namen („Carbon“, „CF“) treffen weiter.
+- `textureOverlay` nimmt seit 4.5.0 den Gegenton mit (Sprenkel in beiden
+  Tönen, wie Stein ihn hat).
+
 ## Namenslisten, die kein Compiler prüft
 
 Drei Stellen führen Tabellennamen **wörtlich**. Beim Umbenennen einer Tabelle
@@ -849,7 +879,9 @@ Sequenzen **nicht** mit; weil `db/schema.ts` sie namentlich führt, will
 drizzle-kit sie danach neu anlegen. Vorbild ist `0010_container_rename.sql` (23
 Objekte, gegen `pg_class` und `pg_constraint` abgeglichen). Die Probe, dass
 nichts fehlt: `npm run db:generate` muss danach eine **leere** Migration
-erzeugen.
+erzeugen. Dasselbe gilt für **Enum-Werte**: drizzle-kit ersetzt einen
+umbenannten Wert durch Löschen und Neuanlegen des Typs; von Hand steht dort
+`ALTER TYPE … RENAME VALUE` (Vorbild `0026_texture_kinds.sql`).
 
 ## Freunde und geteiltes Lager
 

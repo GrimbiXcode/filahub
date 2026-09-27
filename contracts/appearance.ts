@@ -29,6 +29,17 @@ import { z } from "zod";
  * laden.
  *
  * `plain` ist der Normalfall und keine Lücke: eine Farbe ohne Muster.
+ *
+ * **Die Reihenfolge ist die des Postgres-Enums** (`texture_kind` in
+ * `db/schema.ts`) und damit nicht frei: Neue Werte kommen nur ans Ende, weil
+ * `ALTER TYPE … ADD VALUE` sie dort anhängt. Für Auswahllisten gibt es
+ * deshalb eine eigene Reihenfolge, `TEXTURE_KIND_CHOICES`.
+ *
+ * `fiber` hieß bis 4.4.0 `carbon`. Kohlefaser ist nur eine von mehreren
+ * Verstärkungen; Glas-, Aramid-, Basalt- und Aluminiumfasern sehen im Regal
+ * gleich aus. Umbenannt in der von Hand geschriebenen Migration
+ * `0026_texture_kinds.sql` (`RENAME VALUE`), weil drizzle-kit eine Umbenennung
+ * nicht erkennt und den Typ neu anlegen würde.
  */
 export const TEXTURE_KINDS = [
   "plain",
@@ -36,15 +47,42 @@ export const TEXTURE_KINDS = [
   "glossy",
   "silk",
   "metallic",
-  "carbon",
+  "fiber",
   "transparent",
   "glow",
   "wood",
+  // seit 4.5.0
+  "speckle",
+  "sparkle",
+  "marble",
+  "satin",
 ] as const;
 
 export type TextureKind = (typeof TEXTURE_KINDS)[number];
 
 export const textureKindSchema = z.enum(TEXTURE_KINDS);
+
+/**
+ * Die Musterarten in der Reihenfolge, in der eine Auswahl sie anbietet: erst
+ * die Glanzstufen von matt nach spiegelnd, dann Durchsicht und Leuchten,
+ * zuletzt die Strukturen. `api/appearance.test.ts` hält fest, dass jede Art
+ * genau einmal vorkommt – sonst fehlte eine still in der Verwaltung.
+ */
+export const TEXTURE_KIND_CHOICES: readonly TextureKind[] = [
+  "plain",
+  "matte",
+  "satin",
+  "silk",
+  "glossy",
+  "metallic",
+  "transparent",
+  "glow",
+  "fiber",
+  "wood",
+  "speckle",
+  "sparkle",
+  "marble",
+];
 
 // ---------------------------------------------------------------------------
 // Farbcode
@@ -211,14 +249,131 @@ export type BuiltinTexture = {
  * `api/appearance.test.ts` nagelt das fest.
  */
 export const BUILTIN_TEXTURES: readonly BuiltinTexture[] = [
-  { kind: "matte", names: ["Matt", "Matte", "Seidenmatt"] },
+  { kind: "matte", names: ["Matt", "Matte"] },
+  /*
+    „Seidenmatt“ stand bis 4.4.0 bei `matte`. Es ist die wörtliche
+    Übersetzung von „Satin“ und gehört seit es die Art gibt dorthin.
+  */
+  {
+    kind: "satin",
+    names: ["Satin", "Seidenmatt", "Satiniert", "Satin finish"],
+  },
   { kind: "glossy", names: ["Glänzend", "Glanz", "Glossy", "Shiny"] },
-  { kind: "silk", names: ["Silk", "Seide", "Seidenglanz"] },
-  { kind: "metallic", names: ["Metallic", "Metallisch", "Metall", "Metal"] },
-  { kind: "carbon", names: ["Carbon", "Karbon", "Carbon fibre", "CF"] },
-  { kind: "transparent", names: ["Transparent", "Klar", "Clear"] },
+  {
+    kind: "silk",
+    names: ["Silk", "Seide", "Seidenglanz", "Perlmutt", "Pearl", "Pearlescent"],
+  },
+  {
+    kind: "metallic",
+    names: [
+      "Metallic",
+      "Metallisch",
+      "Metall",
+      "Metal",
+      "Metallfüllung",
+      "Bronzefill",
+      "Copperfill",
+    ],
+  },
+  /*
+    Faserverstärkt: alles, was eine Faser im Strang hat. Die Kürzel sind die
+    der Materialbezeichnungen (PLA-CF, PETG-GF, PA-AF) – wer sie als
+    Oberfläche einträgt, meint genau das.
+  */
+  {
+    kind: "fiber",
+    names: [
+      "Faserverstärkt",
+      "Faser",
+      "Carbon",
+      "Karbon",
+      "Kohlefaser",
+      "Carbonfaser",
+      "Glasfaser",
+      "Aramid",
+      "Aramidfaser",
+      "Kevlar",
+      "Basaltfaser",
+      "Aluminiumfaser",
+      "CF",
+      "GF",
+      "AF",
+      "Fibre reinforced",
+      "Fiber reinforced",
+      "Fibre",
+      "Fiber",
+      "Carbon fibre",
+      "Carbon fiber",
+      "Glass fibre",
+      "Glass fiber",
+      "Aramid fibre",
+      "Aramid fiber",
+      "Basalt fibre",
+      "Basalt fiber",
+      "Aluminium fibre",
+      "Aluminum fiber",
+    ],
+  },
+  {
+    kind: "transparent",
+    names: [
+      "Transparent",
+      "Klar",
+      "Clear",
+      "Transluzent",
+      "Translucent",
+      "Kristall",
+      "Crystal",
+    ],
+  },
   { kind: "glow", names: ["Leuchtend", "Glow", "Glow in the dark", "Neon"] },
-  { kind: "wood", names: ["Holzoptik", "Holz", "Wood"] },
+  {
+    kind: "wood",
+    names: ["Holzoptik", "Holz", "Wood", "Kork", "Cork", "Bambus", "Bamboo"],
+  },
+  /*
+    Gesprenkelt: matte, deckende Einsprengsel – Steinmehl, Granulat,
+    Farbpartikel (colorFabb stoneFill, Terrazzo, „Rock“-PLA).
+  */
+  {
+    kind: "speckle",
+    names: [
+      "Gesprenkelt",
+      "Stein",
+      "Steinoptik",
+      "Granit",
+      "Terrazzo",
+      "Konfetti",
+      "Speckled",
+      "Speckle",
+      "Stone",
+      "Stonefill",
+      "Granite",
+      "Sprinkle",
+      "Sprinkles",
+      "Rock",
+    ],
+  },
+  /*
+    Glitzernd: reflektierende Plättchen (Glimmer, Glitter). Galaxy ist
+    dieselbe Zeichnung – eine dunkle Grundfarbe mit Glitter darin.
+  */
+  {
+    kind: "sparkle",
+    names: [
+      "Glitzer",
+      "Glitzernd",
+      "Funkelnd",
+      "Galaxy",
+      "Galaxie",
+      "Sternenstaub",
+      "Sparkle",
+      "Glitter",
+      "Starlight",
+      "Stardust",
+    ],
+  },
+  { kind: "marble", names: ["Marmor", "Marmoriert", "Marble", "Marbled"] },
 ];
 
 // ---------------------------------------------------------------------------

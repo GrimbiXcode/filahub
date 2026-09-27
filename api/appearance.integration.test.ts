@@ -10,13 +10,19 @@
  * dem Material nichts antut.
  */
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { deleteUserAccount } from "./queries/account";
-import { getDb } from "./queries/connection";
+import { getDb, migrateDb } from "./queries/connection";
 import { upsertUser, findUserByUnionId } from "./queries/users";
+import { TEXTURE_KINDS } from "@contracts/appearance";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
-import { callerFor, closeDb, resetSchema } from "./test/integration-db";
+import {
+  callerFor,
+  closeDb,
+  migrateUntil,
+  resetSchema,
+} from "./test/integration-db";
 
 const db = () => getDb();
 
@@ -271,5 +277,84 @@ describe("Kontolöschung", () => {
     const textures = await db().select().from(schema.customTextures);
     expect(colors).toHaveLength(0);
     expect(textures).toHaveLength(0);
+  });
+});
+
+describe("Musterarten seit 4.5.0", () => {
+  it("nimmt die neuen Musterarten an", async () => {
+    for (const kind of ["speckle", "sparkle", "marble", "satin", "fiber"]) {
+      const created = await callerFor(anna).appearance.createTexture({
+        ...PERSONAL,
+        name: `Eigen ${kind}`,
+        kind: kind as "speckle",
+      });
+      expect(created?.kind).toBe(kind);
+    }
+  });
+
+  it("lehnt die alte Musterart „carbon“ ab", async () => {
+    await expect(
+      callerFor(anna).appearance.createTexture({
+        ...PERSONAL,
+        name: "Alt",
+        kind: "carbon" as "fiber",
+      })
+    ).rejects.toThrow();
+  });
+});
+
+/*
+  `0026_texture_kinds.sql` ist von Hand geschrieben: drizzle-kit hätte den Typ
+  gelöscht und neu angelegt, und der Rückguss wäre an jeder vorhandenen
+  `carbon`-Zeile gescheitert. Geprüft wird deshalb genau der Fall, an dem die
+  erzeugte Fassung zerbrochen wäre – eine eigene Oberfläche mit `carbon` im
+  Altbestand –, und zwar über denselben Weg wie in Produktion (`migrateDb`
+  wendet die ausstehende Migration an).
+*/
+describe("Migration 0026 – carbon wird fiber", () => {
+  beforeEach(async () => {
+    await migrateUntil(26);
+  }, 60_000);
+
+  afterAll(async () => {
+    await resetSchema();
+  }, 60_000);
+
+  it("benennt vorhandene Zeilen um und kennt die neuen Werte", async () => {
+    const user = await db().execute<{ id: string }>(sql`
+      INSERT INTO "users" ("unionId", "name") VALUES ('alt-1', 'Alt')
+      RETURNING "id"`);
+    const userId = Number(user.rows[0].id);
+    await db().execute(sql`
+      INSERT INTO "custom_textures" ("userId", "name", "nameKey", "kind")
+      VALUES (${userId}, 'Kohle', 'kohle', 'carbon'),
+             (${userId}, 'Seide', 'seide', 'silk')`);
+
+    await migrateDb();
+
+    const rows = await db()
+      .select({
+        name: schema.customTextures.name,
+        kind: schema.customTextures.kind,
+      })
+      .from(schema.customTextures)
+      .orderBy(schema.customTextures.name);
+    expect(rows).toEqual([
+      { name: "Kohle", kind: "fiber" },
+      { name: "Seide", kind: "silk" },
+    ]);
+
+    const values = await db().execute<{ value: string }>(sql`
+      SELECT unnest(enum_range(NULL::texture_kind))::text AS value`);
+    // Reihenfolge und Werte wie im Code – `ADD VALUE` hängt ans Ende an.
+    expect(values.rows.map(row => row.value)).toEqual([...TEXTURE_KINDS]);
+  });
+
+  it("läuft auf einer leeren Datenbank durch", async () => {
+    await migrateDb();
+    const count = await db().execute<{ c: string }>(
+      sql`SELECT count(*) AS c FROM "custom_textures"`
+    );
+    expect(count.rows[0].c).toBe("0");
   });
 });

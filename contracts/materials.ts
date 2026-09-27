@@ -291,13 +291,19 @@ export function lagerConfigIsValid(config: {
  */
 export const COMMON_TEXTURES = [
   "Matt",
+  "Satin",
   "Silk",
   "Glänzend",
   "Transparent",
   "Metallic",
   "Leuchtend",
   "Holzoptik",
-  "Carbon",
+  "Faserverstärkt",
+  "Gesprenkelt",
+  "Stein",
+  "Glitzer",
+  "Galaxy",
+  "Marmor",
 ] as const;
 
 // ---------------------------------------------------------------------------
