@@ -89,9 +89,12 @@ export function identifierNumber(
  * Vorlage, mit verschiedenen Vorlagen oder von Hand verändert sein.
  */
 function identifierChunks(identifier: string): (string | number)[] {
-  return [...identifier.trim().toLowerCase().matchAll(/\d+|\D+/g)].map(
-    chunk => (/\d/.test(chunk[0]) ? Number(chunk[0]) : chunk[0])
-  );
+  return [
+    ...identifier
+      .trim()
+      .toLowerCase()
+      .matchAll(/\d+|\D+/g),
+  ].map(chunk => (/\d/.test(chunk[0]) ? Number(chunk[0]) : chunk[0]));
 }
 
 /**
