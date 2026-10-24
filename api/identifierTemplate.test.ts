@@ -6,6 +6,7 @@ import {
   identifierTemplateSchema,
   nextIdentifier,
   nextIdentifiers,
+  compareIdentifiers,
   normalizeIdentifier,
   parseIdentifierTemplate,
 } from "@contracts/identifierTemplate";
@@ -128,5 +129,24 @@ describe("Kennung als Eingabe", () => {
     expect(identifierInputSchema.parse(" F01 ")).toBe("F01");
     expect(identifierInputSchema.parse("   ")).toBeNull();
     expect(identifierInputSchema.parse(null)).toBeNull();
+  });
+});
+
+describe("compareIdentifiers", () => {
+  it("sortiert Zahlen in der Kennung nach Wert, nicht nach Text", () => {
+    const list = ["ID: 1", "ID: 10", "ID: 11", "ID: 2", "ID: 3"];
+    const sorted = [...list].sort(compareIdentifiers);
+    expect(sorted).toEqual(["ID: 1", "ID: 2", "ID: 3", "ID: 10", "ID: 11"]);
+  });
+
+  it("kennt führende Nullen und Großschreibung nicht als Unterschied", () => {
+    expect(compareIdentifiers("F01", "f1")).toBe(0);
+    expect(compareIdentifiers("F02", "F10")).toBeLessThan(0);
+  });
+
+  it("vergleicht Textstücke wie bisher alphabetisch", () => {
+    expect(compareIdentifiers("A10", "B2")).toBeLessThan(0);
+    expect(compareIdentifiers("B2", "A10")).toBeGreaterThan(0);
+    expect(compareIdentifiers("Rolle 3", "Rolle 20")).toBeLessThan(0);
   });
 });

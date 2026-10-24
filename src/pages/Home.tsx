@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
+import { compareIdentifiers } from "@contracts/identifierTemplate";
 import {
   TOGGLEABLE_MATERIAL_COLUMNS,
   type MaterialColumn,
@@ -147,7 +148,14 @@ function compareBy(
   };
   switch (key) {
     case "identifier":
-      return text(a.identifier, b.identifier);
+      /*
+        Kennungen sind Nummern mit Rand: „ID: 2“ gehört vor „ID: 10“, was dem
+        Textvergleich entginge. Leere wie überall ans Ende.
+      */
+      if (!a.identifier && !b.identifier) return 0;
+      if (!a.identifier) return 1;
+      if (!b.identifier) return -1;
+      return compareIdentifiers(a.identifier, b.identifier);
     case "name":
       return text(a.name, b.name);
     case "percent":

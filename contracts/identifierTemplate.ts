@@ -83,6 +83,39 @@ export function identifierNumber(
 }
 
 /**
+ * Zerlegt eine Kennung in Text- und Zahlstücke – „ID: 10-a“ wird zu
+ * [„id: ", 10, „-a“]. Nur der Kennungsvergleich braucht das; die Vorlage spielt
+ * keine Rolle, weil sie im Vergleich nicht weiterhilft: Kennungen können ohne
+ * Vorlage, mit verschiedenen Vorlagen oder von Hand verändert sein.
+ */
+function identifierChunks(identifier: string): (string | number)[] {
+  return [...identifier.trim().toLowerCase().matchAll(/\d+|\D+/g)].map(
+    chunk => (/\d/.test(chunk[0]) ? Number(chunk[0]) : chunk[0])
+  );
+}
+
+/**
+ * Natürlicher Vergleich zweier Kennungen: Zahlstücke zählen als Zahlen, nicht
+ * als Text – „ID: 2“ steht vor „ID: 10“, nicht dahinter. Die Vorlage des Lagers
+ * braucht es dafür nicht: Jede Zahl in der Kennung wird so verglichen, auch die
+ * einer ohne Vorlage. Passt der Vergleich nicht weiter, entscheidet der Text.
+ */
+export function compareIdentifiers(a: string, b: string): number {
+  const chunksA = identifierChunks(a);
+  const chunksB = identifierChunks(b);
+  const length = Math.min(chunksA.length, chunksB.length);
+  for (let i = 0; i < length; i++) {
+    const x = chunksA[i];
+    const y = chunksB[i];
+    if (x === y) continue;
+    return typeof x === "number" && typeof y === "number"
+      ? x - y
+      : String(x).localeCompare(String(y));
+  }
+  return chunksA.length - chunksB.length;
+}
+
+/**
  * Die nächste freie Kennung nach der Vorlage: die kleinste Nummer ab 1, die
  * keine der vorhandenen Kennungen belegt. `null` bei ungültiger Vorlage.
  */
