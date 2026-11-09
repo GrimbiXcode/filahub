@@ -144,6 +144,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
 
     // Alphabetisch, wie die Abfrage sortiert.
     expect(withUserId).toEqual([
+      // Seit 4.7.0: API-Schlüssel gehören immer einer Person
+      "api_tokens",
       "audit_log",
       "container_types",
       "custom_colors",
@@ -171,6 +173,8 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "organization_invitations",
       "organization_members",
       "preset_proposals",
+      // Seit 4.7.0: Eingangsfach, Besitz wie beim Bestand
+      "print_imports",
       // Seit 4.2.0: Druckhistorie, Besitz wie beim Bestand
       "print_jobs",
       "storage_boxes",
@@ -224,6 +228,10 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "printJobLinks",
         "printJobFiles",
         "unblockRequests",
+        // Seit 4.7.0; `bridgePrinters` über den Schlüssel (Ausnahmeliste)
+        "printImports",
+        "apiTokens",
+        "bridgePrinters",
       ].sort()
     );
   });

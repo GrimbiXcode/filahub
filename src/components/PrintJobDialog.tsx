@@ -1,7 +1,15 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Check, ChevronsUpDown, Package, Plus, Trash2 } from "lucide-react";
+import {
+  Check,
+  ChevronsUpDown,
+  FileUp,
+  Package,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
+import { normalizeMaterialType } from "@contracts/materials";
 import {
   MAX_LINK_LENGTH,
   MAX_LINKS_PER_PRINT_JOB,
@@ -15,6 +23,12 @@ import {
   tagsOverLimit,
   type PrintJobStatus,
 } from "@contracts/printJobs";
+import {
+  SlicerFileError,
+  pickProductForFilament,
+  type SlicerFilament,
+  type SlicerJob,
+} from "@contracts/slicerMetadata";
 import { AutocompleteInput } from "@/components/AutocompleteInput";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,13 +64,19 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { printJobPath } from "@/const";
 import { useActiveScope } from "@/lib/activeScope";
+import { useAppearanceResolver } from "@/lib/appearance";
 import { useFormat } from "@/lib/formatContext";
 import { formKeys } from "@/lib/formKeyboard";
 import { useT } from "@/lib/i18nContext";
 import type { PrintJobPrefill } from "@/lib/quickActions";
+import { SLICER_FILE_ACCEPT, readSlicerUpload } from "@/lib/slicerFile";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import type { MaterialOverview, PrintJobDetail } from "@/types";
+import type {
+  MaterialOverview,
+  PrintImportEntry,
+  PrintJobDetail,
+} from "@/types";
 
 type Props = {
   open: boolean;
@@ -71,6 +91,8 @@ type Row = {
   productId: number | null;
   materialId: number | null;
   grams: string;
+  /** Was die Slicer-Datei zu dieser Zeile sagt – nur zur Anzeige */
+  fromFile?: SlicerFilament;
 };
 
 type LinkRow = { key: number; url: string; label: string };
@@ -82,6 +104,23 @@ const newKey = () => nextKey++;
 function toLocalInput(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/** Wörter in Kleinbuchstaben – für den Abgleich des Druckermodells */
+function words(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/**
+ * „MK4S“ aus dem G-Code → der schon benutzte Druckername, der das Modell als
+ * Wort enthält („Prusa MK4S Werkstatt“); sonst das Modell selbst.
+ */
+function printerFromModel(model: string, known: readonly string[]): string {
+  const key = model.toLowerCase();
+  return known.find(name => words(name).includes(key)) ?? model;
 }
 
 /**
@@ -123,12 +162,25 @@ export function PrintJobDialog({
   const [links, setLinks] = useState<LinkRow[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [notes, setNotes] = useState("");
+  /** Name der zuletzt übernommenen Slicer-Datei – für den Hinweis im Formular */
+  const [fileApplied, setFileApplied] = useState<string | null>(null);
+  const [readingFile, setReadingFile] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const resolveAppearance = useAppearanceResolver();
+  /**
+   * Ein Eintrag des Eingangsfachs, dessen Materialzeilen noch zugeordnet
+   * werden müssen – sobald Materialien und Gebinde geladen sind (unten).
+   */
+  const [pendingImport, setPendingImport] = useState<PrintImportEntry | null>(
+    null
+  );
+  const importItem = editing ? null : (prefill?.importItem ?? null);
 
   /* Beim Öffnen befüllen – während des Renderns, wie im Materialformular. */
   const formKey = open
     ? editing
       ? `edit-${editing.id}`
-      : `new-${prefill?.productId ?? ""}-${prefill?.materialId ?? ""}`
+      : `new-${prefill?.productId ?? ""}-${prefill?.materialId ?? ""}-${prefill?.importItem?.id ?? ""}`
     : null;
   const [applied, setApplied] = useState<string | null>(null);
   if (formKey !== applied) {
@@ -163,6 +215,21 @@ export function PrintJobDialog({
             }))
         );
         setNotes(editing.notes ?? "");
+        setPendingImport(null);
+      } else if (importItem) {
+        // Aus dem Eingangsfach: Kopf sofort, Materialzeilen nach dem Laden
+        setTitle(importItem.title);
+        setPrintedAt(toLocalInput(new Date(importItem.printedAt)));
+        setStatus(importItem.status);
+        const duration = importItem.durationMinutes;
+        setHours(duration != null ? String(Math.floor(duration / 60)) : "");
+        setMinutes(duration != null ? String(duration % 60) : "");
+        setPrinter(importItem.printer ?? "");
+        setTags("");
+        setLinks([]);
+        setRows([]);
+        setNotes("");
+        setPendingImport(importItem);
       } else {
         setTitle("");
         setPrintedAt(toLocalInput(new Date()));
@@ -181,11 +248,128 @@ export function PrintJobDialog({
           },
         ]);
         setNotes("");
+        setPendingImport(null);
       }
+      setFileApplied(null);
     }
   }
 
   const orphans = editing?.materials.filter(m => m.productId == null) ?? [];
+
+  /**
+   * Die Angaben einer Slicer-Datei eintragen (seit 4.7.0). Nur in leere
+   * Felder: Was jemand schon getippt hat, bleibt. Das Material ist ein
+   * Vorschlag (`pickProductForFilament`) und wird nur gesetzt, wenn er
+   * eindeutig ist; das Gebinde nur, wenn das Material genau eines in Gebrauch
+   * hat.
+   */
+  const applySlicerJob = (
+    job: Pick<
+      SlicerJob,
+      "title" | "durationMinutes" | "printerModel" | "filaments" | "fileName"
+    >,
+    options: { quiet?: boolean } = {}
+  ) => {
+    const resolveHex = (color: string | null) =>
+      resolveAppearance(color, null).hex;
+    const activeOf = (productId: number) =>
+      (allMaterials ?? []).filter(
+        m => m.productId === productId && m.archivedAt == null
+      );
+    const rowFor = (
+      filament: SlicerFilament,
+      keepProductId: number | null
+    ): Row => {
+      const productId =
+        keepProductId ??
+        pickProductForFilament(filament, products ?? [], resolveHex);
+      const active = productId != null ? activeOf(productId) : [];
+      return {
+        key: newKey(),
+        productId,
+        materialId: active.length === 1 ? active[0].id : null,
+        grams: String(filament.grams),
+        fromFile: filament,
+      };
+    };
+
+    if (!title.trim()) setTitle(job.title);
+    if (job.durationMinutes != null && !hours.trim() && !minutes.trim()) {
+      setHours(String(Math.floor(job.durationMinutes / 60)));
+      setMinutes(String(job.durationMinutes % 60));
+    }
+    if (job.printerModel && !printer.trim())
+      setPrinter(printerFromModel(job.printerModel, facets?.printers ?? []));
+
+    setRows(current => {
+      // Ein Material, eine Zeile ohne Gramm – etwa von der Material-Seite
+      // geöffnet: Das gewählte Material bleibt, die Gramm kommen dazu.
+      const [only] = current;
+      if (
+        job.filaments.length === 1 &&
+        current.length === 1 &&
+        only.grams.trim() === ""
+      ) {
+        const row = rowFor(job.filaments[0], only.productId);
+        return [
+          only.productId != null && only.materialId != null
+            ? { ...row, materialId: only.materialId }
+            : row,
+        ];
+      }
+      const kept = current.filter(
+        row => row.productId != null || row.grams.trim() !== ""
+      );
+      const room = MAX_MATERIALS_PER_PRINT_JOB - kept.length - orphans.length;
+      const next = [
+        ...kept,
+        ...job.filaments.slice(0, Math.max(0, room)).map(f => rowFor(f, null)),
+      ];
+      // Ohne Filamente bleibt eine leere Zeile zum Eintragen
+      return next.length > 0
+        ? next
+        : [{ key: newKey(), productId: null, materialId: null, grams: "" }];
+    });
+    setFileApplied(job.fileName);
+    if (job.filaments.length === 0 && !options.quiet)
+      toast.warning(t.prints.form.fromFileEmpty);
+  };
+
+  /* Eintrag des Eingangsfachs: zuordnen, sobald die Listen da sind */
+  if (pendingImport && products && allMaterials) {
+    setPendingImport(null);
+    applySlicerJob(
+      {
+        title: pendingImport.title,
+        durationMinutes: pendingImport.durationMinutes,
+        printerModel: null,
+        filaments: pendingImport.filaments,
+        fileName: pendingImport.title,
+      },
+      { quiet: true }
+    );
+  }
+
+  const onFilePicked = async (file: File | undefined) => {
+    if (!file) return;
+    setReadingFile(true);
+    try {
+      applySlicerJob(await readSlicerUpload(file));
+    } catch (error) {
+      toast.error(
+        error instanceof SlicerFileError
+          ? t.prints.form.fromFileErrors[error.code]
+          : t.prints.form.fromFileErrors.unexpected
+      );
+    } finally {
+      setReadingFile(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  };
+
+  const unassigned = fileApplied
+    ? rows.filter(row => row.fromFile && row.productId == null).length
+    : 0;
 
   const onSaved = (id: number, created: boolean) => {
     toast.success(created ? t.prints.created : t.prints.saved);
@@ -205,7 +389,15 @@ export function PrintJobDialog({
     onSuccess: () => editing && onSaved(editing.id, false),
     onError: e => toast.error(e.message),
   });
-  const pending = create.isPending || update.isPending;
+  const resolveImport = trpc.printImport.resolve.useMutation({
+    onSuccess: ({ id }) => {
+      utils.printImport.invalidate();
+      onSaved(id, true);
+    },
+    onError: e => toast.error(e.message),
+  });
+  const pending =
+    create.isPending || update.isPending || resolveImport.isPending;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -280,6 +472,8 @@ export function PrintJobDialog({
       materials,
     };
     if (editing) update.mutate({ ...data, id: editing.id });
+    else if (importItem)
+      resolveImport.mutate({ ...data, importId: importItem.id });
     else create.mutate(data);
   };
 
@@ -302,6 +496,43 @@ export function PrintJobDialog({
           <DialogDescription>{t.prints.form.description}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4" {...formKeys}>
+          {!editing && (
+            <div className="grid gap-1.5 rounded-md border border-dashed p-3">
+              <input
+                ref={fileInput}
+                type="file"
+                accept={SLICER_FILE_ACCEPT}
+                className="hidden"
+                onChange={e => void onFilePicked(e.target.files?.[0])}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="justify-self-start"
+                disabled={readingFile}
+                onClick={() => fileInput.current?.click()}
+              >
+                <FileUp className="mr-1.5 h-3.5 w-3.5" />
+                {readingFile
+                  ? t.prints.form.fromFileReading
+                  : t.prints.form.fromFile}
+              </Button>
+              <p className="text-xs wrap-anywhere text-muted-foreground">
+                {importItem && fileApplied === importItem.title
+                  ? t.prints.form.fromImportApplied
+                  : fileApplied
+                    ? t.prints.form.fromFileApplied({ name: fileApplied })
+                    : t.prints.form.fromFileHint}
+              </p>
+              {unassigned > 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  {t.prints.form.fromFileUnassigned({ count: unassigned })}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="grid gap-2">
             <Label htmlFor="pj-title">{t.prints.form.titleLabel}</Label>
             <Input
@@ -368,6 +599,15 @@ export function PrintJobDialog({
                     products={products ?? []}
                     onChange={patch => setRow(row.key, patch)}
                   />
+                  {row.fromFile && (
+                    <FileFilamentHint
+                      filament={row.fromFile}
+                      productType={
+                        products?.find(p => p.id === row.productId)
+                          ?.materialType ?? null
+                      }
+                    />
+                  )}
                 </div>
                 <Input
                   type="number"
@@ -582,6 +822,50 @@ export function PrintJobDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Was die Slicer-Datei zu einer Zeile sagt: Farbe, Materialart, Profil. Weicht
+ * die Materialart des gewählten Materials ab, steht das in Warnfarbe daneben –
+ * gewählt bleibt, was der Mensch gewählt hat.
+ */
+function FileFilamentHint({
+  filament,
+  productType,
+}: {
+  filament: SlicerFilament;
+  productType: string | null;
+}) {
+  const t = useT();
+  const fileType = filament.filamentType;
+  const mismatch =
+    fileType != null &&
+    productType != null &&
+    normalizeMaterialType(fileType) !== normalizeMaterialType(productType);
+  const parts = [filament.filamentType, filament.profileName].filter(
+    (part, i, all): part is string => part != null && all.indexOf(part) === i
+  );
+  return (
+    // Umbrechen statt abschneiden: Eine einzeilige Zeile gibt ihre volle
+    // Breite als Mindestbreite ans Raster weiter und schiebt den Dialog auf
+    // dem Telefon über den Rand.
+    <p className="mt-1 text-xs wrap-anywhere text-muted-foreground">
+      {filament.colorHex && (
+        <span
+          aria-hidden
+          className="mr-1.5 inline-block h-2.5 w-2.5 rounded-full border align-[-1px]"
+          style={{ backgroundColor: filament.colorHex }}
+        />
+      )}
+      {t.prints.form.fileFilamentLabel({ slot: filament.slot + 1 })}
+      {parts.length > 0 && ` · ${parts.join(" · ")}`}
+      {mismatch && (
+        <span className="ml-1.5 text-amber-600 dark:text-amber-400">
+          {t.prints.form.fileTypeMismatch({ type: fileType })}
+        </span>
+      )}
+    </p>
   );
 }
 

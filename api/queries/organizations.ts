@@ -1,5 +1,5 @@
 import { randomInt } from "node:crypto";
-import { and, asc, count, eq, inArray, ne, or } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, ne, or } from "drizzle-orm";
 import { CODE_ALPHABET, CODE_LENGTH, formatCode } from "@contracts/codes";
 import {
   JOIN_CODE_PREFIX,
@@ -8,6 +8,8 @@ import {
   type OrganizationRole,
 } from "@contracts/organizations";
 import {
+  apiTokens,
+  printImports,
   consumptions,
   lager,
   materialPrintSettings,
@@ -29,6 +31,8 @@ import {
 } from "@db/schema";
 import { getDb, type DbTransaction } from "./connection";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
+import { deleteApiTokens, deleteTokensOfMembership } from "./apiTokens";
+import { recordAudit } from "./audit";
 
 /**
  * Organisationen: gemeinsamer Bestand mehrerer Personen.
@@ -232,6 +236,16 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(customTextures)
     .where(eq(customTextures.organizationId, organizationId));
+
+  /*
+    Eingangsfach und API-Schlüssel (seit 4.7.0): Die Schlüssel gehören
+    Personen, zielen aber auf diese Organisation – ohne sie zeigte ihre
+    `organizationId` später auf eine neu vergebene ID.
+  */
+  await tx
+    .delete(printImports)
+    .where(eq(printImports.organizationId, organizationId));
+  await deleteApiTokens(tx, eq(apiTokens.organizationId, organizationId));
 
   await tx
     .delete(organizationInvitations)
@@ -439,11 +453,22 @@ export async function deleteOrganizationIfEmpty(
       .select({ value: count() })
       .from(printJobs)
       .where(eq(printJobs.organizationId, id));
+    /* Offene Einträge im Eingangsfach (seit 4.7.0) sind Drucke, die noch kommen */
+    const importRows = await tx
+      .select({ value: count() })
+      .from(printImports)
+      .where(
+        and(
+          eq(printImports.organizationId, id),
+          isNull(printImports.resolvedAt)
+        )
+      );
     const inside =
       Number(lagerRows.at(0)?.value ?? 0) +
       Number(containerRows.at(0)?.value ?? 0) +
       Number(boxRows.at(0)?.value ?? 0) +
-      Number(printRows.at(0)?.value ?? 0);
+      Number(printRows.at(0)?.value ?? 0) +
+      Number(importRows.at(0)?.value ?? 0);
     if (inside > 0) return { blockedBy: inside };
     await deleteOrganizationCascade(tx, id, removedKeys);
     return { blockedBy: null };
@@ -602,6 +627,26 @@ export async function changeMembership(
       await tx
         .delete(organizationMembers)
         .where(eq(organizationMembers.id, target.id));
+      /*
+        Mit der Mitgliedschaft enden ihre API-Schlüssel (seit 4.7.0). Sie
+        wirkten ohnehin nicht mehr – jeder Aufruf prüft die Mitgliedschaft –,
+        aber eine tote Vollmacht soll nicht in der Liste stehen bleiben.
+      */
+      const revoked = await deleteTokensOfMembership(
+        tx,
+        userId,
+        organizationId
+      );
+      for (const token of revoked)
+        recordAudit({
+          event: "api_token.revoked",
+          subjectUserId: userId,
+          detail: {
+            tokenId: token.id,
+            organizationId,
+            reason: "membership_ended",
+          },
+        });
     } else {
       await tx
         .update(organizationMembers)

@@ -52,6 +52,10 @@ export function gebindePath(id: number): string {
  * gewöhnlicher Link ist und ein Lesezeichen die Filter behält.
  */
 export const PRINTS_PATH = "/drucke";
+/** Eingangsfach (seit 4.7.0) – gemeldete Drucke zum Übernehmen */
+export const PRINT_IMPORTS_PATH = "/drucke/eingang";
+/** API-Schlüssel, PrusaSlicer-Skript und Drucker-Brücke (seit 4.7.0) */
+export const CONNECTIONS_PATH = "/verbindungen";
 
 export function printJobPath(id: number): string {
   return `${PRINTS_PATH}/${id}`;

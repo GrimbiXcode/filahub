@@ -603,6 +603,9 @@ gegen echte Beispieldateien.
 | 4.3.0   | Phase 4: Fotos und 3MF                                                                      | hoch – Dateien, Datenschutz             |
 | später  | 3MF auslesen, Telegram-Warnung (#17), Prusa-Anbindung (#41), Druckeinstellungen für Freunde |                                         |
 
+Die Prusa-Anbindung (#41) hat einen eigenen Plan:
+`docs/plan-prusa-integration.md`.
+
 Major-Version für Phase 1, weil sich Export-Format, Import-Semantik und die
 Bedeutung von „Material“ in der Oberfläche ändern. Jede Stufe mit englischer
 Release Note (`src/release-notes/AGENTS.md` beachten) und Versionssprung in

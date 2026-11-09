@@ -28,7 +28,7 @@ import {
   printJobs,
 } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
-import { getDb } from "./connection";
+import { getDb, type DbTransaction } from "./connection";
 import { lockProductInScope } from "./products";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 
@@ -248,9 +248,19 @@ function jobColumns(input: PrintJobInput) {
 export async function createPrintJob(
   scope: Scope,
   input: PrintJobInput,
-  assertRoom?: ConsumptionRoomCheck
+  assertRoom?: ConsumptionRoomCheck,
+  /**
+   * Läuft in derselben Transaktion – vor dem Anlegen (`before`, etwa um einen
+   * Eintrag des Eingangsfachs zu sperren) und danach mit der neuen ID
+   * (`after`). Wirft einer, wird nichts angelegt.
+   */
+  hooks?: {
+    before?: (tx: DbTransaction) => Promise<void>;
+    after?: (tx: DbTransaction, id: number) => Promise<void>;
+  }
 ): Promise<number> {
   return getDb().transaction(async tx => {
+    await hooks?.before?.(tx);
     const plans = planRows(input.materials);
     const names = await checkMaterialRows(tx, scope, plans);
     const [{ id }] = await tx
@@ -258,6 +268,7 @@ export async function createPrintJob(
       .values({ ...jobColumns(input), ...scopeOwner(scope) })
       .returning({ id: printJobs.id });
     await insertChildren(tx, id, input, plans, names, { assertRoom });
+    await hooks?.after?.(tx, id);
     return id;
   });
 }

@@ -6,6 +6,8 @@ on:
 
 env:
   IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/filahub
+  # Die Drucker-Brücke (seit 4.7.0) – eigenes, winziges Abbild aus bridge/
+  BRIDGE_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/filahub-bridge
 
 jobs:
   release:
@@ -100,4 +102,36 @@ jobs:
         with:
           subject-name: ${{ env.IMAGE_NAME }}
           subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      # Die Brücke mit denselben Tags wie die App. Ihr Startbefehl in der App
+      # nennt `:latest`; wer eine bestimmte Fassung will, nimmt die Version.
+      - name: Extract Docker metadata (Brücke)
+        id: bridge-meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.BRIDGE_IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push image (Brücke)
+        id: bridge-build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./bridge
+          push: true
+          tags: ${{ steps.bridge-meta.outputs.tags }}
+          labels: ${{ steps.bridge-meta.outputs.labels }}
+          cache-from: type=gha,scope=bridge
+          cache-to: type=gha,mode=max,scope=bridge
+          sbom: true
+          provenance: mode=max
+
+      - name: Herkunftsnachweis erzeugen (Brücke)
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4
+        with:
+          subject-name: ${{ env.BRIDGE_IMAGE_NAME }}
+          subject-digest: ${{ steps.bridge-build.outputs.digest }}
           push-to-registry: true

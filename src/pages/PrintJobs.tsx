@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router";
-import { History, Plus, Search, X } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router";
+import { History, Inbox, Plus, Search, X } from "lucide-react";
 import {
   PRINT_JOB_SEARCH_MIN_LENGTH,
   PRINT_JOB_STATUSES,
@@ -27,6 +27,7 @@ import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 import { useT } from "@/lib/i18nContext";
 import { quickActions } from "@/lib/quickActions";
 import { trpc } from "@/lib/trpc";
+import { PRINT_IMPORTS_PATH } from "@/const";
 
 /** „Alle“ im Select – Radix erlaubt keinen leeren Wert */
 const ANY = "__any";
@@ -52,6 +53,9 @@ function positiveInt(value: string | null): number | undefined {
 export default function PrintJobs() {
   const t = useT();
   const scope = useActiveScope();
+  const navigate = useNavigate();
+  const { data: openImportCount } = trpc.printImport.count.useQuery(scope);
+  const openImports = openImportCount ?? 0;
   const role = useScopeRole();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState(params.get("q") ?? "");
@@ -134,25 +138,39 @@ export default function PrintJobs() {
           title={t.prints.title}
           description={t.prints.description}
           actions={
-            roleAllows(role, "weigher") && (
-              <Button
-                className="flex-1 sm:flex-none"
-                onClick={() =>
-                  quickActions.openPrintJobForm(
-                    productId != null || gebinde
-                      ? {
-                          productId: gebinde?.productId ?? productId!,
-                          // Von einem aufgebrauchten Gebinde bucht niemand ab
-                          materialId:
-                            gebinde && !gebinde.archivedAt ? gebinde.id : null,
-                        }
-                      : null
-                  )
-                }
-              >
-                <Plus className="mr-2 h-4 w-4" /> {t.prints.add}
-              </Button>
-            )
+            <>
+              {openImports > 0 && (
+                <Button
+                  variant="outline"
+                  className="flex-1 sm:flex-none"
+                  onClick={() => navigate(PRINT_IMPORTS_PATH)}
+                >
+                  <Inbox className="mr-2 h-4 w-4" />
+                  {t.printImports.inboxLink({ count: openImports })}
+                </Button>
+              )}
+              {roleAllows(role, "weigher") && (
+                <Button
+                  className="flex-1 sm:flex-none"
+                  onClick={() =>
+                    quickActions.openPrintJobForm(
+                      productId != null || gebinde
+                        ? {
+                            productId: gebinde?.productId ?? productId!,
+                            // Von einem aufgebrauchten Gebinde bucht niemand ab
+                            materialId:
+                              gebinde && !gebinde.archivedAt
+                                ? gebinde.id
+                                : null,
+                          }
+                        : null
+                    )
+                  }
+                >
+                  <Plus className="mr-2 h-4 w-4" /> {t.prints.add}
+                </Button>
+              )}
+            </>
           }
         />
 

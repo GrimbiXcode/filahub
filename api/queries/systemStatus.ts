@@ -136,6 +136,9 @@ const COUNTED_TABLES = [
   "print_job_materials",
   "print_job_links",
   "print_job_files",
+  "print_imports",
+  "api_tokens",
+  "bridge_printers",
   "hidden_container_presets",
   "preset_proposals",
   /*

@@ -10,6 +10,7 @@ import { materialRouter } from "./materialRouter";
 import { organizationRouter } from "./organizationRouter";
 import { presetRouter } from "./presetRouter";
 import { printJobRouter } from "./printJobRouter";
+import { connectionRouter, printImportRouter } from "./printImportRouter";
 import { productRouter } from "./productRouter";
 import { containerTypeRouter } from "./containerTypeRouter";
 import { storageBoxRouter } from "./storageBoxRouter";
@@ -30,6 +31,8 @@ export const appRouter = createRouter({
   product: productRouter,
   /* Druckhistorie (seit 4.2.0) */
   print: printJobRouter,
+  printImport: printImportRouter,
+  connection: connectionRouter,
   appearance: appearanceRouter,
   friend: friendRouter,
   organization: organizationRouter,

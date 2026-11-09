@@ -48,6 +48,8 @@ import {
   SETTINGS_PATH,
   MATERIALS_PATH,
   PRINTS_PATH,
+  PRINT_IMPORTS_PATH,
+  CONNECTIONS_PATH,
 } from "@/const";
 import {
   Archive,
@@ -74,6 +76,8 @@ import {
   Sun,
   UserCog,
   Users,
+  Cable,
+  Inbox as InboxIcon,
 } from "lucide-react";
 import {
   type CSSProperties,
@@ -124,6 +128,7 @@ const menuItems: {
 }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
   { icon: History, label: "prints", path: PRINTS_PATH },
+  { icon: InboxIcon, label: "printInbox", path: PRINT_IMPORTS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Boxes, label: "lager", path: LAGER_PATH },
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },
@@ -131,6 +136,7 @@ const menuItems: {
   { icon: Palette, label: "appearance", path: APPEARANCE_PATH },
   { icon: Users, label: "friends", path: FRIENDS_PATH },
   { icon: Building2, label: "organizations", path: ORGANIZATIONS_PATH },
+  { icon: Cable, label: "connections", path: CONNECTIONS_PATH },
 ];
 
 /** Nur für Administratoren sichtbar; abgesichert wird serverseitig (adminQuery) */
@@ -320,6 +326,17 @@ function AuthLayoutContent({
     }
   );
   const pendingOrganizations = pendingInvitations ?? 0;
+  /*
+    Offene Einträge im Eingangsfach (seit 4.7.0) – je Bereich, deshalb mit
+    `scope` im Schlüssel; kürzerer `staleTime`, weil die Brücke jederzeit
+    etwas einliefern kann.
+  */
+  const activeScope = useActiveScope();
+  const { data: openImports } = trpc.printImport.count.useQuery(activeScope, {
+    staleTime: 1000 * 60,
+    retry: false,
+  });
+  const pendingImports = openImports ?? 0;
   const role = useScopeRole();
   const t = useT();
   const isCollapsed = state === "collapsed";
@@ -478,7 +495,9 @@ function AuthLayoutContent({
                     ? pendingFriends
                     : item.path === ORGANIZATIONS_PATH
                       ? pendingOrganizations
-                      : 0;
+                      : item.path === PRINT_IMPORTS_PATH
+                        ? pendingImports
+                        : 0;
                 return (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
@@ -489,7 +508,9 @@ function AuthLayoutContent({
                           ? t.nav[item.label]
                           : item.path === FRIENDS_PATH
                             ? t.nav.friendsPending({ count: badge })
-                            : t.nav.organizationsPending({ count: badge })
+                            : item.path === PRINT_IMPORTS_PATH
+                              ? t.nav.printInboxPending({ count: badge })
+                              : t.nav.organizationsPending({ count: badge })
                       }
                       className={`${railButton} font-normal`}
                     >

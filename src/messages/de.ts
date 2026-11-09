@@ -81,6 +81,10 @@ export const de = {
     settings: "Einstellungen",
     material: "Material",
     prints: "Drucke",
+    printInbox: "Eingangsfach",
+    printInboxPending: (vars: { count: number }) =>
+      `Eingangsfach (${vars.count} offen)`,
+    connections: "Verbindungen",
     weigh: "Wiegen",
     weighMaterial: "Gebinde wiegen",
     consume: "Verbrauch",
@@ -497,6 +501,29 @@ export const de = {
     notesLabel: "Notizen (Markdown)",
     notesPlaceholder:
       "z. B. erste Schicht langsam, Klebestift auf Glas, im Slicer-Profil „PolyTerra“",
+    prusa: {
+      importButton: "Aus PrusaSlicer",
+      exportButton: "Für PrusaSlicer",
+      exported:
+        "Profil heruntergeladen – in PrusaSlicer über „Datei → Importieren → Konfigurationspaket importieren“.",
+      exportHeader:
+        "Filamentprofil aus filahub.\nIn PrusaSlicer: Datei → Importieren → Konfigurationspaket importieren.",
+      profileLabel: "Profil aus der Datei",
+      unnamed: (vars: { number: number }) => `Profil ${vars.number}`,
+      importedFrom: (vars: { name: string }) =>
+        `Werte aus „${vars.name}“ eingetragen – bitte prüfen und speichern. Was das Profil nicht kennt, bleibt unverändert.`,
+      outOfRange: (vars: { fields: string }) =>
+        `Nicht übernommen, weil außerhalb des üblichen Bereichs: ${vars.fields}.`,
+      typeMismatch: (vars: { profile: string; material: string }) =>
+        `Das Profil ist für ${vars.profile}, das Material ist ${vars.material}.`,
+      takeDensity: (vars: { value: string }) =>
+        `Dichte ${vars.value} g/cm³ am Material übernehmen`,
+      errors: {
+        noFilament: "In der Datei steht kein Filamentprofil von PrusaSlicer.",
+        tooLarge: "Die Datei ist zu groß für ein Profil.",
+        unreadable: "Die Datei ließ sich nicht lesen.",
+      },
+    },
     short: {
       nozzle: "Düse",
       bed: "Bett",
@@ -1396,6 +1423,29 @@ export const de = {
         "Ändern sich Material, Gebinde, Gramm oder Datum, werden die Verbräuche beim Speichern neu gebucht.",
       orphanHint:
         "Das Material dieser Zeile gibt es nicht mehr. Die Zeile bleibt als Eintrag erhalten.",
+      fromFile: "Aus G-Code übernehmen",
+      fromFileReading: "Lese Datei …",
+      fromFileHint:
+        "G-Code oder Binär-G-Code von PrusaSlicer. Die Datei wird nur auf diesem Gerät gelesen und nicht hochgeladen.",
+      fromFileApplied: (vars: { name: string }) =>
+        `Aus „${vars.name}“ übernommen – bitte prüfen.`,
+      fromFileUnassigned: (vars: { count: number }) =>
+        vars.count === 1
+          ? "Eine Zeile braucht noch ein Material."
+          : `${vars.count} Zeilen brauchen noch ein Material.`,
+      fromFileEmpty: "In der Datei steht kein Filamentverbrauch.",
+      fromImportApplied:
+        "Aus dem Eingangsfach übernommen – bitte prüfen. Gespeichert wird ein gewöhnlicher Druck.",
+      fromFileErrors: {
+        unknown_format: "Die Datei ist kein G-Code von PrusaSlicer.",
+        no_metadata: "In der Datei stehen keine Angaben eines Slicers.",
+        corrupt: "Die Datei ist beschädigt oder unvollständig.",
+        unexpected: "Die Datei ließ sich nicht lesen.",
+      },
+      fileFilamentLabel: (vars: { slot: number }) =>
+        `Im G-Code: Filament ${vars.slot}`,
+      fileTypeMismatch: (vars: { type: string }) =>
+        `Im G-Code steht ${vars.type}.`,
     },
     saveAsPrint: "Als Druck speichern",
     saveAsPrintHint:
@@ -1403,6 +1453,235 @@ export const de = {
     printLinkLabel: "Link zum Modell (optional)",
   },
 
+  printImports: {
+    title: "Eingangsfach",
+    description:
+      "Drucke, die PrusaSlicer oder die Drucker-Brücke gemeldet haben. Übernimm sie als Druck – erst dann wird abgebucht.",
+    empty: "Nichts im Eingangsfach.",
+    emptyHint:
+      "Unter „Verbindungen“ richtest du das PrusaSlicer-Skript oder die Drucker-Brücke ein. Was sie melden, landet hier.",
+    toConnections: "Zu den Verbindungen",
+    source: { slicer: "Geslict", printer: "Gedruckt" },
+    sourceHint: {
+      slicer:
+        "Gemeldet von PrusaSlicer beim Export – ob wirklich gedruckt wurde, weißt nur du.",
+      printer: "Gemeldet vom Drucker über die Brücke.",
+    },
+    take: "Übernehmen",
+    dismiss: "Verwerfen",
+    dismissSelected: (vars: { count: number }) => `${vars.count} verwerfen`,
+    dismissed: (vars: { count: number }) =>
+      vars.count === 1
+        ? "Eintrag verworfen"
+        : `${vars.count} Einträge verworfen`,
+    selectAll: "Alle auswählen",
+    select: (vars: { title: string }) => `„${vars.title}“ auswählen`,
+    estimated: "geschätzt aus dem Fortschritt",
+    noGrams: "Keine Gramm bekannt – beim Übernehmen eintragen.",
+    progress: (vars: { percent: string }) => `abgebrochen bei ${vars.percent}`,
+    via: (vars: { name: string }) => `über „${vars.name}“`,
+    filament: (vars: { slot: number }) => `Filament ${vars.slot}`,
+    inboxLink: (vars: { count: number }) => `Eingangsfach (${vars.count})`,
+  },
+
+  connections: {
+    title: "Verbindungen",
+    description:
+      "Schlüssel für PrusaSlicer und die Drucker-Brücke. Ein Schlüssel darf nur Drucke ins Eingangsfach legen – nichts lesen und nichts ändern.",
+    add: "Neue Verbindung",
+    empty: "Noch keine Verbindung.",
+    emptyHint:
+      "Mit der Drucker-Brücke landen fertige Drucke deiner Prusa-Drucker von selbst im Eingangsfach. Mit dem PrusaSlicer-Skript jeder Export.",
+    kindLabel: "Was willst du verbinden?",
+    kinds: {
+      bridge: {
+        title: "Drucker-Brücke",
+        text: "Ein kleiner Docker-Container in deinem Netz meldet fertige Drucke deiner Prusa-Drucker (PrusaLink). Die Drucker richtest du danach hier ein.",
+      },
+      slicer: {
+        title: "PrusaSlicer",
+        text: "Ein Skript meldet nach jedem Export Gramm je Filament und Druckzeit.",
+      },
+    },
+    kindBadge: { bridge: "Brücke", slicer: "PrusaSlicer" },
+    nameLabel: "Name",
+    namePlaceholder: { bridge: "z. B. Werkstatt", slicer: "z. B. Laptop" },
+    create: "Schlüssel erzeugen",
+    createdTitle: "Fast fertig",
+    once: "Der Schlüssel steht nur jetzt im Klartext da. Kopiere den Befehl, bevor du das Fenster schließt.",
+    bridgeStep1:
+      "Auf einem Rechner in deinem Netz mit Docker ausführen – Raspberry Pi, NAS oder Server:",
+    bridgeStep2:
+      "Danach hier deine Drucker hinzufügen. Die Brücke holt sich die Einstellungen selbst, du musst am Container nichts mehr tun.",
+    copy: "Kopieren",
+    copied: "Kopiert",
+    slicerStep1: "Skript herunterladen und speichern, z. B. im Benutzerordner:",
+    downloadScript: "filahub-import.py herunterladen",
+    slicerStep2:
+      "Diese Datei anlegen. Adresse und Schlüssel stehen bewusst nicht in PrusaSlicer – PrusaSlicer schreibt seine Einstellungen in jeden G-Code und jedes Projekt.",
+    slicerPathUnix: "Linux und macOS: ~/.config/filahub/import.json",
+    slicerPathWindows: "Windows: %APPDATA%\\filahub\\import.json",
+    slicerStep3:
+      "In PrusaSlicer unter Druckeinstellungen → Ausgabeoptionen → Post-Processing-Skripte eintragen (Pfad anpassen):",
+    slicerNote:
+      "Gemeldet wird beim Export, nicht beim Drucken – ob gedruckt wurde, entscheidest du im Eingangsfach.",
+    done: "Fertig",
+    lastUsed: (vars: { when: string }) => `zuletzt benutzt ${vars.when}`,
+    neverUsed: "noch nie benutzt",
+    owner: (vars: { name: string }) => `von ${vars.name}`,
+    revoke: "Entziehen",
+    revokeTitle: "Schlüssel entziehen?",
+    revokeText:
+      "Wer ihn benutzt, wird ab sofort abgewiesen. Bei einer Brücke gehen auch ihre Drucker.",
+    revoked: "Schlüssel entzogen",
+    sectionBridges: "Drucker-Brücken",
+    sectionSlicer: "PrusaSlicer",
+    bridge: {
+      online: "Online",
+      offline: "Offline",
+      never: "Noch nie gemeldet",
+      neverHint:
+        "Läuft der Container? „docker logs filahub-bridge“ zeigt, was er meldet. Den Startbefehl mit Schlüssel gibt es nur beim Anlegen – wer ihn nicht mehr hat, legt eine neue Brücke an.",
+      offlineHint:
+        "Seit über anderthalb Minuten keine Meldung. Läuft der Container noch, und erreicht er diese Adresse?",
+      version: (vars: { version: string }) => `Brücke ${vars.version}`,
+      queued: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Druck wartet aufs Einliefern"
+          : `${vars.count} Drucke warten aufs Einliefern`,
+      lastSeen: (vars: { when: string }) => `zuletzt gemeldet ${vars.when}`,
+      addPrinter: "Drucker hinzufügen",
+      noPrinters:
+        "Noch kein Drucker. Füge einen hinzu – die Brücke übernimmt ihn beim nächsten Abholen und meldet hier, ob sie ihn erreicht.",
+      log: "Protokoll der Brücke",
+      logEmpty: "Keine Einträge.",
+    },
+    printer: {
+      addTitle: "Drucker hinzufügen",
+      editTitle: "Drucker bearbeiten",
+      description:
+        "Die Angaben stehen am Drucker unter Einstellungen → Netzwerk → PrusaLink. Die Brücke probiert sie gleich aus.",
+      nameLabel: "Name",
+      namePlaceholder: "z. B. MK4S",
+      hostLabel: "Adresse",
+      hostPlaceholder: "z. B. 192.168.1.50",
+      hostHint:
+        "Am besten die IP-Adresse – „.local“-Namen löst ein Container oft nicht auf.",
+      hostInvalid: "Bitte eine Adresse wie 192.168.1.50 angeben.",
+      hostPublic:
+        "Diese Adresse liegt nicht im lokalen Netz – die Brücke fragt nur Geräte im eigenen Netz an.",
+      authLabel: "Anmeldung",
+      auth: {
+        api_key: "API-Schlüssel",
+        digest: "Benutzer und Passwort",
+      },
+      authHint: {
+        api_key: "So melden sich MK4, MK3.9, Core One, XL und MINI an.",
+        digest:
+          "Für Drucker, die PrusaLink mit Benutzer (meist „maker“) und Passwort schützen.",
+      },
+      usernameLabel: "Benutzer",
+      secretLabel: { api_key: "API-Schlüssel", digest: "Passwort" },
+      secretKeep: "Leer lassen = unverändert",
+      secretUnreadable:
+        "Der gespeicherte Zugang ist nicht mehr lesbar – bitte neu eintragen.",
+      enabledLabel: "Diesen Drucker abfragen",
+      test: "Verbindung testen",
+      testing: "Test läuft …",
+      testQueued:
+        "Test angefordert – die Brücke antwortet in wenigen Sekunden.",
+      edit: "Bearbeiten",
+      remove: "Entfernen",
+      removeConfirm: (vars: { name: string }) => `„${vars.name}“ entfernen?`,
+      saved: "Drucker gespeichert",
+      removed: "Drucker entfernt",
+      paused: "pausiert",
+      checked: (vars: { when: string }) => `geprüft ${vars.when}`,
+      httpStatus: (vars: { status: number }) => `HTTP ${vars.status}`,
+      state: {
+        ok: "Verbunden",
+        pending: "Noch nicht geprüft",
+        invalid_host: "Adresse ungültig",
+        blocked_public: "Nicht im lokalen Netz",
+        dns_failed: "Name nicht auflösbar",
+        refused: "Verbindung abgelehnt",
+        timeout: "Keine Antwort",
+        unreachable: "Nicht erreichbar",
+        unauthorized: "Zugang abgelehnt",
+        not_prusalink: "Kein PrusaLink",
+        tls: "TLS-Fehler",
+        error: "Fehler",
+      },
+      help: {
+        ok: "",
+        pending:
+          "Die Brücke prüft den Drucker beim nächsten Abholen – alle paar Sekunden, solange sie läuft.",
+        invalid_host: "Bitte die Adresse prüfen, z. B. 192.168.1.50.",
+        blocked_public:
+          "Trag die Adresse im lokalen Netz ein (192.168.…, 10.…). Wer wirklich einen entfernten Drucker meint, startet die Brücke mit -e BRIDGE_ALLOW_PUBLIC=1.",
+        dns_failed:
+          "Den Namen kennt der Container nicht. Trag die IP-Adresse ein – sie steht am Drucker unter Einstellungen → Netzwerk.",
+        refused:
+          "Das Gerät antwortet, aber nicht auf diesem Port. Ist PrusaLink am Drucker eingeschaltet (Einstellungen → Netzwerk → PrusaLink)? Ein Port gehört nur in die Adresse, wenn er nicht 80 ist.",
+        timeout:
+          "Keine Antwort. Ist der Drucker an und im selben Netz wie die Brücke? Stimmt die IP noch – sie kann sich nach einem Neustart des Routers ändern.",
+        unreachable:
+          "Kein Weg zum Gerät: anderes Netz oder VLAN als die Brücke, oder der Drucker ist aus.",
+        unauthorized: "",
+        not_prusalink:
+          "Unter der Adresse antwortet etwas, aber nicht PrusaLink in der nötigen Fassung. Firmware des Druckers aktualisieren. Ein MK3S mit Raspberry Pi wird noch nicht unterstützt.",
+        tls: "Mit https:// schlägt die Prüfung des Zertifikats fehl – versuch es mit http://.",
+        error:
+          "Unerwarteter Fehler – das Protokoll der Brücke unten sagt mehr.",
+      },
+      unauthorizedHelp: {
+        api_key:
+          "Der API-Schlüssel stimmt nicht. Du findest ihn am Drucker unter Einstellungen → Netzwerk → PrusaLink.",
+        digest:
+          "Benutzer oder Passwort stimmen nicht. Der Benutzer ist meist „maker“, das Passwort steht am Drucker unter Einstellungen → Netzwerk → PrusaLink.",
+      },
+      printerState: {
+        IDLE: "Bereit",
+        BUSY: "Beschäftigt",
+        PRINTING: "Druckt",
+        PAUSED: "Pausiert",
+        FINISHED: "Fertig",
+        STOPPED: "Abgebrochen",
+        ERROR: "Fehler",
+        ATTENTION: "Braucht Aufmerksamkeit",
+        READY: "Bereit",
+      },
+      job: (vars: { file: string; percent: string }) =>
+        `${vars.file} · ${vars.percent}`,
+      serial: (vars: { serial: string }) => `Seriennummer ${vars.serial}`,
+      firmware: (vars: { firmware: string }) => `Firmware ${vars.firmware}`,
+    },
+  },
+
+  nfc: {
+    scan: "Spule antippen (NFC)",
+    fromTag: "Vom NFC-Tag",
+    scanTitle: "Spule antippen",
+    scanText:
+      "Halte die Rückseite des Telefons an das Etikett der Spule. Gelesen wird ein OpenPrintTag, wie es auf Prusament-Spulen steckt.",
+    retry: "Noch einmal",
+    read: (vars: { name: string }) =>
+      `Vom Tag gelesen: ${vars.name} – bitte prüfen.`,
+    readPrintSettings:
+      "Die Druckwerte vom Tag übernimmst du auf der Material-Seite unter „Druckeinstellungen“.",
+    kindMismatch: (vars: { kind: string }) =>
+      `Das Tag beschreibt ${vars.kind} – das gewählte Lager passt nicht dazu.`,
+    colorUnknown: (vars: { hex: string }) =>
+      `Farbe ${vars.hex} hat keinen Namen im Katalog – trag einen ein oder lege ihn unter „Farben & Oberflächen“ an.`,
+    noPrintSettings: "Auf dem Tag stehen keine Druckwerte.",
+    errors: {
+      unsupported: "Dieses Gerät kann keine NFC-Tags lesen.",
+      denied: "Der Zugriff auf NFC wurde nicht erlaubt.",
+      not_openprinttag: "Auf dem Tag steht kein OpenPrintTag.",
+      corrupt: "Das Tag ist beschädigt oder unvollständig.",
+      unreadable: "Das Tag ließ sich nicht lesen – noch einmal ruhig halten.",
+    },
+  },
   consumption: {
     title: "Verbrauch abbuchen",
     description: (vars: { name: string }) =>

@@ -7,6 +7,7 @@ import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 import { getDb } from "./connection";
+import { deleteApiTokens } from "./apiTokens";
 import {
   handleAdminAccountDeletion,
   listInvitationsForUser,
@@ -329,6 +330,30 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     listInvitationsForUser(userId),
   ]);
 
+  /*
+    Eingangsfach und API-Schlüssel (seit 4.7.0). Die Schlüssel ohne Hash – er
+    nützt außerhalb dieser Instanz niemandem –, aber alle der Person, auch die
+    für eine Organisation: Ein Schlüssel ist ihre Vollmacht, nicht Bestand der
+    Organisation. Dazu die Drucker ihrer Brücken ohne Zugangsdaten.
+  */
+  const printImports = await db.query.printImports.findMany({
+    where: eq(schema.printImports.userId, userId),
+  });
+  const apiTokens = await db.query.apiTokens.findMany({
+    where: eq(schema.apiTokens.userId, userId),
+    columns: { tokenHash: false },
+  });
+  const bridgePrinters =
+    apiTokens.length === 0
+      ? []
+      : await db.query.bridgePrinters.findMany({
+          where: inArray(
+            schema.bridgePrinters.apiTokenId,
+            apiTokens.map(t => t.id)
+          ),
+          columns: { secretCiphertext: false },
+        });
+
   return {
     formatVersion: ACCOUNT_EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
@@ -357,6 +382,9 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     organizationInvitations,
     auditLog,
     unblockRequests,
+    printImports,
+    apiTokens,
+    bridgePrinters,
   };
 }
 
@@ -473,6 +501,11 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.printJobs)
       .where(eq(schema.printJobs.userId, userId));
+    // 1c. Eingangsfach und API-Schlüssel samt Druckern der Brücke (seit 4.7.0)
+    await tx
+      .delete(schema.printImports)
+      .where(eq(schema.printImports.userId, userId));
+    await deleteApiTokens(tx, eq(schema.apiTokens.userId, userId));
 
     // 2. Wägungen und Verbräuche der eigenen Rollen
     const ownMaterialIds = tx

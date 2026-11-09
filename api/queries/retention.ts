@@ -1,6 +1,7 @@
 import { lt } from "drizzle-orm";
 import { loginCodes } from "@db/schema";
 import { purgeAuditLog } from "./audit";
+import { purgeResolvedImports } from "./printImports";
 import { getDb } from "./connection";
 
 /**
@@ -62,6 +63,21 @@ export async function runRetentionSweep(): Promise<void> {
   } catch (error) {
     console.warn(
       "[retention] Löschlauf für das Audit-Log fehlgeschlagen:",
+      error
+    );
+  }
+
+  // Erledigte Einträge des Eingangsfachs (seit 4.7.0) – nach 30 Tagen
+  try {
+    const imports = await purgeResolvedImports();
+    if (imports > 0) {
+      console.log(
+        `[retention] ${imports} erledigte Einträge des Eingangsfachs gelöscht.`
+      );
+    }
+  } catch (error) {
+    console.warn(
+      "[retention] Löschlauf für das Eingangsfach fehlgeschlagen:",
       error
     );
   }
