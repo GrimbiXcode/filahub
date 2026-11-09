@@ -11,6 +11,8 @@ import {
   Columns3,
   LayoutGrid,
   List,
+  ListChecks,
+  Pencil,
   Package,
   Plus,
   Printer,
@@ -29,20 +31,43 @@ import {
 } from "@contracts/materialColumns";
 import { roleAllows } from "@contracts/organizations";
 import { mergeCandidates, normalizeMaterialType } from "@contracts/materials";
+import {
+  OPEN_RANGE,
+  REMAINING_UNITS,
+  defaultUnitForKind,
+  inRange,
+  remainingValueIn,
+  unitsForKind,
+  type RemainingRange,
+  type RemainingUnit,
+} from "@contracts/remainingFilter";
 import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
+import { BulkEditDialog } from "@/components/BulkEditDialog";
 import { FriendMaterialList } from "@/components/FriendMaterialList";
 import { IdentifierLookup } from "@/components/IdentifierLookup";
 import { MaterialPanel } from "@/components/MaterialPanel";
 import { MaterialShelf } from "@/components/MaterialShelf";
 import { PageHeader } from "@/components/PageHeader";
+import { RemainingRangeFilter } from "@/components/RemainingRangeFilter";
 import { Spool } from "@/components/Spool";
 import { StockTiles } from "@/components/StockTiles";
 import { LAGER_PATH, gebindePath, materialPath } from "@/const";
 import { useQuickActions } from "@/lib/quickActions";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -88,6 +113,7 @@ import { useDebounced } from "@/hooks/useDebounced";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useActiveLagerId } from "@/lib/activeLager";
 import { groupByProduct, groupByStorageBox } from "@/lib/shelf";
+import { secondaryUnitFor, useRemainingFormat } from "@/lib/remainingFilter";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -133,6 +159,14 @@ const VIEW_KEY = "home-view";
  */
 type ShelfGrouping = "box" | "product";
 const SHELF_GROUPING_KEY = "home-shelf-grouping";
+
+/**
+ * Einheit des Restmengen-Filters. Gemerkt wird nur die Einheit, nicht der
+ * Bereich: Wer in Metern denkt, tut das morgen auch noch – ein Bereich von
+ * gestern verschwiege dagegen still Rollen. Passt die gemerkte Einheit nicht
+ * zum Lager (Meter im Pulverlager), gilt dessen Vorgabe.
+ */
+const REMAINING_UNIT_KEY = "home-remaining-unit";
 
 /** Vergleich für die gewählte Sortierspalte; leere Werte immer ans Ende. */
 function compareBy(
@@ -224,6 +258,51 @@ export default function Home() {
   const [textureFilter, setTextureFilter] = useState(ALL);
   const [boxFilter, setBoxFilter] = useState(ALL);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
+  /*
+    Restmengen-Filter. Der Bereich hängt am Lager, in dem er gesetzt wurde:
+    Ein anderes Lager hat andere Grenzen und oft eine andere Zweiteinheit, ein
+    mitgenommener Bereich wäre dort Zufall. So setzt ihn ein Lagerwechsel
+    zurück, ohne Effekt.
+  */
+  const activeLagerKind =
+    lagerList?.find(l => l.id === activeLagerId)?.materialKind ?? "filament";
+  const [storedRemainingUnit, setStoredRemainingUnit] =
+    useState<RemainingUnit | null>(() => {
+      try {
+        const value = localStorage.getItem(REMAINING_UNIT_KEY);
+        return REMAINING_UNITS.find(u => u === value) ?? null;
+      } catch {
+        return null;
+      }
+    });
+  const remainingUnit =
+    storedRemainingUnit != null &&
+    unitsForKind(activeLagerKind).includes(storedRemainingUnit)
+      ? storedRemainingUnit
+      : defaultUnitForKind(activeLagerKind);
+  const [remainingState, setRemainingState] = useState<{
+    lagerId: number | null;
+    range: RemainingRange;
+  }>({ lagerId: null, range: OPEN_RANGE });
+  const remainingRange =
+    remainingState.lagerId === activeLagerId
+      ? remainingState.range
+      : OPEN_RANGE;
+  const [remainingLog, setRemainingLog] = useState(false);
+  const setRemaining = (unit: RemainingUnit, range: RemainingRange) => {
+    if (unit !== remainingUnit) {
+      setStoredRemainingUnit(unit);
+      try {
+        localStorage.setItem(REMAINING_UNIT_KEY, unit);
+      } catch {
+        /* Ohne Speicher gilt die Wahl für diese Seite – das reicht. */
+      }
+    }
+    setRemainingState({ lagerId: activeLagerId, range });
+  };
+  const clearRemaining = () =>
+    setRemainingState({ lagerId: activeLagerId, range: OPEN_RANGE });
+  const { rangeLabel: remainingRangeLabel } = useRemainingFormat();
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("identifier");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -263,6 +342,34 @@ export default function Home() {
       /* Ohne Speicher gilt die Wahl für diese Seite – das reicht. */
     }
   }, [shelfGrouping]);
+
+  /*
+    Mehrfachauswahl für die Sammelbearbeitung (seit 4.6.0). Nur in der Liste
+    und in den Karten des Telefons – im Regal ist ein Tipp schon „Detail
+    zeigen“, ein zweiter Sinn wäre dort ein Rätsel. Stufe `editor` wie das
+    Ändern eines einzelnen Gebindes.
+  */
+  const isTabletUp = useMediaQuery("(min-width: 768px)");
+  const canSelect =
+    roleAllows(role, "editor") && (!isTabletUp || view === "list");
+  const [selecting, setSelecting] = useState(false);
+  const selectionActive = selecting && canSelect;
+  const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(
+    () => new Set()
+  );
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
+  const toggleSelected = (id: number) =>
+    setSelectedIds(previous => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const endSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+  };
 
   /*
     Spaltenauswahl. Sie blendet **zusätzlich** aus: Was hier an bleibt, kann
@@ -361,7 +468,8 @@ export default function Home() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [materials]);
 
-  const filtered = useMemo(() => {
+  /** Alle Filter außer der Restmenge – deren Verteilung zeigt der Filter */
+  const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const typeKey =
       typeFilter === ALL ? null : normalizeMaterialType(typeFilter);
@@ -407,10 +515,48 @@ export default function Home() {
     onlyLowStock,
   ]);
 
+  const filtered = baseFiltered.filter(m =>
+    inRange(remainingValueIn(remainingUnit, m), remainingRange)
+  );
+
   const sorted = useMemo(() => {
     const factor = sortDir === "asc" ? 1 : -1;
     return [...filtered].sort((a, b) => compareBy(sortKey, a, b) * factor);
   }, [filtered, sortKey, sortDir]);
+
+  /*
+    Was bearbeitet wird, ist die Auswahl **unter den angezeigten** Gebinden:
+    Wer nach der Auswahl einen Filter setzt, sieht weggefilterte Zeilen nicht
+    mehr – und soll sie nicht unbemerkt mitändern. Ein Lagerwechsel räumt die
+    Auswahl damit von selbst ab.
+  */
+  const selectedVisibleIds = useMemo(
+    () =>
+      selectionActive
+        ? sorted.filter(m => selectedIds.has(m.id)).map(m => m.id)
+        : [],
+    [selectionActive, sorted, selectedIds]
+  );
+  const allVisibleSelected =
+    sorted.length > 0 && selectedVisibleIds.length === sorted.length;
+  const toggleAllVisible = () =>
+    setSelectedIds(
+      allVisibleSelected ? new Set() : new Set(sorted.map(m => m.id))
+    );
+
+  const archiveMany = trpc.material.updateMany.useMutation({
+    onSuccess: ({ updated }) => {
+      toast.success(t.bulkEdit.archived({ count: updated }));
+      utils.material.list.invalidate();
+      utils.material.byId.invalidate();
+      utils.product.invalidate();
+      // Drucke nennen Gebinde und Buchungsstand (seit 4.2.0)
+      utils.print.invalidate();
+      setArchiveConfirmOpen(false);
+      endSelection();
+    },
+    onError: e => toast.error(e.message),
+  });
 
   const groups = useMemo(
     () =>
@@ -503,6 +649,17 @@ export default function Home() {
       label: t.home.filterLowStock,
       clear: () => setOnlyLowStock(false),
     });
+  const remainingChip = remainingRangeLabel(
+    remainingUnit,
+    secondaryUnitFor(activeLagerKind),
+    remainingRange
+  );
+  if (remainingChip)
+    activeFilters.push({
+      key: "remaining",
+      label: t.home.remainingFilter.chip({ range: remainingChip }),
+      clear: clearRemaining,
+    });
 
   const resetFilters = () => {
     setSearch("");
@@ -511,6 +668,7 @@ export default function Home() {
     setManufacturerFilter(ALL);
     setBoxFilter(ALL);
     setOnlyLowStock(false);
+    clearRemaining();
   };
 
   const toggleSort = (key: SortKey) => {
@@ -630,6 +788,16 @@ export default function Home() {
           </Button>
         </div>
       </div>
+      <RemainingRangeFilter
+        kind={activeLagerKind}
+        unit={remainingUnit}
+        range={remainingRange}
+        onChange={setRemaining}
+        log={remainingLog}
+        onLogChange={setRemainingLog}
+        materials={materials ?? []}
+        visible={baseFiltered}
+      />
       <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
         <Label htmlFor="low-stock" className="font-normal">
           {t.home.onlyLowStock}
@@ -743,6 +911,28 @@ export default function Home() {
                     </button>
                   )}
                 </div>
+                {canSelect && (
+                  <Button
+                    variant={selectionActive ? "secondary" : "outline"}
+                    className="h-10"
+                    aria-pressed={selectionActive}
+                    aria-label={
+                      selectionActive
+                        ? t.bulkEdit.selectModeDone
+                        : t.bulkEdit.selectMode
+                    }
+                    onClick={() =>
+                      selectionActive ? endSelection() : setSelecting(true)
+                    }
+                  >
+                    <ListChecks className="h-4 w-4 sm:mr-2" />
+                    <span className="hidden sm:inline">
+                      {selectionActive
+                        ? t.bulkEdit.selectModeDone
+                        : t.bulkEdit.selectMode}
+                    </span>
+                  </Button>
+                )}
                 {/* Ab dem Tablet liegen die Filter in einem Popover – die
                     Übersicht soll mit dem Regal beginnen, nicht mit vier
                     Auswahlfeldern. */}
@@ -759,7 +949,7 @@ export default function Home() {
                   </PopoverTrigger>
                   <PopoverContent
                     align="start"
-                    className="w-[min(92vw,600px)] p-4"
+                    className="max-h-(--radix-popover-content-available-height) w-[min(92vw,600px)] overflow-y-auto p-4"
                   >
                     {filterFields}
                     <div className="mt-3 flex justify-end">
@@ -963,7 +1153,16 @@ export default function Home() {
                       key={material.id}
                       material={material}
                       appearance={appearanceFor(material)}
-                      onOpen={() => navigate(gebindePath(material.id))}
+                      selected={
+                        selectionActive
+                          ? selectedIds.has(material.id)
+                          : undefined
+                      }
+                      onOpen={() =>
+                        selectionActive
+                          ? toggleSelected(material.id)
+                          : navigate(gebindePath(material.id))
+                      }
                       onWeigh={
                         roleAllows(role, "weigher")
                           ? () => openWeighing(material)
@@ -1018,6 +1217,21 @@ export default function Home() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              {selectionActive && (
+                                <TableHead className="w-10">
+                                  <Checkbox
+                                    checked={
+                                      allVisibleSelected
+                                        ? true
+                                        : selectedVisibleIds.length > 0
+                                          ? "indeterminate"
+                                          : false
+                                    }
+                                    onCheckedChange={toggleAllVisible}
+                                    aria-label={t.bulkEdit.selectAll}
+                                  />
+                                </TableHead>
+                              )}
                               {showsColumn("identifier") && (
                                 <SortableHead
                                   label={t.home.colIdentifier}
@@ -1091,8 +1305,30 @@ export default function Home() {
                               <TableRow
                                 key={m.id}
                                 className="cursor-pointer"
-                                onClick={() => navigate(gebindePath(m.id))}
+                                data-state={
+                                  selectionActive && selectedIds.has(m.id)
+                                    ? "selected"
+                                    : undefined
+                                }
+                                onClick={() =>
+                                  selectionActive
+                                    ? toggleSelected(m.id)
+                                    : navigate(gebindePath(m.id))
+                                }
                               >
+                                {selectionActive && (
+                                  <TableCell onClick={e => e.stopPropagation()}>
+                                    <Checkbox
+                                      checked={selectedIds.has(m.id)}
+                                      onCheckedChange={() =>
+                                        toggleSelected(m.id)
+                                      }
+                                      aria-label={t.bulkEdit.selectRow({
+                                        name: m.name,
+                                      })}
+                                    />
+                                  </TableCell>
+                                )}
                                 {showsColumn("identifier") && (
                                   <TableCell>
                                     {m.identifier ? (
@@ -1232,6 +1468,98 @@ export default function Home() {
                 </div>
               </>
             )}
+
+            {selectionActive && (
+              <div
+                role="toolbar"
+                aria-label={t.bulkEdit.selected({
+                  count: selectedVisibleIds.length,
+                })}
+                className="sticky bottom-[calc(1rem+env(safe-area-inset-bottom))] z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-card p-2 pl-4 shadow-lg"
+              >
+                <span className="mr-auto font-mono text-sm tabular-nums">
+                  {t.bulkEdit.selected({ count: selectedVisibleIds.length })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="md:hidden"
+                  onClick={toggleAllVisible}
+                  disabled={sorted.length === 0}
+                >
+                  {allVisibleSelected ? t.bulkEdit.clear : t.bulkEdit.selectAll}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="hidden md:inline-flex"
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={selectedVisibleIds.length === 0}
+                >
+                  {t.bulkEdit.clear}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setArchiveConfirmOpen(true)}
+                  disabled={selectedVisibleIds.length === 0}
+                >
+                  <Archive className="mr-1 h-3.5 w-3.5" />
+                  {t.bulkEdit.archive}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => setBulkEditOpen(true)}
+                  disabled={selectedVisibleIds.length === 0}
+                >
+                  <Pencil className="mr-1 h-3.5 w-3.5" />
+                  {t.bulkEdit.edit}
+                </Button>
+              </div>
+            )}
+
+            <BulkEditDialog
+              open={bulkEditOpen}
+              onOpenChange={setBulkEditOpen}
+              ids={selectedVisibleIds}
+              onDone={endSelection}
+            />
+            <AlertDialog
+              open={archiveConfirmOpen}
+              onOpenChange={setArchiveConfirmOpen}
+            >
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {t.bulkEdit.archiveTitle({
+                      count: selectedVisibleIds.length,
+                    })}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {t.bulkEdit.archiveDescription}
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={archiveMany.isPending}>
+                    {t.common.cancel}
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    disabled={archiveMany.isPending}
+                    onClick={e => {
+                      // Offen lassen, bis der Server geantwortet hat
+                      e.preventDefault();
+                      archiveMany.mutate({
+                        ...scope,
+                        ids: selectedVisibleIds,
+                        patch: { archived: true },
+                      });
+                    }}
+                  >
+                    {t.bulkEdit.archiveConfirm}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <FriendResults query={search} />
           </div>
@@ -1384,11 +1712,17 @@ function SortableHead({
 function MaterialCard({
   material,
   appearance,
+  selected,
   onOpen,
   onWeigh,
   onConsume,
 }: {
   material: MaterialOverview;
+  /**
+   * Gesetzt, solange die Mehrfachauswahl läuft: Dann wählt ein Tipp aus,
+   * statt zu öffnen, und Wiegen/Abbuchen treten zurück.
+   */
+  selected?: boolean;
   /** Fertig aufgelöst – der Katalog wird einmal je Seite geholt, nicht je Karte */
   appearance: ResolvedAppearance & { label: string };
   onOpen: () => void;
@@ -1399,14 +1733,29 @@ function MaterialCard({
 }) {
   const { formatGrams, formatPercent, formatSecondary } = useFormat();
   const t = useT();
+  const selecting = selected !== undefined;
 
   return (
-    <div className="rounded-xl border bg-card shadow-xs">
+    <div
+      className={cn(
+        "rounded-xl border bg-card shadow-xs",
+        selected && "border-primary ring-1 ring-primary"
+      )}
+    >
       <button
         type="button"
         onClick={onOpen}
+        aria-pressed={selecting ? selected : undefined}
         className="flex w-full items-center gap-3 rounded-t-xl p-3 text-left focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
       >
+        {selecting && (
+          <Checkbox
+            checked={selected}
+            tabIndex={-1}
+            aria-hidden
+            className="pointer-events-none size-5"
+          />
+        )}
         <Spool
           size={56}
           hex={appearance.hex}
@@ -1457,7 +1806,7 @@ function MaterialCard({
           </div>
         </div>
       </button>
-      {(onWeigh || onConsume) && (
+      {!selecting && (onWeigh || onConsume) && (
         <div className="grid grid-cols-2 gap-1 border-t p-2">
           {onConsume && (
             <Button variant="ghost" className="h-10" onClick={onConsume}>

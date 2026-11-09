@@ -318,6 +318,44 @@ export const de = {
       `Filter „${vars.label}“ entfernen`,
     filterSearch: (vars: { query: string }) => `Suche: „${vars.query}“`,
     filterLowStock: "Knapper Bestand",
+    remainingFilter: {
+      label: "Restmenge",
+      unitAria: "Einheit der Restmenge",
+      unitGrams: "g",
+      unitMeters: "m",
+      unitLiters: "l",
+      unitPercent: "%",
+      lowerThumb: "Untergrenze der Restmenge",
+      upperThumb: "Obergrenze der Restmenge",
+      dragRange: "Bereich ziehen, um beide Grenzen zugleich zu verschieben",
+      from: "von",
+      to: "bis",
+      all: "Alle",
+      between: (vars: { from: string; to: string }) =>
+        `${vars.from} – ${vars.to}`,
+      atMost: (vars: { to: string }) => `≤ ${vars.to}`,
+      atLeast: (vars: { from: string }) => `≥ ${vars.from}`,
+      chip: (vars: { range: string }) => `Restmenge ${vars.range}`,
+      logScale: "Logarithmische Skala",
+      presetsAria: "Schnellwahl Füllstand",
+      presets: {
+        almostEmpty: "Fast leer",
+        opened: "Angebrochen",
+        full: "Voll",
+      },
+      missingMeters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Meterangabe (keine Dichte hinterlegt) ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Meterangabe (keine Dichte hinterlegt) sind ausgeblendet.`,
+      missingLiters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Literangabe (keine Dichte hinterlegt) ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Literangabe (keine Dichte hinterlegt) sind ausgeblendet.`,
+      missingPercent: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Nennmenge ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Nennmenge sind ausgeblendet.`,
+    },
     materialType: "Materialart",
     allMaterialTypes: "Alle Materialarten",
     texture: "Oberfläche",
@@ -733,6 +771,35 @@ export const de = {
       glow: "Leuchtend",
       wood: "Holzoptik",
     },
+  },
+
+  bulkEdit: {
+    selectMode: "Auswählen",
+    selectModeDone: "Fertig",
+    selectAll: "Alle angezeigten auswählen",
+    selectRow: (vars: { name: string }) => `${vars.name} auswählen`,
+    selected: (vars: { count: number }) => `${vars.count} Gebinde ausgewählt`,
+    edit: "Bearbeiten",
+    archive: "Aufgebraucht",
+    clear: "Auswahl aufheben",
+    title: (vars: { count: number }) => `${vars.count} Gebinde bearbeiten`,
+    description:
+      "Nur angehakte Felder werden geändert – für alle ausgewählten Gebinde gleich. Alles andere bleibt, wie es ist.",
+    changeField: (vars: { field: string }) => `${vars.field} ändern`,
+    priceHint: "Leer lassen, um den Preis zu entfernen.",
+    purchaseDateHint: "Leer lassen, um das Kaufdatum zu entfernen.",
+    nominalLabel: "Nennmenge (g)",
+    invalidPrice: "Bitte einen gültigen Preis angeben",
+    nothingChecked: "Bitte mindestens ein Feld zum Ändern anhaken.",
+    save: (vars: { count: number }) => `${vars.count} Gebinde speichern`,
+    saved: (vars: { count: number }) => `${vars.count} Gebinde geändert`,
+    archiveTitle: (vars: { count: number }) =>
+      `${vars.count} Gebinde als aufgebraucht markieren?`,
+    archiveDescription:
+      "Aufgebrauchte Gebinde stehen nicht mehr im Regal und zählen nicht zum Bestand. Verlauf, Material und Druckeinstellungen bleiben; auf der Seite eines Gebindes lässt es sich wieder in Gebrauch nehmen.",
+    archiveConfirm: "Als aufgebraucht markieren",
+    archived: (vars: { count: number }) =>
+      `${vars.count} Gebinde als aufgebraucht markiert`,
   },
 
   materialForm: {

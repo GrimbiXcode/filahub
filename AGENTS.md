@@ -52,7 +52,9 @@ src/            React-Frontend
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
                 PrintFiles (Fotos und 3MF eines Drucks), NfcScanDialog
-                (OpenPrintTag per Web NFC)
+                (OpenPrintTag per Web NFC),
+                RemainingRangeFilter (Restmengen-Filter der Übersicht),
+                BulkEditDialog (Sammelbearbeitung aus der Übersicht)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -68,6 +70,8 @@ src/            React-Frontend
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox oder Material),
+                remainingFilter.ts (Zweiteinheit je Lager, Texte des
+                Restmengen-Filters),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
@@ -129,6 +133,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
                 nächste freie Nummer),
                 printSettings.ts (Druckeinstellungen je Materialart),
+                remainingFilter.ts (Restmengen-Filter: Einheiten, Skala,
+                Positionen, Schnellwahl),
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 slicerMetadata.ts (G-Code/bgcode von PrusaSlicer lesen,
@@ -137,6 +143,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 (Eingangsfach, Schlüsselform), bridge.ts (Protokoll der Brücke,
                 Diagnosecodes, Adressen), openPrintTag.ts (CBOR/NDEF,
                 OpenPrintTag → Material),
+                bulkEdit.ts (Sammelbearbeitung: erlaubte Felder),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -425,6 +432,36 @@ Druckeinstellungen bleiben.
   Aufbrauchen zu lösen, änderte rückwirkend die Nettowerte. Die
   Belegungszählung der Dryboxen zählt aufgebrauchte Gebinde deshalb mit.
 - Stufe `editor` (`material.setArchived`), wie Ändern.
+
+### Sammelbearbeitung (seit 4.6.0)
+
+Mehrere Gebinde aus der Übersicht auf einmal ändern: `material.updateMany`
+(`ids`, `patch`), Schema und Hilfen in `contracts/bulkEdit.ts`, Oberfläche in
+`src/components/BulkEditDialog.tsx` und der Auswahl in `Home.tsx`.
+
+- **Nur Felder, die für jedes Gebinde einzeln gelten:** Preis, Kaufdatum,
+  Nennmenge, Drybox und `archived`. Das Schema ist `strict` – die Felder des
+  Materials gelten schon für alle seine Gebinde (über Materialien hinweg wäre
+  das Zusammenführen), die Kennung ist je Lager eindeutig, ein Lagerwechsel
+  braucht `assertProductFitsLager` je Material, die Gebindeart die Vorauswahl
+  nach Hersteller. Wer ein Feld ergänzt, prüft diese Liste an
+  `bulkGebindePatchSchema`.
+- **`undefined` = nicht ändern, `null` = leeren**, wie bei `material.update`.
+  Der Dialog trägt deshalb je Feld einen Haken „ändern“; Tippen setzt ihn mit.
+- **Alles oder nichts.** `updateMaterialsBulk` sperrt die Gebinde in fester
+  Reihenfolge (`ORDER BY id … FOR UPDATE`, dieselbe Sperre wie
+  `deleteMaterial`) und ändert keines, wenn eines im Bereich fehlt – Antwort
+  `NOT_FOUND` für die ganze Anfrage, ohne zu sagen, welches (sonst ein Orakel
+  über fremde IDs). Dubletten in `ids` zählen einmal (`uniqueIds`).
+- **Stufe `editor`**, Drybox gegen den Bereich geprüft (`validateForeignKeys`),
+  höchstens `MAX_BULK_EDIT_GEBINDE` (so viele, wie ein Lager fasst),
+  30 Aufrufe/min je Benutzer. Kein Audit-Ereignis.
+- **Im Client zählt nur die Auswahl unter den angezeigten Gebinden**
+  (`selectedVisibleIds`): Ein nachträglich gesetzter Filter soll weggefilterte
+  Zeilen nicht unbemerkt mitändern. Auswählen gibt es in der Liste und in den
+  Karten des Telefons, nicht im Regal – dort heißt ein Tipp schon „Detail“.
+- Getestet in `api/bulkEdit.test.ts` (Schema) und
+  `api/bulkEdit.integration.test.ts` (Bereich, Stufen, alles oder nichts).
 
 ### Druckeinstellungen (seit 4.1.0)
 
@@ -895,6 +932,38 @@ Android; ohne `NDEFReader` erscheinen die Knöpfe nicht.
   fallen weg.
 - **Nicht gespeichert:** die UID des Tags. Spule antippen → Wiegen (Plan)
   bräuchte eine eigene Spalte je Gebinde; das ist der nächste Schritt.
+
+## Restmengen-Filter (seit 4.5.0)
+
+Ein Bereich mit zwei Griffen im Filter der Übersicht, wahlweise in Gramm, in
+der Zweiteinheit des Lagers (Meter, Liter) oder in Prozent; Pulver kennt nur
+Gramm und Prozent. Rechnung in `contracts/remainingFilter.ts` (getestet in
+`api/remainingFilter.test.ts`), Oberfläche in
+`src/components/RemainingRangeFilter.tsx`, gefiltert in `Home.tsx` wie die
+übrigen Filter im Browser.
+
+- **Je Gebinde, nicht je Material.** Die Frage ist „welche Rolle ist fast
+  leer?“; den Bestand des Materials deckt „nur knapp“ ab.
+- **Offene Enden sind `null`.** Ein Griff am Rand – oder einer, der nach dem
+  Runden auf 0 bzw. die Obergrenze fällt – schneidet nichts ab. „≥ 500 g“
+  bleibt richtig, wenn die größte Rolle wechselt.
+- **Ohne Wert in der Einheit fliegt ein Gebinde bei aktivem Bereich raus**
+  (Meter ohne Dichte), und der Filter sagt, wie viele das sind.
+- **Der Slider arbeitet in Positionen** (0–1000), nicht in Werten: So bleibt die
+  Strecke beim Ziehen gleich breit, auch auf der logarithmischen Skala. Die
+  Strecke zwischen den Griffen zieht beide Grenzen zugleich – das kann Radix
+  nicht; der Zeiger auf der Strecke wird in der Komponente behandelt und
+  erreicht den Slider nicht.
+- **Die Griffe bleiben, wo sie hingezogen wurden** (`placed`), statt aus dem
+  gerundeten Wert neu gesetzt zu werden. Sonst landete der Rückweg neben dem
+  Tastenraster des Sliders, und Radix rastete bei jedem Tastendruck wieder auf
+  dieselbe Stelle ein.
+- **Gemerkt wird die Einheit** (`localStorage`, `home-remaining-unit`), nicht
+  der Bereich. Der Bereich hängt am Lager, in dem er gesetzt wurde; ein
+  Lagerwechsel setzt ihn zurück.
+- **Schnellwahl** in Prozent: „Fast leer“ ≤ 10 % (der rote Ring der Spule),
+  „Angebrochen“ 11–89 %, „Voll“ ≥ 90 %. Der Füllstand ist ganzzahlig, der Test
+  prüft, dass jeder Wert genau einen Treffer hat.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -1671,11 +1740,9 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `printFiles`, `slicerMetadata`, `prusaProfile`, `openPrintTag`, `bridge`,
-  `fileStorage`,
-  `storageConfig`,
-  `serverBundle`,
+  `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
+  `printJobs`, `bulkEdit`, `printFiles`, `slicerMetadata`, `prusaProfile`,
+  `openPrintTag`, `bridge`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
@@ -1714,8 +1781,9 @@ Datenbank.
   `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
   `api/materialProducts.integration.test.ts`,
   `api/printJobs.integration.test.ts`,
-  `api/printFiles.integration.test.ts` und
-  `api/printImports.integration.test.ts`,
+  `api/printFiles.integration.test.ts`,
+  `api/printImports.integration.test.ts` und
+  `api/bulkEdit.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

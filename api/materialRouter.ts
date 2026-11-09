@@ -13,6 +13,12 @@ import {
   roleAllows,
 } from "@contracts/organizations";
 import {
+  bulkGebindePatchSchema,
+  hasBulkChanges,
+  uniqueIds,
+} from "@contracts/bulkEdit";
+import {
+  MAX_BULK_EDIT_GEBINDE,
   MAX_CONSUMPTIONS_PER_MATERIAL,
   MAX_MATERIALS_PER_LAGER,
   MAX_WEIGHINGS_PER_MATERIAL,
@@ -50,6 +56,7 @@ import {
   containerTypeInScope,
   storageBoxInScope,
   updateMaterial,
+  updateMaterialsBulk,
 } from "./queries/filament";
 import {
   countMaterialsInLager,
@@ -553,6 +560,70 @@ export const materialRouter = createRouter({
           )
       );
       return { ok: true };
+    }),
+
+  /**
+   * Sammelbearbeitung aus der Übersicht (seit 4.6.0): derselbe Preis,
+   * dasselbe Kaufdatum, dieselbe Nennmenge oder Drybox für mehrere Gebinde,
+   * oder alle als aufgebraucht markieren.
+   *
+   * Welche Felder dabei sind und warum die übrigen fehlen, steht an
+   * `bulkGebindePatchSchema`. Alles oder nichts: Gehört eine ID nicht zum
+   * Bereich, ändert sich keines – und die Antwort ist `NOT_FOUND` für die
+   * ganze Anfrage, ohne zu sagen, welche, sonst wäre sie ein Orakel über
+   * fremde IDs.
+   */
+  updateMany: authedQuery
+    .use(
+      rateLimited({
+        key: "material.updateMany",
+        limit: 30,
+        windowMs: 60_000,
+        by: "user",
+      })
+    )
+    .input(
+      z.object({
+        ids: z
+          .array(z.number().int().positive())
+          .min(1, "Bitte mindestens ein Gebinde wählen")
+          .max(MAX_BULK_EDIT_GEBINDE),
+        patch: bulkGebindePatchSchema,
+        ...scopeInput.shape,
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "editor"
+      );
+      if (!hasBulkChanges(input.patch)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Keine Änderung gewählt",
+        });
+      }
+      // Nach der Bereichsprüfung: Die Drybox muss zum selben Bereich gehören.
+      await validateForeignKeys(
+        scope,
+        undefined,
+        undefined,
+        input.patch.storageBoxId
+      );
+      const updated = await updateMaterialsBulk(
+        scope,
+        uniqueIds(input.ids),
+        input.patch
+      );
+      if (updated == null) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message:
+            "Mindestens ein Gebinde wurde nicht gefunden. Bitte die Seite neu laden.",
+        });
+      }
+      return { updated };
     }),
 
   delete: authedQuery
