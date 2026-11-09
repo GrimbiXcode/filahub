@@ -38,6 +38,14 @@
 export const MAX_MATERIALS_PER_LAGER = 1000;
 
 /**
+ * Gebinde je Sammelbearbeitung (`material.updateMany`, seit 4.6.0).
+ *
+ * So viele, wie ein Lager fassen kann: Die Übersicht zeigt ein Lager, und wer
+ * dort „alle auswählen“ drückt, soll nicht an einer zweiten Zahl scheitern.
+ */
+export const MAX_BULK_EDIT_GEBINDE = MAX_MATERIALS_PER_LAGER;
+
+/**
  * Wägungen je Material.
  *
  * Eine Rolle wird ein paar Dutzend Mal gewogen, bevor sie leer ist. Tausend

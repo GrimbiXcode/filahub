@@ -50,7 +50,8 @@ src/            React-Frontend
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
                 PrintFiles (Fotos und 3MF eines Drucks),
-                RemainingRangeFilter (Restmengen-Filter der Übersicht)
+                RemainingRangeFilter (Restmengen-Filter der Übersicht),
+                BulkEditDialog (Sammelbearbeitung aus der Übersicht)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -127,6 +128,7 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 Positionen, Schnellwahl),
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
+                bulkEdit.ts (Sammelbearbeitung: erlaubte Felder),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -411,6 +413,36 @@ Druckeinstellungen bleiben.
   Aufbrauchen zu lösen, änderte rückwirkend die Nettowerte. Die
   Belegungszählung der Dryboxen zählt aufgebrauchte Gebinde deshalb mit.
 - Stufe `editor` (`material.setArchived`), wie Ändern.
+
+### Sammelbearbeitung (seit 4.6.0)
+
+Mehrere Gebinde aus der Übersicht auf einmal ändern: `material.updateMany`
+(`ids`, `patch`), Schema und Hilfen in `contracts/bulkEdit.ts`, Oberfläche in
+`src/components/BulkEditDialog.tsx` und der Auswahl in `Home.tsx`.
+
+- **Nur Felder, die für jedes Gebinde einzeln gelten:** Preis, Kaufdatum,
+  Nennmenge, Drybox und `archived`. Das Schema ist `strict` – die Felder des
+  Materials gelten schon für alle seine Gebinde (über Materialien hinweg wäre
+  das Zusammenführen), die Kennung ist je Lager eindeutig, ein Lagerwechsel
+  braucht `assertProductFitsLager` je Material, die Gebindeart die Vorauswahl
+  nach Hersteller. Wer ein Feld ergänzt, prüft diese Liste an
+  `bulkGebindePatchSchema`.
+- **`undefined` = nicht ändern, `null` = leeren**, wie bei `material.update`.
+  Der Dialog trägt deshalb je Feld einen Haken „ändern“; Tippen setzt ihn mit.
+- **Alles oder nichts.** `updateMaterialsBulk` sperrt die Gebinde in fester
+  Reihenfolge (`ORDER BY id … FOR UPDATE`, dieselbe Sperre wie
+  `deleteMaterial`) und ändert keines, wenn eines im Bereich fehlt – Antwort
+  `NOT_FOUND` für die ganze Anfrage, ohne zu sagen, welches (sonst ein Orakel
+  über fremde IDs). Dubletten in `ids` zählen einmal (`uniqueIds`).
+- **Stufe `editor`**, Drybox gegen den Bereich geprüft (`validateForeignKeys`),
+  höchstens `MAX_BULK_EDIT_GEBINDE` (so viele, wie ein Lager fasst),
+  30 Aufrufe/min je Benutzer. Kein Audit-Ereignis.
+- **Im Client zählt nur die Auswahl unter den angezeigten Gebinden**
+  (`selectedVisibleIds`): Ein nachträglich gesetzter Filter soll weggefilterte
+  Zeilen nicht unbemerkt mitändern. Auswählen gibt es in der Liste und in den
+  Karten des Telefons, nicht im Regal – dort heißt ein Tipp schon „Detail“.
+- Getestet in `api/bulkEdit.test.ts` (Schema) und
+  `api/bulkEdit.integration.test.ts` (Bereich, Stufen, alles oder nichts).
 
 ### Druckeinstellungen (seit 4.1.0)
 
@@ -1476,7 +1508,7 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
-  `printJobs`,
+  `printJobs`, `bulkEdit`,
   `printFiles`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
@@ -1515,8 +1547,9 @@ Datenbank.
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
   `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
   `api/materialProducts.integration.test.ts`,
-  `api/printJobs.integration.test.ts` und
-  `api/printFiles.integration.test.ts`,
+  `api/printJobs.integration.test.ts`,
+  `api/printFiles.integration.test.ts` und
+  `api/bulkEdit.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

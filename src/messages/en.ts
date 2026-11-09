@@ -726,6 +726,39 @@ export const en: Messages = {
     },
   },
 
+  bulkEdit: {
+    selectMode: "Select",
+    selectModeDone: "Done",
+    selectAll: "Select all shown",
+    selectRow: (vars: { name: string }) => `Select ${vars.name}`,
+    selected: (vars: { count: number }) =>
+      `${vars.count} ${vars.count === 1 ? "container" : "containers"} selected`,
+    edit: "Edit",
+    archive: "Used up",
+    clear: "Clear selection",
+    title: (vars: { count: number }) =>
+      `Edit ${vars.count} ${vars.count === 1 ? "container" : "containers"}`,
+    description:
+      "Only checked fields are changed – the same for every selected container. Everything else stays as it is.",
+    changeField: (vars: { field: string }) => `Change ${vars.field}`,
+    priceHint: "Leave empty to remove the price.",
+    purchaseDateHint: "Leave empty to remove the purchase date.",
+    nominalLabel: "Nominal amount (g)",
+    invalidPrice: "Please enter a valid price",
+    nothingChecked: "Please check at least one field to change.",
+    save: (vars: { count: number }) =>
+      `Save ${vars.count} ${vars.count === 1 ? "container" : "containers"}`,
+    saved: (vars: { count: number }) =>
+      `${vars.count} ${vars.count === 1 ? "container" : "containers"} updated`,
+    archiveTitle: (vars: { count: number }) =>
+      `Mark ${vars.count} ${vars.count === 1 ? "container" : "containers"} as used up?`,
+    archiveDescription:
+      "Used-up containers leave the shelf and no longer count towards stock. History, material and print settings stay; a container can be put back into use from its own page.",
+    archiveConfirm: "Mark as used up",
+    archived: (vars: { count: number }) =>
+      `${vars.count} ${vars.count === 1 ? "container" : "containers"} marked as used up`,
+  },
+
   materialForm: {
     createTitle: "New material",
     editTitle: "Edit container",

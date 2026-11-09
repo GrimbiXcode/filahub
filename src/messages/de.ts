@@ -746,6 +746,35 @@ export const de = {
     },
   },
 
+  bulkEdit: {
+    selectMode: "Auswählen",
+    selectModeDone: "Fertig",
+    selectAll: "Alle angezeigten auswählen",
+    selectRow: (vars: { name: string }) => `${vars.name} auswählen`,
+    selected: (vars: { count: number }) => `${vars.count} Gebinde ausgewählt`,
+    edit: "Bearbeiten",
+    archive: "Aufgebraucht",
+    clear: "Auswahl aufheben",
+    title: (vars: { count: number }) => `${vars.count} Gebinde bearbeiten`,
+    description:
+      "Nur angehakte Felder werden geändert – für alle ausgewählten Gebinde gleich. Alles andere bleibt, wie es ist.",
+    changeField: (vars: { field: string }) => `${vars.field} ändern`,
+    priceHint: "Leer lassen, um den Preis zu entfernen.",
+    purchaseDateHint: "Leer lassen, um das Kaufdatum zu entfernen.",
+    nominalLabel: "Nennmenge (g)",
+    invalidPrice: "Bitte einen gültigen Preis angeben",
+    nothingChecked: "Bitte mindestens ein Feld zum Ändern anhaken.",
+    save: (vars: { count: number }) => `${vars.count} Gebinde speichern`,
+    saved: (vars: { count: number }) => `${vars.count} Gebinde geändert`,
+    archiveTitle: (vars: { count: number }) =>
+      `${vars.count} Gebinde als aufgebraucht markieren?`,
+    archiveDescription:
+      "Aufgebrauchte Gebinde stehen nicht mehr im Regal und zählen nicht zum Bestand. Verlauf, Material und Druckeinstellungen bleiben; auf der Seite eines Gebindes lässt es sich wieder in Gebrauch nehmen.",
+    archiveConfirm: "Als aufgebraucht markieren",
+    archived: (vars: { count: number }) =>
+      `${vars.count} Gebinde als aufgebraucht markiert`,
+  },
+
   materialForm: {
     createTitle: "Neues Material",
     editTitle: "Gebinde bearbeiten",
