@@ -47,6 +47,8 @@ import ContainerTypes from "./pages/ContainerTypes";
 import StorageBoxes from "./pages/StorageBoxes";
 import Legal from "./pages/Legal";
 import Login from "./pages/Login";
+import DiscordHandoff from "./pages/DiscordHandoff";
+import { DISCORD_HANDOFF_PAGE } from "@contracts/discord";
 import NotFound from "./pages/NotFound";
 import OrganizationDetail from "./pages/OrganizationDetail";
 import Organizations from "./pages/Organizations";
@@ -148,6 +150,7 @@ export default function App() {
           <Route path={ADMIN_SYSTEM_PATH} element={<AdminSystem />} />
         </Route>
         <Route path="/login" element={<Login />} />
+        <Route path={DISCORD_HANDOFF_PAGE} element={<DiscordHandoff />} />
         {/* Ohne Anmeldung erreichbar – siehe LEGAL_PATHS in src/const.ts */}
         <Route
           path={LEGAL_PATHS.privacy}

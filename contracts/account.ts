@@ -157,6 +157,12 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "printImports",
   "apiTokens",
   "bridgePrinters",
+  /*
+    Seit 4.8.0: laufende Anmeldungen über Discord – Zweck, Discord-ID und
+    -Namen, Ablauf. Liegen höchstens eine Viertelstunde, gehören solange aber
+    zur Person. Additiv, die Exportversion bleibt.
+  */
+  "discordLoginRequests",
 ] as const;
 
 export type AccountExportSection = (typeof ACCOUNT_EXPORT_SECTIONS)[number];

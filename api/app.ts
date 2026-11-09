@@ -6,6 +6,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { registerDevLogin } from "./devLogin";
+import { registerDiscordRoutes } from "./discord";
 import { registerFileRoutes } from "./fileRoutes";
 import { registerIngestRoutes } from "./ingestRoutes";
 import { TELEGRAM_LOGIN_FRAME_PATH } from "@contracts/constants";
@@ -137,6 +138,8 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get("/health", c => c.json({ status: "ok" }));
 // Nur lokal und nur mit DEV_LOGIN=1; sonst wird nichts registriert
 registerDevLogin(app);
+// Anmeldung über Discord (seit 4.8.0): Start, Rücksprung, Einmal-Code
+registerDiscordRoutes(app);
 // Fotos und 3MF zu Drucken – eigene Routen, weil tRPC keine Binärdaten kann
 registerFileRoutes(app);
 // Eingangsfach und Drucker-Brücke – angemeldet per API-Schlüssel, nie per Cookie

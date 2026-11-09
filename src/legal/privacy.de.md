@@ -19,6 +19,8 @@ auslösen – das geht schneller.
 | Daten                                                                                                                                                                                      | Zweck                                  | Rechtsgrundlage                               | Aufbewahrung                                |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------- | --------------------------------------------- | ------------------------------------------- |
 | Telegram-ID, Anzeigename, Telegram-Benutzername                                                                                                                                            | Konto und Anmeldung                    | Art. 6 Abs. 1 lit. b DSGVO (Vertrag)          | bis zur Löschung des Kontos                 |
+| Discord-ID, Discord-Benutzername, bei Konten aus Discord der Discord-Anzeigename als Anzeigename                                                                                           | Konto und Anmeldung über Discord       | Art. 6 Abs. 1 lit. b DSGVO (Vertrag)          | bis zur Löschung des Kontos oder Trennen    |
+| Laufende Discord-Anmeldungen: Prüfwerte, bei Einmal-Code Discord-ID und -Namen                                                                                                             | Anmeldung über Discord                 | Art. 6 Abs. 1 lit. b                          | **höchstens 15 Minuten**                    |
 | Zeitpunkt der letzten Anmeldung                                                                                                                                                            | Betrieb, Erkennung ungenutzter Konten  | Art. 6 Abs. 1 lit. f (berechtigtes Interesse) | bis zur Löschung des Kontos                 |
 | Bestand: Rollen, Wägungen, Rollentypen, Lagerboxen – samt Preisen, Kaufdaten, Kurz-Kennungen, Lagerorten und Notizen                                                                       | Kernfunktion der Anwendung             | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
 | Einstellungen: Sprache, Währung, Zahlenformat, zuletzt gesehene Neuerungen                                                                                                                 | Darstellung                            | Art. 6 Abs. 1 lit. b                          | bis zur Löschung des Kontos                 |
@@ -39,7 +41,9 @@ revidierten Datenschutzgesetzes (revDSG).
 
 ## 3. Anmeldung über Telegram
 
-Eine Anmeldung ist nur mit einem Telegram-Konto möglich. Es gibt zwei Wege.
+Eine Anmeldung ist mit einem Telegram-Konto möglich und, wenn der Betreiber
+dieser Instanz es anbietet, mit einem Discord-Konto (Abschnitt 3a). Für
+Telegram gibt es zwei Wege.
 
 **Anmeldebutton von Telegram.** Der Button wird von `telegram.org` nachgeladen.
 Schon dieser Abruf teilt Telegram deine IP-Adresse und Angaben zu deinem Gerät
@@ -69,6 +73,39 @@ Widerruf wirkt für die Zukunft. Für die Anmeldung selbst brauchst du das Widge
 nicht – der Code-Weg bleibt offen.
 
 Was Telegram seinerseits mit den Daten tut, richtet sich nach Telegrams eigener
+Datenschutzerklärung. Darauf hat der Betreiber dieser Instanz keinen Einfluss.
+
+## 3a. Anmeldung über Discord
+
+Bietet diese Instanz die Anmeldung über Discord an, erscheint auf der
+Anmeldeseite der Knopf „Mit Discord anmelden“; in den Einstellungen lässt sich
+Discord außerdem mit einem bestehenden Konto verbinden. Beides geschieht nur auf
+deinen Klick.
+
+**Was Discord erfährt.** Dein Browser wechselt zu `discord.com`. Discord erfährt
+dabei deine IP-Adresse, Angaben zu deinem Gerät und dass du dich bei dieser
+Instanz anmeldest.
+
+**Was diese Instanz erhält.** Nach deiner Zustimmung bei Discord nur deine
+Discord-ID, deinen Benutzernamen und deinen Anzeigenamen (Berechtigung
+`identify`) – keine E-Mail-Adresse, keine Server, keine Nachrichten. Gespeichert
+werden Discord-ID und Benutzername; entsteht das Konto über Discord, dient der
+Anzeigename als Name. Den Zugangsschlüssel von Discord widerruft der Server
+sofort wieder. Für die Dauer der Anmeldung liegt ein Datensatz mit Prüfwerten
+und – wenn du den Code in einer anderen App eingeben musst – Discord-ID und
+Namen höchstens 15 Minuten auf dem Server.
+
+**Übermittlung in die USA.** Discord wird von der Discord Inc. mit Sitz in den
+USA betrieben. Die Übermittlung findet statt, weil du die Anmeldung über
+Discord ausdrücklich wählst (Art. 49 Abs. 1 lit. a DSGVO bzw. Art. 17 Abs. 1
+lit. a revDSG); ein Schutzniveau wie im europäischen Recht kann nicht in jedem
+Fall gewährleistet werden. Wer das nicht möchte, meldet sich über Telegram an.
+
+**Trennen.** In den Einstellungen unter „Anmeldewege“ trennst du Discord
+wieder, solange dir ein anderer Anmeldeweg bleibt; Discord-ID und Benutzername
+werden dabei gelöscht.
+
+Was Discord seinerseits mit den Daten tut, richtet sich nach Discords eigener
 Datenschutzerklärung. Darauf hat der Betreiber dieser Instanz keinen Einfluss.
 
 ## 4. Hosting
@@ -130,7 +167,9 @@ Zurücknehmen einer Freigabe wirkt sofort.
   Analysedienste, keine Zählpixel und keine Werbenetzwerke ein.
 - **Keine externen Schriften, keine Content Delivery Networks.** Alle Dateien
   kommen vom Server dieser Instanz. Einzige Ausnahme ist der Telegram-Button
-  aus Abschnitt 3, und der nur nach deiner Einwilligung.
+  aus Abschnitt 3, und der nur nach deiner Einwilligung. Die Anmeldung über
+  Discord (Abschnitt 3a) lädt nichts in diese Seite, sondern wechselt zu
+  Discord.
 - **Keine Weitergabe zu Werbezwecken**, kein Verkauf, keine Profilbildung.
 - **Keine automatisierte Entscheidung im Einzelfall** und kein Profiling im
   Sinne von Art. 22 DSGVO.
@@ -139,13 +178,14 @@ Zurücknehmen einer Freigabe wirkt sofort.
 
 ## 7. Was auf deinem Gerät gespeichert wird
 
-| Name                      | Art                | Zweck                                   | Dauer              |
-| ------------------------- | ------------------ | --------------------------------------- | ------------------ |
-| `filament_sid`            | Cookie, `httpOnly` | hält deine Anmeldung                    | 30 Tage            |
-| `sidebar_state`           | Cookie             | gewünschte Breite der Navigationsleiste | 7 Tage             |
-| `theme`                   | lokaler Speicher   | gewähltes Farbschema                    | bis du ihn löschst |
-| `sidebar-width`           | lokaler Speicher   | gewählte Breite der Navigationsleiste   | bis du ihn löschst |
-| `telegram-widget-consent` | lokaler Speicher   | deine Entscheidung aus Abschnitt 3      | bis du ihn löschst |
+| Name                      | Art                | Zweck                                                       | Dauer              |
+| ------------------------- | ------------------ | ----------------------------------------------------------- | ------------------ |
+| `filament_sid`            | Cookie, `httpOnly` | hält deine Anmeldung                                        | 30 Tage            |
+| `sidebar_state`           | Cookie             | gewünschte Breite der Navigationsleiste                     | 7 Tage             |
+| `theme`                   | lokaler Speicher   | gewähltes Farbschema                                        | bis du ihn löschst |
+| `sidebar-width`           | lokaler Speicher   | gewählte Breite der Navigationsleiste                       | bis du ihn löschst |
+| `telegram-widget-consent` | lokaler Speicher   | deine Entscheidung aus Abschnitt 3                          | bis du ihn löschst |
+| `filahub_discord`         | Cookie, `httpOnly` | bindet die Discord-Anmeldung an dieses Gerät (Abschnitt 3a) | 15 Minuten         |
 
 Alle diese Einträge sind entweder technisch notwendig oder halten eine
 Einstellung fest, die du selbst getroffen hast. Es gibt deshalb keinen
@@ -205,7 +245,7 @@ deines Arbeitsplatzes.
 ## 10. Pflicht zur Bereitstellung
 
 Es besteht keine gesetzliche oder vertragliche Pflicht, Daten bereitzustellen.
-Ohne Telegram-Konto ist eine Anmeldung technisch nicht möglich, und ohne
+Ohne Telegram-Konto – oder, wo angeboten, Discord-Konto – ist eine Anmeldung technisch nicht möglich, und ohne
 Angaben zu deinem Bestand hat die Anwendung nichts zu rechnen.
 
 ## 11. Änderungen

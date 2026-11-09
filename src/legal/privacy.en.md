@@ -16,18 +16,20 @@ faster.
 
 ## 2. What data is processed
 
-| Data                                                                                                                                                                 | Purpose                               | Legal basis                        | Retention                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---------------------------------- | ---------------------------------------- |
-| Telegram ID, display name, Telegram username                                                                                                                         | account and sign-in                   | Art. 6(1)(b) GDPR (contract)       | until the account is deleted             |
-| Time of last sign-in                                                                                                                                                 | operation, spotting dormant accounts  | Art. 6(1)(f) (legitimate interest) | until the account is deleted             |
-| Stock: spools, weigh-ins, spool types, storage boxes – including prices, purchase dates, short IDs, locations and notes                                              | core function of the application      | Art. 6(1)(b)                       | until the account is deleted             |
-| Settings: language, currency, number format, last release notes seen                                                                                                 | presentation                          | Art. 6(1)(b)                       | until the account is deleted             |
-| Sign-in codes: Telegram ID, Telegram name, code                                                                                                                      | signing in without the widget         | Art. 6(1)(b)                       | **deleted automatically after 24 hours** |
-| Friendships and shares: who is connected to whom, how far each store is shared, loan requests                                                                        | sharing stock with friends            | Art. 6(1)(a) (consent)             | until either account is deleted          |
-| Organizations: name and notes; memberships with level and join date; invitations and their answer                                                                    | running a stock together              | Art. 6(1)(a) and (b)               | see section 5                            |
-| Preset proposals: content, reasoning, submitter, moderation record                                                                                                   | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 9                            |
-| Server logs at the host, including IP address                                                                                                                        | operation and defence against attacks | Art. 6(1)(f)                       | as configured by the host, see section 4 |
-| Security log: sign-ins and sign-outs, failed attempts, account deletions, moderation decisions – with a timestamp and an **encrypted fingerprint** of the IP address | detecting and investigating incidents | Art. 6(1)(f)                       | **90 days**                              |
+| Data                                                                                                                                                                 | Purpose                               | Legal basis                        | Retention                                    |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ---------------------------------- | -------------------------------------------- |
+| Telegram ID, display name, Telegram username                                                                                                                         | account and sign-in                   | Art. 6(1)(b) GDPR (contract)       | until the account is deleted                 |
+| Discord ID, Discord username, for accounts created via Discord the Discord display name as display name                                                              | account and sign-in via Discord       | Art. 6(1)(b) GDPR (contract)       | until the account is deleted or disconnected |
+| Pending Discord sign-ins: check values, with a one-time code Discord ID and names                                                                                    | signing in via Discord                | Art. 6(1)(b)                       | **at most 15 minutes**                       |
+| Time of last sign-in                                                                                                                                                 | operation, spotting dormant accounts  | Art. 6(1)(f) (legitimate interest) | until the account is deleted                 |
+| Stock: spools, weigh-ins, spool types, storage boxes – including prices, purchase dates, short IDs, locations and notes                                              | core function of the application      | Art. 6(1)(b)                       | until the account is deleted                 |
+| Settings: language, currency, number format, last release notes seen                                                                                                 | presentation                          | Art. 6(1)(b)                       | until the account is deleted                 |
+| Sign-in codes: Telegram ID, Telegram name, code                                                                                                                      | signing in without the widget         | Art. 6(1)(b)                       | **deleted automatically after 24 hours**     |
+| Friendships and shares: who is connected to whom, how far each store is shared, loan requests                                                                        | sharing stock with friends            | Art. 6(1)(a) (consent)             | until either account is deleted              |
+| Organizations: name and notes; memberships with level and join date; invitations and their answer                                                                    | running a stock together              | Art. 6(1)(a) and (b)               | see section 5                                |
+| Preset proposals: content, reasoning, submitter, moderation record                                                                                                   | maintaining the shared catalogue      | Art. 6(1)(b) and (f)               | see section 9                                |
+| Server logs at the host, including IP address                                                                                                                        | operation and defence against attacks | Art. 6(1)(f)                       | as configured by the host, see section 4     |
+| Security log: sign-ins and sign-outs, failed attempts, account deletions, moderation decisions – with a timestamp and an **encrypted fingerprint** of the IP address | detecting and investigating incidents | Art. 6(1)(f)                       | **90 days**                                  |
 
 Free-text fields such as notes or location are filled in by you. Whatever you
 put there is stored along with the rest – even if it has nothing to do with
@@ -39,7 +41,8 @@ Protection (revFADP).
 
 ## 3. Signing in with Telegram
 
-Signing in requires a Telegram account. There are two ways.
+Signing in requires a Telegram account or, if the operator of this instance
+offers it, a Discord account (section 3a). For Telegram there are two ways.
 
 **Telegram's sign-in button.** The button is loaded from `telegram.org`. That
 request alone tells Telegram your IP address and details about your device –
@@ -66,6 +69,37 @@ forward. You do not need the widget to sign in – the code route stays open.
 
 What Telegram does with the data on its own account is governed by Telegram's
 own privacy policy. The operator of this instance has no influence over it.
+
+## 3a. Signing in with Discord
+
+If this instance offers signing in with Discord, the sign-in page shows the
+button “Sign in with Discord”; in the settings you can also connect Discord to
+an existing account. Both only happen when you click.
+
+**What Discord learns.** Your browser switches to `discord.com`. Discord learns
+your IP address, details about your device and that you are signing in to this
+instance.
+
+**What this instance receives.** After you agree at Discord, only your Discord
+ID, your username and your display name (permission `identify`) – no email
+address, no servers, no messages. The Discord ID and username are stored; if
+the account is created via Discord, the display name serves as its name. The
+server revokes Discord's access token right away. While signing in, a record
+with check values – and, if you have to enter the code in another app, the
+Discord ID and names – stays on the server for at most 15 minutes.
+
+**Transfer to the USA.** Discord is operated by Discord Inc., based in the USA.
+The transfer takes place because you explicitly choose to sign in with Discord
+(Art. 49(1)(a) GDPR and Art. 17(1)(a) revFADP); a level of protection as under
+European law cannot be guaranteed in every case. If you do not want that, sign
+in with Telegram.
+
+**Disconnecting.** Under “Sign-in methods” in the settings you can disconnect
+Discord again as long as another sign-in method remains; the Discord ID and
+username are deleted.
+
+What Discord itself does with the data is governed by Discord's own privacy
+policy. The operator of this instance has no influence on that.
 
 ## 4. Hosting
 
@@ -131,13 +165,14 @@ share individually, and leaving or withdrawing a share takes effect immediately.
 
 ## 7. What is stored on your device
 
-| Name                      | Type               | Purpose                               | Duration           |
-| ------------------------- | ------------------ | ------------------------------------- | ------------------ |
-| `filament_sid`            | cookie, `httpOnly` | keeps you signed in                   | 30 days            |
-| `sidebar_state`           | cookie             | preferred width of the navigation bar | 7 days             |
-| `theme`                   | local storage      | chosen colour scheme                  | until you clear it |
-| `sidebar-width`           | local storage      | chosen width of the navigation bar    | until you clear it |
-| `telegram-widget-consent` | local storage      | your decision from section 3          | until you clear it |
+| Name                      | Type               | Purpose                                              | Duration           |
+| ------------------------- | ------------------ | ---------------------------------------------------- | ------------------ |
+| `filament_sid`            | cookie, `httpOnly` | keeps you signed in                                  | 30 days            |
+| `sidebar_state`           | cookie             | preferred width of the navigation bar                | 7 days             |
+| `theme`                   | local storage      | chosen colour scheme                                 | until you clear it |
+| `sidebar-width`           | local storage      | chosen width of the navigation bar                   | until you clear it |
+| `telegram-widget-consent` | local storage      | your decision from section 3                         | until you clear it |
+| `filahub_discord`         | cookie, `httpOnly` | ties the Discord sign-in to this device (section 3a) | 15 minutes         |
 
 All of these are either technically necessary or record a setting you chose
 yourself. There is therefore no consent banner – and none of it serves to
@@ -193,7 +228,7 @@ the European Union the authority of your country of residence or place of work.
 ## 10. Obligation to provide data
 
 There is no statutory or contractual obligation to provide data. Without a
-Telegram account signing in is technically impossible, and without details about
+Telegram account – or, where offered, a Discord account – signing in is technically impossible, and without details about
 your stock the application has nothing to calculate.
 
 ## 11. Changes

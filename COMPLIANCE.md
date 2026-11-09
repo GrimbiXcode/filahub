@@ -133,7 +133,8 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
 - **Categories of data subjects**: registered users of this instance
 - **Categories of data**: see the table in [PRIVACY.md](PRIVACY.md)
 - **Recipients**: Telegram FZ-LLC (authentication, loan and organization
-  notifications); the hosting provider (processor); with
+  notifications); if configured, Discord Inc. (authentication only, since
+  4.8.0); the hosting provider (processor); with
   `STORAGE_DRIVER=s3`, the object storage provider (processor, holds uploaded
   files); **other users of this
   instance** — either limited to what the data subject shared with an accepted
@@ -157,8 +158,12 @@ Template for Art. 30 GDPR / Art. 12 revFADP. Fill in the operator-specific rows.
   organization's inventory — that is the organization's record, not theirs
 - **Third-country transfers**: Telegram, United Arab Emirates — no adequacy
   decision; based on explicit consent (Art. 49(1)(a) GDPR / Art. 17(1)(a)
-  revFADP), obtained through the click-to-load gate on the login page
-- **Erasure periods**: sign-in codes 24 h; security log 90 days; everything else
+  revFADP), obtained through the click-to-load gate on the login page.
+  Discord, USA (if configured): the user's explicit choice of "Sign in with
+  Discord" (Art. 49(1)(a) GDPR / Art. 17(1)(a) revFADP) unless an adequacy
+  basis (EU-U.S. Data Privacy Framework) applies — the operator checks this
+- **Erasure periods**: sign-in codes 24 h; pending Discord sign-ins 15 min;
+  security log 90 days; everything else
   until the account is deleted
 - **Technical and organisational measures**: see below
 
@@ -171,7 +176,10 @@ the processing to be _occasional_. Regular user accounts are not.
 For Art. 32 GDPR / Art. 8 revFADP. What the software provides:
 
 - **Authentication** via Telegram, HMAC-SHA256 verified with a constant-time
-  comparison and a 24-hour replay window (`api/telegram/widget.ts`)
+  comparison and a 24-hour replay window (`api/telegram/widget.ts`); since
+  4.8.0 optionally via Discord, OAuth2 with PKCE, single-use `state` bound to
+  the starting browser by an `httpOnly` cookie, token revoked right after use
+  (`api/discord.ts`)
 - **Sessions** as HS256 JWTs with the algorithm pinned on verification, 30-day
   lifetime, revocable through `users.tokenVersion`
 - **Cookies** `httpOnly`, `Secure` outside localhost, `SameSite=Lax`

@@ -5,6 +5,7 @@ import {
 import { findNotificationTarget } from "../queries/friends";
 import { findAdminUsers } from "../queries/users";
 import { appLink, sendTelegramMessage } from "../telegram/send";
+import { telegramChatId } from "./loginAccess";
 
 /**
  * Ausgehende Telegram-Hinweise – gemeinsam genutzt von Freundschaften und
@@ -31,10 +32,13 @@ export async function notify(
 ): Promise<boolean> {
   const target = await findNotificationTarget(recipientId);
   if (!target) return false;
+  // Konten ohne Telegram (seit 4.8.0 über Discord entstanden) sind nicht erreichbar
+  const chatId = telegramChatId(target.unionId);
+  if (!chatId) return false;
   const messages = notificationMessages(target.language);
   const link = appLink(path);
   const text = build(messages) + (link ? messages.openLink({ url: link }) : "");
-  return sendTelegramMessage(target.unionId, text);
+  return sendTelegramMessage(chatId, text);
 }
 
 /**
@@ -57,10 +61,12 @@ export async function notifyAdmins(
   const link = appLink(path);
   await Promise.all(
     admins.map(admin => {
+      const chatId = telegramChatId(admin.unionId);
+      if (!chatId) return false;
       const messages = notificationMessages(admin.language);
       const text =
         build(messages) + (link ? messages.openLink({ url: link }) : "");
-      return sendTelegramMessage(admin.unionId, text);
+      return sendTelegramMessage(chatId, text);
     })
   );
 }

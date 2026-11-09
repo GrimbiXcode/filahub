@@ -22,6 +22,10 @@ export const AUDIT_EVENTS = [
   "login.rate_limited",
   /** Signatur des Telegram-Widgets nicht verifizierbar */
   "login.widget_invalid",
+  /** Discord als Anmeldeweg verbunden (seit 4.8.0) */
+  "login.discord_linked",
+  /** Discord als Anmeldeweg getrennt (seit 4.8.0) */
+  "login.discord_unlinked",
   /** Abmeldung auf diesem Gerät */
   "logout",
   /** Alle Sitzungen entwertet */

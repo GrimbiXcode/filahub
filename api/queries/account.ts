@@ -325,6 +325,32 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     nur die persönlichen Zeilen. Sie filtern auf `userId`, und der ist bei
     Zeilen einer Organisation NULL – dafür muss hier nichts ergänzt werden.
   */
+  /*
+    Laufende Discord-Anmeldungen (seit 4.8.0): höchstens eine Viertelstunde
+    alt, aber solange sie liegen, tragen sie Discord-ID und -Namen. Über das
+    Konto (Verbinden) und über die verbundene Discord-ID (Einmal-Code).
+    Hashes und Verifier bleiben draußen – sie sind Schlüssel, keine Angaben
+    über die Person.
+  */
+  const discordLoginRequests = await db
+    .select({
+      purpose: schema.discordLoginRequests.purpose,
+      discordId: schema.discordLoginRequests.discordId,
+      discordUsername: schema.discordLoginRequests.discordUsername,
+      discordGlobalName: schema.discordLoginRequests.discordGlobalName,
+      expiresAt: schema.discordLoginRequests.expiresAt,
+      createdAt: schema.discordLoginRequests.createdAt,
+    })
+    .from(schema.discordLoginRequests)
+    .where(
+      profile.discordId
+        ? or(
+            eq(schema.discordLoginRequests.userId, userId),
+            eq(schema.discordLoginRequests.discordId, profile.discordId)
+          )
+        : eq(schema.discordLoginRequests.userId, userId)
+    );
+
   const [organizationMemberships, organizationInvitations] = await Promise.all([
     listMemberships(userId),
     listInvitationsForUser(userId),
@@ -385,6 +411,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     printImports,
     apiTokens,
     bridgePrinters,
+    discordLoginRequests,
   };
 }
 
@@ -453,7 +480,7 @@ export async function deleteUserAccount(
   const result = await db.transaction(async tx => {
     const user = await tx.query.users.findFirst({
       where: eq(schema.users.id, userId),
-      columns: { id: true, unionId: true },
+      columns: { id: true, unionId: true, discordId: true },
     });
     if (!user) {
       throw new Error(`Benutzer ${userId} existiert nicht`);
@@ -629,6 +656,22 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.loginCodes)
       .where(eq(schema.loginCodes.telegramId, user.unionId));
+
+    /*
+      10b. Laufende Discord-Anmeldungen (seit 4.8.0). Verbinden hängt am
+           Konto (der Fremdschlüssel kaskadiert ohnehin, hier steht es
+           ausdrücklich), ein offener Einmal-Code an der Discord-ID.
+    */
+    await tx
+      .delete(schema.discordLoginRequests)
+      .where(
+        user.discordId
+          ? or(
+              eq(schema.discordLoginRequests.userId, userId),
+              eq(schema.discordLoginRequests.discordId, user.discordId)
+            )
+          : eq(schema.discordLoginRequests.userId, userId)
+      );
 
     /*
       10a. Freundschaften und Ausleih-Vorgänge, jeweils in **beiden**

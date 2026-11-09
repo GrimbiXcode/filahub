@@ -29,7 +29,7 @@ import { lookup } from "node:dns/promises";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export const BRIDGE_VERSION = "4.7.0";
+export const BRIDGE_VERSION = "4.8.0";
 export const BRIDGE_PROTOCOL = 1;
 
 // ---------------------------------------------------------------------------

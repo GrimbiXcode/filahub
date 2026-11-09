@@ -15,12 +15,13 @@ Vorlauf angekündigt, damit du deine Daten exportieren kannst.
 
 ## 2. Konto
 
-Die Anmeldung erfolgt über Telegram. Du bist für dein Telegram-Konto und den
-Zugang dazu selbst verantwortlich; wer Zugriff darauf hat, kommt auch in dein
+Die Anmeldung erfolgt über Telegram und, wo der Betreiber es anbietet, über
+Discord. Du bist für diese Konten und den Zugang dazu selbst verantwortlich;
+wer Zugriff auf ein mit filahub verbundenes Konto hat, kommt auch in dein
 filahub-Konto.
 
-Auf manchen Instanzen ist die Registrierung auf bestimmte Telegram-Konten
-beschränkt. Ob und für wen diese Instanz offen ist, entscheidet der Betreiber.
+Auf manchen Instanzen ist die Registrierung auf bestimmte Telegram- oder
+Discord-Konten beschränkt. Ob und für wen diese Instanz offen ist, entscheidet der Betreiber.
 
 Du kannst dein Konto jederzeit in den Einstellungen löschen. Der Betreiber kann
 Konten sperren oder löschen, wenn sie gegen diese Bedingungen verstoßen oder den

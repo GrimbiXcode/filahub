@@ -114,6 +114,8 @@ export async function getSchemaMigrations(): Promise<SchemaMigration[]> {
 const COUNTED_TABLES = [
   "users",
   "login_codes",
+  // Seit 4.8.0: laufende Anmeldungen über Discord (höchstens 15 Minuten alt)
+  "discord_login_requests",
   "container_types",
   "storage_boxes",
   // Seit 2.7.0: die eigenen Farben und Oberflächen der Darstellung.

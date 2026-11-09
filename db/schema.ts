@@ -77,13 +77,33 @@ export const userRoleEnum = pgEnum("user_role", ["user", "admin"]);
 
 export const users = pgTable("users", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
-  /** Telegram-User-ID als String, eindeutig (Login über Telegram) */
+  /**
+   * Feste Kennung des Kontos, eindeutig; steht im Session-Token.
+   *
+   * Bei Konten, die über Telegram entstanden sind, die Telegram-User-ID als
+   * String – dorthin gehen auch die Telegram-Nachrichten. Seit 4.8.0 kann ein
+   * Konto auch über Discord entstehen; es heißt dann `discord:<Discord-ID>`
+   * und ist über Telegram nicht erreichbar (`telegramChatId` in
+   * `api/lib/loginAccess.ts` entscheidet das an genau einer Stelle).
+   */
   unionId: varchar("unionId", { length: 255 }).notNull().unique(),
   name: varchar("name", { length: 255 }),
   telegramUsername: varchar("telegramUsername", { length: 255 }),
+  /**
+   * Discord-User-ID (17–20 Ziffern), wenn das Konto mit Discord verbunden ist
+   * – sei es, weil es darüber entstanden ist, sei es, weil es Discord in den
+   * Einstellungen verbunden hat. Eindeutig: Ein Discord-Konto führt zu genau
+   * einem filahub-Konto.
+   */
+  discordId: varchar("discordId", { length: 32 }).unique(),
+  /**
+   * Discord-Benutzername zur Anzeige in den Einstellungen („verbunden als …“).
+   * Bei jeder Anmeldung über Discord aufgefrischt.
+   */
+  discordUsername: varchar("discordUsername", { length: 255 }),
   /*
-    Keine E-Mail-Adresse: Die Anmeldung läuft ausschließlich über Telegram, die
-    App hat für eine Adresse keinen Zweck. Die Spalte existierte bis 1.1.1 aus
+    Keine E-Mail-Adresse: Die Anmeldung läuft ausschließlich über Telegram
+    bzw. seit 4.8.0 über Discord, die App hat für eine Adresse keinen Zweck. Die Spalte existierte bis 1.1.1 aus
     der Altdatenbank heraus, wurde nie beschrieben und ist entfernt worden.
     Wer sie wieder einführt, braucht einen Zweck, eine Rechtsgrundlage und
     einen Eintrag in der Datenschutzerklärung.
@@ -198,6 +218,54 @@ export const loginCodes = pgTable("login_codes", {
 });
 
 export type LoginCode = typeof loginCodes.$inferSelect;
+
+/**
+ * Laufende Anmeldungen über Discord (seit 4.8.0, Vorbild Dungeon Buddy).
+ *
+ * Eine Zeile je Start, serverseitig statt im Cookie: So gilt `state` nur
+ * einmal, und ein Rücksprung in einem anderen Browser (installierte App auf
+ * iOS, Rückkehr aus der Discord-App) wird erkannt. Gespeichert werden nur
+ * Hashes von `state` und der Bindung an den Browser (Zufallswert im
+ * httpOnly-Cookie); der PKCE-Verifier lebt höchstens zehn Minuten.
+ *
+ * Einmal-Code: Kommt der Rücksprung ohne passendes Cookie an, meldet er dort
+ * nicht an, sondern zeigt einen 6-stelligen Code (`handoff*`). Eingelöst wird
+ * er nur dort, wo die Anmeldung begann – mit demselben Cookie –, höchstens
+ * fünfmal falsch in fünf Minuten. Bis dahin liegen hier Discord-ID und
+ * Namen; die Zeile verschwindet beim Einlösen bzw. beim Aufräumen.
+ *
+ * Verbinden in den Einstellungen: `purpose = 'link'` mit dem Konto in
+ * `userId`. Verbinden meldet nie an.
+ */
+export const discordLoginRequests = pgTable(
+  "discord_login_requests",
+  {
+    stateHash: varchar("stateHash", { length: 64 }).primaryKey(),
+    bindingHash: varchar("bindingHash", { length: 64 }).notNull().unique(),
+    verifier: varchar("verifier", { length: 128 }).notNull(),
+    purpose: varchar("purpose", { length: 8 }).notNull().default("login"),
+    userId: bigint("userId", { mode: "number" }).references(() => users.id, {
+      onDelete: "cascade",
+    }),
+    expiresAt: tsColumn("expiresAt").notNull(),
+    usedAt: tsColumn("usedAt"),
+    handoffCodeHash: varchar("handoffCodeHash", { length: 64 }),
+    handoffExpiresAt: tsColumn("handoffExpiresAt"),
+    handoffFailures: integer("handoffFailures").default(0).notNull(),
+    discordId: varchar("discordId", { length: 32 }),
+    discordUsername: varchar("discordUsername", { length: 255 }),
+    discordGlobalName: varchar("discordGlobalName", { length: 255 }),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    index("discord_login_requests_expires_idx").on(t.expiresAt),
+    index("discord_login_requests_user_idx").on(t.userId),
+    check(
+      "discord_login_requests_purpose_user",
+      sql`(${t.purpose} = 'link') = (${t.userId} IS NOT NULL) AND ${t.purpose} IN ('login', 'link')`
+    ),
+  ]
+);
 
 /*
   Die Werte stehen in `contracts/materials.ts` und werden hier nur zu einem

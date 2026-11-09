@@ -1,4 +1,4 @@
-import { count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, isNull, sql } from "drizzle-orm";
 import * as schema from "@db/schema";
 import type { InsertUser } from "@db/schema";
 import {
@@ -8,6 +8,17 @@ import {
 import { compareVersions } from "@contracts/releaseNotes";
 import { getDb } from "./connection";
 import { env } from "../lib/env";
+import { discordUnionId, hasAnyAllowlist } from "../lib/loginAccess";
+
+/** Das Konto, mit dem diese Discord-ID verbunden ist (seit 4.8.0). */
+export async function findUserByDiscordId(discordId: string) {
+  const rows = await getDb()
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.discordId, discordId))
+    .limit(1);
+  return rows.at(0);
+}
 
 export async function findUserByUnionId(unionId: string) {
   const rows = await getDb()
@@ -151,10 +162,20 @@ export async function updateUserSettings(
 export async function shouldGrantAdmin(options: {
   unionId: string;
   ownerTelegramId: string;
+  /** Seit 4.8.0: dieselbe Ansage für Discord (`OWNER_DISCORD_ID`) */
+  discordId?: string | null;
+  ownerDiscordId?: string;
   hasAllowlist: boolean;
   isFirstUser: () => Promise<boolean>;
 }): Promise<boolean> {
   if (options.ownerTelegramId && options.unionId === options.ownerTelegramId) {
+    return true;
+  }
+  if (
+    options.ownerDiscordId &&
+    options.discordId &&
+    options.discordId === options.ownerDiscordId
+  ) {
     return true;
   }
   if (!options.hasAllowlist) return false;
@@ -176,13 +197,16 @@ export async function upsertUser(data: InsertUser) {
     lastSignInAt: new Date(),
     name: data.name,
     telegramUsername: data.telegramUsername,
+    discordUsername: data.discordUsername,
   };
 
   if (values.role === undefined) {
     const grantAdmin = await shouldGrantAdmin({
       unionId: values.unionId!,
       ownerTelegramId: env.ownerTelegramId,
-      hasAllowlist: env.telegramAllowedIds.length > 0,
+      discordId: values.discordId ?? null,
+      ownerDiscordId: env.ownerDiscordId,
+      hasAllowlist: hasAnyAllowlist(env),
       // Erst fragen, wenn die Antwort zählt – sonst zwei Abfragen pro Login.
       isFirstUser: async () => {
         const existing = await findUserByUnionId(values.unionId!);
@@ -219,5 +243,88 @@ export async function revokeSessions(userId: number) {
   await getDb()
     .update(schema.users)
     .set({ tokenVersion: sql`${schema.users.tokenVersion} + 1` })
+    .where(eq(schema.users.id, userId));
+}
+
+export type DiscordProfile = {
+  id: string;
+  username: string;
+  globalName: string | null;
+};
+
+/**
+ * Anmeldung über Discord: das verbundene Konto auffrischen oder ein neues
+ * anlegen (seit 4.8.0).
+ *
+ * Ein bestehendes Konto behält seinen Namen – bei einem Telegram-Konto, das
+ * Discord nur verbunden hat, wäre es sonst Zufall, welcher Dienst zuletzt
+ * den Anzeigenamen gesetzt hat. Aufgefrischt wird nur der Discord-Benutzername
+ * und, beim Betreiber, die Rolle.
+ */
+export async function upsertDiscordUser(profile: DiscordProfile) {
+  const existing = await findUserByDiscordId(profile.id);
+  if (!existing) {
+    return upsertUser({
+      unionId: discordUnionId(profile.id),
+      name: profile.globalName ?? profile.username,
+      discordId: profile.id,
+      discordUsername: profile.username,
+      lastSignInAt: new Date(),
+    });
+  }
+  const set: Partial<InsertUser> = {
+    lastSignInAt: new Date(),
+    discordUsername: profile.username,
+  };
+  if (env.ownerDiscordId && env.ownerDiscordId === profile.id) {
+    set.role = "admin";
+  }
+  const [user] = await getDb()
+    .update(schema.users)
+    .set(set)
+    .where(eq(schema.users.id, existing.id))
+    .returning();
+  return user;
+}
+
+export type LinkDiscordResult = "linked" | "already_linked" | "taken";
+
+/**
+ * Verbindet ein Discord-Konto mit einem filahub-Konto.
+ *
+ * Ersetzt nie: Hat das Konto schon ein anderes Discord-Konto, muss es erst
+ * getrennt werden. Und eine Discord-ID, die schon zu einem anderen Konto
+ * führt, wird nicht umgehängt – sonst verlöre jemand still seinen
+ * Anmeldeweg. Der eindeutige Index fängt das Rennen zweier gleichzeitiger
+ * Verbindungen ab.
+ */
+export async function linkDiscord(
+  userId: number,
+  profile: DiscordProfile
+): Promise<LinkDiscordResult> {
+  const holder = await findUserByDiscordId(profile.id);
+  if (holder) return holder.id === userId ? "already_linked" : "taken";
+  try {
+    const rows = await getDb()
+      .update(schema.users)
+      .set({ discordId: profile.id, discordUsername: profile.username })
+      .where(and(eq(schema.users.id, userId), isNull(schema.users.discordId)))
+      .returning({ id: schema.users.id });
+    return rows.length === 1 ? "linked" : "already_linked";
+  } catch (error) {
+    // Drizzle hüllt den Treiberfehler ein; der SQLSTATE steckt in `cause`.
+    for (let e: unknown = error, i = 0; e != null && i < 5; i++) {
+      if ((e as { code?: unknown }).code === "23505") return "taken";
+      e = (e as { cause?: unknown }).cause;
+    }
+    throw error;
+  }
+}
+
+/** Trennt Discord wieder; die Prüfung, ob ein Weg bleibt, macht der Aufrufer. */
+export async function unlinkDiscord(userId: number) {
+  await getDb()
+    .update(schema.users)
+    .set({ discordId: null, discordUsername: null })
     .where(eq(schema.users.id, userId));
 }

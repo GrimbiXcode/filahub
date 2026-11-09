@@ -56,7 +56,18 @@ These are documented behaviours, not bugs:
 - **`TELEGRAM_ALLOWED_IDS` empty means nobody can sign in.** Open registration
   requires `TELEGRAM_OPEN_REGISTRATION=1` as an explicit choice. With it, and
   without `OWNER_TELEGRAM_ID`, no account is made admin automatically — see
-  `shouldGrantAdmin` in `api/queries/users.ts`.
+  `shouldGrantAdmin` in `api/queries/users.ts`. The same holds separately for
+  Discord (`DISCORD_ALLOWED_IDS`, `DISCORD_OPEN_REGISTRATION`,
+  `OWNER_DISCORD_ID`); opening Telegram does not open Discord.
+- **A Discord callback in a different browser does not sign that browser in.**
+  It shows a one-time code that only works with the cookie of the browser that
+  started the sign-in (`api/discord.ts`), so guessing codes is useless. The
+  remaining risk is phishing: an attacker starts a sign-in, sends the Discord
+  link to a victim and asks for the code the victim's browser then shows — that
+  would sign the attacker into the victim's account. Mitigations are the
+  warning on the code page, 5 minutes validity, 5 attempts, and the
+  `login.success` entry with `method: "discord_code"` in the security log. A
+  report that only restates this scenario is known.
 - **`DEV_LOGIN=1` bypasses Telegram entirely** and creates an admin. It is
   ignored when `NODE_ENV=production`, and the route is not even registered
   there — see `api/devLogin.ts`.

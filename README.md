@@ -9,7 +9,7 @@ the tare comes off. Between weigh-ins, a consumption is the grams a print used,
 typed in from the slicer; it comes off the last weigh-in until the next one
 replaces it. Short IDs for quick retrieval, a shared preset catalogue of
 manufacturers and containers, per-store sharing with friends, organizations for
-a stock several people work on, and Telegram-only login.
+a stock several people work on, and login via Telegram or (optionally) Discord.
 
 **Stack:** React + Vite + Tailwind (frontend) · Hono + tRPC (backend) ·
 Drizzle ORM + PostgreSQL (database)
@@ -43,24 +43,29 @@ cp .env.example .env
 # and, if anyone but you will use it, the LEGAL_OPERATOR_* values
 ```
 
-| Variable                     | Purpose                                                                     |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| `APP_SECRET`                 | Random secret for signing session tokens                                    |
-| `DATABASE_URL`               | PostgreSQL connection string                                                |
-| `TELEGRAM_BOT_TOKEN`         | Token from @BotFather                                                       |
-| `TELEGRAM_BOT_USERNAME`      | Bot username without @                                                      |
-| `TELEGRAM_ALLOWED_IDS`       | Allowed Telegram IDs (comma-separated); empty = nobody, unless opened below |
-| `TELEGRAM_OPEN_REGISTRATION` | Set to `1` to let any Telegram account register                             |
-| `OWNER_TELEGRAM_ID`          | Telegram ID of the admin                                                    |
-| `APP_BASE_URL`               | Public address of this instance — links in Telegram messages; optional      |
-| `LEGAL_OPERATOR_NAME`        | Who runs this instance — shown in the imprint and privacy policy            |
-| `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator — multi-line, see below                      |
-| `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                |
-| `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                     |
-| `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                   |
-| `UPLOAD_DIR`                 | Directory for photos and 3MF files of prints (default `/data/uploads`)      |
-| `STORAGE_DRIVER`             | `local` (default, the directory above) or `s3` — see "File storage" below   |
-| `S3_*`                       | Bucket, region, endpoint and keys when `STORAGE_DRIVER=s3`                  |
+| Variable                     | Purpose                                                                            |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| `APP_SECRET`                 | Random secret for signing session tokens                                           |
+| `DATABASE_URL`               | PostgreSQL connection string                                                       |
+| `TELEGRAM_BOT_TOKEN`         | Token from @BotFather                                                              |
+| `TELEGRAM_BOT_USERNAME`      | Bot username without @                                                             |
+| `TELEGRAM_ALLOWED_IDS`       | Allowed Telegram IDs (comma-separated); empty = nobody, unless opened below        |
+| `TELEGRAM_OPEN_REGISTRATION` | Set to `1` to let any Telegram account register                                    |
+| `OWNER_TELEGRAM_ID`          | Telegram ID of the admin                                                           |
+| `APP_BASE_URL`               | Public address of this instance — links in Telegram messages; required for Discord |
+| `DISCORD_CLIENT_ID`          | Discord login (optional, with the secret and `APP_BASE_URL`), see section 6        |
+| `DISCORD_CLIENT_SECRET`      | Client secret of the Discord application                                           |
+| `DISCORD_ALLOWED_IDS`        | Allowed Discord IDs (17–20 digits, comma-separated)                                |
+| `DISCORD_OPEN_REGISTRATION`  | Set to `1` to let any Discord account register                                     |
+| `OWNER_DISCORD_ID`           | Discord ID of the admin                                                            |
+| `LEGAL_OPERATOR_NAME`        | Who runs this instance — shown in the imprint and privacy policy                   |
+| `LEGAL_OPERATOR_ADDRESS`     | Postal address of the operator — multi-line, see below                             |
+| `LEGAL_OPERATOR_EMAIL`       | Contact address for data protection requests                                       |
+| `LEGAL_OPERATOR_HOSTING`     | Who provides the servers (processor under Art. 28 GDPR)                            |
+| `TRUST_PROXY_HOPS`           | Trusted reverse proxies in front of the app (default `1`)                          |
+| `UPLOAD_DIR`                 | Directory for photos and 3MF files of prints (default `/data/uploads`)             |
+| `STORAGE_DRIVER`             | `local` (default, the directory above) or `s3` — see "File storage" below          |
+| `S3_*`                       | Bucket, region, endpoint and keys when `STORAGE_DRIVER=s3`                         |
 
 ### Multi-line values
 
@@ -279,6 +284,35 @@ TLS certificate automatically. nginx + Certbot works too, of course.
 2. Send `/login` to the bot → receive a 6-digit code (valid for 5 min)
 3. Enter the code on the website → logged in
 
+**Optional: Discord** (button "Sign in with Discord", since 4.8.0)
+
+OAuth2 authorization code flow with PKCE and scope `identify`: filahub only
+receives the Discord ID, username and display name; the access token is revoked
+right away. Setup:
+
+1. Create an application at
+   [discord.com/developers/applications](https://discord.com/developers/applications).
+2. Under "OAuth2", add the redirect `<APP_BASE_URL>/api/auth/discord/callback`
+   (e.g. `https://filahub.yourdomain.at/api/auth/discord/callback`).
+3. Copy client ID and client secret into `DISCORD_CLIENT_ID` and
+   `DISCORD_CLIENT_SECRET`. `APP_BASE_URL` must be set too — the redirect is
+   never derived from request headers.
+4. Decide who may create an account via Discord: `DISCORD_ALLOWED_IDS` or
+   `DISCORD_OPEN_REGISTRATION=1`. Someone who is not allowed sees their
+   Discord ID on the login page to send it to you.
+5. Optionally `OWNER_DISCORD_ID` for the admin role.
+
+Existing users connect Discord under Settings → "Sign-in methods" and can then
+sign in either way to the same account — no entry in `DISCORD_ALLOWED_IDS`
+needed, since their account is already allowed via Telegram. Disconnecting is
+only possible while another allowed method remains. An account created via
+Discord has no Telegram and therefore receives no Telegram notifications.
+
+If Discord sends the browser back to a different browser than the one that
+started (typical for the installed app on iOS), that browser is **not** signed
+in; it shows a 6-digit code that only works in the app where the sign-in began
+(5 minutes, 5 attempts).
+
 ### Who may sign in
 
 Only the IDs in `TELEGRAM_ALLOWED_IDS` can sign in. **An empty list means
@@ -289,9 +323,15 @@ That default is deliberate. Open registration makes you the data controller for
 however many strangers show up, with everything that follows from it — see
 [PRIVACY.md](PRIVACY.md). Nobody should end up there by overlooking a variable.
 
-`OWNER_TELEGRAM_ID` gets the admin role and keeps it on every sign-in. If it is
-unset, the very first account to register becomes admin — but only while a
-whitelist is in place. With open registration there is no such shortcut, or the
+The same holds for Discord, separately: `DISCORD_ALLOWED_IDS` or
+`DISCORD_OPEN_REGISTRATION=1`. Opening Telegram does **not** open Discord. An
+existing account may sign in via either of its methods as soon as one of them is
+allowed. With a list in place, the owner (`OWNER_TELEGRAM_ID`,
+`OWNER_DISCORD_ID`) counts as allowed even if not on it.
+
+`OWNER_TELEGRAM_ID` (or `OWNER_DISCORD_ID`) gets the admin role and keeps it on
+every sign-in. If both are unset, the very first account to register becomes
+admin — but only while a whitelist is in place. With open registration there is no such shortcut, or the
 first stranger to find a fresh instance would take it over.
 
 ## 7. Preset catalogue
