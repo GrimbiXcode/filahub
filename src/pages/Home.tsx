@@ -31,6 +31,16 @@ import {
 } from "@contracts/materialColumns";
 import { roleAllows } from "@contracts/organizations";
 import { mergeCandidates, normalizeMaterialType } from "@contracts/materials";
+import {
+  OPEN_RANGE,
+  REMAINING_UNITS,
+  defaultUnitForKind,
+  inRange,
+  remainingValueIn,
+  unitsForKind,
+  type RemainingRange,
+  type RemainingUnit,
+} from "@contracts/remainingFilter";
 import AuthLayout from "@/components/AuthLayout";
 import { AppearanceSwatch } from "@/components/AppearanceSwatch";
 import { BulkEditDialog } from "@/components/BulkEditDialog";
@@ -39,6 +49,7 @@ import { IdentifierLookup } from "@/components/IdentifierLookup";
 import { MaterialPanel } from "@/components/MaterialPanel";
 import { MaterialShelf } from "@/components/MaterialShelf";
 import { PageHeader } from "@/components/PageHeader";
+import { RemainingRangeFilter } from "@/components/RemainingRangeFilter";
 import { Spool } from "@/components/Spool";
 import { StockTiles } from "@/components/StockTiles";
 import { LAGER_PATH, gebindePath, materialPath } from "@/const";
@@ -102,6 +113,7 @@ import { useDebounced } from "@/hooks/useDebounced";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { useActiveLagerId } from "@/lib/activeLager";
 import { groupByProduct, groupByStorageBox } from "@/lib/shelf";
+import { secondaryUnitFor, useRemainingFormat } from "@/lib/remainingFilter";
 import { fillLevelColor, fillLevelTextColor } from "@/lib/format";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -147,6 +159,14 @@ const VIEW_KEY = "home-view";
  */
 type ShelfGrouping = "box" | "product";
 const SHELF_GROUPING_KEY = "home-shelf-grouping";
+
+/**
+ * Einheit des Restmengen-Filters. Gemerkt wird nur die Einheit, nicht der
+ * Bereich: Wer in Metern denkt, tut das morgen auch noch – ein Bereich von
+ * gestern verschwiege dagegen still Rollen. Passt die gemerkte Einheit nicht
+ * zum Lager (Meter im Pulverlager), gilt dessen Vorgabe.
+ */
+const REMAINING_UNIT_KEY = "home-remaining-unit";
 
 /** Vergleich für die gewählte Sortierspalte; leere Werte immer ans Ende. */
 function compareBy(
@@ -238,6 +258,51 @@ export default function Home() {
   const [textureFilter, setTextureFilter] = useState(ALL);
   const [boxFilter, setBoxFilter] = useState(ALL);
   const [onlyLowStock, setOnlyLowStock] = useState(false);
+  /*
+    Restmengen-Filter. Der Bereich hängt am Lager, in dem er gesetzt wurde:
+    Ein anderes Lager hat andere Grenzen und oft eine andere Zweiteinheit, ein
+    mitgenommener Bereich wäre dort Zufall. So setzt ihn ein Lagerwechsel
+    zurück, ohne Effekt.
+  */
+  const activeLagerKind =
+    lagerList?.find(l => l.id === activeLagerId)?.materialKind ?? "filament";
+  const [storedRemainingUnit, setStoredRemainingUnit] =
+    useState<RemainingUnit | null>(() => {
+      try {
+        const value = localStorage.getItem(REMAINING_UNIT_KEY);
+        return REMAINING_UNITS.find(u => u === value) ?? null;
+      } catch {
+        return null;
+      }
+    });
+  const remainingUnit =
+    storedRemainingUnit != null &&
+    unitsForKind(activeLagerKind).includes(storedRemainingUnit)
+      ? storedRemainingUnit
+      : defaultUnitForKind(activeLagerKind);
+  const [remainingState, setRemainingState] = useState<{
+    lagerId: number | null;
+    range: RemainingRange;
+  }>({ lagerId: null, range: OPEN_RANGE });
+  const remainingRange =
+    remainingState.lagerId === activeLagerId
+      ? remainingState.range
+      : OPEN_RANGE;
+  const [remainingLog, setRemainingLog] = useState(false);
+  const setRemaining = (unit: RemainingUnit, range: RemainingRange) => {
+    if (unit !== remainingUnit) {
+      setStoredRemainingUnit(unit);
+      try {
+        localStorage.setItem(REMAINING_UNIT_KEY, unit);
+      } catch {
+        /* Ohne Speicher gilt die Wahl für diese Seite – das reicht. */
+      }
+    }
+    setRemainingState({ lagerId: activeLagerId, range });
+  };
+  const clearRemaining = () =>
+    setRemainingState({ lagerId: activeLagerId, range: OPEN_RANGE });
+  const { rangeLabel: remainingRangeLabel } = useRemainingFormat();
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("identifier");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -403,7 +468,8 @@ export default function Home() {
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [materials]);
 
-  const filtered = useMemo(() => {
+  /** Alle Filter außer der Restmenge – deren Verteilung zeigt der Filter */
+  const baseFiltered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const typeKey =
       typeFilter === ALL ? null : normalizeMaterialType(typeFilter);
@@ -448,6 +514,10 @@ export default function Home() {
     boxFilter,
     onlyLowStock,
   ]);
+
+  const filtered = baseFiltered.filter(m =>
+    inRange(remainingValueIn(remainingUnit, m), remainingRange)
+  );
 
   const sorted = useMemo(() => {
     const factor = sortDir === "asc" ? 1 : -1;
@@ -579,6 +649,17 @@ export default function Home() {
       label: t.home.filterLowStock,
       clear: () => setOnlyLowStock(false),
     });
+  const remainingChip = remainingRangeLabel(
+    remainingUnit,
+    secondaryUnitFor(activeLagerKind),
+    remainingRange
+  );
+  if (remainingChip)
+    activeFilters.push({
+      key: "remaining",
+      label: t.home.remainingFilter.chip({ range: remainingChip }),
+      clear: clearRemaining,
+    });
 
   const resetFilters = () => {
     setSearch("");
@@ -587,6 +668,7 @@ export default function Home() {
     setManufacturerFilter(ALL);
     setBoxFilter(ALL);
     setOnlyLowStock(false);
+    clearRemaining();
   };
 
   const toggleSort = (key: SortKey) => {
@@ -706,6 +788,16 @@ export default function Home() {
           </Button>
         </div>
       </div>
+      <RemainingRangeFilter
+        kind={activeLagerKind}
+        unit={remainingUnit}
+        range={remainingRange}
+        onChange={setRemaining}
+        log={remainingLog}
+        onLogChange={setRemainingLog}
+        materials={materials ?? []}
+        visible={baseFiltered}
+      />
       <div className="flex items-center justify-between gap-3 rounded-lg border p-3 sm:col-span-2">
         <Label htmlFor="low-stock" className="font-normal">
           {t.home.onlyLowStock}
@@ -857,7 +949,7 @@ export default function Home() {
                   </PopoverTrigger>
                   <PopoverContent
                     align="start"
-                    className="w-[min(92vw,600px)] p-4"
+                    className="max-h-(--radix-popover-content-available-height) w-[min(92vw,600px)] overflow-y-auto p-4"
                   >
                     {filterFields}
                     <div className="mt-3 flex justify-end">

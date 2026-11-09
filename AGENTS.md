@@ -49,8 +49,9 @@ src/            React-Frontend
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
-                PrintFiles (Fotos und 3MF eines Drucks), BulkEditDialog
-                (Sammelbearbeitung aus der Übersicht)
+                PrintFiles (Fotos und 3MF eines Drucks),
+                RemainingRangeFilter (Restmengen-Filter der Übersicht),
+                BulkEditDialog (Sammelbearbeitung aus der Übersicht)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -66,6 +67,8 @@ src/            React-Frontend
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
                 shelf.ts (Regal: Gruppierung nach Drybox oder Material),
+                remainingFilter.ts (Zweiteinheit je Lager, Texte des
+                Restmengen-Filters),
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
@@ -121,6 +124,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 identifierTemplate.ts (Kennungsvorlage je Lager: Platzhalter,
                 nächste freie Nummer),
                 printSettings.ts (Druckeinstellungen je Materialart),
+                remainingFilter.ts (Restmengen-Filter: Einheiten, Skala,
+                Positionen, Schnellwahl),
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 bulkEdit.ts (Sammelbearbeitung: erlaubte Felder),
@@ -695,6 +700,38 @@ scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
   dort ebenso) – `S3_TEST_PREFIX=` leer setzen. Die Tests räumen nur ab, was
   sie selbst angelegt haben; trotzdem einen eigenen Test-Bucket nehmen, nie
   den einer laufenden Instanz.
+
+## Restmengen-Filter (seit 4.5.0)
+
+Ein Bereich mit zwei Griffen im Filter der Übersicht, wahlweise in Gramm, in
+der Zweiteinheit des Lagers (Meter, Liter) oder in Prozent; Pulver kennt nur
+Gramm und Prozent. Rechnung in `contracts/remainingFilter.ts` (getestet in
+`api/remainingFilter.test.ts`), Oberfläche in
+`src/components/RemainingRangeFilter.tsx`, gefiltert in `Home.tsx` wie die
+übrigen Filter im Browser.
+
+- **Je Gebinde, nicht je Material.** Die Frage ist „welche Rolle ist fast
+  leer?“; den Bestand des Materials deckt „nur knapp“ ab.
+- **Offene Enden sind `null`.** Ein Griff am Rand – oder einer, der nach dem
+  Runden auf 0 bzw. die Obergrenze fällt – schneidet nichts ab. „≥ 500 g“
+  bleibt richtig, wenn die größte Rolle wechselt.
+- **Ohne Wert in der Einheit fliegt ein Gebinde bei aktivem Bereich raus**
+  (Meter ohne Dichte), und der Filter sagt, wie viele das sind.
+- **Der Slider arbeitet in Positionen** (0–1000), nicht in Werten: So bleibt die
+  Strecke beim Ziehen gleich breit, auch auf der logarithmischen Skala. Die
+  Strecke zwischen den Griffen zieht beide Grenzen zugleich – das kann Radix
+  nicht; der Zeiger auf der Strecke wird in der Komponente behandelt und
+  erreicht den Slider nicht.
+- **Die Griffe bleiben, wo sie hingezogen wurden** (`placed`), statt aus dem
+  gerundeten Wert neu gesetzt zu werden. Sonst landete der Rückweg neben dem
+  Tastenraster des Sliders, und Radix rastete bei jedem Tastendruck wieder auf
+  dieselbe Stelle ein.
+- **Gemerkt wird die Einheit** (`localStorage`, `home-remaining-unit`), nicht
+  der Bereich. Der Bereich hängt am Lager, in dem er gesetzt wurde; ein
+  Lagerwechsel setzt ihn zurück.
+- **Schnellwahl** in Prozent: „Fast leer“ ≤ 10 % (der rote Ring der Spule),
+  „Angebrochen“ 11–89 %, „Voll“ ≥ 90 %. Der Füllstand ist ganzzahlig, der Test
+  prüft, dass jeder Wert genau einen Treffer hat.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -1470,8 +1507,8 @@ Datenbank.
 - Nur Server-Tests sind vorgesehen: `api/**/*.test.ts` / `api/**/*.spec.ts`.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
-  `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `bulkEdit`,
+  `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
+  `printJobs`, `bulkEdit`,
   `printFiles`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
