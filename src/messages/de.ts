@@ -314,6 +314,44 @@ export const de = {
       `Filter „${vars.label}“ entfernen`,
     filterSearch: (vars: { query: string }) => `Suche: „${vars.query}“`,
     filterLowStock: "Knapper Bestand",
+    remainingFilter: {
+      label: "Restmenge",
+      unitAria: "Einheit der Restmenge",
+      unitGrams: "g",
+      unitMeters: "m",
+      unitLiters: "l",
+      unitPercent: "%",
+      lowerThumb: "Untergrenze der Restmenge",
+      upperThumb: "Obergrenze der Restmenge",
+      dragRange: "Bereich ziehen, um beide Grenzen zugleich zu verschieben",
+      from: "von",
+      to: "bis",
+      all: "Alle",
+      between: (vars: { from: string; to: string }) =>
+        `${vars.from} – ${vars.to}`,
+      atMost: (vars: { to: string }) => `≤ ${vars.to}`,
+      atLeast: (vars: { from: string }) => `≥ ${vars.from}`,
+      chip: (vars: { range: string }) => `Restmenge ${vars.range}`,
+      logScale: "Logarithmische Skala",
+      presetsAria: "Schnellwahl Füllstand",
+      presets: {
+        almostEmpty: "Fast leer",
+        opened: "Angebrochen",
+        full: "Voll",
+      },
+      missingMeters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Meterangabe (keine Dichte hinterlegt) ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Meterangabe (keine Dichte hinterlegt) sind ausgeblendet.`,
+      missingLiters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Literangabe (keine Dichte hinterlegt) ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Literangabe (keine Dichte hinterlegt) sind ausgeblendet.`,
+      missingPercent: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 Gebinde ohne Nennmenge ist ausgeblendet."
+          : `${vars.count} Gebinde ohne Nennmenge sind ausgeblendet.`,
+    },
     materialType: "Materialart",
     allMaterialTypes: "Alle Materialarten",
     texture: "Oberfläche",

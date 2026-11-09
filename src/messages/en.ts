@@ -300,6 +300,44 @@ export const en: Messages = {
       `Remove the “${vars.label}” filter`,
     filterSearch: (vars: { query: string }) => `Search: “${vars.query}”`,
     filterLowStock: "Running low",
+    remainingFilter: {
+      label: "Remaining",
+      unitAria: "Unit for the remaining amount",
+      unitGrams: "g",
+      unitMeters: "m",
+      unitLiters: "l",
+      unitPercent: "%",
+      lowerThumb: "Lower limit of the remaining amount",
+      upperThumb: "Upper limit of the remaining amount",
+      dragRange: "Drag the range to move both limits at once",
+      from: "from",
+      to: "to",
+      all: "All",
+      between: (vars: { from: string; to: string }) =>
+        `${vars.from} – ${vars.to}`,
+      atMost: (vars: { to: string }) => `≤ ${vars.to}`,
+      atLeast: (vars: { from: string }) => `≥ ${vars.from}`,
+      chip: (vars: { range: string }) => `Remaining ${vars.range}`,
+      logScale: "Logarithmic scale",
+      presetsAria: "Fill level shortcuts",
+      presets: {
+        almostEmpty: "Almost empty",
+        opened: "Opened",
+        full: "Full",
+      },
+      missingMeters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 container without a length (no density set) is hidden."
+          : `${vars.count} containers without a length (no density set) are hidden.`,
+      missingLiters: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 container without a volume (no density set) is hidden."
+          : `${vars.count} containers without a volume (no density set) are hidden.`,
+      missingPercent: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 container without a nominal amount is hidden."
+          : `${vars.count} containers without a nominal amount are hidden.`,
+    },
     materialType: "Material type",
     allMaterialTypes: "All material types",
     texture: "Finish",
