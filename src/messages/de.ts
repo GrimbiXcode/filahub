@@ -1590,6 +1590,31 @@ export const de = {
       firmware: (vars: { firmware: string }) => `Firmware ${vars.firmware}`,
     },
   },
+
+  nfc: {
+    scan: "Spule antippen (NFC)",
+    fromTag: "Vom NFC-Tag",
+    scanTitle: "Spule antippen",
+    scanText:
+      "Halte die Rückseite des Telefons an das Etikett der Spule. Gelesen wird ein OpenPrintTag, wie es auf Prusament-Spulen steckt.",
+    retry: "Noch einmal",
+    read: (vars: { name: string }) =>
+      `Vom Tag gelesen: ${vars.name} – bitte prüfen.`,
+    readPrintSettings:
+      "Die Druckwerte vom Tag übernimmst du auf der Material-Seite unter „Druckeinstellungen“.",
+    kindMismatch: (vars: { kind: string }) =>
+      `Das Tag beschreibt ${vars.kind} – das gewählte Lager passt nicht dazu.`,
+    colorUnknown: (vars: { hex: string }) =>
+      `Farbe ${vars.hex} hat keinen Namen im Katalog – trag einen ein oder lege ihn unter „Farben & Oberflächen“ an.`,
+    noPrintSettings: "Auf dem Tag stehen keine Druckwerte.",
+    errors: {
+      unsupported: "Dieses Gerät kann keine NFC-Tags lesen.",
+      denied: "Der Zugriff auf NFC wurde nicht erlaubt.",
+      not_openprinttag: "Auf dem Tag steht kein OpenPrintTag.",
+      corrupt: "Das Tag ist beschädigt oder unvollständig.",
+      unreadable: "Das Tag ließ sich nicht lesen – noch einmal ruhig halten.",
+    },
+  },
   consumption: {
     title: "Verbrauch abbuchen",
     description: (vars: { name: string }) =>

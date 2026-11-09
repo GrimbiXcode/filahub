@@ -1,7 +1,31 @@
 # Plan: Prusa-Anbindung (#41)
 
-Stand: Phase A und D sind mit 4.7.0 umgesetzt (siehe `AGENTS.md`, „G-Code
-auslesen“ und „Filamentprofile von PrusaSlicer“); B, C und E sind Entwurf. 4.5.0 und 4.6.0 sind anderweitig vergeben.
+Stand: **Alle fünf Phasen sind mit 4.7.0 umgesetzt** (siehe `AGENTS.md`,
+„G-Code auslesen“, „Filamentprofile von PrusaSlicer“, „Eingangsfach und
+API-Schlüssel“, „Drucker-Brücke“, „OpenPrintTag“). 4.5.0 und 4.6.0 waren
+anderweitig vergeben. Abweichungen vom Entwurf stehen unter „Stand der
+Umsetzung“; was an echten Geräten noch zu prüfen ist, unter „Vor der
+Umsetzung zu prüfen“.
+
+## Stand der Umsetzung
+
+- **Phase C ist anders gebaut als entworfen** – auf Wunsch so einfach wie
+  möglich für den Endbenutzer: Statt einer Konfigurationsdatei kennt die
+  Brücke nur Adresse und Schlüssel (ein `docker run`, den die App fertig
+  anzeigt). Drucker, Adressen und Zugang pflegt der Benutzer **in der App**;
+  die Brücke holt sie ab (`GET /api/bridge/config`) und meldet Zustand und
+  Diagnose je Drucker samt Protokoll zurück (`POST /api/bridge/report`).
+  Dafür gibt es eine zweite Schlüsselart (`bridge`), die Tabelle
+  `bridge_printers` und verschlüsselt gespeicherte PrusaLink-Zugänge
+  (AES-256-GCM aus `APP_SECRET`). Die Brücke fragt nur Ziele im lokalen
+  Netz an und meldet nur Kennungen, nie Antwortinhalte.
+- **Phase B:** Eingangsfach und Schlüssel wie entworfen; das Skript liegt
+  unter `public/tools/` (jede Instanz bietet es selbst an), seine Tests unter
+  `tools/`.
+- **Phase E:** Lesen über Web NFC im Materialformular und in den
+  Druckeinstellungen, ohne die UID zu speichern. Schreiben (Verbrauch zurück
+  aufs Tag) und „Spule antippen → Wiegen“ sind nicht umgesetzt.
+- **Versionen:** alles in 4.7.0 statt verteilt.
 
 Issue #41: „Verbrauchsdaten direkt ab Prusa einbinden. Verbräuche könnten
 geloggt und im Nachhinein den Materialien zugewiesen werden.“
@@ -450,30 +474,26 @@ auf `material_products` und die Nennmenge am Gebinde.
 Annahmen über die Prusa-Seite, die gegen echte Dateien und Geräte geprüft
 werden müssen, bevor Code entsteht:
 
-| Annahme                                                                         | Phase | Wie prüfen                                                       |
-| ------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------- |
-| bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | **bestätigt** (Spezifikation, Beispiele PrusaSlicer 2.6 und 2.8) |
-| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt**, auch MMU3 (echte Datei, PrusaSlicer 2.9.7)        |
-| Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                     |
-| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                       |
-| Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                       |
-| PrusaSlicer importiert ein Paket mit nur einem `[filament:…]`-Abschnitt         | D     | Export aus filahub in PrusaSlicer 2.9 importieren                |
-| OpenPrintTag-Format und Schreibbarkeit                                          | E     | Spezifikation, ein Prusament-Tag auslesen                        |
+| Annahme                                                                         | Phase | Wie prüfen                                                                                                |
+| ------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------- |
+| bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | **bestätigt** (Spezifikation, Beispiele PrusaSlicer 2.6 und 2.8)                                          |
+| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt**, auch MMU3 (echte Datei, PrusaSlicer 2.9.7)                                                 |
+| Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                                                              |
+| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                                                                |
+| Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                                                                |
+| PrusaSlicer importiert ein Paket mit nur einem `[filament:…]`-Abschnitt         | D     | Export aus filahub in PrusaSlicer 2.9 importieren                                                         |
+| OpenPrintTag-Format                                                             | E     | **bestätigt** gegen die Beispiel-Tags der Spezifikation; ein echtes Tag mit Web NFC auf Android steht aus |
+| Web NFC liest NFC-V-Tags (ISO 15693) auf Android                                | E     | an einem Telefon mit Chrome prüfen                                                                        |
+| PrusaLink-Antworten (Status, Job, Datei-Metadaten, Digest) wie im Nachbau       | C     | Brücke gegen MK4S/Core One laufen lassen                                                                  |
 
 Wo eine Annahme nicht stimmt, ändert sich der Leser, nicht das Eingangsfach:
 Phase B hängt an keiner davon.
 
 ## Versionen
 
-| Version  | Inhalt                                   |
-| -------- | ---------------------------------------- |
-| 4.7.0    | Phase A und D (umgesetzt)                |
-| folgende | Phase B (Fach, Schlüssel, Slicer-Skript) |
-| danach   | Phase C (Brücke)                         |
-| später   | Phase E, je nach Prüfung                 |
-
-Feste Nummern erst bei der Umsetzung: 4.5.0 und 4.6.0 waren schon vergeben,
-als Phase A fertig wurde.
+| Version | Inhalt                     |
+| ------- | -------------------------- |
+| 4.7.0   | Phasen A bis E (umgesetzt) |
 
 Je Version eine Release Note (englisch, nur für Benutzer; die Brücke und das
 Skript bekommen ihre Anleitung im README, nicht in der Note) und der

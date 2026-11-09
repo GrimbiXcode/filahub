@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  BRIDGE_VERSION,
   Bridge,
   classifyNetworkError,
   filamentsFromMeta,
@@ -471,5 +473,16 @@ describe("Hilfen der Brücke", () => {
       },
     ]);
     expect(titleFromFileName("/usb/BENCHY~1.BGC")).toBe("BENCHY~1");
+  });
+});
+
+describe("Versionen", () => {
+  it("Brücke und PrusaSlicer-Skript tragen die Version der App", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8")) as {
+      version: string;
+    };
+    expect(BRIDGE_VERSION).toBe(pkg.version);
+    const script = readFileSync("public/tools/filahub-import.py", "utf8");
+    expect(script).toContain(`VERSION = "${pkg.version}"`);
   });
 });

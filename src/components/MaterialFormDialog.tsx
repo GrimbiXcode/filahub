@@ -46,7 +46,14 @@ import {
   submitShortcut,
   SUBMIT_KEYSHORTCUTS,
 } from "@/lib/formKeyboard";
-import { useT } from "@/lib/i18nContext";
+import { useI18n, useT } from "@/lib/i18nContext";
+import { NfcScanDialog } from "@/components/NfcScanDialog";
+import { nfcSupported } from "@/lib/nfc";
+import {
+  nearestBuiltinColorName,
+  type OpenPrintTagMaterial,
+} from "@contracts/openPrintTag";
+import { Nfc } from "lucide-react";
 import { kindLabel } from "@/lib/materialKind";
 import { trpc } from "@/lib/trpc";
 import type { MaterialOverview } from "@/types";
@@ -115,6 +122,13 @@ export function MaterialFormDialog({
    */
   const [productId, setProductId] = useState<number | null>(null);
 
+  const { language } = useI18n();
+  const [nfcOpen, setNfcOpen] = useState(false);
+  const [tagNote, setTagNote] = useState<{
+    label: string;
+    unknownColor: string | null;
+    kind: OpenPrintTagMaterial["kind"];
+  } | null>(null);
   const [identifier, setIdentifier] = useState("");
   const [name, setName] = useState("");
   const [materialType, setMaterialType] = useState("");
@@ -165,6 +179,7 @@ export function MaterialFormDialog({
       setNameTouched(!!material?.name);
       setIdentifierTouched(!!material);
       setRejectedIdentifier(null);
+      setTagNote(null);
       setIdentifier(material?.identifier ?? "");
       setName(material?.name ?? "");
       setMaterialType(material?.materialType ?? "");
@@ -346,6 +361,48 @@ export function MaterialFormDialog({
     (isEdit && p.id === material?.productId && p.gebindeCount <= 1) ||
     (p.kind === selectedLager.materialKind &&
       (p.diameterUm ?? null) === (selectedLager.filamentDiameterUm ?? null));
+  /* „Spule antippen“ (seit 4.7.0): was vom OpenPrintTag übernommen wurde */
+  const applyTag = (tag: OpenPrintTagMaterial) => {
+    const label =
+      tag.manufacturer &&
+      tag.name &&
+      !tag.name.toLowerCase().startsWith(tag.manufacturer.toLowerCase())
+        ? `${tag.manufacturer} ${tag.name}`
+        : (tag.name ?? tag.manufacturer ?? "");
+    // Gibt es das Material schon (und passt es ins Lager), kommt nur ein Gebinde dazu
+    const existing = label
+      ? productOptions.find(p => p.name.toLowerCase() === label.toLowerCase())
+      : undefined;
+    let unknownColor: string | null = null;
+    if (existing) {
+      setProductId(existing.id);
+    } else {
+      setProductId(null);
+      if (label) {
+        setName(label);
+        setNameTouched(true);
+      }
+      if (tag.materialType) setMaterialType(tag.materialType);
+      if (tag.manufacturer) setManufacturer(tag.manufacturer);
+      if (tag.colorHex) {
+        const colorName = nearestBuiltinColorName(tag.colorHex, language);
+        if (colorName) setColor(colorName);
+        else {
+          setNewHex(tag.colorHex);
+          unknownColor = tag.colorHex;
+        }
+      }
+      if (tag.densityGramsPerLiter)
+        setDensity(String(tag.densityGramsPerLiter));
+    }
+    if (tag.nominalWeight) setNominalWeight(String(tag.nominalWeight));
+    setTagNote({
+      label: label || "OpenPrintTag",
+      unknownColor,
+      kind: tag.kind,
+    });
+  };
+
   const productOptions = (products ?? []).filter(
     p => p.id === productId || productFits(p)
   );
@@ -674,6 +731,42 @@ export function MaterialFormDialog({
             die Zelle bei ihrer Spaltenbreite, und der Inhalt darin kürzt sich.
           */}
           <div className="grid items-start gap-4 overflow-y-auto p-4 [&>*]:min-w-0 sm:grid-cols-2 sm:p-6">
+            {!isEdit && nfcSupported() && (
+              <div className="grid gap-1.5 rounded-md border border-dashed p-3 sm:col-span-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="justify-self-start"
+                  onClick={() => setNfcOpen(true)}
+                >
+                  <Nfc className="mr-1.5 h-3.5 w-3.5" />
+                  {t.nfc.scan}
+                </Button>
+                {tagNote && (
+                  <>
+                    <p className="text-xs text-muted-foreground wrap-anywhere">
+                      {t.nfc.read({ name: tagNote.label })}{" "}
+                      {t.nfc.readPrintSettings}
+                    </p>
+                    {tagNote.unknownColor && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400">
+                        {t.nfc.colorUnknown({ hex: tagNote.unknownColor })}
+                      </p>
+                    )}
+                    {tagNote.kind &&
+                      selectedLager &&
+                      tagNote.kind !== selectedLager.materialKind && (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">
+                          {t.nfc.kindMismatch({
+                            kind: kindLabel(t, tagNote.kind),
+                          })}
+                        </p>
+                      )}
+                  </>
+                )}
+              </div>
+            )}
             {/*
               Das Lager zuerst und über die ganze Breite: Es bestimmt Materialart
               und – beim Filament – die Stärke, aus denen die Zweitanzeige
@@ -1145,6 +1238,13 @@ export function MaterialFormDialog({
             </Button>
           </DialogFooter>
         </form>
+        {!isEdit && nfcSupported() && (
+          <NfcScanDialog
+            open={nfcOpen}
+            onOpenChange={setNfcOpen}
+            onRead={applyTag}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

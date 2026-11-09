@@ -32,6 +32,8 @@ src/            React-Frontend
                 Material mit allen Gebinden), PrintJobs und PrintJobDetail
                 (Druckhistorie), Lager, ContainerTypes, StorageBoxes,
                 Appearance (eigene Farben und Oberflächen),
+                PrintImports (Eingangsfach), Connections (API-Schlüssel,
+                Drucker-Brücke),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminUsers, AdminMonitoring, AdminSystem,
@@ -49,7 +51,8 @@ src/            React-Frontend
                 ProductGebindeList (die Gebinde eines Materials samt Bestand),
                 PrintSettings (Druckeinstellungen: Zeile, Karte, Dialog),
                 PrintJobDialog, PrintJobCard und RecentPrints (Druckhistorie),
-                PrintFiles (Fotos und 3MF eines Drucks)
+                PrintFiles (Fotos und 3MF eines Drucks), NfcScanDialog
+                (OpenPrintTag per Web NFC)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -69,6 +72,7 @@ src/            React-Frontend
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
                 entfernen), slicerFile.ts (Slicer-Datei stückweise lesen),
+                nfc.ts (Web NFC, OpenPrintTag),
                 utils.ts (cn-Helfer)
   release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
                 **Englisch**, eigene AGENTS.md im Verzeichnis
@@ -77,9 +81,12 @@ api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   fileRoutes.ts /api/files/* – Fotos und 3MF hochladen, ausliefern, exportieren
+  ingestRoutes.ts /api/ingest/*, /api/bridge/* – Absender mit API-Schlüssel
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
                 (die Gebinde), product (die Materialien), appearance, friend,
-                organization, print (die Druckhistorie), preset, admin, legal,
+                organization, print (die Druckhistorie), printImport
+                (Eingangsfach), connection (API-Schlüssel, Brücke), preset,
+                admin, legal,
                 unblock (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
                 eine `organizationId` aus einer Eingabe auflöst und übersetzt
@@ -100,7 +107,8 @@ api/            Hono/tRPC-Backend
                 products.ts (Materialien: Liste, Zusammenführen, Aufräumen
                 ohne Gebinde), printJobs.ts (Druckhistorie: Schreibpfade samt
                 Verbrauchskopplung, Suche, Seiten), printFiles.ts (Dateizeilen,
-                Kontingent, Titelbild, Aufräumlauf),
+                Kontingent, Titelbild, Aufräumlauf), printImports.ts
+                (Eingangsfach), apiTokens.ts (Schlüssel, Drucker der Brücke),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -125,7 +133,10 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 slicerMetadata.ts (G-Code/bgcode von PrusaSlicer lesen,
                 Materialvorschlag), prusaProfile.ts (Filamentprofile von
-                PrusaSlicer ↔ Druckeinstellungen),
+                PrusaSlicer ↔ Druckeinstellungen), printImports.ts
+                (Eingangsfach, Schlüsselform), bridge.ts (Protokoll der Brücke,
+                Diagnosecodes, Adressen), openPrintTag.ts (CBOR/NDEF,
+                OpenPrintTag → Material),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -133,7 +144,11 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
                 releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik)
+bridge/         Drucker-Brücke für PrusaLink: eine Datei ohne Abhängigkeiten
+                (Node 26 führt sie direkt aus) samt Dockerfile – eigenes Image
+tools/          Tests des PrusaSlicer-Skripts (python3 -m unittest discover tools)
 public/         Unverändert ausgelieferte Dateien: Icons, manifest.webmanifest,
+                tools/filahub-import.py (PrusaSlicer-Skript zum Download),
                 theme-init.js (Farbschema vor dem ersten Paint),
                 telegram-login.html + telegram-login.js (Rahmen für das
                 Telegram-Login-Widget – siehe „Content Security Policy“)
@@ -750,6 +765,137 @@ Tests in `api/slicerMetadata.test.ts`.
   unter einer fremden Lizenz und kommen nicht ins Repo; gegen sie geprüft
   wurde von Hand.
 
+### Eingangsfach und API-Schlüssel (seit 4.7.0)
+
+Phase B aus `docs/plan-prusa-integration.md`: Das PrusaSlicer-Skript und die
+Drucker-Brücke liefern Drucke in ein Eingangsfach (`print_imports`), wer sie
+übernimmt, legt einen gewöhnlichen Druck an. Regeln ohne Datenbank in
+`contracts/printImports.ts`, Routen in `api/ingestRoutes.ts`, Prozeduren in
+`api/printImportRouter.ts` (`printImport.*`, `connection.*`), Abfragen in
+`api/queries/printImports.ts` und `api/queries/apiTokens.ts`.
+
+- **Warum ein Fach statt direkt `print_jobs`:** Ein eingelieferter Druck kennt
+  kein filahub-Material (das Eingabeschema verlangt eines), die Daten kommen
+  von einer Maschine, und ein Slicer meldet „geslict“, nicht „gedruckt“.
+  Übernehmen (`printImport.resolve`) ruft `createPrintJob` mit denselben
+  Grenzen und derselben Verbrauchskopplung wie `print.create`; die Haken
+  `claimImportHooks` sperren den Eintrag (`FOR UPDATE`) und erledigen ihn in
+  **derselben** Transaktion – zwei Klicks erzeugen genau einen Druck.
+- **Entdoppeln über `externalKey`**, je Bereich eindeutig (zwei partielle
+  Unique-Indizes), auch über erledigte Einträge – die bleiben dafür 30 Tage
+  (`purgeResolvedImports` im Aufbewahrungslauf). Eine Wiederholung bekommt
+  `200` mit der bestehenden ID.
+- **API-Schlüssel** (`api_tokens`): `fh_` + 32 Byte Zufall, gespeichert nur
+  der SHA-256, angezeigt das Präfix, im Klartext genau einmal (Antwort von
+  `connection.create`). Ein Schlüssel gehört **immer einer Person**
+  (`userId` NOT NULL, kein `ownerXor`); `organizationId` ist das Ziel. Zwei
+  Arten: `slicer` liefert ein, `bridge` holt zusätzlich Konfiguration und
+  meldet Zustand.
+- **Jeder Aufruf prüft neu:** Schlüssel vorhanden, Konto nicht gesperrt,
+  `resolveScope(userId, organizationId, "weigher")` – Herabstufen oder
+  Austritt wirkt sofort. Aufgeräumt wird trotzdem: Austritt/Entfernen
+  (`changeMembership`), Organisations- und Kontolöschung löschen die Schlüssel
+  samt Druckern (`deleteApiTokens`), mit `api_token.revoked`
+  (`reason: membership_ended`).
+- **Nur Bearer, nie Cookie.** Die Routen sehen kein Sitzungs-Cookie an und
+  senden keine CORS-Kopfzeilen – keine CSRF-Fläche, kein Abruf aus fremden
+  Seiten. Körper höchstens 64 KB, vor dem Parsen geprüft.
+- **Stufen:** Fach ansehen `viewer`; übernehmen, verwerfen und Schlüssel
+  anlegen `weigher`; verwalten (Drucker, entziehen) der Besitzer, in einer
+  Organisation zusätzlich jeder `admin` (`findManageableToken`).
+- **Grenzen** (`contracts/limits.ts`): 10 Schlüssel je Person, 500 offene
+  Einträge je Bereich (`inbox_full`), 120 Einlieferungen je Schlüssel und
+  Minute, 20 ungültige Schlüssel je Adresse und Minute – protokolliert wird
+  nur das Zuschlagen (`api_token.invalid`).
+- **Audit:** `api_token.created`, `api_token.revoked`, `api_token.invalid`.
+  Einlieferungen nicht – Nutzung, nicht Sicherheit.
+- **Registriert** in `COUNTED_TABLES`, den Listen in
+  `api/postgres.integration.test.ts` (auch die Enums `print_import_source`,
+  `api_token_kind`, `prusalink_auth_kind`), dem DSGVO-Wächter
+  (`api_tokens`, `print_imports` findet er selbst, `bridgePrinters` steht in
+  der Ausnahmeliste) und im Export (`printImports`, `apiTokens` ohne Hash,
+  `bridgePrinters` ohne Zugang; additiv, Version bleibt 5). Eine
+  Organisation mit offenen Einträgen ist nicht „leer“.
+- **PrusaSlicer-Skript:** `public/tools/filahub-import.py`, nur
+  Standardbibliothek, liest ASCII- und Binär-G-Code wie
+  `contracts/slicerMetadata.ts`. Adresse und Schlüssel stehen in
+  `~/.config/filahub/import.json`, **nie** in der Skriptzeile – PrusaSlicer
+  schreibt seine Konfiguration samt Skriptzeile in jeden G-Code. Scheitert
+  das Einliefern, scheitert der Export nicht. Tests in
+  `tools/test_filahub_import.py`, laufen in der CI.
+- **Oberfläche:** `/drucke/eingang` (`PrintImports.tsx`, Zähler in der
+  Navigation und auf `/drucke`), Übernehmen über
+  `quickActions.openPrintJobForm({ importItem })` – der `PrintJobDialog`
+  ordnet die Filamente mit derselben Logik zu wie beim G-Code-Import.
+
+### Drucker-Brücke (seit 4.7.0)
+
+Phase C. Ein Container im Netz des Benutzers (`bridge/filahub-bridge.ts`,
+Image `ghcr.io/grimbixcode/filahub-bridge`), gestartet mit **einem**
+`docker run`, den die App mit Adresse und Schlüssel fertig anzeigt. Alles
+Weitere pflegt der Benutzer unter `/verbindungen`; die Brücke holt es sich ab.
+
+- **Daten fließen nur von innen nach außen.** Der Server ruft nie einen
+  Drucker auf. Die Brücke holt `GET /api/bridge/config` (Drucker samt
+  entschlüsseltem Zugang), fragt PrusaLink ab (`/api/v1/status`, `/job`,
+  `/info`, `/api/version`; API-Schlüssel oder Digest) und meldet
+  `POST /api/bridge/report` (Zustand je Drucker, Version, Warteschlange,
+  letzte 40 Protokollzeilen) – alle 10 s, Testanfragen schneller (3 s).
+- **Diagnose statt Antworten.** Je Drucker meldet die Brücke eine Kennung
+  aus `BRIDGE_PRINTER_STATES` (`dns_failed`, `refused`, `unauthorized`,
+  `not_prusalink` …) und die ausgelesenen Felder, **nie** den Inhalt einer
+  Antwort; die App übersetzt die Kennung in eine Anleitung
+  (`t.connections.printer.help`). „Verbindung testen“ setzt
+  `testRequestedAt`, die Brücke antwortet mit `testAnsweredFor`.
+- **Nur lokale Ziele.** Die Brücke löst den Namen auf und fragt nur private
+  Adressen an (`isPrivateIp`, Gegenstück `isPrivateAddress` in
+  `contracts/bridge.ts`), außer mit `BRIDGE_ALLOW_PUBLIC=1`. Eine gestohlene
+  Sitzung kann die Brücke so nicht als Werkzeug gegen fremde Dienste nutzen.
+- **Zugangsdaten verschlüsselt** (`bridge_printers.secretCiphertext`,
+  AES-256-GCM, Schlüssel per HKDF aus `APP_SECRET`, `api/lib/apiToken.ts`).
+  Die App bekommt sie nie zurück (`hasSecret`, `secretUnreadable`); nur die
+  Brücke im Klartext. `APP_SECRET` rotieren macht sie unlesbar.
+- **Fertige Drucke:** FINISHED → `success`, STOPPED → `cancelled` (Gramm
+  × Fortschritt, `gramsEstimated`), ERROR → `failed`; ein verschwundener Job
+  nach dem letzten Fortschritt. Die Gramm aus den Metadaten der Datei
+  (`job.file.meta`, sonst `/api/v1/files/…`); ohne sie wird trotzdem
+  eingeliefert, mit `metaWarning`. Ein gemeldeter Job trägt seine ID negativ
+  – PrusaLink zeigt ihn nach FINISHED weiter an.
+- **Warteschlange** in `/data/queue.json` (Volume), solange filahub nicht
+  annimmt; 4xx verwirft, 429/5xx wartet. 401/403 vom Server pausiert die
+  Brücke 5 Minuten.
+- **Protokoll zweimal:** `contracts/bridge.ts` (zod, Server) und die Typen in
+  der Brücke, die nichts importieren darf. `api/bridge.test.ts` lässt die
+  echte Brücke gegen einen PrusaLink-Nachbau (`api/test/fakePrusaLink.ts`) und
+  einen filahub-Nachbau laufen und prüft jede Meldung mit den zod-Schemas.
+- **Versionsgleich:** `BRIDGE_VERSION` und `VERSION` im Skript folgen
+  `package.json` (geprüft in `api/bridge.test.ts`).
+- **Noch nicht an echten Geräten geprüft:** die Antwortformen von PrusaLink
+  (Plan, „Vor der Umsetzung zu prüfen“); ein MK3S mit PrusaLink auf dem Pi
+  hat eine ältere Schnittstelle und wird noch nicht unterstützt.
+
+### OpenPrintTag (seit 4.7.0)
+
+Phase E. „Spule antippen“ liest das NFC-Tag einer Spule (Format von Prusa,
+https://github.com/prusa3d/OpenPrintTag, MIT) über Web NFC – nur Chrome auf
+Android; ohne `NDEFReader` erscheinen die Knöpfe nicht.
+
+- **Nur lesen**, im Browser (`src/lib/nfc.ts`). CBOR- und NDEF-Leser ohne
+  Bibliothek in `contracts/openPrintTag.ts`, getestet gegen die
+  Beispiel-Tags der Spezifikation (`api/test/fixtures/openprinttag/`, Lizenz
+  daneben).
+- **Materialformular:** Name (Hersteller + Materialname), Materialart (Enum
+  der Spezifikation, sonst `material_abbreviation`), Hersteller, Farbe (der
+  nächste Katalogton bei ΔE < 20, sonst nur der Farbcode als Vorschlag),
+  Nennmenge, Dichte. Gibt es das Material schon (gleicher Name, passendes
+  Lager), wird es gewählt und nur ein Gebinde angelegt.
+- **Druckeinstellungen:** „Vom NFC-Tag“ füllt den Dialog wie ein
+  PrusaSlicer-Profil (gemeinsamer Weg über `ImportedProfiles.options`):
+  Düse und Bett von/bis, Bauraum ab 30 °C, Trocknen. Verdrehte Spannen
+  fallen weg.
+- **Nicht gespeichert:** die UID des Tags. Spule antippen → Wiegen (Plan)
+  bräuchte eine eigene Spalte je Gebinde; das ist der nächste Schritt.
+
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
 **Eine Kennung kommt je Lager nur einmal vor** (seit 3.1.0), ohne Rücksicht auf
@@ -925,8 +1071,9 @@ die ihre Empfänger-Spalte ehrlich `sharedWithUserId` nennt, rutschte durch. Was
 er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
 nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
 über das Gebinde), `materialPrintSettings` (über das Material),
-`printJobMaterials`, `printJobLinks` und `printJobFiles` (über den Druck) und
-`loginCodes` (über die Telegram-ID).
+`printJobMaterials`, `printJobLinks` und `printJobFiles` (über den Druck),
+`bridgePrinters` (über den API-Schlüssel) und `loginCodes` (über die
+Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -1525,7 +1672,8 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `printFiles`, `slicerMetadata`, `prusaProfile`, `fileStorage`,
+  `printFiles`, `slicerMetadata`, `prusaProfile`, `openPrintTag`, `bridge`,
+  `fileStorage`,
   `storageConfig`,
   `serverBundle`,
   `consumption`, `format`,
@@ -1565,8 +1713,9 @@ Datenbank.
   `api/organizations.integration.test.ts`, `api/appearance.integration.test.ts`,
   `api/abuse.integration.test.ts`, `api/materialType.integration.test.ts`,
   `api/materialProducts.integration.test.ts`,
-  `api/printJobs.integration.test.ts` und
-  `api/printFiles.integration.test.ts`,
+  `api/printJobs.integration.test.ts`,
+  `api/printFiles.integration.test.ts` und
+  `api/printImports.integration.test.ts`,
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

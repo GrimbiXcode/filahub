@@ -1549,6 +1549,31 @@ export const en: Messages = {
       firmware: (vars: { firmware: string }) => `Firmware ${vars.firmware}`,
     },
   },
+
+  nfc: {
+    scan: "Tap spool (NFC)",
+    fromTag: "From NFC tag",
+    scanTitle: "Tap the spool",
+    scanText:
+      "Hold the back of your phone against the spool's label. It reads an OpenPrintTag, like the ones on Prusament spools.",
+    retry: "Try again",
+    read: (vars: { name: string }) =>
+      `Read from the tag: ${vars.name} – please check.`,
+    readPrintSettings:
+      "Take over the print values from the tag on the material page under “Print settings”.",
+    kindMismatch: (vars: { kind: string }) =>
+      `The tag describes ${vars.kind} – the selected storage doesn't match.`,
+    colorUnknown: (vars: { hex: string }) =>
+      `Colour ${vars.hex} has no name in the catalogue – enter one or create it under “Colours & surfaces”.`,
+    noPrintSettings: "The tag has no print values.",
+    errors: {
+      unsupported: "This device can't read NFC tags.",
+      denied: "Access to NFC was not allowed.",
+      not_openprinttag: "The tag holds no OpenPrintTag.",
+      corrupt: "The tag is damaged or incomplete.",
+      unreadable: "The tag couldn't be read – hold still and try again.",
+    },
+  },
   consumption: {
     title: "Log usage",
     description: (vars: { name: string }) =>

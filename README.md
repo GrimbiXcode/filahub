@@ -430,6 +430,38 @@ You cannot block yourself or another administrator — an instance that locks ou
 its own administration has no way back except a manual database edit. Remove the
 role first if you really mean it.
 
+## 10. PrusaSlicer script and printer bridge
+
+Since 4.7.0 prints can arrive by themselves, into an inbox where users take
+them over (only then is filament booked). Users set everything up in the app
+under **Connections**; as the operator there is **nothing to configure**. What
+you should know:
+
+- **Two senders, one endpoint.** The PrusaSlicer post-processing script
+  (`public/tools/filahub-import.py`, served by your instance at
+  `/tools/filahub-import.py`) and the printer bridge both call
+  `POST /api/ingest/print-imports` with a bearer key. The bridge additionally
+  calls `GET /api/bridge/config` and `POST /api/bridge/report`. Your reverse
+  proxy must pass the `Authorization` header through unchanged – Caddy does by
+  default.
+- **The bridge runs at the user's place, not yours.** It is a separate image,
+  `ghcr.io/grimbixcode/filahub-bridge`, built from `bridge/` and published with
+  every release tag next to the app image. The app shows users a ready-made
+  `docker run` command containing your instance's address (taken from the
+  browser) and their key. The bridge only ever connects **outwards** – to
+  your instance and to printers in its own network; your server never connects
+  to a printer. If you run a fork with your own registry, change
+  `BRIDGE_IMAGE` in `contracts/bridge.ts`.
+- **PrusaLink logins are encrypted with a key derived from `APP_SECRET`.**
+  Rotating `APP_SECRET` makes them unreadable; the app then asks the user to
+  enter them again, and the bridge reports "login rejected" until they do.
+- **Limits:** 10 keys per person, 10 printers per bridge, 500 open inbox
+  entries per scope, 120 deliveries per key and minute, 20 invalid keys per
+  address and minute (only exceeding that is logged, as `api_token.invalid`).
+  Done inbox entries are purged after 30 days.
+- **Tests of the script** run with `python3 -m unittest discover tools`
+  (part of CI).
+
 ## Useful commands
 
 | Command                    | Purpose                                         |

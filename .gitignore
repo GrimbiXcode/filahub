@@ -44,3 +44,6 @@ sbom.cdx.json
 
 # Hochgeladene Dateien der lokalen Entwicklung (UPLOAD_DIR)
 /data/
+
+# Python (Tests des PrusaSlicer-Skripts)
+__pycache__/

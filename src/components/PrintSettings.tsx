@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   Download,
   FileUp,
+  Nfc,
   Flame,
   Pencil,
   SlidersHorizontal,
@@ -24,10 +25,12 @@ import {
   profileName,
   prusaBundleFromPrintSettings,
   readPrusaProfiles,
-  type PrusaFilamentProfile,
+  type ImportedPrintSettings,
 } from "@contracts/prusaProfile";
 import { roleAllows } from "@contracts/organizations";
 import { MarkdownContent } from "@/components/MarkdownContent";
+import { NfcScanDialog } from "@/components/NfcScanDialog";
+import { nfcSupported } from "@/lib/nfc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -79,11 +82,16 @@ export type PrintSettingsProduct = {
   densityGramsPerLiter: number | null;
 };
 
-/** Profile aus einer eingelesenen Datei von PrusaSlicer */
+/**
+ * Werte zum Übernehmen – aus einem Profil von PrusaSlicer (eine oder mehrere
+ * Möglichkeiten) oder von einem NFC-Tag (genau eine).
+ */
 type ImportedProfiles = {
   fileName: string;
-  profiles: PrusaFilamentProfile[];
-  /** Neu je Datei – der Dialog befüllt sich damit neu */
+  options: { name: string | null; imported: ImportedPrintSettings }[];
+  /** Vorausgewählte Möglichkeit */
+  preselect: number;
+  /** Neu je Einlesen – der Dialog befüllt sich damit neu */
   nonce: number;
 };
 
@@ -217,6 +225,8 @@ export function PrintSettingsCard({
   const [imported, setImported] = useState<ImportedProfiles | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const canEdit = roleAllows(role, "editor") && kind != null;
+  const [nfcOpen, setNfcOpen] = useState(false);
+  const canScan = kind === "filament" && canEdit && nfcSupported();
 
   /**
    * Profil von PrusaSlicer einlesen (seit 4.7.0) – im Browser, und nur in den
@@ -229,7 +239,15 @@ export function PrintSettingsCard({
       return toast.error(t.printSettings.prusa.errors.tooLarge);
     try {
       const profiles = readPrusaProfiles(await file.text());
-      setImported({ fileName: file.name, profiles, nonce: Date.now() });
+      setImported({
+        fileName: file.name,
+        options: profiles.map(profile => ({
+          name: profile.name,
+          imported: printSettingsFromProfile(profile),
+        })),
+        preselect: bestProfileIndex(profiles, product.name),
+        nonce: Date.now(),
+      });
       setEditOpen(true);
     } catch (error) {
       toast.error(
@@ -299,6 +317,16 @@ export function PrintSettingsCard({
               </Button>
             </>
           )}
+          {canScan && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setNfcOpen(true)}
+            >
+              <Nfc className="mr-1.5 h-3.5 w-3.5" />
+              {t.nfc.fromTag}
+            </Button>
+          )}
           {kind === "filament" && filled && (
             <Button size="sm" variant="outline" onClick={exportProfile}>
               <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -358,6 +386,36 @@ export function PrintSettingsCard({
           </>
         )}
       </CardContent>
+      {canScan && (
+        <NfcScanDialog
+          open={nfcOpen}
+          onOpenChange={setNfcOpen}
+          onRead={material => {
+            if (!material.printSettings)
+              return void toast.info(t.nfc.noPrintSettings);
+            setImported({
+              fileName: "OpenPrintTag",
+              options: [
+                {
+                  name:
+                    [material.manufacturer, material.name]
+                      .filter(Boolean)
+                      .join(" ") || null,
+                  imported: {
+                    settings: material.printSettings,
+                    densityGramsPerLiter: material.densityGramsPerLiter,
+                    filamentType: material.materialType,
+                    outOfRange: [],
+                  },
+                },
+              ],
+              preselect: 0,
+              nonce: Date.now(),
+            });
+            setEditOpen(true);
+          }}
+        />
+      )}
       {kind != null && (
         <PrintSettingsDialog
           open={editOpen}
@@ -414,8 +472,7 @@ function PrintSettingsDialog({
     const current = storedValues();
     const fromProfile =
       index !== null && imported
-        ? (printSettingsFromProfile(imported.profiles[index])
-            .settings as Record<string, unknown>)
+        ? (imported.options[index].imported.settings as Record<string, unknown>)
         : {};
     setValues(
       Object.fromEntries(
@@ -436,17 +493,14 @@ function PrintSettingsDialog({
   if (formKey !== applied) {
     setApplied(formKey);
     if (formKey !== null) {
-      const index = imported
-        ? bestProfileIndex(imported.profiles, product.name)
-        : null;
+      const index = imported ? imported.preselect : null;
       setProfileIndex(index ?? 0);
       fillValues(index);
       setEnclosure(storedValues().enclosureRequired === true);
       setNotes(stored?.notes ?? "");
       const density =
         index !== null && imported
-          ? printSettingsFromProfile(imported.profiles[index])
-              .densityGramsPerLiter
+          ? imported.options[index].imported.densityGramsPerLiter
           : null;
       // Ohne eigene Dichte am Material angekreuzt, sonst nur angeboten
       setTakeDensity(density !== null && product.densityGramsPerLiter == null);
@@ -455,7 +509,7 @@ function PrintSettingsDialog({
 
   const current =
     imported && kind === "filament"
-      ? printSettingsFromProfile(imported.profiles[profileIndex])
+      ? imported.options[profileIndex].imported
       : null;
   const offeredDensity =
     current?.densityGramsPerLiter != null &&
@@ -544,7 +598,7 @@ function PrintSettingsDialog({
           <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
             {imported && current && (
               <div className="grid gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
-                {imported.profiles.length > 1 && (
+                {imported.options.length > 1 && (
                   <div className="grid gap-1.5">
                     <Label htmlFor="ps-profile">
                       {t.printSettings.prusa.profileLabel}
@@ -561,7 +615,7 @@ function PrintSettingsDialog({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {imported.profiles.map((profile, index) => (
+                        {imported.options.map((profile, index) => (
                           <SelectItem key={index} value={String(index)}>
                             {profile.name ??
                               t.printSettings.prusa.unnamed({
@@ -576,7 +630,7 @@ function PrintSettingsDialog({
                 <p className="wrap-anywhere">
                   {t.printSettings.prusa.importedFrom({
                     name:
-                      imported.profiles[profileIndex].name ?? imported.fileName,
+                      imported.options[profileIndex].name ?? imported.fileName,
                   })}
                 </p>
                 {current.outOfRange.length > 0 && (

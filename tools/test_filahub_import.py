@@ -10,11 +10,15 @@ import importlib.util
 import json
 import os
 import struct
+import sys
 import tempfile
 import threading
 import unittest
 import zlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
+
+# Kein Bytecode neben das Skript – es liegt in public/ und würde mit ausgeliefert
+sys.dont_write_bytecode = True
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location(
