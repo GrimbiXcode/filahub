@@ -1,7 +1,7 @@
 # Plan: Prusa-Anbindung (#41)
 
-Stand: Phase A ist mit 4.7.0 umgesetzt (siehe `AGENTS.md`, „G-Code
-auslesen“); B bis E sind Entwurf. 4.5.0 und 4.6.0 sind anderweitig vergeben.
+Stand: Phase A und D sind mit 4.7.0 umgesetzt (siehe `AGENTS.md`, „G-Code
+auslesen“ und „Filamentprofile von PrusaSlicer“); B, C und E sind Entwurf. 4.5.0 und 4.6.0 sind anderweitig vergeben.
 
 Issue #41: „Verbrauchsdaten direkt ab Prusa einbinden. Verbräuche könnten
 geloggt und im Nachhinein den Materialien zugewiesen werden.“
@@ -54,7 +54,7 @@ welcher Rolle das Filament kam.
 | A     | G-Code/bgcode im Druckformular auslesen (4.7.0) | gering – keine Schemaänderung | –            |
 | B     | Eingangsfach, API-Schlüssel, PrusaSlicer-Skript | hoch – neue Zugangsart        | A            |
 | C     | LAN-Brücke für PrusaLink                        | mittel – eigene Komponente    | B            |
-| D     | Filamentprofile ↔ Druckeinstellungen            | gering                        | –            |
+| D     | Filamentprofile ↔ Druckeinstellungen (4.7.0)    | gering                        | –            |
 | E     | OpenPrintTag (NFC) – Prototyp                   | offen – Spezifikation prüfen  | –            |
 
 Phase A und D können sofort beginnen. Phase B ist der eigentliche Inhalt von
@@ -388,6 +388,14 @@ mitten im Druck, filahub kurz weg.
 Unabhängig von B und C. Auf der Material-Seite, Karte „Druckeinstellungen“:
 „Aus PrusaSlicer importieren“ und „Für PrusaSlicer exportieren“.
 
+_(Umgesetzt in 4.7.0. Abweichungen vom Entwurf: Gelesen werden auch
+„Konfiguration exportieren“ ohne Abschnitte und mehrere Filamente einer
+MMU-Konfiguration; ein Bauraum unter 30 °C fällt weg, weil die Profile des
+Core One 20 °C für „nicht heizen“ tragen. Der Export schreibt die Mitte der
+Spanne für alle Schichten und das obere Ende für die erste. Ob PrusaSlicer das
+Paket ohne Abschnitt `[presets]` annimmt, ist noch an einer echten Installation
+zu prüfen – siehe unten.)_
+
 - **Import** einer Filament-`.ini` (Benutzerprofil aus dem
   Konfigurationsverzeichnis oder ein Config-Bundle mit
   `[filament:…]`-Abschnitt), im Browser gelesen. Abbildung:
@@ -449,6 +457,7 @@ werden müssen, bevor Code entsteht:
 | Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                     |
 | PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                       |
 | Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                       |
+| PrusaSlicer importiert ein Paket mit nur einem `[filament:…]`-Abschnitt         | D     | Export aus filahub in PrusaSlicer 2.9 importieren                |
 | OpenPrintTag-Format und Schreibbarkeit                                          | E     | Spezifikation, ein Prusament-Tag auslesen                        |
 
 Wo eine Annahme nicht stimmt, ändert sich der Leser, nicht das Eingangsfach:
@@ -456,12 +465,12 @@ Phase B hängt an keiner davon.
 
 ## Versionen
 
-| Version  | Inhalt                                            |
-| -------- | ------------------------------------------------- |
-| 4.7.0    | Phase A (umgesetzt)                               |
-| folgende | Phase D, Phase B (Fach, Schlüssel, Slicer-Skript) |
-| danach   | Phase C (Brücke)                                  |
-| später   | Phase E, je nach Prüfung                          |
+| Version  | Inhalt                                   |
+| -------- | ---------------------------------------- |
+| 4.7.0    | Phase A und D (umgesetzt)                |
+| folgende | Phase B (Fach, Schlüssel, Slicer-Skript) |
+| danach   | Phase C (Brücke)                         |
+| später   | Phase E, je nach Prüfung                 |
 
 Feste Nummern erst bei der Umsetzung: 4.5.0 und 4.6.0 waren schon vergeben,
 als Phase A fertig wurde.

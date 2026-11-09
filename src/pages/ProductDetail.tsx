@@ -225,6 +225,7 @@ export default function ProductDetail() {
           productId={product.id}
           kind={product.kind}
           stored={product.printSettings}
+          product={product}
         />
 
         <RecentPrints productId={product.id} />

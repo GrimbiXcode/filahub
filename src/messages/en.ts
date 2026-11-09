@@ -441,6 +441,29 @@ export const en: Messages = {
     notesLabel: "Notes (Markdown)",
     notesPlaceholder:
       "e.g. slow first layer, glue stick on glass, slicer profile “PolyTerra”",
+    prusa: {
+      importButton: "From PrusaSlicer",
+      exportButton: "For PrusaSlicer",
+      exported:
+        "Profile downloaded – in PrusaSlicer use “File → Import → Import Config Bundle”.",
+      exportHeader:
+        "Filament profile from filahub.\nIn PrusaSlicer: File → Import → Import Config Bundle.",
+      profileLabel: "Profile from the file",
+      unnamed: (vars: { number: number }) => `Profile ${vars.number}`,
+      importedFrom: (vars: { name: string }) =>
+        `Values from “${vars.name}” filled in – please check and save. Anything the profile doesn't cover stays as it was.`,
+      outOfRange: (vars: { fields: string }) =>
+        `Not taken over because outside the usual range: ${vars.fields}.`,
+      typeMismatch: (vars: { profile: string; material: string }) =>
+        `The profile is for ${vars.profile}, the material is ${vars.material}.`,
+      takeDensity: (vars: { value: string }) =>
+        `Use density ${vars.value} g/cm³ for this material`,
+      errors: {
+        noFilament: "The file contains no PrusaSlicer filament profile.",
+        tooLarge: "The file is too large for a profile.",
+        unreadable: "The file could not be read.",
+      },
+    },
     short: {
       nozzle: "Nozzle",
       bed: "Bed",

@@ -1,6 +1,6 @@
 ---
 date: 2026-11-09
-title: Fill in a print from its G-code
+title: PrusaSlicer files: G-code and filament profiles
 ---
 
 Logging a print no longer means copying numbers out of the slicer.
@@ -36,7 +36,25 @@ Lines without a clear match stay open for you to pick, and each line shows what
 the G-code said (colour, type, profile), with a warning if the type differs
 from the material you chose.
 
-## Your file stays on your device
+## Filament profiles to and from PrusaSlicer
 
-The file is read in your browser and is never uploaded. Only the values you
-save end up in filahub.
+The print settings card on a material page has two new buttons:
+
+- **From PrusaSlicer** reads a filament profile – a single profile file, an
+  exported config or a config bundle. Nozzle and bed temperatures, chamber,
+  fan, flow and retraction are filled into the form for you to check before
+  saving. If the file holds several profiles, pick the one you want; the best
+  match by name is preselected. Values filahub doesn't know from the profile,
+  like drying, stay as they were. The profile's density can be taken over for
+  the material too.
+- **For PrusaSlicer** downloads your settings as a config bundle. In
+  PrusaSlicer, use **File → Import → Import Config Bundle**, and the material
+  appears as a filament profile. The first layer gets the upper end of your
+  nozzle and bed range, all other layers the middle.
+
+Max volumetric speed has no counterpart in filahub and is not converted.
+
+## Your files stay on your device
+
+G-code and profiles are read in your browser and never uploaded. Only the
+values you save end up in filahub.

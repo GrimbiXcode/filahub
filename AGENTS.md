@@ -124,7 +124,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
                 slicerMetadata.ts (G-Code/bgcode von PrusaSlicer lesen,
-                Materialvorschlag),
+                Materialvorschlag), prusaProfile.ts (Filamentprofile von
+                PrusaSlicer ↔ Druckeinstellungen),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -445,6 +446,36 @@ Primärschlüssel, `settings` jsonb, `notes` Markdown, `schemaVersion`).
 - **Oberfläche:** `src/components/PrintSettings.tsx` – die kompakte Zeile
   (`PrintSettingsSummary`) in `ProductGebindeList`, die Karte samt Dialog auf
   der Material-Seite.
+
+#### Filamentprofile von PrusaSlicer (seit 4.7.0)
+
+Phase D aus `docs/plan-prusa-integration.md`: Die Karte liest ein
+Filamentprofil von PrusaSlicer ein („Aus PrusaSlicer“) und schreibt eines
+(„Für PrusaSlicer“). Regeln in `contracts/prusaProfile.ts`, Tests in
+`api/prusaProfile.test.ts` mit Werten aus echten Konfigurationen.
+
+- **Nur im Browser, nur in den Dialog.** Das Einlesen füllt den Dialog vor,
+  gespeichert wird erst beim Speichern, über denselben Weg wie von Hand.
+  Werte, die das Profil nicht kennt (Trocknen, Höchstgeschwindigkeit,
+  geschlossener Bauraum), bleiben, wie sie waren.
+- **Drei Formen:** Benutzerprofil und „Konfiguration exportieren“ ohne
+  Abschnitte (bei mehreren Filamenten Zahlen als Kommaliste, Texte mit
+  Semikolon), Konfigurationspaket mit `[filament:…]`; Vorlagen (`*PLA*`)
+  fallen weg, gleiche Profile einer MMU erscheinen einmal. Bei mehreren
+  wählt der Dialog das mit den meisten gemeinsamen Wörtern im Namen vor.
+- **Zuordnung** (Tabelle an `printSettingsFromProfile`): Düse und Bett aus
+  Schicht- und Erstschichtwert als „von/bis“, 0 °C heißt „nicht setzen“,
+  Bauraum erst ab 30 °C (Core One: 20 °C = nicht heizen). Werte außerhalb der
+  Bereiche von `filamentPrintSettingsSchema` fallen weg und werden genannt.
+  `filament_max_volumetric_speed` (mm³/s) wird nicht in mm/s umgerechnet.
+- **Die Dichte wird angeboten, nicht still geschrieben** – angekreuzt nur,
+  wenn das Material noch keine hat; gespeichert über `product.update`.
+- **Der Export ist ein Konfigurationspaket** mit einem Abschnitt
+  `[filament:<Hersteller Name> (filahub)]`. Aus „von/bis“ werden zwei Werte:
+  die Mitte für alle Schichten, das obere Ende für die erste. Zurückgelesen
+  ergibt das „Mitte bis oberes Ende“ – nicht verlustfrei, aber in der
+  ursprünglichen Spanne (`api/prusaProfile.test.ts` prüft den Rundlauf).
+- **Nur Filament.** Harz- und Pulverlager zeigen die Knöpfe nicht.
 
 ## Druckhistorie (seit 4.2.0)
 
@@ -1494,7 +1525,8 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `printFiles`, `slicerMetadata`, `fileStorage`, `storageConfig`,
+  `printFiles`, `slicerMetadata`, `prusaProfile`, `fileStorage`,
+  `storageConfig`,
   `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,

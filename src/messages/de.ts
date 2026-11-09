@@ -459,6 +459,29 @@ export const de = {
     notesLabel: "Notizen (Markdown)",
     notesPlaceholder:
       "z. B. erste Schicht langsam, Klebestift auf Glas, im Slicer-Profil „PolyTerra“",
+    prusa: {
+      importButton: "Aus PrusaSlicer",
+      exportButton: "Für PrusaSlicer",
+      exported:
+        "Profil heruntergeladen – in PrusaSlicer über „Datei → Importieren → Konfigurationspaket importieren“.",
+      exportHeader:
+        "Filamentprofil aus filahub.\nIn PrusaSlicer: Datei → Importieren → Konfigurationspaket importieren.",
+      profileLabel: "Profil aus der Datei",
+      unnamed: (vars: { number: number }) => `Profil ${vars.number}`,
+      importedFrom: (vars: { name: string }) =>
+        `Werte aus „${vars.name}“ eingetragen – bitte prüfen und speichern. Was das Profil nicht kennt, bleibt unverändert.`,
+      outOfRange: (vars: { fields: string }) =>
+        `Nicht übernommen, weil außerhalb des üblichen Bereichs: ${vars.fields}.`,
+      typeMismatch: (vars: { profile: string; material: string }) =>
+        `Das Profil ist für ${vars.profile}, das Material ist ${vars.material}.`,
+      takeDensity: (vars: { value: string }) =>
+        `Dichte ${vars.value} g/cm³ am Material übernehmen`,
+      errors: {
+        noFilament: "In der Datei steht kein Filamentprofil von PrusaSlicer.",
+        tooLarge: "Die Datei ist zu groß für ein Profil.",
+        unreadable: "Die Datei ließ sich nicht lesen.",
+      },
+    },
     short: {
       nozzle: "Düse",
       bed: "Bett",
