@@ -50,7 +50,7 @@ import {
  */
 
 /** Übersetzt die Fehlerkennungen der Schreibpfade in lesbare Meldungen. */
-async function withPrintJobErrors<T>(run: () => Promise<T>): Promise<T> {
+export async function withPrintJobErrors<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run();
   } catch (error) {
@@ -82,7 +82,7 @@ async function withPrintJobErrors<T>(run: () => Promise<T>): Promise<T> {
  * Zeilen, die wirklich abbuchen – sonst verriete die Meldung fremde Gebinde,
  * und eine reine Titeländerung stieße an die eigenen Verbräuche.
  */
-function consumptionRoom(
+export function consumptionRoom(
   actorUserId: number,
   ip: string | null | undefined
 ): ConsumptionRoomCheck {

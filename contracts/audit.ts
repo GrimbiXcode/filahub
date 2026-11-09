@@ -162,6 +162,26 @@ export const AUDIT_EVENTS = [
   "unblock.requested",
   /** Antrag beschieden; `detail.decision` nennt das Ergebnis. */
   "unblock.reviewed",
+  /*
+    API-Schlüssel (seit 4.7.0). Sie stehen hier, weil ein Schlüssel ein
+    Zugriffsrecht ist – eingeschränkt auf das Einliefern ins Eingangsfach, aber
+    ohne Anmeldung nutzbar. Wer wann einen erzeugt hat und wer ihn wieder
+    entzogen hat, muss rekonstruierbar sein. Die Einlieferungen selbst stehen
+    nicht hier: Nutzung, nicht Sicherheit.
+  */
+  /** Schlüssel erzeugt; `detail` trägt `{ tokenId, organizationId }` */
+  "api_token.created",
+  /**
+   * Schlüssel entzogen; `detail.reason` unterscheidet `user` (selbst),
+   * `admin` (von einem Administrator der Organisation) und
+   * `membership_ended` (mit der Mitgliedschaft).
+   */
+  "api_token.revoked",
+  /**
+   * Zu viele Aufrufe mit ungültigem Schlüssel von einer Adresse – wie bei der
+   * Anmeldung nur das Zuschlagen, nicht jeder Versuch.
+   */
+  "api_token.invalid",
 ] as const;
 
 export type AuditEvent = (typeof AUDIT_EVENTS)[number];

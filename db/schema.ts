@@ -9,6 +9,12 @@ import type { MaterialColumn } from "@contracts/materialColumns";
 import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
 import { PRINT_JOB_STATUSES } from "@contracts/printJobs";
 import { PRINT_FILE_KINDS } from "@contracts/printFiles";
+import { PRINT_IMPORT_SOURCES } from "@contracts/printImports";
+import {
+  PRUSALINK_AUTH_KINDS,
+  type BridgePrinterStatus,
+  type BridgeStatus,
+} from "@contracts/bridge";
 import {
   ORGANIZATION_INVITATION_STATUSES,
   ORGANIZATION_ROLES,
@@ -886,6 +892,151 @@ export const printJobFiles = pgTable(
 );
 
 export type PrintJobFile = typeof printJobFiles.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Eingangsfach, API-Schlüssel und LAN-Brücke (seit 4.7.0)
+// ---------------------------------------------------------------------------
+
+export const printImportSourceEnum = pgEnum(
+  "print_import_source",
+  PRINT_IMPORT_SOURCES
+);
+
+/**
+ * Eingelieferte Drucke, die noch niemand übernommen hat – vom
+ * PrusaSlicer-Skript (geslict) oder von der Brücke (gedruckt).
+ *
+ * - Eigentum wie überall (`ownerXor`); der Bereich ist der des Schlüssels.
+ * - `externalKey` kommt vom Absender und entdoppelt Wiederholungen – je
+ *   Bereich eindeutig, auch über erledigte Einträge hinweg (die bleiben dafür
+ *   30 Tage, `PRINT_IMPORT_RESOLVED_RETENTION_DAYS`).
+ * - `filaments` jsonb in der Form von `ImportedFilament`, gelesen über
+ *   `parseStoredFilaments`.
+ * - Übernehmen setzt `printJobId` und `resolvedAt`, Verwerfen nur
+ *   `resolvedAt`. Kein Fremdschlüssel, wie überall.
+ */
+export const printImports = pgTable(
+  "print_imports",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    source: printImportSourceEnum("source").notNull(),
+    externalKey: varchar("externalKey", { length: 200 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    printedAt: tsColumn("printedAt").notNull(),
+    status: printJobStatusEnum("status").default("success").notNull(),
+    progressPercent: integer("progressPercent"),
+    durationMinutes: integer("durationMinutes"),
+    printer: varchar("printer", { length: 100 }),
+    filaments: jsonb("filaments")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    gramsEstimated: boolean("gramsEstimated").default(false).notNull(),
+    apiTokenId: bigint("apiTokenId", { mode: "number" }),
+    printJobId: bigint("printJobId", { mode: "number" }),
+    resolvedAt: tsColumn("resolvedAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    ownerXor("print_imports_owner_xor"),
+    uniqueIndex("print_imports_user_key_unique")
+      .on(t.userId, t.externalKey)
+      .where(sql`"organizationId" IS NULL`),
+    uniqueIndex("print_imports_organization_key_unique")
+      .on(t.organizationId, t.externalKey)
+      .where(sql`"organizationId" IS NOT NULL`),
+    index("print_imports_user_open_idx").on(t.userId, t.resolvedAt),
+    index("print_imports_organization_open_idx").on(
+      t.organizationId,
+      t.resolvedAt
+    ),
+  ]
+);
+
+export type PrintImport = typeof printImports.$inferSelect;
+
+export const apiTokenKindEnum = pgEnum("api_token_kind", ["slicer", "bridge"]);
+
+/**
+ * API-Schlüssel. Einer gehört **immer einer Person** (`userId`, nie NULL) –
+ * er ist ihre Vollmacht; `organizationId` ist das Ziel, nicht der Besitzer.
+ * Deshalb kein `ownerXor`.
+ *
+ * - Gespeichert wird nur der SHA-256 (`tokenHash`), angezeigt das Präfix.
+ * - `kind`: `slicer` darf einliefern, `bridge` zusätzlich seine Konfiguration
+ *   abholen und Zustand melden (`bridgeStatus`).
+ * - Ob er wirkt, entscheidet jeder Aufruf neu: Konto nicht gesperrt und
+ *   `resolveScope(userId, organizationId, "weigher")` – ein Austritt beendet
+ *   ihn sofort, auch bevor die Kaskade ihn löscht.
+ */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }).notNull(),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    kind: apiTokenKindEnum("kind").notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
+    tokenPrefix: varchar("tokenPrefix", { length: 16 }).notNull(),
+    lastUsedAt: tsColumn("lastUsedAt"),
+    /** Letzte Meldung einer Brücke: Version, Start, Warteschlange, Protokoll */
+    bridgeStatus: jsonb("bridgeStatus").$type<BridgeStatus>(),
+    bridgeStatusAt: tsColumn("bridgeStatusAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+  },
+  t => [
+    uniqueIndex("api_tokens_hash_unique").on(t.tokenHash),
+    index("api_tokens_user_idx").on(t.userId),
+    index("api_tokens_organization_idx").on(t.organizationId),
+  ]
+);
+
+export type ApiToken = typeof apiTokens.$inferSelect;
+
+export const prusaLinkAuthKindEnum = pgEnum(
+  "prusalink_auth_kind",
+  PRUSALINK_AUTH_KINDS
+);
+
+/**
+ * Die Drucker einer Brücke, gepflegt in der App. Besitz über den Schlüssel
+ * (`apiTokenId`) – kein eigenes `userId`, deshalb in der Ausnahmeliste des
+ * DSGVO-Wächters.
+ *
+ * - `secretCiphertext`: API-Schlüssel bzw. Passwort von PrusaLink,
+ *   verschlüsselt (`api/lib/secretBox.ts`, AES-256-GCM, Schlüssel aus
+ *   `APP_SECRET`). Die App zeigt ihn nie wieder an; nur die Brücke bekommt
+ *   ihn im Klartext.
+ * - `status`: die letzte Meldung der Brücke zu diesem Drucker (Diagnose).
+ * - `testRequestedAt`: „Verbindung testen“ – die Brücke antwortet beim
+ *   nächsten Abholen.
+ */
+export const bridgePrinters = pgTable(
+  "bridge_printers",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    apiTokenId: bigint("apiTokenId", { mode: "number" }).notNull(),
+    name: varchar("name", { length: 100 }).notNull(),
+    host: varchar("host", { length: 255 }).notNull(),
+    authKind: prusaLinkAuthKindEnum("authKind").notNull(),
+    username: varchar("username", { length: 100 }),
+    secretCiphertext: text("secretCiphertext"),
+    enabled: boolean("enabled").default(true).notNull(),
+    testRequestedAt: tsColumn("testRequestedAt"),
+    status: jsonb("status").$type<BridgePrinterStatus>(),
+    statusAt: tsColumn("statusAt"),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [index("bridge_printers_token_idx").on(t.apiTokenId)]
+);
+
+export type BridgePrinter = typeof bridgePrinters.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde

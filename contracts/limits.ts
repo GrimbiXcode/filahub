@@ -78,6 +78,20 @@ export const MAX_STORAGE_BOXES_PER_SCOPE = 100;
 export const MAX_PRINT_JOBS_PER_SCOPE = 20_000;
 
 /**
+ * Eingangsfach und API-Schlüssel (seit 4.7.0).
+ *
+ * Offene Einträge je Bereich: 500. Das Fach soll geleert werden, nicht
+ * wachsen – eine Brücke, die nach einem Fehler jeden Statuswechsel meldet,
+ * füllte sonst die Tabelle. Erledigte Einträge zählen nicht; sie gehen nach
+ * `PRINT_IMPORT_RESOLVED_RETENTION_DAYS`.
+ *
+ * Schlüssel je Person: 10 – ein Slicer je Rechner und eine Brücke je
+ * Werkstatt, mit Luft.
+ */
+export const MAX_OPEN_PRINT_IMPORTS_PER_SCOPE = 500;
+export const MAX_API_TOKENS_PER_USER = 10;
+
+/**
  * Dateien zu Drucken (seit 4.3.0).
  *
  * Zwanzig je Druck reichen für Fotos von allen Seiten, dem Fehlschlag und dem

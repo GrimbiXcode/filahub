@@ -150,6 +150,13 @@ export const ACCOUNT_EXPORT_SECTIONS = [
     Eigenschaft des Kontos, keine eigene Zeile.
   */
   "unblockRequests",
+  /*
+    Seit 4.7.0: Eingangsfach (eingelieferte Drucke), API-Schlüssel ohne Hash
+    und die Drucker der Brücken ohne Zugangsdaten. Additiv, Version bleibt 5.
+  */
+  "printImports",
+  "apiTokens",
+  "bridgePrinters",
 ] as const;
 
 export type AccountExportSection = (typeof ACCOUNT_EXPORT_SECTIONS)[number];

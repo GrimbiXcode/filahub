@@ -7,6 +7,7 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { registerDevLogin } from "./devLogin";
 import { registerFileRoutes } from "./fileRoutes";
+import { registerIngestRoutes } from "./ingestRoutes";
 import { TELEGRAM_LOGIN_FRAME_PATH } from "@contracts/constants";
 import { env } from "./lib/env";
 
@@ -138,6 +139,8 @@ app.get("/health", c => c.json({ status: "ok" }));
 registerDevLogin(app);
 // Fotos und 3MF zu Drucken – eigene Routen, weil tRPC keine Binärdaten kann
 registerFileRoutes(app);
+// Eingangsfach und Drucker-Brücke – angemeldet per API-Schlüssel, nie per Cookie
+registerIngestRoutes(app);
 app.use("/api/trpc/*", async c => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",

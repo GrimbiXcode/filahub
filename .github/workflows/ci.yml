@@ -56,6 +56,11 @@ jobs:
       - name: Unit tests
         run: npm run test
 
+      # Das PrusaSlicer-Skript (public/tools/filahub-import.py) läuft beim
+      # Benutzer, nicht im Container – Python liegt auf dem Runner bereit.
+      - name: Tests des PrusaSlicer-Skripts
+        run: python3 -m unittest discover tools
+
       - name: Integration tests (PostgreSQL)
         run: npm run test:integration
         env:

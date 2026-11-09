@@ -76,6 +76,9 @@ describe("Migrationen", () => {
       "print_job_materials",
       "print_job_links",
       "print_job_files",
+      "print_imports",
+      "api_tokens",
+      "bridge_printers",
       "container_types",
       "storage_boxes",
       "custom_colors",
@@ -141,6 +144,9 @@ describe("Migrationen", () => {
       "organization_invitation_status",
       "print_job_status",
       "print_file_kind",
+      "print_import_source",
+      "api_token_kind",
+      "prusalink_auth_kind",
     ]) {
       expect(names).toContain(type);
     }
