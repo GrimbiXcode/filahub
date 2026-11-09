@@ -1071,3 +1071,58 @@ export async function setMaterialArchived(
     .returning({ id: materials.id });
   return rows.length > 0;
 }
+
+/**
+ * Sammelbearbeitung (seit 4.5.0): derselbe Änderungssatz für mehrere Gebinde,
+ * in **einer** Transaktion.
+ *
+ * Alles oder nichts: Die Gebinde werden zuerst mit `FOR UPDATE` gesperrt –
+ * dieselbe Sperre, die `deleteMaterial` als Erstes nimmt –, und fehlt auch nur
+ * eines im Bereich, ändert sich keines (`null`). Ein Teilerfolg ließe den
+ * Benutzer raten, welche Zeilen den neuen Preis tragen.
+ *
+ * Liefert die Zahl der geänderten Gebinde. `storageBoxId` muss der Aufrufer
+ * vorher gegen den Bereich geprüft haben (`storageBoxInScope`).
+ */
+export async function updateMaterialsBulk(
+  scope: Scope,
+  ids: number[],
+  patch: {
+    priceCents?: number | null;
+    purchaseDate?: string | null;
+    nominalWeight?: number;
+    storageBoxId?: number | null;
+    archived?: boolean;
+  }
+): Promise<number | null> {
+  if (ids.length === 0) return 0;
+  return getDb().transaction(async tx => {
+    const found = await tx
+      .select({ id: materials.id })
+      .from(materials)
+      .where(and(inArray(materials.id, ids), scopeWhere(materials, scope)))
+      // Feste Reihenfolge: Zwei Sammelbearbeitungen über überlappende
+      // Auswahlen sperren sonst über Kreuz.
+      .orderBy(materials.id)
+      .for("update");
+    if (found.length !== ids.length) return null;
+    const { archived, ...fields } = patch;
+    const set: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined) set[key] = value;
+    }
+    if (archived !== undefined) {
+      // Wie `setMaterialArchived`: Ein zweites „aufgebraucht“ behält den
+      // ersten Zeitpunkt.
+      set.archivedAt = archived
+        ? sql`coalesce(${materials.archivedAt}, now())`
+        : null;
+    }
+    if (Object.keys(set).length === 0) return found.length;
+    await tx
+      .update(materials)
+      .set(set)
+      .where(and(inArray(materials.id, ids), scopeWhere(materials, scope)));
+    return found.length;
+  });
+}
