@@ -323,6 +323,17 @@ const GRAMS_KEY = "filament used [g]";
  * Aus den Schlüsseln von PrusaSlicer das Ergebnis bauen. Bei mehreren
  * Filamenten (MMU, INDX, XL) stehen die Werte als Liste: Gramm mit Komma,
  * alles andere mit Semikolon, Profilnamen in Anführungszeichen.
+ *
+ * Zwei Eigenheiten, beide an einer echten Datei (Core One mit MMU3,
+ * PrusaSlicer 2.9.7) gefunden:
+ *
+ * - **Die Farbe steht in `extruder_colour`**, sobald jemand sie setzt.
+ *   `filament_colour` ist dann überall die Vorgabe `#FF8000`, die Vorschau des
+ *   Slicers zeigt die Extruderfarbe. Bei vier Rollen desselben Materials ist
+ *   sie das Einzige, was sie unterscheidet.
+ * - **`filament_vendor` ist ein Einzelwert**, auch bei mehreren Filamenten.
+ *   Wem er gehört, sagt die Datei nicht – bei mehreren Slots bleibt er weg;
+ *   der Hersteller steckt ohnehin im Profilnamen je Slot.
  */
 export function slicerJobFromMetadata(
   meta: Map<string, string>,
@@ -334,8 +345,11 @@ export function slicerJobFromMetadata(
     .map(value => Number(value.trim()));
   const types = splitList(meta.get("filament_type"));
   const colors = splitList(meta.get("filament_colour"));
+  const extruderColors = splitList(meta.get("extruder_colour"));
   const profiles = splitList(meta.get("filament_settings_id"));
   const vendors = splitList(meta.get("filament_vendor"));
+  const vendorOf = (slot: number) =>
+    vendors.length > 1 || grams.length === 1 ? (vendors[slot] ?? null) : null;
 
   const filaments: SlicerFilament[] = [];
   grams.forEach((raw, slot) => {
@@ -345,9 +359,10 @@ export function slicerJobFromMetadata(
       slot,
       grams: Math.min(MAX_PRINT_GRAMS, Math.max(1, Math.round(raw))),
       filamentType: types[slot] ?? null,
-      colorHex: normalizeColor(colors[slot]),
+      colorHex:
+        normalizeColor(extruderColors[slot]) ?? normalizeColor(colors[slot]),
       profileName: cleanProfileName(profiles[slot]),
-      vendor: vendors[slot] ?? null,
+      vendor: vendorOf(slot),
     });
   });
 
@@ -446,7 +461,27 @@ export type SlicerMatchProduct = {
   activeCount: number;
 };
 
-export type SlicerMatch = { productId: number; score: number };
+export type SlicerMatch = {
+  productId: number;
+  score: number;
+  /** Farbabstand zum Filament, `null` ohne Farbcode auf einer Seite */
+  colorDistance: number | null;
+};
+
+/**
+ * Die Farbe, die PrusaSlicer schreibt, solange niemand eine setzt. Für den
+ * Vorschlag heißt sie „unbekannt“: Sonst schlösse sie jede schwarze Rolle aus.
+ * Angezeigt wird sie trotzdem – sie steht so in der Datei.
+ */
+export const PRUSASLICER_DEFAULT_COLOR = "#ff8000";
+
+/**
+ * Schwellen in ΔE (`colorDistance`). Die Farbnamen am Material lösen auf
+ * allgemeine Katalogtöne auf („Braun“ ist ein Braun, nicht das der Rolle);
+ * nah heißt deshalb großzügig unter 35, deutlich anders ab 50.
+ */
+const COLOR_NEAR = 35;
+const COLOR_FAR = 50;
 
 /** Wörter eines Profilnamens, die nichts unterscheiden */
 const GENERIC_WORDS = new Set(["generic", "filament", "the"]);
@@ -487,21 +522,39 @@ export function rankProductsForFilament(
     );
     score += profileWords.filter(word => productWords.has(word)).length;
     const hex = resolveHex(product.color);
-    if (hex && filament.colorHex) {
-      const distance = colorDistance(hex, filament.colorHex);
-      if (distance < 100) score += 1;
-      else if (distance > 300) score -= 1;
+    const fileHex =
+      filament.colorHex === PRUSASLICER_DEFAULT_COLOR
+        ? null
+        : filament.colorHex;
+    const distance = hex && fileHex ? colorDistance(hex, fileHex) : null;
+    if (distance !== null) {
+      if (distance < COLOR_NEAR) score += 1;
+      else if (distance > 60) score -= 1;
     }
     if (product.activeCount > 0) score += 1;
-    matches.push({ productId: product.id, score });
+    matches.push({ productId: product.id, score, colorDistance: distance });
   }
-  return matches.sort((a, b) => b.score - a.score || a.productId - b.productId);
+  return matches.sort(
+    (a, b) =>
+      b.score - a.score ||
+      (a.colorDistance ?? Infinity) - (b.colorDistance ?? Infinity) ||
+      a.productId - b.productId
+  );
 }
 
 /**
  * Der eine Vorschlag, den das Formular einträgt – nur, wenn er eindeutig
  * vorn liegt und mehr hat als die bloße Materialart. Sonst bleibt die Zeile
  * offen, und der Mensch wählt.
+ *
+ * Eine bekannte, deutlich andere Farbe (ΔE ab 50) verhindert den
+ * Vorschlag: Gelb aus der Datei wird nicht zur grauen Rolle, nur weil die
+ * braune und die grüne noch weiter weg sind.
+ *
+ * Bei Punktegleichstand entscheidet die Farbe, aber nur deutlich: um die
+ * Hälfte näher als die nächste und selbst nah. Vier Rollen desselben Materials
+ * (MMU) unterscheiden sich nur darin, und dunkle Töne liegen eng beieinander –
+ * die feste Schwelle allein hielte Braun und Dunkelgrün für gleich gut.
  */
 export function pickProductForFilament(
   filament: SlicerFilament,
@@ -514,7 +567,16 @@ export function pickProductForFilament(
     resolveHex
   );
   if (!best || best.score < 4) return null;
-  if (second && second.score === best.score) return null;
+  if (best.colorDistance !== null && best.colorDistance >= COLOR_FAR)
+    return null;
+  if (second && second.score === best.score) {
+    const near = best.colorDistance;
+    const clearlyCloser =
+      near !== null &&
+      near < COLOR_NEAR &&
+      (second.colorDistance === null || near * 1.5 < second.colorDistance);
+    if (!clearlyCloser) return null;
+  }
   return best.productId;
 }
 
@@ -525,24 +587,32 @@ function words(value: string | null | undefined): string[] {
     .filter(word => word.length > 1);
 }
 
-/** Abstand zweier Farben, gewichtet nach dem Auge („redmean“), 0 bis ~765 */
+/**
+ * Abstand zweier Farben als ΔE im CIELAB-Raum (CIE76): 0 gleich, um 2 kaum
+ * zu unterscheiden, 100 Schwarz gegen Weiß.
+ *
+ * Nicht im RGB-Raum: Dort zählt bei dunklen Tönen die Helligkeit mehr als der
+ * Farbton – das Dunkelbraun einer echten MMU-Datei (`#3A200B`) lag dort fast
+ * gleich weit von „Braun“ wie von „Dunkelgrün“, in CIELAB ist es 20 gegen 45.
+ */
 export function colorDistance(a: string, b: string): number {
-  const [r1, g1, b1] = rgb(a);
-  const [r2, g2, b2] = rgb(b);
-  const rMean = (r1 + r2) / 2;
-  const dr = r1 - r2;
-  const dg = g1 - g2;
-  const db = b1 - b2;
-  return Math.sqrt(
-    (2 + rMean / 256) * dr * dr +
-      4 * dg * dg +
-      (2 + (255 - rMean) / 256) * db * db
-  );
+  const [l1, a1, b1] = toLab(a);
+  const [l2, a2, b2] = toLab(b);
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2);
 }
 
-function rgb(hex: string): [number, number, number] {
+/** sRGB → CIELAB mit Weißpunkt D65 */
+function toLab(hex: string): [number, number, number] {
   const value = parseInt(hex.replace("#", ""), 16);
-  return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+  const [r, g, b] = [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff]
+    .map(channel => channel / 255)
+    .map(c => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+  const f = (t: number) =>
+    t > 216 / 24389 ? Math.cbrt(t) : ((24389 / 27) * t + 16) / 116;
+  return [116 * f(y) - 16, 500 * (f(x) - f(y)), 200 * (f(y) - f(z))];
 }
 
 // ---------------------------------------------------------------------------

@@ -691,14 +691,26 @@ Tests in `api/slicerMetadata.test.ts`.
   hinaus – eine Deflate-Bombe bleibt bei 1 MB.
 - **Mehrere Filamente:** Gramm als Kommaliste, alles andere mit Semikolon,
   Profilnamen in Anführungszeichen (`splitList`). Slots mit 0 g entfallen,
-  alles über 0 zählt als mindestens 1 g.
+  alles über 0 zählt als mindestens 1 g. Zwei Eigenheiten, gefunden an einer
+  echten Datei (Core One mit MMU3, PrusaSlicer 2.9.7): **Die Farbe steht in
+  `extruder_colour`**, sobald jemand sie setzt – `filament_colour` bleibt dann
+  überall `#FF8000`. Und **`filament_vendor` ist ein Einzelwert**, auch bei
+  mehreren Filamenten; bei mehreren Slots bleibt er weg (der Hersteller steht
+  ohnehin im Profilnamen je Slot).
 - **Das Material ist ein Vorschlag** (`rankProductsForFilament`,
   `pickProductForFilament`). Die Materialart muss über
   `normalizeMaterialType` stimmen, Harz und Pulver fallen heraus; Punkte für
-  Hersteller, Wörter des Profilnamens und eine ähnliche Farbe. Die Farbe zählt
-  am wenigsten – PrusaSlicer schreibt `#FF8000`, solange niemand eine setzt.
-  Eingetragen wird nur ein eindeutiger Vorsprung mit mehr als der bloßen
-  Materialart; das Gebinde nur, wenn das Material genau eines in Gebrauch hat.
+  Hersteller, Wörter des Profilnamens und eine ähnliche Farbe. Eingetragen
+  wird nur ein eindeutiger Vorsprung mit mehr als der bloßen Materialart; das
+  Gebinde nur, wenn das Material genau eines in Gebrauch hat.
+- **Die Farbe entscheidet bei vier Rollen desselben Materials** (MMU) – und
+  wird deshalb in **CIELAB** gemessen (ΔE, `colorDistance`), nicht in RGB:
+  Dort lag Dunkelbraun fast gleich weit von „Braun“ wie von „Dunkelgrün“, in
+  CIELAB 20 gegen 45. Nah heißt unter 35 (die Farbnamen am Material lösen auf
+  allgemeine Katalogtöne auf), ab 50 verhindert eine bekannte Farbe den
+  Vorschlag, bei Gleichstand gewinnt nur, wer um die Hälfte näher liegt.
+  `#FF8000` gilt dabei als unbekannt (`PRUSASLICER_DEFAULT_COLOR`) – sonst
+  schlösse die Vorgabe des Slicers jede schwarze Rolle aus.
   Abweichende Materialart nach Handwahl: Hinweis an der Zeile, keine Sperre.
 - **Nur in leere Felder**, und nur beim Anlegen, nicht beim Bearbeiten – dort
   hieße es umbuchen.

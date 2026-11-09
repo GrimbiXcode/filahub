@@ -152,6 +152,88 @@ describe("Binär-G-Code", () => {
     ]);
   });
 
+  /**
+   * Nachgebaut nach einer echten Datei: Core One mit MMU3, PrusaSlicer 2.9.7,
+   * vier Rollen PolyTerra PLA in vier Farben. Die Farben stehen nur in
+   * `extruder_colour`, der Hersteller nur einmal.
+   */
+  it("liest einen MMU3-Druck wie aus PrusaSlicer 2.9", async () => {
+    const profile = '"Polymaker PolyTerra PLA @COREONE"';
+    const bytes = buildBgcode([
+      { type: 0, data: "Producer=PrusaSlicer 2.9.7\n" },
+      {
+        type: 3,
+        data: printerMetadata({
+          printer_model: "COREONEMMU3",
+          filament_type: "PLA;PLA;PLA;PLA;PLA",
+          extruder_colour: "#3A200B;#00330C;#8D8B8F;#00A700;#FBEB7D",
+          "filament used [g]": "26.30, 13.47, 3.47, 58.33, 0.00",
+        }),
+      },
+      {
+        type: 4,
+        compression: 1,
+        data: iniText({
+          "filament used [g]": "26.30, 13.47, 3.47, 58.33, 0.00",
+          "total filament used [g]": "101.58",
+          "total filament used for wipe tower [g]": "32.23",
+          "estimated printing time (normal mode)": "14h 31m 34s",
+        }),
+      },
+      {
+        type: 2,
+        compression: 1,
+        data: iniText({
+          extruder_colour: "#3A200B;#00330C;#8D8B8F;#00A700;#FBEB7D",
+          filament_colour: "#FF8000;#FF8000;#FF8000;#FF8000;#FF8000",
+          filament_settings_id: Array(5).fill(profile).join(";"),
+          filament_type: "PLA;PLA;PLA;PLA;PLA",
+          filament_vendor: "Polymaker",
+          printer_model: "COREONEMMU3",
+        }),
+      },
+      gcodeBlock(1_000_000),
+    ]);
+    const job = await readSlicerFile(
+      countingSource(bytes),
+      "Colored_Miniature_Trees_1_0.25n_0.12mm_PLAPLAPLAPLA_COREONEMMU3_14h32m.bgcode"
+    );
+    expect(job.title).toBe("Colored_Miniature_Trees_1");
+    expect(job.durationMinutes).toBe(872);
+    expect(job.printerModel).toBe("COREONEMMU3");
+    expect(
+      job.filaments.map(f => [f.slot, f.grams, f.colorHex, f.vendor])
+    ).toEqual([
+      [0, 26, "#3a200b", null],
+      [1, 13, "#00330c", null],
+      [2, 3, "#8d8b8f", null],
+      [3, 58, "#00a700", null],
+    ]);
+    expect(new Set(job.filaments.map(f => f.profileName))).toEqual(
+      new Set(["Polymaker PolyTerra PLA"])
+    );
+  });
+
+  it("nimmt die Filamentfarbe, wenn keine Extruderfarbe gesetzt ist", async () => {
+    const bytes = buildBgcode([
+      {
+        type: 2,
+        data: iniText({
+          extruder_colour: '""',
+          filament_colour: "#1A1A1A",
+          filament_vendor: "Prusa Polymers",
+        }),
+      },
+      { type: 4, data: iniText({ "filament used [g]": "4" }) },
+      gcodeBlock(10),
+    ]);
+    const [filament] = (await readSlicerFile(countingSource(bytes), "a"))
+      .filaments;
+    expect(filament.colorHex).toBe("#1a1a1a");
+    // Ein Filament: Der Einzelwert gehört eindeutig ihm
+    expect(filament.vendor).toBe("Prusa Polymers");
+  });
+
   it("nimmt eine Datei ohne Prüfsummen", async () => {
     const bytes = buildBgcode(
       [{ type: 4, data: PRINT_METADATA }, gcodeBlock(10)],
@@ -381,11 +463,20 @@ describe("Hilfen", () => {
     expect(crc32(new Uint8Array())).toBe(0);
   });
 
-  it("misst Farbabstände", () => {
+  it("misst Farbabstände in CIELAB", () => {
     expect(colorDistance("#000000", "#000000")).toBe(0);
-    expect(colorDistance("#000000", "#ffffff")).toBeGreaterThan(700);
-    expect(colorDistance("#1a1a1a", "#000000")).toBeLessThan(100);
-    expect(colorDistance("#ff8000", "#000000")).toBeGreaterThan(300);
+    expect(colorDistance("#000000", "#ffffff")).toBeCloseTo(100, 0);
+    expect(colorDistance("#1a1a1a", "#000000")).toBeLessThan(15);
+    // Werte einer echten MMU3-Datei gegen die mitgelieferten Katalogfarben:
+    // der richtige Ton jeweils um mehr als die Hälfte näher
+    const brown = "#6f4a2e";
+    const darkGreen = "#1d5c30";
+    expect(colorDistance("#3a200b", brown) * 1.5).toBeLessThan(
+      colorDistance("#3a200b", darkGreen)
+    );
+    expect(colorDistance("#00330c", darkGreen) * 1.5).toBeLessThan(
+      colorDistance("#00330c", brown)
+    );
   });
 });
 
@@ -499,6 +590,79 @@ describe("Materialvorschlag", () => {
         resolve
       )
     ).toBeNull();
+  });
+
+  it("hält Rollen desselben Materials über die Farbe auseinander", () => {
+    const trees = [
+      product(30, {
+        name: "PolyTerra PLA Wood Brown",
+        manufacturer: "Polymaker",
+        color: "Braun",
+      }),
+      product(31, {
+        name: "PolyTerra PLA Forest Green",
+        manufacturer: "Polymaker",
+        color: "Dunkelgrün",
+      }),
+      product(32, {
+        name: "PolyTerra PLA Fossil Grey",
+        manufacturer: "Polymaker",
+        color: "Grau",
+      }),
+      product(33, {
+        name: "PolyTerra PLA Grass Green",
+        manufacturer: "Polymaker",
+        color: "Grün",
+      }),
+    ];
+    // Die Töne des mitgelieferten Katalogs (`BUILTIN_COLORS`)
+    const treeHexes: Record<string, string> = {
+      Braun: "#6f4a2e",
+      Dunkelgrün: "#1d5c30",
+      Grau: "#8a8a8f",
+      Grün: "#2e9e46",
+    };
+    const resolveTree = (color: string | null) =>
+      color ? treeHexes[color] : null;
+    const pick = (colorHex: string) =>
+      pickProductForFilament(
+        filament({ profileName: "Polymaker PolyTerra PLA", colorHex }),
+        trees,
+        resolveTree
+      );
+    expect(pick("#3a200b")).toBe(30);
+    expect(pick("#00330c")).toBe(31);
+    expect(pick("#8d8b8f")).toBe(32);
+    expect(pick("#00a700")).toBe(33);
+    // Gelb passt zu keiner – dann bleibt die Zeile offen
+    expect(pick("#fbeb7d")).toBeNull();
+  });
+
+  it("hält die Vorgabefarbe von PrusaSlicer für unbekannt", () => {
+    // #FF8000 steht in jeder Datei, in der niemand eine Farbe gesetzt hat
+    const pick = pickProductForFilament(
+      filament({
+        profileName: "Prusament PLA Galaxy Black",
+        vendor: "Prusa Polymers",
+        colorHex: "#ff8000",
+      }),
+      products,
+      resolve
+    );
+    expect(pick).toBe(2);
+  });
+
+  it("trägt bei deutlich anderer Farbe nichts ein", () => {
+    const pick = pickProductForFilament(
+      filament({
+        profileName: "Prusament PLA Galaxy Black",
+        vendor: "Prusa Polymers",
+        colorHex: "#ffffff",
+      }),
+      products,
+      resolve
+    );
+    expect(pick).toBeNull();
   });
 
   it("zieht Materialien mit Gebinde in Gebrauch vor", () => {

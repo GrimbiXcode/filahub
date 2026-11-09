@@ -25,10 +25,16 @@ Fields you already typed stay as they are.
 filahub looks for a material of the same type whose manufacturer and name fit
 the filament profile, for example "Prusament PLA". It only fills one in when
 the match is clear. If the material has exactly one spool in use, that spool is
-chosen too, so saving books the consumption as usual. Lines without a clear
-match stay open for you to pick, and each line shows what the G-code said
-(colour, type, profile), with a warning if the type differs from the material
-you chose.
+chosen too, so saving books the consumption as usual.
+
+For multi-material prints with several spools of the same material, the colour
+decides: set the extruder colours in PrusaSlicer to match your spools, and each
+line finds the spool with the closest colour. A colour that fits none of them
+leaves the line open.
+
+Lines without a clear match stay open for you to pick, and each line shows what
+the G-code said (colour, type, profile), with a warning if the type differs
+from the material you chose.
 
 ## Your file stays on your device
 

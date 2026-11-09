@@ -445,7 +445,7 @@ werden müssen, bevor Code entsteht:
 | Annahme                                                                         | Phase | Wie prüfen                                                       |
 | ------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------- |
 | bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | **bestätigt** (Spezifikation, Beispiele PrusaSlicer 2.6 und 2.8) |
-| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt** für ein Filament; XL/MMU mit echter Datei offen    |
+| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt**, auch MMU3 (echte Datei, PrusaSlicer 2.9.7)        |
 | Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                     |
 | PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                       |
 | Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                       |
