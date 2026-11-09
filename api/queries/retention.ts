@@ -3,6 +3,7 @@ import { loginCodes } from "@db/schema";
 import { purgeAuditLog } from "./audit";
 import { purgeResolvedImports } from "./printImports";
 import { getDb } from "./connection";
+import { purgeDiscordLoginRequests } from "./discordLogin";
 
 /**
  * Aufbewahrung personenbezogener Daten, die nicht am Benutzerkonto hängen.
@@ -38,6 +39,21 @@ export async function purgeExpiredLoginCodes(): Promise<number> {
  * lassen oder eine Anmeldung zu blockieren.
  */
 export async function runRetentionSweep(): Promise<void> {
+  try {
+    /*
+      Laufende Discord-Anmeldungen (seit 4.8.0): Verifier und, beim
+      Einmal-Code, Discord-ID und Namen. Jeder Start räumt schon mit auf; hier
+      der Rest, wenn lange niemand eine Anmeldung beginnt.
+    */
+    const discord = await purgeDiscordLoginRequests();
+    if (discord > 0) {
+      console.log(
+        `[retention] ${discord} abgelaufene Discord-Anmeldungen gelöscht.`
+      );
+    }
+  } catch (error) {
+    console.warn("[retention] Discord-Anmeldungen nicht aufgeräumt:", error);
+  }
   try {
     const codes = await purgeExpiredLoginCodes();
     if (codes > 0) {

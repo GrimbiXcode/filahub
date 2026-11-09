@@ -153,6 +153,21 @@ const de = {
   unblockRejected: (v: { note: string }) =>
     `Dein Antrag auf Aufhebung der Sperre wurde abgelehnt.\n\n${v.note}`,
 
+  /*
+    Seit 4.8.0: Hinweise zur Discord-Anmeldung. Sie gehen an Telegram, weil
+    genau dann jemand Bescheid wissen soll, wenn er es nicht selbst war –
+    etwa wenn ihm jemand den Einmal-Code abgeschwatzt hat.
+  */
+  discordCodeSignIn: () =>
+    `Neue Anmeldung bei filahub mit Discord über einen Einmal-Code aus dem ` +
+    `Browser.\n\nWarst du das nicht, melde dich in den Einstellungen auf allen ` +
+    `Geräten ab und trenne Discord.`,
+
+  discordLinked: (v: { username: string }) =>
+    `Dein filahub-Konto ist jetzt mit dem Discord-Konto „${v.username}“ ` +
+    `verbunden; du kannst dich auch darüber anmelden.\n\nWarst du das nicht, ` +
+    `trenne Discord in den Einstellungen.`,
+
   /** Meldung an die Administratoren – nur sie bekommen sie. */
   abuseAlert: (v: { lines: string }) =>
     `filahub meldet auffällige Zugriffe:\n\n${v.lines}\n\n` +
@@ -212,6 +227,16 @@ const en: NotificationMessages = {
 
   unblockRejected: v =>
     `Your request to lift the block was rejected.\n\n${v.note}`,
+
+  discordCodeSignIn: () =>
+    `New sign-in to filahub with Discord using a one-time code from the ` +
+    `browser.\n\nIf that was not you, sign out on all devices in the settings ` +
+    `and disconnect Discord.`,
+
+  discordLinked: v =>
+    `Your filahub account is now connected to the Discord account "${v.username}"; ` +
+    `you can sign in with it too.\n\nIf that was not you, disconnect Discord ` +
+    `in the settings.`,
 
   abuseAlert: v =>
     `filahub reports unusual activity:\n\n${v.lines}\n\n` +

@@ -15,10 +15,12 @@ export your data.
 
 ## 2. Account
 
-Signing in works through Telegram. You are responsible for your Telegram account
-and for access to it; whoever can reach it can also reach your filahub account.
+Signing in works through Telegram and, where the operator offers it, through
+Discord. You are responsible for these accounts and for access to them; whoever
+can reach an account connected to filahub can also reach your filahub account.
 
-On some instances registration is restricted to particular Telegram accounts.
+On some instances registration is restricted to particular Telegram or Discord
+accounts.
 Whether and for whom this instance is open is the operator's decision.
 
 You can delete your account at any time in the settings. The operator may

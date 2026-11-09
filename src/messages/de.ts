@@ -110,7 +110,7 @@ export const de = {
     intro:
       "Melde dich mit deinem Telegram-Konto an. Telegram bestätigt deine Identität – auf Wunsch auch per Telefonnummer.",
     notConfigured:
-      "Telegram-Login ist noch nicht konfiguriert. Bitte hinterlege TELEGRAM_BOT_TOKEN und TELEGRAM_BOT_USERNAME auf dem Server.",
+      "Noch keine Anmeldung eingerichtet. Bitte hinterlege auf dem Server TELEGRAM_BOT_TOKEN und TELEGRAM_BOT_USERNAME oder DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET und APP_BASE_URL.",
     widgetNotice:
       "Der Telegram-Anmeldebutton wird von telegram.org geladen. Telegram erfährt dabei deine IP-Adresse und Angaben zu deinem Gerät – auch dann, wenn du dich am Ende nicht anmeldest. Telegram sitzt in den Vereinigten Arabischen Emiraten, für die kein Angemessenheitsbeschluss vorliegt.",
     widgetLoad: "Telegram-Anmeldung laden",
@@ -127,6 +127,61 @@ export const de = {
     signingIn: "Anmelden …",
     development: "Entwicklung",
     signInWithoutTelegram: "Ohne Telegram anmelden",
+    withTelegram: "Mit Telegram",
+    withDiscord: "Mit Discord",
+    discordSignIn: "Mit Discord anmelden",
+    discordStarting: "Weiter zu Discord …",
+    discordNotice:
+      "Weiter zu discord.com. Discord erfährt, dass du dich hier anmeldest; filahub erhält nur deine Discord-ID und deinen Benutzernamen.",
+    discordCodeOpen: "Code aus dem Browser eingeben",
+    discordCodeLabel: "Code aus der Discord-Anmeldung",
+    discordCodeHint:
+      "Hat der Browser nach der Anmeldung mit Discord einen Code gezeigt? Gib ihn hier ein.",
+    discordCodeSubmit: "Code einlösen",
+    discordCancelled: "Anmeldung mit Discord abgebrochen.",
+    discordYourId: "Deine Discord-ID:",
+    discordCopyId: "ID kopieren",
+    discordIdCopied: "Discord-ID kopiert",
+    discordResults: {
+      cancelled: "Anmeldung mit Discord abgebrochen.",
+      expired:
+        "Die Anmeldung mit Discord hat zu lange gedauert oder wurde schon benutzt. Versuche es noch einmal.",
+      registration_closed:
+        "Diese Instanz nimmt keine neuen Konten über Discord an. Bist du schon per Telegram angemeldet, verbinde Discord in den Einstellungen.",
+      not_allowlisted:
+        "Dein Discord-Konto ist für diese Instanz nicht freigegeben. Schick dem Betreiber deine Discord-ID.",
+      rate_limited_instance:
+        "Diese Instanz nimmt heute keine neuen Anmeldungen mehr an. Bitte morgen erneut versuchen.",
+      rate_limited_ip:
+        "Von diesem Anschluss wurden heute schon mehrere Konten angelegt. Bitte morgen erneut versuchen.",
+      too_many:
+        "Zu viele Versuche. Bitte in ein paar Minuten erneut versuchen.",
+      unreachable:
+        "Discord antwortet gerade nicht. Versuche es in ein paar Minuten noch einmal.",
+      misconfigured:
+        "Die Anmeldung mit Discord ist auf dieser Instanz nicht richtig eingerichtet. Melde das dem Betreiber.",
+      failed:
+        "Die Anmeldung mit Discord hat nicht geklappt. Versuche es noch einmal.",
+      link_signed_out:
+        "Du warst nicht mehr angemeldet, nichts wurde verbunden. Melde dich an und verbinde Discord in den Einstellungen noch einmal.",
+      link_other_browser:
+        "Discord hat dich in einen anderen Browser zurückgeschickt als den, in dem du angemeldet bist. Nichts wurde verbunden. Melde dich hier so an wie bisher (nicht mit Discord, sonst entsteht ein neues Konto) und verbinde Discord hier in den Einstellungen.",
+    },
+  },
+
+  discordHandoff: {
+    title: "Anmeldecode",
+    intro:
+      "Discord hat dich in diesen Browser zurückgeschickt, nicht in die App, in der du die Anmeldung begonnen hast. Gib dort diesen Code ein:",
+    where:
+      "Auf der Anmeldeseite unter „Mit Discord“ → „Code aus dem Browser eingeben“. Der Code gilt 5 Minuten.",
+    warning:
+      "Gib den Code nur in der filahub-App ein, in der du selbst gerade „Mit Discord anmelden“ gewählt hast. Wer dich nach diesem Code fragt, will in dein Konto.",
+    missing:
+      "Hier ist kein Code angekommen. Beginne die Anmeldung mit Discord noch einmal.",
+    copy: "Code kopieren",
+    copied: "Code kopiert",
+    toLogin: "Zur Anmeldung",
   },
 
   legal: {
@@ -222,6 +277,44 @@ export const de = {
       "Firefox am Rechner kann Webseiten nicht als App installieren. Setze filahub als Lesezeichen – oder öffne die Seite in Chrome, Edge oder Safari, wenn du ein eigenes Symbol möchtest.",
     installHowUnknown:
       "Suche im Menü deines Browsers nach „App installieren“, „Zum Home-Bildschirm“ oder „Zum Dock hinzufügen“. Wie der Punkt heißt, entscheidet der Browser.",
+    loginMethods: "Anmeldewege",
+    loginMethodsHint:
+      "Womit du dich bei filahub anmelden kannst. Ein verbundenes Discord-Konto führt zu diesem Konto, gleich ob du dich über Telegram oder Discord anmeldest.",
+    telegramMethod: "Telegram",
+    discordMethod: "Discord",
+    methodConnected: "Verbunden",
+    methodConnectedAs: (vars: { name: string }) => `Verbunden als ${vars.name}`,
+    methodNotConnected: "Nicht verbunden",
+    telegramOnlyAtLogin:
+      "Telegram lässt sich derzeit nur bei der Anmeldung verbinden; ein Konto, das über Discord entstanden ist, bleibt bei Discord.",
+    discordConnect: "Discord verbinden",
+    discordConnecting: "Weiter zu Discord …",
+    discordConnectHint:
+      "Weiter zu discord.com; Discord fragt dich, ob du filahub deine Discord-ID und deinen Benutzernamen geben willst.",
+    discordDisconnect: "Trennen",
+    discordDisconnectOnlyWay:
+      "Discord ist dein einziger Anmeldeweg und lässt sich darum nicht trennen.",
+    discordDisconnected: "Discord getrennt",
+    discordLinkResults: {
+      linked:
+        "Discord ist verbunden. Du kannst dich ab jetzt auch damit anmelden.",
+      already_linked:
+        "Dieses Discord-Konto ist schon mit deinem Konto verbunden.",
+      taken:
+        "Dieses Discord-Konto gehört schon zu einem anderen filahub-Konto. Nichts wurde verbunden.",
+      other_account:
+        "In diesem Browser ist inzwischen ein anderes Konto angemeldet. Nichts wurde verbunden.",
+      link_elsewhere:
+        "Discord hat dich in einen anderen Browser zurückgeschickt. Nichts wurde verbunden – verbinde Discord in dem Browser, in dem du begonnen hast.",
+      cancelled: "Verbinden mit Discord abgebrochen.",
+      expired: "Das Verbinden hat zu lange gedauert. Versuche es noch einmal.",
+      unreachable:
+        "Discord antwortet gerade nicht. Versuche es in ein paar Minuten noch einmal.",
+      misconfigured:
+        "Discord ist auf dieser Instanz nicht richtig eingerichtet. Melde das dem Betreiber.",
+      failed:
+        "Verbinden mit Discord hat nicht geklappt. Versuche es noch einmal.",
+    },
     dataAndAccount: "Daten und Konto",
     exportFilesHint:
       "Fotos und 3MF-Dateien deiner Drucke gibt es als eigenes ZIP – das JSON nennt sie mit Prüfsumme.",

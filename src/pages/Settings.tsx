@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { AccountDataActions } from "@/components/AccountDataActions";
 import AuthLayout from "@/components/AuthLayout";
 import { InstallAppCard } from "@/components/InstallAppCard";
+import { LoginMethodsCard } from "@/components/LoginMethodsCard";
 import { PageHeader } from "@/components/PageHeader";
 import { ThemeSegmentedControl } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -218,6 +219,9 @@ export default function Settings() {
             </dl>
           </CardContent>
         </Card>
+
+        {/* Seit 4.8.0: Telegram und Discord als Anmeldewege */}
+        <LoginMethodsCard />
 
         {/* Steht weit unten: eine einmalige Handlung, die niemand sucht,
             während er Formate einstellt. */}

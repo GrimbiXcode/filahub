@@ -10,6 +10,7 @@ import {
   LEGAL_PATHS,
   TELEGRAM_WIDGET_CONSENT_KEY,
 } from "@/const";
+import { DiscordLogin, DiscordReturnNotice } from "@/components/DiscordLogin";
 import { Wordmark } from "@/components/Logo";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -172,109 +173,144 @@ export default function Login() {
             <p className="text-sm text-muted-foreground text-center">
               {t.common.loading}
             </p>
-          ) : !loginInfo?.botConfigured ? (
-            <p className="text-sm text-destructive text-center">
-              {t.login.notConfigured}
-            </p>
+          ) : !loginInfo?.botConfigured && !loginInfo?.discordConfigured ? (
+            <>
+              <DiscordReturnNotice />
+              <p className="text-sm text-destructive text-center">
+                {t.login.notConfigured}
+              </p>
+            </>
           ) : (
             <>
-              <div className="space-y-3 text-center">
-                <p className="text-sm text-muted-foreground">{t.login.intro}</p>
-                {!widgetConsent ? (
-                  <div className="space-y-2 rounded-md border border-dashed p-3 text-left">
-                    <p className="text-xs text-muted-foreground">
-                      {t.login.widgetNotice}
+              <DiscordReturnNotice />
+              {loginInfo.botConfigured && (
+                <>
+                  {loginInfo.discordConfigured && (
+                    <h2 className="text-sm font-medium">
+                      {t.login.withTelegram}
+                    </h2>
+                  )}
+                  <div className="space-y-3 text-center">
+                    <p className="text-sm text-muted-foreground">
+                      {t.login.intro}
                     </p>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        localStorage.setItem(TELEGRAM_WIDGET_CONSENT_KEY, "1");
-                        setWidgetConsent(true);
-                      }}
-                    >
-                      <ShieldQuestion className="mr-2 h-4 w-4" />
-                      {t.login.widgetLoad}
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      {t.login.widgetAlternative}
-                    </p>
+                    {!widgetConsent ? (
+                      <div className="space-y-2 rounded-md border border-dashed p-3 text-left">
+                        <p className="text-xs text-muted-foreground">
+                          {t.login.widgetNotice}
+                        </p>
+                        <Button
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            localStorage.setItem(
+                              TELEGRAM_WIDGET_CONSENT_KEY,
+                              "1"
+                            );
+                            setWidgetConsent(true);
+                          }}
+                        >
+                          <ShieldQuestion className="mr-2 h-4 w-4" />
+                          {t.login.widgetLoad}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          {t.login.widgetAlternative}
+                        </p>
+                      </div>
+                    ) : botUsername ? (
+                      <iframe
+                        ref={widgetFrameRef}
+                        title={t.login.widgetTitle}
+                        src={`${TELEGRAM_LOGIN_FRAME_PATH}?bot=${encodeURIComponent(botUsername)}&theme=${resolvedTheme}`}
+                        className="mx-auto block max-w-full border-0"
+                        style={widgetFrameSize}
+                      />
+                    ) : null}
                   </div>
-                ) : botUsername ? (
-                  <iframe
-                    ref={widgetFrameRef}
-                    title={t.login.widgetTitle}
-                    src={`${TELEGRAM_LOGIN_FRAME_PATH}?bot=${encodeURIComponent(botUsername)}&theme=${resolvedTheme}`}
-                    className="mx-auto block max-w-full border-0"
-                    style={widgetFrameSize}
-                  />
-                ) : null}
-              </div>
 
-              <div className="flex items-center gap-3">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">
-                  {t.login.orWithCode}
-                </span>
-                <Separator className="flex-1" />
-              </div>
+                  <div className="flex items-center gap-3">
+                    <Separator className="flex-1" />
+                    <span className="text-xs text-muted-foreground">
+                      {t.login.orWithCode}
+                    </span>
+                    <Separator className="flex-1" />
+                  </div>
 
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  setError(null);
-                  loginWithCode.mutate({ code: code.trim() });
-                }}
-                className="space-y-3"
-              >
-                <div className="space-y-1.5">
-                  {/* `block` statt des `flex` der Basiskomponente: Sonst
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      setError(null);
+                      loginWithCode.mutate({ code: code.trim() });
+                    }}
+                    className="space-y-3"
+                  >
+                    <div className="space-y-1.5">
+                      {/* `block` statt des `flex` der Basiskomponente: Sonst
                       werden Text und Link zu einzelnen Kacheln, die getrennt
                       umbrechen. */}
-                  <Label
-                    htmlFor="login-code"
-                    className="block text-xs leading-snug"
-                  >
-                    {t.login.codeFromBot}{" "}
-                    {botUsername && (
-                      <a
-                        className="font-medium underline"
-                        href={`https://t.me/${botUsername}`}
-                        target="_blank"
-                        rel="noreferrer"
+                      <Label
+                        htmlFor="login-code"
+                        className="block text-xs leading-snug"
                       >
-                        @{botUsername}
-                      </a>
-                    )}{" "}
-                    {t.login.codeRequestHint({ command: "/login" })}
-                  </Label>
-                  <Input
-                    id="login-code"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    placeholder={t.login.codePlaceholder}
-                    value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  variant="secondary"
-                  className="w-full"
-                  disabled={code.length !== 6 || loginWithCode.isPending}
-                >
-                  <MessageCircleCode className="mr-2 h-4 w-4" />
-                  {loginWithCode.isPending
-                    ? t.login.signingIn
-                    : t.login.signInWithCode}
-                </Button>
-              </form>
+                        {t.login.codeFromBot}{" "}
+                        {botUsername && (
+                          <a
+                            className="font-medium underline"
+                            href={`https://t.me/${botUsername}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            @{botUsername}
+                          </a>
+                        )}{" "}
+                        {t.login.codeRequestHint({ command: "/login" })}
+                      </Label>
+                      <Input
+                        id="login-code"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        placeholder={t.login.codePlaceholder}
+                        value={code}
+                        onChange={e =>
+                          setCode(e.target.value.replace(/\D/g, ""))
+                        }
+                      />
+                    </div>
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className="w-full"
+                      disabled={code.length !== 6 || loginWithCode.isPending}
+                    >
+                      <MessageCircleCode className="mr-2 h-4 w-4" />
+                      {loginWithCode.isPending
+                        ? t.login.signingIn
+                        : t.login.signInWithCode}
+                    </Button>
+                  </form>
 
-              {error && (
-                <p className="flex items-start gap-2 text-sm text-destructive">
-                  <Send className="mt-0.5 h-4 w-4 shrink-0" /> {error}
-                </p>
+                  {error && (
+                    <p className="flex items-start gap-2 text-sm text-destructive">
+                      <Send className="mt-0.5 h-4 w-4 shrink-0" /> {error}
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* Seit 4.8.0: Anmeldung über Discord (api/discord.ts) */}
+              {loginInfo.discordConfigured && (
+                <>
+                  {loginInfo.botConfigured && (
+                    <>
+                      <Separator />
+                      <h2 className="text-sm font-medium">
+                        {t.login.withDiscord}
+                      </h2>
+                    </>
+                  )}
+                  <DiscordLogin />
+                </>
               )}
             </>
           )}

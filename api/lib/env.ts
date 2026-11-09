@@ -99,6 +99,27 @@ export const env = {
   telegramOpenRegistration: ["1", "true"].includes(
     (process.env.TELEGRAM_OPEN_REGISTRATION ?? "").toLowerCase()
   ),
+  /*
+    Anmeldung über Discord (seit 4.8.0): OAuth2 mit PKCE, Scope `identify`.
+    Aktiv, sobald Client-ID, Client-Secret **und** `APP_BASE_URL` gesetzt sind
+    – die Rücksprungadresse bei Discord muss fest eingetragen sein und darf
+    nicht aus Anfrage-Kopfzeilen entstehen (siehe `appBaseUrl`).
+
+    Freigabe wie bei Telegram, aber je Weg getrennt: `DISCORD_ALLOWED_IDS`
+    oder ausdrücklich `DISCORD_OPEN_REGISTRATION`. Eine offene
+    Telegram-Registrierung öffnet Discord bewusst nicht mit.
+  */
+  discordClientId: (process.env.DISCORD_CLIENT_ID ?? "").trim(),
+  discordClientSecret: (process.env.DISCORD_CLIENT_SECRET ?? "").trim(),
+  discordAllowedIds: (process.env.DISCORD_ALLOWED_IDS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean),
+  /** Discord-User-ID des Betreibers – wird wie OWNER_TELEGRAM_ID Admin */
+  ownerDiscordId: (process.env.OWNER_DISCORD_ID ?? "").trim(),
+  discordOpenRegistration: ["1", "true"].includes(
+    (process.env.DISCORD_OPEN_REGISTRATION ?? "").toLowerCase()
+  ),
   /**
    * Anmeldung ohne Telegram für die lokale Entwicklung (`DEV_LOGIN=1`).
    * Wirkt nur außerhalb von NODE_ENV=production – siehe api/devLogin.ts.

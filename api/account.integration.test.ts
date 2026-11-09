@@ -150,6 +150,12 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
       "container_types",
       "custom_colors",
       "custom_textures",
+      /*
+        Seit 4.8.0: laufende Discord-Anmeldungen. `userId` nur beim
+        Verbinden in den Einstellungen; im Export unter
+        `discordLoginRequests`, bei der Löschung samt offenem Einmal-Code.
+      */
+      "discord_login_requests",
       "friendships",
       "hidden_container_presets",
       "lager",
@@ -188,7 +194,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
     ]);
 
     /*
-      Diese siebzehn plus acht, die den Personenbezug über eine andere Spalte
+      Diese achtzehn plus acht, die den Personenbezug über eine andere Spalte
       führen: `profile` (users.id), `weighings` und seit 2.9.0 `consumptions`
       (beide über das Gebinde), seit 4.1.0 `materialPrintSettings` (über das
       Material), seit 4.2.0 `printJobMaterials` und `printJobLinks`, seit 4.3.0
@@ -221,6 +227,7 @@ describe("Datenexport (Art. 15/20 DSGVO)", () => {
         "storageBoxes",
         "customColors",
         "customTextures",
+        "discordLoginRequests",
         "weighings",
         "consumptions",
         "printJobs",

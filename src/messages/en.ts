@@ -101,7 +101,7 @@ export const en: Messages = {
     intro:
       "Sign in with your Telegram account. Telegram confirms your identity – by phone number too, if you want.",
     notConfigured:
-      "The Telegram login is not configured yet. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME on the server.",
+      "No sign-in is configured yet. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_BOT_USERNAME, or DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET and APP_BASE_URL on the server.",
     widgetNotice:
       "The Telegram sign-in button is loaded from telegram.org. Telegram learns your IP address and details about your device in the process – even if you never sign in. Telegram is based in the United Arab Emirates, for which no adequacy decision exists.",
     widgetLoad: "Load Telegram sign-in",
@@ -117,6 +117,58 @@ export const en: Messages = {
     signingIn: "Signing in …",
     development: "Development",
     signInWithoutTelegram: "Sign in without Telegram",
+    withTelegram: "With Telegram",
+    withDiscord: "With Discord",
+    discordSignIn: "Sign in with Discord",
+    discordStarting: "Continuing to Discord …",
+    discordNotice:
+      "Continues to discord.com. Discord learns that you sign in here; filahub only receives your Discord ID and username.",
+    discordCodeOpen: "Enter code from the browser",
+    discordCodeLabel: "Code from the Discord sign-in",
+    discordCodeHint:
+      "Did the browser show a code after signing in with Discord? Enter it here.",
+    discordCodeSubmit: "Redeem code",
+    discordCancelled: "Discord sign-in cancelled.",
+    discordYourId: "Your Discord ID:",
+    discordCopyId: "Copy ID",
+    discordIdCopied: "Discord ID copied",
+    discordResults: {
+      cancelled: "Discord sign-in cancelled.",
+      expired:
+        "The Discord sign-in took too long or was already used. Please try again.",
+      registration_closed:
+        "This instance does not accept new accounts via Discord. If you already sign in with Telegram, connect Discord in the settings.",
+      not_allowlisted:
+        "Your Discord account is not enabled for this instance. Send your Discord ID to the operator.",
+      rate_limited_instance:
+        "This instance is not accepting any more sign-ups today. Please try again tomorrow.",
+      rate_limited_ip:
+        "Several accounts have already been created from this connection today. Please try again tomorrow.",
+      too_many: "Too many attempts. Please try again in a few minutes.",
+      unreachable:
+        "Discord is not responding right now. Please try again in a few minutes.",
+      misconfigured:
+        "The Discord sign-in is not set up correctly on this instance. Please tell the operator.",
+      failed: "Signing in with Discord did not work. Please try again.",
+      link_signed_out:
+        "You were no longer signed in, nothing was connected. Sign in and connect Discord in the settings again.",
+      link_other_browser:
+        "Discord sent you back to a different browser than the one you are signed in with. Nothing was connected. Sign in here the way you usually do (not with Discord, that would create a new account) and connect Discord here in the settings.",
+    },
+  },
+
+  discordHandoff: {
+    title: "Sign-in code",
+    intro:
+      "Discord sent you back to this browser, not to the app where you started signing in. Enter this code there:",
+    where:
+      "On the sign-in page under “With Discord” → “Enter code from the browser”. The code is valid for 5 minutes.",
+    warning:
+      "Only enter the code in the filahub app where you yourself just chose “Sign in with Discord”. Anyone asking you for this code wants into your account.",
+    missing: "No code arrived here. Start signing in with Discord again.",
+    copy: "Copy code",
+    copied: "Code copied",
+    toLogin: "To sign-in",
   },
 
   legal: {
@@ -208,6 +260,42 @@ export const en: Messages = {
       "Firefox on the desktop cannot install websites as apps. Bookmark filahub instead – or open it in Chrome, Edge or Safari if you want an icon of its own.",
     installHowUnknown:
       "Look for “Install app”, “Add to home screen” or “Add to dock” in your browser's menu. What the entry is called is up to the browser.",
+    loginMethods: "Sign-in methods",
+    loginMethodsHint:
+      "How you can sign in to filahub. A connected Discord account leads to this account, whether you sign in via Telegram or Discord.",
+    telegramMethod: "Telegram",
+    discordMethod: "Discord",
+    methodConnected: "Connected",
+    methodConnectedAs: (vars: { name: string }) => `Connected as ${vars.name}`,
+    methodNotConnected: "Not connected",
+    telegramOnlyAtLogin:
+      "Telegram can currently only be connected when signing up; an account created via Discord stays with Discord.",
+    discordConnect: "Connect Discord",
+    discordConnecting: "Continuing to Discord …",
+    discordConnectHint:
+      "Continues to discord.com; Discord asks whether you want to give filahub your Discord ID and username.",
+    discordDisconnect: "Disconnect",
+    discordDisconnectOnlyWay:
+      "Discord is your only sign-in method and therefore cannot be disconnected.",
+    discordDisconnected: "Discord disconnected",
+    discordLinkResults: {
+      linked: "Discord is connected. From now on you can sign in with it too.",
+      already_linked:
+        "This Discord account is already connected to your account.",
+      taken:
+        "This Discord account already belongs to another filahub account. Nothing was connected.",
+      other_account:
+        "Another account is now signed in in this browser. Nothing was connected.",
+      link_elsewhere:
+        "Discord sent you back to a different browser. Nothing was connected – connect Discord in the browser where you started.",
+      cancelled: "Connecting Discord cancelled.",
+      expired: "Connecting took too long. Please try again.",
+      unreachable:
+        "Discord is not responding right now. Please try again in a few minutes.",
+      misconfigured:
+        "Discord is not set up correctly on this instance. Please tell the operator.",
+      failed: "Connecting Discord did not work. Please try again.",
+    },
     dataAndAccount: "Data and account",
     exportFilesHint:
       "Photos and 3MF files of your prints come as a separate ZIP – the JSON lists them with a checksum.",

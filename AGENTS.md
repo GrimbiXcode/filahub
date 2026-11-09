@@ -5,7 +5,7 @@ und Harz in **Lagern** (bis fünf je Benutzer, je Lager eine Materialart),
 Gebindearten (Rolle, Beutel, Flasche, Eimer, Kartusche) und Dryboxen inkl.
 Leergewicht (Tara), Wägungen und Verbräuche mit automatischer
 Restmengenberechnung,
-Kurz-Kennungen zum schnellen Wiederfinden, Login ausschließlich über Telegram. Benutzer können sich als
+Kurz-Kennungen zum schnellen Wiederfinden, Login über Telegram und seit 4.8.0 optional über Discord. Benutzer können sich als
 Freunde verbinden, ihr Lager abgestuft freigeben und Material untereinander
 anfragen. Seit 4.0.0 bündelt ein **Material** (das Produkt) seine **Gebinde**
 (die einzelnen Rollen, Flaschen, Beutel) – Bestand und Warnung zählen je
@@ -21,7 +21,7 @@ Benutzer).
   TanStack Query, react-hook-form + zod
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
 - **Datenbank:** Drizzle ORM + PostgreSQL (`pg`, `drizzle-kit`)
-- **Auth:** Telegram Login Widget + Bot-Code-Login, JWT-Session-Cookie (`jose`, HS256)
+- **Auth:** Telegram Login Widget + Bot-Code-Login, seit 4.8.0 optional Discord (OAuth2 mit PKCE), JWT-Session-Cookie (`jose`, HS256)
 - **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
 ## Projektstruktur
@@ -37,7 +37,8 @@ src/            React-Frontend
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminUsers, AdminMonitoring, AdminSystem,
-                Blocked (Sperrseite), Login, NotFound
+                Blocked (Sperrseite), Login, DiscordHandoff (Einmal-Code nach
+                der Discord-Anmeldung), NotFound
   components/   App-Komponenten + ui/ (shadcn); AuthLayout (Symbolleiste,
                 Kopfzeile ab Tablet, mobile Kopfzeile), TopBar (Bereich, Lager,
                 Kennung, Wiegen/Verbrauch), IdentifierLookup (Kennung → Wiegen),
@@ -54,7 +55,9 @@ src/            React-Frontend
                 PrintFiles (Fotos und 3MF eines Drucks), NfcScanDialog
                 (OpenPrintTag per Web NFC),
                 RemainingRangeFilter (Restmengen-Filter der Übersicht),
-                BulkEditDialog (Sammelbearbeitung aus der Übersicht)
+                BulkEditDialog (Sammelbearbeitung aus der Übersicht),
+                DiscordLogin (Discord auf der Anmeldeseite), LoginMethodsCard
+                (Anmeldewege in den Einstellungen)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
                 format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
                 theme.tsx (Farbschema über next-themes)
@@ -83,6 +86,8 @@ src/            React-Frontend
   types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
 api/            Hono/tRPC-Backend
   boot.ts       Server-Einstieg: tRPC unter /api/trpc, in Prod statische Files + Telegram-Bot
+  discord.ts    /api/auth/discord/* – Anmeldung über Discord (Start, Rücksprung,
+                Einmal-Code), siehe „Anmeldung über Discord“
   devLogin.ts   /api/dev-login – Anmeldung ohne Telegram, nur lokal mit DEV_LOGIN=1
   fileRoutes.ts /api/files/* – Fotos und 3MF hochladen, ausliefern, exportieren
   ingestRoutes.ts /api/ingest/*, /api/bridge/* – Absender mit API-Schlüssel
@@ -98,6 +103,9 @@ api/            Hono/tRPC-Backend
                 rateLimited (tRPC-Prozeduren; siehe „Grenzen gegen Missbrauch")
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
   lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts,
+                loginAccess.ts (wer sich anmelden darf, je Weg; reine
+                Funktionen), signIn.ts (Freigabe, Registrierungsgrenze,
+                Sitzung – geteilt von Telegram und Discord),
                 vite.ts (Static-Serving samt Cache-Kopfzeilen),
                 clientIp.ts, rateLimit.ts (Zähler im Speicher), quota.ts
                 (Mengenobergrenzen), notify.ts, abuseAlert.ts (Meldung an Admins),
@@ -107,6 +115,7 @@ api/            Hono/tRPC-Backend
   telegram/     auth.ts (Session-Cookie → User), session.ts (JWT), widget.ts, bot.ts (Polling-Bot mit /id, /login),
                 send.ts (ausgehende Nachrichten – ohne die Polling-Schleife importierbar)
   queries/      connection.ts (getDb/getPool, Drizzle-Instanz), users.ts, filament.ts,
+                discordLogin.ts (Aufräumen laufender Discord-Anmeldungen),
                 lager.ts (Lager-CRUD, Obergrenze, Belegung, Löschkaskade),
                 products.ts (Materialien: Liste, Zusammenführen, Aufräumen
                 ohne Gebinde), printJobs.ts (Druckhistorie: Schreibpfade samt
@@ -124,7 +133,8 @@ api/            Hono/tRPC-Backend
 db/             schema.ts, relations.ts, seed.ts, presets/catalog.ts (Startkatalog),
                 migrations/ (drizzle-kit-Output)
 contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Paths,
-                Versionsdatei), errors.ts,
+                Versionsdatei), errors.ts, discord.ts (Pfade und feste
+                Ergebnislisten der Discord-Anmeldung),
                 types.ts, import.ts, friends.ts (Freigabestufen, Freundescode),
                 codes.ts (Alphabet und Normalform beider Codes),
                 organizations.ts (Stufen, Beitrittscode, Obergrenzen),
@@ -220,6 +230,8 @@ TypeScript ist in drei Projekte aufgeteilt (`tsconfig.json` mit Referenzen):
   die Prozedur-Middleware entscheidet. Session = JWT (HS256, 1 Jahr) im
   Cookie `filament_sid`. Außerhalb von localhost wird das Cookie als
   `Secure; SameSite=None` gesetzt → HTTPS ist im Produktivbetrieb Pflicht.
+  Das Token trägt `users.unionId` – bei Telegram-Konten die Telegram-ID, bei
+  Konten aus Discord `discord:<ID>` (siehe „Anmeldung über Discord“).
 
 ## Lager, Materialarten und Zweiteinheiten
 
@@ -1620,6 +1632,57 @@ Neue Sprache: Eintrag in `contracts/i18n.ts`, Schlüssel in `nameI18nSchema`
 und der Vorschlagsdialog erzeugen ihre Felder aus `SUPPORTED_LANGUAGES` und
 ziehen automatisch nach.
 
+## Anmeldung über Discord (seit 4.8.0)
+
+Vorbild ist die Umsetzung im Dungeon Buddy. OAuth2 Authorization Code mit
+PKCE, Scope `identify`; aktiv, sobald `DISCORD_CLIENT_ID`,
+`DISCORD_CLIENT_SECRET` **und** `APP_BASE_URL` gesetzt sind
+(`discordConfigured()` in `api/discord.ts`). Die Rücksprungadresse ist
+`<APP_BASE_URL>/api/auth/discord/callback` und entsteht nie aus
+Anfrage-Kopfzeilen.
+
+- **Ablauf.** `GET /api/auth/discord/start` legt eine Zeile in
+  `discord_login_requests` an (Hash von `state`, Hash der Browser-Bindung,
+  Verifier; 10 Minuten) und setzt das httpOnly-Cookie `filahub_discord`
+  (Pfad `/api/auth/discord`). Der Rücksprung verbraucht die Zeile atomar
+  (`usedAt`), tauscht den Code, liest `/users/@me` und widerruft das Token
+  sofort. Er endet immer auf einer Seite der App: `/` mit Sitzung, sonst
+  `/login?discord=<Grund>` bzw. `/einstellungen?discord=<Ergebnis>`. Die
+  Gründe stehen als feste Listen in `contracts/discord.ts`; nie Text von
+  Discord.
+- **Einmal-Code.** Kommt der Rücksprung ohne passendes Bindungs-Cookie an
+  (iOS öffnet Discord aus der installierten App in einem anderen
+  Cookie-Speicher), wird dieser Browser **nicht** angemeldet, sondern zeigt
+  `/login/discord-code#code=<6 Ziffern>` (Code nur im Fragment). Einlösen per
+  `POST /api/auth/discord/code` nur mit dem Cookie des Starts, 5 Minuten,
+  höchstens 5 Fehlversuche; derselbe Grenz-Eimer wie der Telegram-Code
+  (`LOGIN_RATE_LIMITS` in `api/lib/signIn.ts`).
+- **Konten.** Ein Konto aus Discord bekommt `unionId = discord:<ID>` und
+  `discordId`. Ein Telegram-Konto verbindet Discord in den Einstellungen
+  (`auth.discordLinkStart`, Zweck `link`, eigener State-Hash); der Rücksprung
+  meldet dann nie an und verbindet nur, wenn in diesem Browser genau dieses
+  Konto angemeldet ist. Verbinden ersetzt nie und hängt nie um (`linkDiscord`).
+  Trennen (`auth.discordUnlink`) nur, solange Telegram bleibt **und** über
+  Telegram angemeldet werden darf. Telegram nachträglich mit einem
+  Discord-Konto zu verbinden, gibt es (noch) nicht.
+- **Telegram-Nachrichten** gehen nur an Konten mit Telegram: `telegramChatId`
+  (`api/lib/loginAccess.ts`) ist die einzige Stelle, die aus `unionId` eine
+  Chat-ID macht. Wer Nachrichten verschickt, fragt dort.
+- **Freigabe je Weg** (`loginAccess`, Wahrheitstabelle in
+  `api/loginAccess.test.ts`): Liste (`TELEGRAM_ALLOWED_IDS` /
+  `DISCORD_ALLOWED_IDS`, der jeweilige `OWNER_*` gilt als freigegeben) oder
+  ausdrückliche Öffnung (`TELEGRAM_OPEN_REGISTRATION` /
+  `DISCORD_OPEN_REGISTRATION`). Die offene Telegram-Registrierung öffnet
+  Discord **nicht** mit. Ein bestehendes Konto darf herein, sobald einer
+  seiner Wege zugelassen ist. Freigabe, Registrierungsgrenze, Protokoll und
+  Cookie stehen für beide Wege in `api/lib/signIn.ts`.
+- **Protokoll.** Discord hat keine eigene Spalte im Audit-Log; die
+  Discord-ID steht in `detail.discordId`. Neue Ereignisse
+  `login.discord_linked` und `login.discord_unlinked`.
+- **Auskunft und Löschung.** Laufende Anfragen stehen im Export unter
+  `discordLoginRequests` (ohne Hashes und Verifier) und gehen mit dem Konto;
+  aufgeräumt wird bei jedem Start und im täglichen Lauf.
+
 ## Konfiguration / Umgebungsvariablen
 
 Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
@@ -1631,6 +1694,9 @@ der Instanz, nur für Links in Telegram-Nachrichten; fehlt sie, nennen die
 Nachrichten bloß den Ort in der App. Bewusst konfiguriert und nicht aus den
 Anfrage-Kopfzeilen abgeleitet: Die kann ein Aufrufer setzen, und daraus einen
 Link zu bauen, den wir an Dritte verschicken, wäre eine offene Weiterleitung.
+Optional für Discord: `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET` (beide
+plus `APP_BASE_URL`), `DISCORD_ALLOWED_IDS`, `DISCORD_OPEN_REGISTRATION`,
+`OWNER_DISCORD_ID` – siehe „Anmeldung über Discord“.
 Optional `UPLOAD_DIR` – das Verzeichnis für Fotos und 3MF-Dateien (Vorgabe
 `/data/uploads` in Produktion, sonst `./data/uploads`); siehe „Fotos und 3MF“.
 Statt dessen `STORAGE_DRIVER=s3` mit `S3_*` – siehe „S3 als Ablage“.
@@ -1745,7 +1811,8 @@ Datenbank.
   `openPrintTag`, `bridge`, `fileStorage`, `storageConfig`, `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
-  `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
+  `friendCode`, `rateLimit`, `limits`, `blocking`, `staticFiles` und
+  `loginAccess` (Wahrheitstabelle der Freigabe je Weg). Alle laufen ohne Datenbank
   – reine zod- und Funktionstests. Bei neuen Backend-Features Tests in `api/`
   anlegen.
 - `api/blocking.test.ts` ist wie `friendVisibility` mehr als ein Funktionstest:
@@ -1782,8 +1849,10 @@ Datenbank.
   `api/materialProducts.integration.test.ts`,
   `api/printJobs.integration.test.ts`,
   `api/printFiles.integration.test.ts`,
-  `api/printImports.integration.test.ts` und
-  `api/bulkEdit.integration.test.ts`,
+  `api/printImports.integration.test.ts`,
+  `api/bulkEdit.integration.test.ts` und
+  `api/discord.integration.test.ts` (Discord-Ablauf mit nachgebautem
+  discord.com: Anmelden, Einmal-Code, Verbinden, Trennen),
   konfiguriert in
   `vitest.integration.config.ts`; aus `vitest.config.ts` ausgeschlossen, damit
   `npm run test` ohne Datenbank lauffähig bleibt.

@@ -11,11 +11,41 @@ export default app;
  * Monaten laufen. Aber stillschweigend soll keine davon weiterlaufen.
  */
 function warnAboutConfiguration() {
-  if (env.telegramAllowedIds.length === 0 && !env.telegramOpenRegistration) {
+  const discordReady =
+    env.discordClientId && env.discordClientSecret && env.appBaseUrl;
+  const telegramClosed =
+    env.telegramAllowedIds.length === 0 && !env.telegramOpenRegistration;
+  const discordClosed =
+    env.discordAllowedIds.length === 0 && !env.discordOpenRegistration;
+  if (telegramClosed && (!discordReady || discordClosed)) {
     console.warn(
       "[Konfiguration] Weder TELEGRAM_ALLOWED_IDS noch TELEGRAM_OPEN_REGISTRATION " +
         "gesetzt – niemand kann sich anmelden. Freigabeliste eintragen oder die " +
         "Registrierung ausdrücklich öffnen."
+    );
+  }
+
+  if ((env.discordClientId || env.discordClientSecret) && !discordReady) {
+    console.warn(
+      "[Konfiguration] Discord-Anmeldung unvollständig: DISCORD_CLIENT_ID, " +
+        "DISCORD_CLIENT_SECRET und APP_BASE_URL müssen alle gesetzt sein. " +
+        "Bis dahin bleibt der Knopf „Mit Discord anmelden“ verborgen."
+    );
+  }
+
+  if (discordReady && discordClosed) {
+    console.warn(
+      "[Konfiguration] Discord ist eingerichtet, aber weder DISCORD_ALLOWED_IDS " +
+        "noch DISCORD_OPEN_REGISTRATION gesetzt: Neue Konten entstehen über " +
+        "Discord nicht. Wer per Telegram freigegeben ist, kann Discord in den " +
+        "Einstellungen verbinden und sich danach darüber anmelden."
+    );
+  }
+
+  if (discordReady && env.discordOpenRegistration) {
+    console.warn(
+      "[Konfiguration] Offene Registrierung über Discord: Jedes Discord-Konto " +
+        "kann sich anlegen – siehe PRIVACY.md."
     );
   }
 
