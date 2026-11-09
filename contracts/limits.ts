@@ -38,7 +38,7 @@
 export const MAX_MATERIALS_PER_LAGER = 1000;
 
 /**
- * Gebinde je Sammelbearbeitung (`material.updateMany`, seit 4.5.0).
+ * Gebinde je Sammelbearbeitung (`material.updateMany`, seit 4.6.0).
  *
  * So viele, wie ein Lager fassen kann: Die Übersicht zeigt ein Lager, und wer
  * dort „alle auswählen“ drückt, soll nicht an einer zweiten Zahl scheitern.

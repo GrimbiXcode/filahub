@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /**
- * Sammelbearbeitung von Gebinden aus der Übersicht (seit 4.5.0).
+ * Sammelbearbeitung von Gebinden aus der Übersicht (seit 4.6.0).
  *
  * Gemeinsam für Client und Server: Der Dialog baut den Änderungssatz mit
  * denselben Regeln, die `material.updateMany` prüft.

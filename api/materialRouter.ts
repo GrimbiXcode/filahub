@@ -563,7 +563,7 @@ export const materialRouter = createRouter({
     }),
 
   /**
-   * Sammelbearbeitung aus der Übersicht (seit 4.5.0): derselbe Preis,
+   * Sammelbearbeitung aus der Übersicht (seit 4.6.0): derselbe Preis,
    * dasselbe Kaufdatum, dieselbe Nennmenge oder Drybox für mehrere Gebinde,
    * oder alle als aufgebraucht markieren.
    *

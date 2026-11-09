@@ -38,7 +38,7 @@ type Props = {
 };
 
 /**
- * Sammelbearbeitung aus der Übersicht (seit 4.5.0).
+ * Sammelbearbeitung aus der Übersicht (seit 4.6.0).
  *
  * Jedes Feld hat einen eigenen Haken „ändern“: Ein leeres Preisfeld heißt
  * sonst entweder „nicht anfassen“ oder „Preis entfernen“, und welches gemeint

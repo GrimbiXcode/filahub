@@ -1,5 +1,5 @@
 /**
- * Sammelbearbeitung (`material.updateMany`, seit 4.5.0) gegen eine echte
+ * Sammelbearbeitung (`material.updateMany`, seit 4.6.0) gegen eine echte
  * PostgreSQL-Datenbank: alles oder nichts, Bereichsgrenze, Stufen und die
  * Drybox aus dem eigenen Bereich.
  *

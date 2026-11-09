@@ -1073,7 +1073,7 @@ export async function setMaterialArchived(
 }
 
 /**
- * Sammelbearbeitung (seit 4.5.0): derselbe Änderungssatz für mehrere Gebinde,
+ * Sammelbearbeitung (seit 4.6.0): derselbe Änderungssatz für mehrere Gebinde,
  * in **einer** Transaktion.
  *
  * Alles oder nichts: Die Gebinde werden zuerst mit `FOR UPDATE` gesperrt –

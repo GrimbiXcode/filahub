@@ -279,7 +279,7 @@ export default function Home() {
   }, [shelfGrouping]);
 
   /*
-    Mehrfachauswahl für die Sammelbearbeitung (seit 4.5.0). Nur in der Liste
+    Mehrfachauswahl für die Sammelbearbeitung (seit 4.6.0). Nur in der Liste
     und in den Karten des Telefons – im Regal ist ein Tipp schon „Detail
     zeigen“, ein zweiter Sinn wäre dort ein Rätsel. Stufe `editor` wie das
     Ändern eines einzelnen Gebindes.

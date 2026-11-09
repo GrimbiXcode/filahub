@@ -409,7 +409,7 @@ Druckeinstellungen bleiben.
   Belegungszählung der Dryboxen zählt aufgebrauchte Gebinde deshalb mit.
 - Stufe `editor` (`material.setArchived`), wie Ändern.
 
-### Sammelbearbeitung (seit 4.5.0)
+### Sammelbearbeitung (seit 4.6.0)
 
 Mehrere Gebinde aus der Übersicht auf einmal ändern: `material.updateMany`
 (`ids`, `patch`), Schema und Hilfen in `contracts/bulkEdit.ts`, Oberfläche in
