@@ -1292,6 +1292,27 @@ export const en: Messages = {
         "If material, container, grams or date change, the usage entries are rebooked on saving.",
       orphanHint:
         "The material of this row no longer exists. The row is kept as a record.",
+      fromFile: "Import from G-code",
+      fromFileReading: "Reading file …",
+      fromFileHint:
+        "G-code or binary G-code from PrusaSlicer. The file is read on this device only and is not uploaded.",
+      fromFileApplied: (vars: { name: string }) =>
+        `Imported from “${vars.name}” – please check.`,
+      fromFileUnassigned: (vars: { count: number }) =>
+        vars.count === 1
+          ? "One line still needs a material."
+          : `${vars.count} lines still need a material.`,
+      fromFileEmpty: "The file contains no filament usage.",
+      fromFileErrors: {
+        unknown_format: "This file is not G-code from PrusaSlicer.",
+        no_metadata: "The file contains no slicer information.",
+        corrupt: "The file is damaged or incomplete.",
+        unexpected: "The file could not be read.",
+      },
+      fileFilamentLabel: (vars: { slot: number }) =>
+        `In the G-code: filament ${vars.slot}`,
+      fileTypeMismatch: (vars: { type: string }) =>
+        `The G-code says ${vars.type}.`,
     },
     saveAsPrint: "Save as a print",
     saveAsPrintHint:

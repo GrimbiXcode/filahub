@@ -1,6 +1,7 @@
 # Plan: Prusa-Anbindung (#41)
 
-Stand: Entwurf auf Basis von 4.4.0. Nichts davon ist umgesetzt.
+Stand: Phase A ist mit 4.7.0 umgesetzt (siehe `AGENTS.md`, „G-Code
+auslesen“); B bis E sind Entwurf. 4.5.0 und 4.6.0 sind anderweitig vergeben.
 
 Issue #41: „Verbrauchsdaten direkt ab Prusa einbinden. Verbräuche könnten
 geloggt und im Nachhinein den Materialien zugewiesen werden.“
@@ -48,13 +49,13 @@ welcher Rolle das Filament kam.
 
 ## Überblick
 
-| Phase | Inhalt                                               | Risiko                        | Abhängig von |
-| ----- | ---------------------------------------------------- | ----------------------------- | ------------ |
-| A     | G-Code/bgcode im Druckformular auslesen (im Browser) | gering – keine Schemaänderung | –            |
-| B     | Eingangsfach, API-Schlüssel, PrusaSlicer-Skript      | hoch – neue Zugangsart        | A            |
-| C     | LAN-Brücke für PrusaLink                             | mittel – eigene Komponente    | B            |
-| D     | Filamentprofile ↔ Druckeinstellungen                 | gering                        | –            |
-| E     | OpenPrintTag (NFC) – Prototyp                        | offen – Spezifikation prüfen  | –            |
+| Phase | Inhalt                                          | Risiko                        | Abhängig von |
+| ----- | ----------------------------------------------- | ----------------------------- | ------------ |
+| A     | G-Code/bgcode im Druckformular auslesen (4.7.0) | gering – keine Schemaänderung | –            |
+| B     | Eingangsfach, API-Schlüssel, PrusaSlicer-Skript | hoch – neue Zugangsart        | A            |
+| C     | LAN-Brücke für PrusaLink                        | mittel – eigene Komponente    | B            |
+| D     | Filamentprofile ↔ Druckeinstellungen            | gering                        | –            |
+| E     | OpenPrintTag (NFC) – Prototyp                   | offen – Spezifikation prüfen  | –            |
 
 Phase A und D können sofort beginnen. Phase B ist der eigentliche Inhalt von
 #41; C ist der zweite Absender für dasselbe Fach.
@@ -88,13 +89,14 @@ sie belegt die Felder vor, der Mensch prüft und speichert wie bisher.
 
 G-Code-Dateien sind schnell 50–200 MB. Gelesen wird über `File.slice`:
 
-- ASCII: die letzten 256 KB (Konfigurationsblock samt Kennzahlen), die ersten
-  64 KB nur für den Fall, dass ein anderer Slicer die Zeilen oben schreibt.
-- bgcode: Kopf lesen, dann **Block für Block** Kopf lesen und über die
-  G-Code-Blöcke anhand ihrer Größe springen. Höchstens 10 000 Blöcke, je
-  Metadaten-Block höchstens 1 MB entpackt – eine kaputte oder böswillige Datei
-  darf das Formular nicht einfrieren. Prüfsummen (CRC32) der gelesenen Blöcke
-  werden geprüft.
+- ASCII: die ersten 64 KB (seit PrusaSlicer 2.6 stehen die Kennzahlen dort)
+  und die letzten 512 KB (Konfigurationsblock mit Farbe, Profil, Hersteller).
+- bgcode: Block für Block bis zum **ersten G-Code-Block** – laut
+  Spezifikation stehen alle Metadaten davor. Höchstens 256 Blöcke, je
+  Metadaten-Block höchstens 1 MB gepackt und entpackt – eine kaputte oder
+  böswillige Datei darf das Formular nicht einfrieren. Prüfsummen (CRC32)
+  werden geprüft. _(Umgesetzt; der Entwurf sah vor, über G-Code-Blöcke zu
+  springen – unnötig.)_
 
 ### Code
 
@@ -136,10 +138,11 @@ G-Code-Dateien sind schnell 50–200 MB. Gelesen wird über `File.slice`:
   JPEG/PNG/WebP/3MF. G-Code ist groß, enthält die vollständige Konfiguration
   (inklusive Post-Processing-Zeilen, siehe Phase B) und hat als Anhang keinen
   Wert, den die 3MF nicht schon hat.
-- **Vorschaubild optional als Titelbild.** Das größte PNG-Thumbnail kann als
-  Foto angeboten werden – aber nur über den bestehenden Weg (`prepareImage`
-  kodiert neu, der Server prüft auf Metadaten). QOI-Vorschauen werden
-  übersprungen.
+- **Vorschaubild als Titelbild – noch offen.** Das größte PNG-Thumbnail
+  könnte als Foto angeboten werden – aber nur über den bestehenden Weg
+  (`prepareImage` kodiert neu, der Server prüft auf Metadaten). QOI-Vorschauen
+  würden übersprungen. In 4.7.0 nicht enthalten: Fotos hängen an einem
+  gespeicherten Druck, das Formular legt ihn erst an.
 - **`printedAt` bleibt „jetzt“.** Der Slicer kennt den Druckzeitpunkt nicht.
 
 ### Tests
@@ -439,26 +442,29 @@ auf `material_products` und die Nennmenge am Gebinde.
 Annahmen über die Prusa-Seite, die gegen echte Dateien und Geräte geprüft
 werden müssen, bevor Code entsteht:
 
-| Annahme                                                                         | Phase | Wie prüfen                                  |
-| ------------------------------------------------------------------------------- | ----- | ------------------------------------------- |
-| bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | libbgcode-Spezifikation, Beispieldateien    |
-| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | Beispieldateien MK4S, XL mit mehreren Tools |
-| Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                |
-| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One  |
-| Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs  |
-| OpenPrintTag-Format und Schreibbarkeit                                          | E     | Spezifikation, ein Prusament-Tag auslesen   |
+| Annahme                                                                         | Phase | Wie prüfen                                                       |
+| ------------------------------------------------------------------------------- | ----- | ---------------------------------------------------------------- |
+| bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | **bestätigt** (Spezifikation, Beispiele PrusaSlicer 2.6 und 2.8) |
+| `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt** für ein Filament; XL/MMU mit echter Datei offen    |
+| Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                     |
+| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                       |
+| Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                       |
+| OpenPrintTag-Format und Schreibbarkeit                                          | E     | Spezifikation, ein Prusament-Tag auslesen                        |
 
 Wo eine Annahme nicht stimmt, ändert sich der Leser, nicht das Eingangsfach:
 Phase B hängt an keiner davon.
 
 ## Versionen
 
-| Version | Inhalt                                   |
-| ------- | ---------------------------------------- |
-| 4.5.0   | Phase A, Phase D                         |
-| 4.6.0   | Phase B (Fach, Schlüssel, Slicer-Skript) |
-| 4.7.0   | Phase C (Brücke)                         |
-| später  | Phase E, je nach Prüfung                 |
+| Version  | Inhalt                                            |
+| -------- | ------------------------------------------------- |
+| 4.7.0    | Phase A (umgesetzt)                               |
+| folgende | Phase D, Phase B (Fach, Schlüssel, Slicer-Skript) |
+| danach   | Phase C (Brücke)                                  |
+| später   | Phase E, je nach Prüfung                          |
+
+Feste Nummern erst bei der Umsetzung: 4.5.0 und 4.6.0 waren schon vergeben,
+als Phase A fertig wurde.
 
 Je Version eine Release Note (englisch, nur für Benutzer; die Brücke und das
 Skript bekommen ihre Anleitung im README, nicht in der Note) und der

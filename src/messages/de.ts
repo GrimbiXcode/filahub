@@ -1329,6 +1329,27 @@ export const de = {
         "Ändern sich Material, Gebinde, Gramm oder Datum, werden die Verbräuche beim Speichern neu gebucht.",
       orphanHint:
         "Das Material dieser Zeile gibt es nicht mehr. Die Zeile bleibt als Eintrag erhalten.",
+      fromFile: "Aus G-Code übernehmen",
+      fromFileReading: "Lese Datei …",
+      fromFileHint:
+        "G-Code oder Binär-G-Code von PrusaSlicer. Die Datei wird nur auf diesem Gerät gelesen und nicht hochgeladen.",
+      fromFileApplied: (vars: { name: string }) =>
+        `Aus „${vars.name}“ übernommen – bitte prüfen.`,
+      fromFileUnassigned: (vars: { count: number }) =>
+        vars.count === 1
+          ? "Eine Zeile braucht noch ein Material."
+          : `${vars.count} Zeilen brauchen noch ein Material.`,
+      fromFileEmpty: "In der Datei steht kein Filamentverbrauch.",
+      fromFileErrors: {
+        unknown_format: "Die Datei ist kein G-Code von PrusaSlicer.",
+        no_metadata: "In der Datei stehen keine Angaben eines Slicers.",
+        corrupt: "Die Datei ist beschädigt oder unvollständig.",
+        unexpected: "Die Datei ließ sich nicht lesen.",
+      },
+      fileFilamentLabel: (vars: { slot: number }) =>
+        `Im G-Code: Filament ${vars.slot}`,
+      fileTypeMismatch: (vars: { type: string }) =>
+        `Im G-Code steht ${vars.type}.`,
     },
     saveAsPrint: "Als Druck speichern",
     saveAsPrintHint:

@@ -68,7 +68,8 @@ src/            React-Frontend
                 releaseNotes.ts (lädt src/release-notes/ per import.meta.glob),
                 appVersion.ts, appUpdate.ts (Versionsabgleich mit dem Server),
                 importPrompt.ts, imageUpload.ts (Fotos verkleinern, Metadaten
-                entfernen), utils.ts (cn-Helfer)
+                entfernen), slicerFile.ts (Slicer-Datei stückweise lesen),
+                utils.ts (cn-Helfer)
   release-notes/ Inhalt der Seite „Neuerungen": release_vX.Y.Z.md + images/.
                 **Englisch**, eigene AGENTS.md im Verzeichnis
   types/        index.ts (Router-Typen), global.d.ts (__APP_VERSION__)
@@ -122,6 +123,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 printSettings.ts (Druckeinstellungen je Materialart),
                 printJobs.ts (Druckhistorie: Tags, Links, Grenzen, Cursor),
                 printFiles.ts (Dateityp aus den Bytes, Metadaten, Dateinamen),
+                slicerMetadata.ts (G-Code/bgcode von PrusaSlicer lesen,
+                Materialvorschlag),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
                 audit.ts (Ereignisse des Sicherheitsprotokolls),
                 appearance.ts (Farbkatalog, Musterarten, Auflösung, Kontrastfarbe),
@@ -663,6 +666,46 @@ scheitern, die Meldung nennt die fehlende Variable, nie einen Wert.
   dort ebenso) – `S3_TEST_PREFIX=` leer setzen. Die Tests räumen nur ab, was
   sie selbst angelegt haben; trotzdem einen eigenen Test-Bucket nehmen, nie
   den einer laufenden Instanz.
+
+### G-Code auslesen (seit 4.7.0)
+
+Phase A des Plans `docs/plan-prusa-integration.md` (#41): Im
+`PrintJobDialog` belegt „Aus G-Code übernehmen“ Titel, Dauer, Drucker und die
+Materialzeilen aus einer Datei von PrusaSlicer vor. Regeln und Lesen in
+`contracts/slicerMetadata.ts`, der Browser-Teil in `src/lib/slicerFile.ts`,
+Tests in `api/slicerMetadata.test.ts`.
+
+- **Die Datei verlässt das Gerät nicht.** Gelesen wird im Browser über
+  `Blob.slice`, nur was der Parser anfordert. Kein Upload, kein neuer
+  Dateityp in `detectPrintFile`: G-Code ist groß und trägt die ganze
+  Slicer-Konfiguration samt Post-Processing-Zeilen.
+- **Zwei Formate, erkannt an den Bytes.** ASCII-G-Code: Kommentarzeilen
+  `; key = value` aus den ersten 64 KB und den letzten 512 KB (seit
+  PrusaSlicer 2.6 stehen die Kennzahlen auch im Kopf, Farbe, Profil und
+  Hersteller nur im Konfigurationsblock am Ende). Binär-G-Code (libbgcode,
+  `doc/specifications.md`): Blöcke bis zum **ersten G-Code-Block** – alle
+  Metadaten stehen davor, der Rumpf wird nie gelesen.
+- **Grenzen gegen kaputte Dateien:** höchstens 256 Blöcke vor dem G-Code, je
+  Metadaten-Block 1 MB gepackt und entpackt, CRC32 wird geprüft. `fflate`
+  entpackt in einen Puffer der angekündigten Größe und schreibt nie darüber
+  hinaus – eine Deflate-Bombe bleibt bei 1 MB.
+- **Mehrere Filamente:** Gramm als Kommaliste, alles andere mit Semikolon,
+  Profilnamen in Anführungszeichen (`splitList`). Slots mit 0 g entfallen,
+  alles über 0 zählt als mindestens 1 g.
+- **Das Material ist ein Vorschlag** (`rankProductsForFilament`,
+  `pickProductForFilament`). Die Materialart muss über
+  `normalizeMaterialType` stimmen, Harz und Pulver fallen heraus; Punkte für
+  Hersteller, Wörter des Profilnamens und eine ähnliche Farbe. Die Farbe zählt
+  am wenigsten – PrusaSlicer schreibt `#FF8000`, solange niemand eine setzt.
+  Eingetragen wird nur ein eindeutiger Vorsprung mit mehr als der bloßen
+  Materialart; das Gebinde nur, wenn das Material genau eines in Gebrauch hat.
+  Abweichende Materialart nach Handwahl: Hinweis an der Zeile, keine Sperre.
+- **Nur in leere Felder**, und nur beim Anlegen, nicht beim Bearbeiten – dort
+  hieße es umbuchen.
+- **Fixtures werden im Test gebaut** (`api/test/slicerFixtures.ts`), mit
+  `node:zlib` statt des Codes unter Test. Die Beispiele aus libbgcode stehen
+  unter einer fremden Lizenz und kommen nicht ins Repo; gegen sie geprüft
+  wurde von Hand.
 
 ## Kennungen: eindeutig je Lager, Vorlage je Lager
 
@@ -1439,7 +1482,8 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `printSettings`, `printJobs`,
-  `printFiles`, `fileStorage`, `storageConfig`, `serverBundle`,
+  `printFiles`, `slicerMetadata`, `fileStorage`, `storageConfig`,
+  `serverBundle`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking` und `staticFiles`. Alle laufen ohne Datenbank
