@@ -72,7 +72,11 @@ import type { PrintJobPrefill } from "@/lib/quickActions";
 import { SLICER_FILE_ACCEPT, readSlicerUpload } from "@/lib/slicerFile";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
-import type { MaterialOverview, PrintJobDetail } from "@/types";
+import type {
+  MaterialOverview,
+  PrintImportEntry,
+  PrintJobDetail,
+} from "@/types";
 
 type Props = {
   open: boolean;
@@ -163,12 +167,20 @@ export function PrintJobDialog({
   const [readingFile, setReadingFile] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const resolveAppearance = useAppearanceResolver();
+  /**
+   * Ein Eintrag des Eingangsfachs, dessen Materialzeilen noch zugeordnet
+   * werden müssen – sobald Materialien und Gebinde geladen sind (unten).
+   */
+  const [pendingImport, setPendingImport] = useState<PrintImportEntry | null>(
+    null
+  );
+  const importItem = editing ? null : (prefill?.importItem ?? null);
 
   /* Beim Öffnen befüllen – während des Renderns, wie im Materialformular. */
   const formKey = open
     ? editing
       ? `edit-${editing.id}`
-      : `new-${prefill?.productId ?? ""}-${prefill?.materialId ?? ""}`
+      : `new-${prefill?.productId ?? ""}-${prefill?.materialId ?? ""}-${prefill?.importItem?.id ?? ""}`
     : null;
   const [applied, setApplied] = useState<string | null>(null);
   if (formKey !== applied) {
@@ -203,6 +215,21 @@ export function PrintJobDialog({
             }))
         );
         setNotes(editing.notes ?? "");
+        setPendingImport(null);
+      } else if (importItem) {
+        // Aus dem Eingangsfach: Kopf sofort, Materialzeilen nach dem Laden
+        setTitle(importItem.title);
+        setPrintedAt(toLocalInput(new Date(importItem.printedAt)));
+        setStatus(importItem.status);
+        const duration = importItem.durationMinutes;
+        setHours(duration != null ? String(Math.floor(duration / 60)) : "");
+        setMinutes(duration != null ? String(duration % 60) : "");
+        setPrinter(importItem.printer ?? "");
+        setTags("");
+        setLinks([]);
+        setRows([]);
+        setNotes("");
+        setPendingImport(importItem);
       } else {
         setTitle("");
         setPrintedAt(toLocalInput(new Date()));
@@ -221,6 +248,7 @@ export function PrintJobDialog({
           },
         ]);
         setNotes("");
+        setPendingImport(null);
       }
       setFileApplied(null);
     }
@@ -235,7 +263,13 @@ export function PrintJobDialog({
    * eindeutig ist; das Gebinde nur, wenn das Material genau eines in Gebrauch
    * hat.
    */
-  const applySlicerJob = (job: SlicerJob) => {
+  const applySlicerJob = (
+    job: Pick<
+      SlicerJob,
+      "title" | "durationMinutes" | "printerModel" | "filaments" | "fileName"
+    >,
+    options: { quiet?: boolean } = {}
+  ) => {
     const resolveHex = (color: string | null) =>
       resolveAppearance(color, null).hex;
     const activeOf = (productId: number) =>
@@ -287,14 +321,34 @@ export function PrintJobDialog({
         row => row.productId != null || row.grams.trim() !== ""
       );
       const room = MAX_MATERIALS_PER_PRINT_JOB - kept.length - orphans.length;
-      return [
+      const next = [
         ...kept,
         ...job.filaments.slice(0, Math.max(0, room)).map(f => rowFor(f, null)),
       ];
+      // Ohne Filamente bleibt eine leere Zeile zum Eintragen
+      return next.length > 0
+        ? next
+        : [{ key: newKey(), productId: null, materialId: null, grams: "" }];
     });
     setFileApplied(job.fileName);
-    if (job.filaments.length === 0) toast.warning(t.prints.form.fromFileEmpty);
+    if (job.filaments.length === 0 && !options.quiet)
+      toast.warning(t.prints.form.fromFileEmpty);
   };
+
+  /* Eintrag des Eingangsfachs: zuordnen, sobald die Listen da sind */
+  if (pendingImport && products && allMaterials) {
+    setPendingImport(null);
+    applySlicerJob(
+      {
+        title: pendingImport.title,
+        durationMinutes: pendingImport.durationMinutes,
+        printerModel: null,
+        filaments: pendingImport.filaments,
+        fileName: pendingImport.title,
+      },
+      { quiet: true }
+    );
+  }
 
   const onFilePicked = async (file: File | undefined) => {
     if (!file) return;
@@ -335,7 +389,15 @@ export function PrintJobDialog({
     onSuccess: () => editing && onSaved(editing.id, false),
     onError: e => toast.error(e.message),
   });
-  const pending = create.isPending || update.isPending;
+  const resolveImport = trpc.printImport.resolve.useMutation({
+    onSuccess: ({ id }) => {
+      utils.printImport.invalidate();
+      onSaved(id, true);
+    },
+    onError: e => toast.error(e.message),
+  });
+  const pending =
+    create.isPending || update.isPending || resolveImport.isPending;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -410,6 +472,8 @@ export function PrintJobDialog({
       materials,
     };
     if (editing) update.mutate({ ...data, id: editing.id });
+    else if (importItem)
+      resolveImport.mutate({ ...data, importId: importItem.id });
     else create.mutate(data);
   };
 
@@ -455,9 +519,11 @@ export function PrintJobDialog({
                   : t.prints.form.fromFile}
               </Button>
               <p className="text-xs wrap-anywhere text-muted-foreground">
-                {fileApplied
-                  ? t.prints.form.fromFileApplied({ name: fileApplied })
-                  : t.prints.form.fromFileHint}
+                {importItem && fileApplied === importItem.title
+                  ? t.prints.form.fromImportApplied
+                  : fileApplied
+                    ? t.prints.form.fromFileApplied({ name: fileApplied })
+                    : t.prints.form.fromFileHint}
               </p>
               {unassigned > 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400">

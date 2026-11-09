@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { FriendMaterial, MaterialOverview, PrintJobDetail } from "@/types";
+import type { PrintImportEntry } from "@/types";
 
 /**
  * „palette“ = Suche und Sprünge, „weigh“ = Material zum Wiegen auswählen,
@@ -9,8 +10,10 @@ export type PaletteMode = "palette" | "weigh" | "consume";
 
 /** Vorbelegung des Druckformulars – etwa von der Seite eines Gebindes */
 export type PrintJobPrefill = {
-  productId: number;
+  productId?: number | null;
   materialId?: number | null;
+  /** Ein Eintrag des Eingangsfachs (seit 4.7.0): Speichern übernimmt ihn */
+  importItem?: PrintImportEntry | null;
 };
 
 export type QuickActionsState = {

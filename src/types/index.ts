@@ -54,3 +54,8 @@ export type AdminUnblockRequest =
 
 /** Missbrauchsübersicht für /verwaltung/missbrauch */
 export type AdminAbuseOverview = RouterOutputs["admin"]["abuse"]["overview"];
+
+/** Eingangsfach und Verbindungen (seit 4.7.0) */
+export type PrintImportEntry = RouterOutputs["printImport"]["list"][number];
+export type ConnectionEntry = RouterOutputs["connection"]["list"][number];
+export type BridgePrinterItem = ConnectionEntry["printers"][number];

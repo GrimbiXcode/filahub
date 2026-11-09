@@ -72,6 +72,10 @@ export const en: Messages = {
     settings: "Settings",
     material: "Material",
     prints: "Prints",
+    printInbox: "Inbox",
+    printInboxPending: (vars: { count: number }) =>
+      `Inbox (${vars.count} open)`,
+    connections: "Connections",
     weigh: "Weigh",
     weighMaterial: "Weigh a container",
     consume: "Log usage",
@@ -1326,6 +1330,8 @@ export const en: Messages = {
           ? "One line still needs a material."
           : `${vars.count} lines still need a material.`,
       fromFileEmpty: "The file contains no filament usage.",
+      fromImportApplied:
+        "Taken over from the inbox – please check. Saving creates a regular print.",
       fromFileErrors: {
         unknown_format: "This file is not G-code from PrusaSlicer.",
         no_metadata: "The file contains no slicer information.",
@@ -1343,6 +1349,206 @@ export const en: Messages = {
     printLinkLabel: "Link to the model (optional)",
   },
 
+  printImports: {
+    title: "Inbox",
+    description:
+      "Prints reported by PrusaSlicer or the printer bridge. Take them over as a print – only then is the filament booked.",
+    empty: "The inbox is empty.",
+    emptyHint:
+      "Set up the PrusaSlicer script or the printer bridge under “Connections”. Whatever they report lands here.",
+    toConnections: "Go to connections",
+    source: { slicer: "Sliced", printer: "Printed" },
+    sourceHint: {
+      slicer:
+        "Reported by PrusaSlicer on export – only you know whether it was actually printed.",
+      printer: "Reported by the printer via the bridge.",
+    },
+    take: "Take over",
+    dismiss: "Dismiss",
+    dismissSelected: (vars: { count: number }) => `Dismiss ${vars.count}`,
+    dismissed: (vars: { count: number }) =>
+      vars.count === 1 ? "Entry dismissed" : `${vars.count} entries dismissed`,
+    selectAll: "Select all",
+    select: (vars: { title: string }) => `Select “${vars.title}”`,
+    estimated: "estimated from progress",
+    noGrams: "No grams known – enter them when taking over.",
+    progress: (vars: { percent: string }) => `stopped at ${vars.percent}`,
+    via: (vars: { name: string }) => `via “${vars.name}”`,
+    filament: (vars: { slot: number }) => `Filament ${vars.slot}`,
+    inboxLink: (vars: { count: number }) => `Inbox (${vars.count})`,
+  },
+
+  connections: {
+    title: "Connections",
+    description:
+      "Keys for PrusaSlicer and the printer bridge. A key can only put prints into the inbox – it can't read or change anything.",
+    add: "New connection",
+    empty: "No connections yet.",
+    emptyHint:
+      "With the printer bridge, finished prints from your Prusa printers land in the inbox by themselves. With the PrusaSlicer script, every export does.",
+    kindLabel: "What do you want to connect?",
+    kinds: {
+      bridge: {
+        title: "Printer bridge",
+        text: "A small Docker container in your network reports finished prints from your Prusa printers (PrusaLink). You set up the printers here afterwards.",
+      },
+      slicer: {
+        title: "PrusaSlicer",
+        text: "A script reports grams per filament and print time after every export.",
+      },
+    },
+    kindBadge: { bridge: "Bridge", slicer: "PrusaSlicer" },
+    nameLabel: "Name",
+    namePlaceholder: { bridge: "e.g. Workshop", slicer: "e.g. Laptop" },
+    create: "Create key",
+    createdTitle: "Almost done",
+    once: "The key is shown in plain text only now. Copy the command before you close this window.",
+    bridgeStep1:
+      "Run this on a computer in your network that has Docker – a Raspberry Pi, NAS or server:",
+    bridgeStep2:
+      "Then add your printers here. The bridge fetches its settings by itself; you don't need to touch the container again.",
+    copy: "Copy",
+    copied: "Copied",
+    slicerStep1: "Download the script and save it, e.g. in your home folder:",
+    downloadScript: "Download filahub-import.py",
+    slicerStep2:
+      "Create this file. Address and key deliberately don't go into PrusaSlicer – PrusaSlicer writes its settings into every G-code and project.",
+    slicerPathUnix: "Linux and macOS: ~/.config/filahub/import.json",
+    slicerPathWindows: "Windows: %APPDATA%\\filahub\\import.json",
+    slicerStep3:
+      "In PrusaSlicer, add this under Print Settings → Output options → Post-processing scripts (adjust the path):",
+    slicerNote:
+      "It reports on export, not on printing – you decide in the inbox whether it was printed.",
+    done: "Done",
+    lastUsed: (vars: { when: string }) => `last used ${vars.when}`,
+    neverUsed: "never used",
+    owner: (vars: { name: string }) => `by ${vars.name}`,
+    revoke: "Revoke",
+    revokeTitle: "Revoke this key?",
+    revokeText:
+      "Anything using it is rejected from now on. For a bridge, its printers go too.",
+    revoked: "Key revoked",
+    sectionBridges: "Printer bridges",
+    sectionSlicer: "PrusaSlicer",
+    bridge: {
+      online: "Online",
+      offline: "Offline",
+      never: "Never reported",
+      neverHint:
+        "Is the container running? “docker logs filahub-bridge” shows what it says. The start command with the key is only shown when you create a bridge – if you no longer have it, create a new bridge.",
+      offlineHint:
+        "No report for over a minute and a half. Is the container still running, and can it reach this address?",
+      version: (vars: { version: string }) => `Bridge ${vars.version}`,
+      queued: (vars: { count: number }) =>
+        vars.count === 1
+          ? "1 print waiting to be delivered"
+          : `${vars.count} prints waiting to be delivered`,
+      lastSeen: (vars: { when: string }) => `last report ${vars.when}`,
+      addPrinter: "Add printer",
+      noPrinters:
+        "No printer yet. Add one – the bridge picks it up on its next check and reports here whether it can reach it.",
+      log: "Bridge log",
+      logEmpty: "No entries.",
+    },
+    printer: {
+      addTitle: "Add printer",
+      editTitle: "Edit printer",
+      description:
+        "You find these details on the printer under Settings → Network → PrusaLink. The bridge tries them right away.",
+      nameLabel: "Name",
+      namePlaceholder: "e.g. MK4S",
+      hostLabel: "Address",
+      hostPlaceholder: "e.g. 192.168.1.50",
+      hostHint:
+        "Preferably the IP address – a container often can't resolve “.local” names.",
+      hostInvalid: "Please enter an address like 192.168.1.50.",
+      hostPublic:
+        "This address isn't in the local network – the bridge only talks to devices in its own network.",
+      authLabel: "Login",
+      auth: {
+        api_key: "API key",
+        digest: "Username and password",
+      },
+      authHint: {
+        api_key: "This is how MK4, MK3.9, Core One, XL and MINI log in.",
+        digest:
+          "For printers that protect PrusaLink with a username (usually “maker”) and password.",
+      },
+      usernameLabel: "Username",
+      secretLabel: { api_key: "API key", digest: "Password" },
+      secretKeep: "Leave empty to keep it",
+      secretUnreadable:
+        "The stored login can no longer be read – please enter it again.",
+      enabledLabel: "Poll this printer",
+      test: "Test connection",
+      testing: "Testing …",
+      testQueued: "Test requested – the bridge answers within a few seconds.",
+      edit: "Edit",
+      remove: "Remove",
+      removeConfirm: (vars: { name: string }) => `Remove “${vars.name}”?`,
+      saved: "Printer saved",
+      removed: "Printer removed",
+      paused: "paused",
+      checked: (vars: { when: string }) => `checked ${vars.when}`,
+      httpStatus: (vars: { status: number }) => `HTTP ${vars.status}`,
+      state: {
+        ok: "Connected",
+        pending: "Not checked yet",
+        invalid_host: "Invalid address",
+        blocked_public: "Not in the local network",
+        dns_failed: "Name not resolvable",
+        refused: "Connection refused",
+        timeout: "No answer",
+        unreachable: "Unreachable",
+        unauthorized: "Login rejected",
+        not_prusalink: "Not PrusaLink",
+        tls: "TLS error",
+        error: "Error",
+      },
+      help: {
+        ok: "",
+        pending:
+          "The bridge checks the printer on its next round – every few seconds while it's running.",
+        invalid_host: "Please check the address, e.g. 192.168.1.50.",
+        blocked_public:
+          "Enter the address in your local network (192.168.…, 10.…). If you really mean a remote printer, start the bridge with -e BRIDGE_ALLOW_PUBLIC=1.",
+        dns_failed:
+          "The container doesn't know this name. Enter the IP address – it's on the printer under Settings → Network.",
+        refused:
+          "The device answers, but not on this port. Is PrusaLink switched on (Settings → Network → PrusaLink)? Only add a port if it isn't 80.",
+        timeout:
+          "No answer. Is the printer on and in the same network as the bridge? Is the IP still right – it can change after a router restart.",
+        unreachable:
+          "No route to the device: a different network or VLAN than the bridge, or the printer is off.",
+        unauthorized: "",
+        not_prusalink:
+          "Something answers at this address, but not PrusaLink in the required version. Update the printer firmware. An MK3S with a Raspberry Pi isn't supported yet.",
+        tls: "Certificate check fails with https:// – try http://.",
+        error: "Unexpected error – the bridge log below has more.",
+      },
+      unauthorizedHelp: {
+        api_key:
+          "The API key is wrong. You find it on the printer under Settings → Network → PrusaLink.",
+        digest:
+          "Username or password is wrong. The username is usually “maker”; the password is on the printer under Settings → Network → PrusaLink.",
+      },
+      printerState: {
+        IDLE: "Ready",
+        BUSY: "Busy",
+        PRINTING: "Printing",
+        PAUSED: "Paused",
+        FINISHED: "Finished",
+        STOPPED: "Stopped",
+        ERROR: "Error",
+        ATTENTION: "Needs attention",
+        READY: "Ready",
+      },
+      job: (vars: { file: string; percent: string }) =>
+        `${vars.file} · ${vars.percent}`,
+      serial: (vars: { serial: string }) => `Serial ${vars.serial}`,
+      firmware: (vars: { firmware: string }) => `Firmware ${vars.firmware}`,
+    },
+  },
   consumption: {
     title: "Log usage",
     description: (vars: { name: string }) =>
