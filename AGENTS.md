@@ -18,10 +18,10 @@ Benutzer).
 
 - **Frontend:** React 19, Vite 8, TypeScript (strict), Tailwind CSS v4,
   shadcn/ui (Radix-Primitives, siehe `src/components/ui/`), react-router 7,
-  TanStack Query, react-hook-form + zod
+  TanStack Query, zod
 - **Backend:** Hono 4 + tRPC 11 (Fetch-Adapter), `@hono/node-server`
 - **Datenbank:** Drizzle ORM + PostgreSQL (`pg`, `drizzle-kit`)
-- **Auth:** Telegram Login Widget + Bot-Code-Login, seit 4.8.0 optional Discord (OAuth2 mit PKCE), JWT-Session-Cookie (`jose`, HS256)
+- **Auth:** Telegram Login Widget + Bot-Code-Login, seit 4.8.0 optional Discord (OAuth2 mit PKCE), JWT-Session-Cookie (`hono/jwt`, HS256)
 - **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
 **`overrides` in `package.json`** – drei, alle nur für Entwicklungswerkzeuge,
@@ -35,6 +35,31 @@ selbst nachzieht (danach `npm audit` und `npm ls <paket>` prüfen):
   typescript-eslint und `@hono/vite-dev-server`).
 
 TypeScript bleibt bei 6.0: typescript-eslint 8 unterstützt höchstens `<6.1`.
+
+### Eigene Bausteine statt Pakete
+
+Seit dem Aufräumen nach 4.8.0 ersetzen eigene Zeilen oder Bordmittel von
+Node und Hono einige Pakete. Wer eines davon zurückholen will, wägt gegen das
+ab, was hier steht:
+
+- **Markdown** (`contracts/markdown.ts`, Tests in `api/markdown.test.ts`)
+  statt `react-markdown` + `remark-gfm` – die beiden brachten rund hundert
+  Pakete mit. Die Teilmenge samt GFM-Tabellen, Aufgabenlisten und Autolinks
+  rendert alle Markdown-Dateien des Repos wie vorher (verglichen beim
+  Wechsel). Zwei Zusagen hängen daran: **rohes HTML bleibt Text**, und
+  **Adressen laufen durch `safeUrl`** (nur relativ, `http(s)`, `mailto`,
+  `tel`) – Notizen schreiben auch andere Mitglieder. Die Gedächtnisse in
+  `InlineParser` halten bösartige 10 000 Zeichen unter Millisekunden; die
+  Laufzeittests dort werden rot, wenn eines wegfällt.
+- **Farbschema** (`src/lib/theme.ts`) statt `next-themes`: ein Store über
+  `useSyncExternalStore`, wie `activeScope`. Vor dem ersten Paint setzt
+  weiter `public/theme-init.js` die Klasse.
+- **Session-Token** über `hono/jwt` statt `jose`, **Cookies** über
+  `hono/utils/cookie` statt `cookie`, **`.env`** über `process.loadEnvFile`
+  statt `dotenv`. Ausgestellte Sitzungen bleiben gültig; `api/session.test.ts`
+  prüft das an einem Token, das noch `jose` signiert hat.
+- **shadcn-Bausteine** liegen nur noch in `src/components/ui/`, wenn sie
+  benutzt werden. Wer einen braucht, holt ihn mit `npx shadcn add …` zurück.
 
 ## Projektstruktur
 
@@ -71,8 +96,7 @@ src/            React-Frontend
                 DiscordLogin (Discord auf der Anmeldeseite), LoginMethodsCard
                 (Anmeldewege in den Einstellungen)
   providers/    trpc.tsx (tRPC-Client, superjson, httpBatchLink auf /api/trpc),
-                format.tsx (bindet die Formatierer an den angemeldeten Benutzer),
-                theme.tsx (Farbschema über next-themes)
+                format.tsx (bindet die Formatierer an den angemeldeten Benutzer)
   hooks/        useAuth, use-mobile, useMediaQuery, useElementWidth,
                 useReleaseNotes, useAppUpdate (Neuladen bei neuer Version)
   lib/          activeScope.ts (aktiver Bereich: privat oder Organisation),
@@ -80,7 +104,7 @@ src/            React-Frontend
                 organizationRole.ts (Stufen-Beschriftungen),
                 formatContext.ts (useFormat), format.ts (Füllstandsfarben),
                 appearance.ts (Katalog-Hook, Auflösung und Feld-Beschriftung),
-                theme.ts (Farbschema-Konstanten + useAppTheme),
+                theme.ts (Farbschema: Store, Konstanten, useAppTheme),
                 quickActions.ts (Store der Schnellaktionen),
                 formKeyboard.ts (Enter = nächstes Feld, Cmd/Strg + Enter =
                 Speichern in den Erfassungsmasken),
@@ -114,7 +138,8 @@ api/            Hono/tRPC-Backend
   middleware.ts publicQuery / authedQuery / blockedQuery / adminQuery und
                 rateLimited (tRPC-Prozeduren; siehe „Grenzen gegen Missbrauch")
   context.ts    TrpcContext: { req, resHeaders, user? } – Auth ist optional im Context
-  lib/          env.ts (zentrale Env-Variablen), cookies.ts, http.ts,
+  lib/          env.ts (zentrale Env-Variablen), loadEnv.ts (`.env` über
+                `process.loadEnvFile`), cookies.ts, http.ts,
                 loginAccess.ts (wer sich anmelden darf, je Weg; reine
                 Funktionen), signIn.ts (Freigabe, Registrierungsgrenze,
                 Sitzung – geteilt von Telegram und Discord),
@@ -172,7 +197,9 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 notifications.ts (Texte der Telegram-Nachrichten),
                 presets.ts (Preset-Schemas + reine Hilfsfunktionen),
                 locale.ts (Währungs-/Locale-Listen + Schemas), format.ts (Formatierer),
-                releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik)
+                releaseNotes.ts (Frontmatter, Versionsvergleich, Ungelesen-Logik),
+                markdown.ts (Markdown-Leser für MarkdownContent, siehe
+                „Eigene Bausteine statt Pakete“)
 bridge/         Drucker-Brücke für PrusaLink: eine Datei ohne Abhängigkeiten
                 (Node 26 führt sie direkt aus) samt Dockerfile – eigenes Image
 tools/          Tests des PrusaSlicer-Skripts (python3 -m unittest discover tools)
@@ -1697,7 +1724,8 @@ Anfrage-Kopfzeilen.
 
 ## Konfiguration / Umgebungsvariablen
 
-Zentrales Modul: `api/lib/env.ts` (liest via `dotenv` aus `.env`, Vorlage
+Zentrales Modul: `api/lib/env.ts` (liest über `api/lib/loadEnv.ts` mit
+`process.loadEnvFile` aus `.env`, Vorlage
 `.env.example`). Erforderlich: `APP_SECRET` (Session-Signatur),
 `DATABASE_URL` (PostgreSQL), dazu `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`,
 `TELEGRAM_ALLOWED_IDS` (kommagetrennte Whitelist; leer = offene Registrierung),
@@ -1821,6 +1849,7 @@ Datenbank.
   `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
   `printJobs`, `bulkEdit`, `printFiles`, `slicerMetadata`, `prusaProfile`,
   `openPrintTag`, `bridge`, `fileStorage`, `storageConfig`, `serverBundle`,
+  `markdown`, `session`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking`, `staticFiles` und

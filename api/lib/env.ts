@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadEnv";
 import { parseStorageConfig } from "./storageConfig";
 
 /**

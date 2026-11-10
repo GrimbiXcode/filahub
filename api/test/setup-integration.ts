@@ -9,7 +9,7 @@
  * Verbindung ausschließlich aus `TEST_DATABASE_URL` und darf nicht mit
  * `DATABASE_URL` übereinstimmen.
  */
-import "dotenv/config";
+import "../lib/loadEnv";
 
 const testUrl = process.env.TEST_DATABASE_URL;
 

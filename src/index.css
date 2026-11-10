@@ -195,7 +195,7 @@
   * {
     @apply border-border;
   }
-  /* Fallback: next-themes setzt `color-scheme` selbst, vor dem Hydrieren
+  /* Fallback: src/lib/theme.ts setzt `color-scheme` selbst, vor dem Hydrieren
      zählt aber public/theme-init.js bzw. diese Regeln. Ein eingebettetes
      iframe ist nur durchsichtig, wenn sein Schema zu diesem passt – das
      Rahmendokument des Telegram-Widgets bekommt es deshalb als URL-Parameter

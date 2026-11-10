@@ -1,5 +1,7 @@
-import { stringifySetCookie } from "cookie";
-import type { CookieOptions } from "hono/utils/cookie";
+import {
+  serialize as serializeCookie,
+  type CookieOptions,
+} from "hono/utils/cookie";
 import { Session } from "@contracts/constants";
 
 function isLocalhost(headers: Headers): boolean {
@@ -28,13 +30,8 @@ export function getSessionCookieOptions(headers: Headers): CookieOptions {
 
 function serialize(headers: Headers, token: string, maxAgeSeconds: number) {
   const opts = getSessionCookieOptions(headers);
-  return stringifySetCookie({
-    name: Session.cookieName,
-    value: token,
-    httpOnly: opts.httpOnly,
-    path: opts.path,
-    sameSite: opts.sameSite?.toLowerCase() as "lax" | "none",
-    secure: opts.secure,
+  return serializeCookie(Session.cookieName, token, {
+    ...opts,
     maxAge: maxAgeSeconds,
   });
 }
