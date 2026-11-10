@@ -1622,6 +1622,11 @@ export const de = {
     lastUsed: (vars: { when: string }) => `zuletzt benutzt ${vars.when}`,
     neverUsed: "noch nie benutzt",
     owner: (vars: { name: string }) => `von ${vars.name}`,
+    rename: "Umbenennen",
+    renameTitle: "Verbindung umbenennen",
+    renameText:
+      "Nur der Name hier in filahub ändert sich – Schlüssel und Container bleiben, wie sie sind.",
+    renamed: "Name gespeichert",
     revoke: "Entziehen",
     revokeTitle: "Schlüssel entziehen?",
     revokeText:
