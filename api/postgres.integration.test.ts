@@ -79,6 +79,8 @@ describe("Migrationen", () => {
       "print_imports",
       "api_tokens",
       "bridge_printers",
+      "printers",
+      "printer_slots",
       "container_types",
       "storage_boxes",
       "custom_colors",

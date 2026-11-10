@@ -56,6 +56,8 @@ export const PRINTS_PATH = "/drucke";
 export const PRINT_IMPORTS_PATH = "/drucke/eingang";
 /** API-Schlüssel, PrusaSlicer-Skript und Drucker-Brücke (seit 4.7.0) */
 export const CONNECTIONS_PATH = "/verbindungen";
+/** Drucker und ihre geladenen Gebinde (seit 4.9.0) */
+export const PRINTERS_PATH = "/drucker";
 
 export function printJobPath(id: number): string {
   return `${PRINTS_PATH}/${id}`;

@@ -24,6 +24,11 @@ import {
   type PrintJobStatus,
 } from "@contracts/printJobs";
 import {
+  findPrinterByName,
+  loadedMaterialId,
+  loadedSpools,
+} from "@contracts/printers";
+import {
   SlicerFileError,
   pickProductForFilament,
   type SlicerFilament,
@@ -93,6 +98,16 @@ type Row = {
   grams: string;
   /** Was die Slicer-Datei zu dieser Zeile sagt – nur zur Anzeige */
   fromFile?: SlicerFilament;
+  /** Das Gebinde kommt aus dem geladenen Platz des Druckers (seit 4.9.0) */
+  fromSlot?: boolean;
+};
+
+/** Ein geladenes Gebinde samt Drucker und Platz – Vorschlag fürs Abbuchen */
+type LoadedOption = {
+  printerName: string;
+  /** Ab 1; `null` bei einem Drucker mit nur einem Platz */
+  slot: number | null;
+  material: MaterialOverview;
 };
 
 type LinkRow = { key: number; url: string; label: string };
@@ -151,6 +166,12 @@ export function PrintJobDialog({
   const { data: facets } = trpc.print.facets.useQuery(scope, {
     enabled: open,
   });
+  /*
+    Drucker mit geladenen Gebinden (seit 4.9.0): Filament 2 aus dem G-Code ist
+    die Rolle in Platz 2 – ein sichererer Vorschlag als die ähnlichste Farbe.
+  */
+  const { data: printers, isPending: printersPending } =
+    trpc.printer.list.useQuery(scope, { enabled: open });
 
   const [title, setTitle] = useState("");
   const [printedAt, setPrintedAt] = useState("");
@@ -256,6 +277,61 @@ export function PrintJobDialog({
 
   const orphans = editing?.materials.filter(m => m.productId == null) ?? [];
 
+  /** Druckernamen zur Auswahl: eingerichtete Drucker und bisher benutzte */
+  const printerNames = useMemo(() => {
+    const names = (printers ?? []).map(p => p.name);
+    for (const name of facets?.printers ?? [])
+      if (!findPrinterByName(printers ?? [], name)) names.push(name);
+    return names;
+  }, [printers, facets]);
+
+  /** Ein Gebinde in Gebrauch – nur solche schlägt ein Platz vor */
+  const activeGebinde = (id: number) =>
+    allMaterials?.find(m => m.id === id && m.archivedAt == null);
+
+  const matchedPrinter = findPrinterByName(printers ?? [], printer);
+  const loadedOptions: LoadedOption[] = useMemo(
+    () =>
+      loadedSpools(printers ?? [], matchedPrinter).flatMap(entry => {
+        const material = allMaterials?.find(
+          m => m.id === entry.materialId && m.archivedAt == null
+        );
+        return material
+          ? [
+              {
+                printerName: entry.printer.name,
+                slot: entry.printer.slotCount > 1 ? entry.slot + 1 : null,
+                material,
+              },
+            ]
+          : [];
+      }),
+    [printers, matchedPrinter, allMaterials]
+  );
+  /** Die Knöpfe über den Zeilen: nur der Drucker dieses Drucks */
+  const loadedHere = matchedPrinter
+    ? loadedOptions.filter(o => o.printerName === matchedPrinter.name)
+    : [];
+
+  /** Ein geladenes Gebinde übernehmen: in die erste leere Zeile oder neu */
+  const takeLoaded = (material: MaterialOverview) =>
+    setRows(current => {
+      if (current.some(row => row.materialId === material.id)) return current;
+      const patch = {
+        productId: material.productId,
+        materialId: material.id,
+        fromSlot: true,
+      };
+      const empty = current.find(row => row.productId == null);
+      if (empty)
+        return current.map(row =>
+          row.key === empty.key ? { ...row, ...patch } : row
+        );
+      if (current.length + orphans.length >= MAX_MATERIALS_PER_PRINT_JOB)
+        return current;
+      return [...current, { key: newKey(), grams: "", ...patch }];
+    });
+
   /**
    * Die Angaben einer Slicer-Datei eintragen (seit 4.7.0). Nur in leere
    * Felder: Was jemand schon getippt hat, bleibt. Das Material ist ein
@@ -276,10 +352,40 @@ export function PrintJobDialog({
       (allMaterials ?? []).filter(
         m => m.productId === productId && m.archivedAt == null
       );
+    // Der Drucker dieses Drucks – aus dem Feld oder aus der Datei
+    const printerName =
+      printer.trim() ||
+      (job.printerModel
+        ? printerFromModel(job.printerModel, printerNames)
+        : "");
+    const target = findPrinterByName(printers ?? [], printerName);
     const rowFor = (
       filament: SlicerFilament,
       keepProductId: number | null
     ): Row => {
+      /*
+        Zuerst der geladene Platz (seit 4.9.0). Ein schon gewähltes Material
+        (von der Material-Seite geöffnet) bleibt; dann zählt der Platz nur,
+        wenn sein Gebinde zu diesem Material gehört.
+      */
+      const slotted = loadedMaterialId(
+        target,
+        filament.slot,
+        id => activeGebinde(id) != null
+      );
+      const slottedGebinde = slotted != null ? activeGebinde(slotted) : null;
+      if (
+        slottedGebinde &&
+        (keepProductId == null || slottedGebinde.productId === keepProductId)
+      )
+        return {
+          key: newKey(),
+          productId: slottedGebinde.productId,
+          materialId: slottedGebinde.id,
+          grams: String(filament.grams),
+          fromFile: filament,
+          fromSlot: true,
+        };
       const productId =
         keepProductId ??
         pickProductForFilament(filament, products ?? [], resolveHex);
@@ -298,8 +404,7 @@ export function PrintJobDialog({
       setHours(String(Math.floor(job.durationMinutes / 60)));
       setMinutes(String(job.durationMinutes % 60));
     }
-    if (job.printerModel && !printer.trim())
-      setPrinter(printerFromModel(job.printerModel, facets?.printers ?? []));
+    if (job.printerModel && !printer.trim()) setPrinter(printerName);
 
     setRows(current => {
       // Ein Material, eine Zeile ohne Gramm – etwa von der Material-Seite
@@ -313,7 +418,7 @@ export function PrintJobDialog({
         const row = rowFor(job.filaments[0], only.productId);
         return [
           only.productId != null && only.materialId != null
-            ? { ...row, materialId: only.materialId }
+            ? { ...row, materialId: only.materialId, fromSlot: false }
             : row,
         ];
       }
@@ -336,7 +441,7 @@ export function PrintJobDialog({
   };
 
   /* Eintrag des Eingangsfachs: zuordnen, sobald die Listen da sind */
-  if (pendingImport && products && allMaterials) {
+  if (pendingImport && products && allMaterials && !printersPending) {
     setPendingImport(null);
     applySlicerJob(
       {
@@ -582,6 +687,41 @@ export function PrintJobDialog({
             <p className="text-xs text-muted-foreground">
               {t.prints.form.materialsHint}
             </p>
+            {loadedHere.length > 0 && (
+              <div className="grid gap-1.5">
+                <p className="text-xs text-muted-foreground">
+                  {t.prints.form.loadedLabel}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {loadedHere.map(option => {
+                    const taken = rows.some(
+                      row => row.materialId === option.material.id
+                    );
+                    return (
+                      <button
+                        key={option.material.id}
+                        type="button"
+                        disabled={taken}
+                        onClick={() => takeLoaded(option.material)}
+                        className="max-w-full truncate rounded-full border px-2.5 py-0.5 text-xs hover:bg-accent disabled:opacity-50 disabled:hover:bg-transparent"
+                      >
+                        {option.slot != null && (
+                          <span className="mr-1 font-mono text-muted-foreground">
+                            {option.slot}
+                          </span>
+                        )}
+                        {option.material.name}
+                        {option.material.identifier && (
+                          <span className="ml-1 font-mono text-muted-foreground">
+                            {option.material.identifier}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {rows.map(row => (
               <div key={row.key} className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
@@ -597,11 +737,15 @@ export function PrintJobDialog({
                     }
                     materials={allMaterials ?? []}
                     products={products ?? []}
-                    onChange={patch => setRow(row.key, patch)}
+                    loaded={loadedOptions}
+                    onChange={patch =>
+                      setRow(row.key, { ...patch, fromSlot: false })
+                    }
                   />
                   {row.fromFile && (
                     <FileFilamentHint
                       filament={row.fromFile}
+                      fromSlot={row.fromSlot ?? false}
                       productType={
                         products?.find(p => p.id === row.productId)
                           ?.materialType ?? null
@@ -679,7 +823,7 @@ export function PrintJobDialog({
                 id="pj-printer"
                 value={printer}
                 onChange={setPrinter}
-                suggestions={facets?.printers ?? []}
+                suggestions={printerNames}
                 placeholder={t.prints.form.printerPlaceholder}
               />
             </div>
@@ -832,9 +976,11 @@ export function PrintJobDialog({
  */
 function FileFilamentHint({
   filament,
+  fromSlot,
   productType,
 }: {
   filament: SlicerFilament;
+  fromSlot: boolean;
   productType: string | null;
 }) {
   const t = useT();
@@ -860,6 +1006,7 @@ function FileFilamentHint({
       )}
       {t.prints.form.fileFilamentLabel({ slot: filament.slot + 1 })}
       {parts.length > 0 && ` · ${parts.join(" · ")}`}
+      {fromSlot && ` · ${t.prints.form.fromLoadedSlot}`}
       {mismatch && (
         <span className="ml-1.5 text-amber-600 dark:text-amber-400">
           {t.prints.form.fileTypeMismatch({ type: fileType })}
@@ -916,6 +1063,7 @@ function MaterialRowPicker({
   alreadyBooked,
   materials,
   products,
+  loaded,
   onChange,
 }: {
   row: Row;
@@ -923,6 +1071,8 @@ function MaterialRowPicker({
   alreadyBooked: boolean;
   materials: MaterialOverview[];
   products: ProductOption[];
+  /** Geladene Gebinde, der Drucker dieses Drucks zuerst (seit 4.9.0) */
+  loaded: LoadedOption[];
   onChange: (patch: Partial<Row>) => void;
 }) {
   const t = useT();
@@ -984,6 +1134,33 @@ function MaterialRowPicker({
             <CommandInput placeholder={t.prints.form.searchMaterial} />
             <CommandList>
               <CommandEmpty>{t.common.nothingFound}</CommandEmpty>
+              {loaded.length > 0 && (
+                <CommandGroup heading={t.prints.form.groupLoaded}>
+                  {loaded.map(({ printerName, slot, material: m }) => (
+                    <CommandItem
+                      key={`l-${m.id}`}
+                      value={`l-${m.id} ${[printerName, m.identifier, m.name, m.materialType, m.manufacturer, m.color].filter(Boolean).join(" ")}`}
+                      onSelect={() =>
+                        pick({ productId: m.productId, materialId: m.id })
+                      }
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4 shrink-0",
+                          row.materialId === m.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <span className="flex min-w-0 flex-1 flex-col">
+                        <span className="truncate">{m.name}</span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {t.printers.loadedIn({ printer: printerName, slot })}
+                          {m.identifier ? ` · ${m.identifier}` : ""}
+                        </span>
+                      </span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
               {active.length > 0 && (
                 <CommandGroup heading={t.prints.form.groupGebinde}>
                   {active.map(m => (

@@ -59,3 +59,4 @@ export type AdminAbuseOverview = RouterOutputs["admin"]["abuse"]["overview"];
 export type PrintImportEntry = RouterOutputs["printImport"]["list"][number];
 export type ConnectionEntry = RouterOutputs["connection"]["list"][number];
 export type BridgePrinterItem = ConnectionEntry["printers"][number];
+export type PrinterItem = RouterOutputs["printer"]["list"][number];

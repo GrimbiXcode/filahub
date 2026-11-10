@@ -18,6 +18,7 @@ import {
   PRINTS_PATH,
   PRINT_IMPORTS_PATH,
   CONNECTIONS_PATH,
+  PRINTERS_PATH,
   gebindePath,
   LEGAL_PATHS,
   RELEASE_NOTES_PATH,
@@ -37,6 +38,7 @@ import Friends from "./pages/Friends";
 import Home from "./pages/Home";
 import LagerPage from "./pages/Lager";
 import Import from "./pages/Import";
+import Printers from "./pages/Printers";
 import MaterialDetail from "./pages/MaterialDetail";
 import ProductDetail from "./pages/ProductDetail";
 import PrintJobDetail from "./pages/PrintJobDetail";
@@ -119,6 +121,7 @@ export default function App() {
           <Route path={PRINTS_PATH} element={<PrintJobs />} />
           <Route path={PRINT_IMPORTS_PATH} element={<PrintImports />} />
           <Route path={CONNECTIONS_PATH} element={<Connections />} />
+          <Route path={PRINTERS_PATH} element={<Printers />} />
           <Route path={`${PRINTS_PATH}/:id`} element={<PrintJobDetail />} />
           <Route path={CONTAINER_TYPES_PATH} element={<ContainerTypes />} />
           <Route path={DRYBOXES_PATH} element={<StorageBoxes />} />

@@ -8,6 +8,7 @@ import * as schema from "@db/schema";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 import { getDb } from "./connection";
 import { deleteApiTokens } from "./apiTokens";
+import { deletePrintersWhere } from "./printers";
 import {
   handleAdminAccountDeletion,
   listInvitationsForUser,
@@ -120,6 +121,7 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
   const [
     containerTypes,
     storageBoxes,
+    printers,
     customColors,
     customTextures,
     hiddenContainerPresets,
@@ -130,6 +132,9 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     }),
     db.query.storageBoxes.findMany({
       where: eq(schema.storageBoxes.userId, userId),
+    }),
+    db.query.printers.findMany({
+      where: eq(schema.printers.userId, userId),
     }),
     db.query.customColors.findMany({
       where: eq(schema.customColors.userId, userId),
@@ -144,6 +149,17 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
       where: eq(schema.presetProposals.userId, userId),
     }),
   ]);
+
+  // Geladene Plätze hängen am Drucker – derselbe Wächter wie bei den Wägungen
+  const printerSlots =
+    printers.length === 0
+      ? []
+      : await db.query.printerSlots.findMany({
+          where: inArray(
+            schema.printerSlots.printerId,
+            printers.map(p => p.id)
+          ),
+        });
 
   /*
     Login-Codes hängen an der Telegram-ID, nicht am Benutzerdatensatz. Sie
@@ -396,6 +412,8 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     consumptions,
     containerTypes,
     storageBoxes,
+    printers,
+    printerSlots,
     customColors,
     customTextures,
     hiddenContainerPresets,
@@ -545,6 +563,9 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.consumptions)
       .where(inArray(schema.consumptions.materialId, ownMaterialIds));
+
+    // 2b. Drucker samt geladener Plätze (seit 4.9.0) – vor den Gebinden
+    await deletePrintersWhere(tx, eq(schema.printers.userId, userId));
 
     // 3.–6. Eigener Bestand
     await tx

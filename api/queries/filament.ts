@@ -44,6 +44,7 @@ import {
 } from "@db/schema";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb } from "./connection";
+import { unloadGebinde } from "./printers";
 import { hasChanges } from "./patch";
 import {
   PRODUCT_GONE,
@@ -806,6 +807,9 @@ export async function deleteMaterial(scope: Scope, id: number) {
       .update(printJobMaterials)
       .set({ materialId: null, consumptionId: null })
       .where(inArray(printJobMaterials.materialId, scoped));
+    // Aus dem Drucker nehmen (seit 4.9.0) – sonst zeigte der Platz später
+    // auf eine neu vergebene ID
+    await unloadGebinde(tx, scoped);
     const deleted = await tx
       .delete(materials)
       .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
@@ -1056,20 +1060,28 @@ export async function setMaterialArchived(
   id: number,
   archived: boolean
 ): Promise<boolean> {
-  const rows = await getDb()
-    .update(materials)
-    /*
-      Ein zweiter Aufruf mit `archived: true` behält den ersten Zeitpunkt –
-      „aufgebraucht seit“ soll nicht durch einen Doppelklick wandern.
-    */
-    .set({
-      archivedAt: archived
-        ? sql`coalesce(${materials.archivedAt}, now())`
-        : null,
-    })
-    .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
-    .returning({ id: materials.id });
-  return rows.length > 0;
+  return getDb().transaction(async tx => {
+    const rows = await tx
+      .update(materials)
+      /*
+        Ein zweiter Aufruf mit `archived: true` behält den ersten Zeitpunkt –
+        „aufgebraucht seit“ soll nicht durch einen Doppelklick wandern.
+      */
+      .set({
+        archivedAt: archived
+          ? sql`coalesce(${materials.archivedAt}, now())`
+          : null,
+      })
+      .where(and(eq(materials.id, id), scopeWhere(materials, scope)))
+      .returning({ id: materials.id });
+    // Eine leere Rolle hängt nicht mehr im Drucker (seit 4.9.0)
+    if (archived && rows.length > 0)
+      await unloadGebinde(
+        tx,
+        rows.map(r => r.id)
+      );
+    return rows.length > 0;
+  });
 }
 
 /**
@@ -1123,6 +1135,11 @@ export async function updateMaterialsBulk(
       .update(materials)
       .set(set)
       .where(and(inArray(materials.id, ids), scopeWhere(materials, scope)));
+    if (archived === true)
+      await unloadGebinde(
+        tx,
+        found.map(r => r.id)
+      );
     return found.length;
   });
 }

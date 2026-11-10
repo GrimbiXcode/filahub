@@ -50,6 +50,7 @@ import {
   PRINTS_PATH,
   PRINT_IMPORTS_PATH,
   CONNECTIONS_PATH,
+  PRINTERS_PATH,
 } from "@/const";
 import {
   Archive,
@@ -129,6 +130,7 @@ const menuItems: {
   { icon: LayoutDashboard, label: "overview", path: "/" },
   { icon: History, label: "prints", path: PRINTS_PATH },
   { icon: InboxIcon, label: "printInbox", path: PRINT_IMPORTS_PATH },
+  { icon: Printer, label: "printers", path: PRINTERS_PATH },
   { icon: FileUp, label: "import", path: "/import" },
   { icon: Boxes, label: "lager", path: LAGER_PATH },
   { icon: Disc3, label: "containerTypes", path: CONTAINER_TYPES_PATH },

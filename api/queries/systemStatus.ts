@@ -141,6 +141,9 @@ const COUNTED_TABLES = [
   "print_imports",
   "api_tokens",
   "bridge_printers",
+  // Seit 4.9.0: Drucker des Bereichs und ihre geladenen Plätze
+  "printers",
+  "printer_slots",
   "hidden_container_presets",
   "preset_proposals",
   /*

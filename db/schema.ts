@@ -10,6 +10,7 @@ import { CONTAINER_FORMS, MATERIAL_KINDS } from "@contracts/materials";
 import { PRINT_JOB_STATUSES } from "@contracts/printJobs";
 import { PRINT_FILE_KINDS } from "@contracts/printFiles";
 import { PRINT_IMPORT_SOURCES } from "@contracts/printImports";
+import { MAX_PRINTER_SLOTS } from "@contracts/printers";
 import {
   PRUSALINK_AUTH_KINDS,
   type BridgePrinterStatus,
@@ -37,6 +38,7 @@ import {
   index,
   unique,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -1105,6 +1107,79 @@ export const bridgePrinters = pgTable(
 );
 
 export type BridgePrinter = typeof bridgePrinters.$inferSelect;
+
+/**
+ * Drucker des Bereichs (seit 4.9.0) – ein Name und eine Zahl von Plätzen,
+ * damit die App weiß, welche Rolle gerade geladen ist
+ * (`contracts/printers.ts`).
+ *
+ * Eigentum wie überall (`ownerXor`). **Unabhängig von `bridge_printers`**:
+ * Die gehören einem API-Schlüssel und damit einer Person, ein Drucker hier
+ * dem Bereich – und wer keine Brücke betreibt, lädt trotzdem Rollen. Zusammen
+ * finden beide über den Namen (`findPrinterByName`), wie die Drucke auch.
+ *
+ * Der Name ist je Bereich eindeutig, ohne Rücksicht auf Groß-/Kleinschreibung
+ * – sonst wäre die Zuordnung über den Namen mehrdeutig.
+ */
+export const printers = pgTable(
+  "printers",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    organizationId: bigint("organizationId", { mode: "number" }),
+    name: varchar("name", { length: 100 }).notNull(),
+    slotCount: integer("slotCount").default(1).notNull(),
+    createdAt: tsColumn("createdAt").defaultNow().notNull(),
+    updatedAt: tsColumn("updatedAt")
+      .defaultNow()
+      .notNull()
+      .$onUpdate(() => new Date()),
+  },
+  t => [
+    ownerXor("printers_owner_xor"),
+    check(
+      "printers_slot_count_range",
+      sql`"slotCount" BETWEEN 1 AND ${sql.raw(String(MAX_PRINTER_SLOTS))}`
+    ),
+    uniqueIndex("printers_user_name_unique")
+      .on(t.userId, sql`lower(${t.name})`)
+      .where(sql`"organizationId" IS NULL`),
+    uniqueIndex("printers_organization_name_unique")
+      .on(t.organizationId, sql`lower(${t.name})`)
+      .where(sql`"organizationId" IS NOT NULL`),
+  ]
+);
+
+export type Printer = typeof printers.$inferSelect;
+
+/**
+ * Was in welchem Platz geladen ist. Eine fehlende Zeile heißt „leer“ – wie
+ * bei den Freigaben gibt es keine Leer-Zeilen.
+ *
+ * **Ein Gebinde steckt in höchstens einem Platz** (`printer_slots_material_unique`):
+ * Eine Rolle kann nicht in zwei Druckern zugleich hängen. Laden an anderer
+ * Stelle nimmt sie dort heraus (`loadPrinterSlot`). Aufbrauchen und Löschen
+ * eines Gebindes entladen es; Besitz über den Drucker, deshalb kein `userId`
+ * und ein Eintrag in der Ausnahmeliste des DSGVO-Wächters.
+ */
+export const printerSlots = pgTable(
+  "printer_slots",
+  {
+    printerId: bigint("printerId", { mode: "number" }).notNull(),
+    slot: integer("slot").notNull(),
+    materialId: bigint("materialId", { mode: "number" }).notNull(),
+    loadedAt: tsColumn("loadedAt").defaultNow().notNull(),
+  },
+  t => [
+    primaryKey({
+      name: "printer_slots_pkey",
+      columns: [t.printerId, t.slot],
+    }),
+    uniqueIndex("printer_slots_material_unique").on(t.materialId),
+  ]
+);
+
+export type PrinterSlot = typeof printerSlots.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Preset-Katalog: global gepflegte Hersteller und Gebinde

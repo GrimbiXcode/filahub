@@ -76,6 +76,7 @@ export const en: Messages = {
     printInboxPending: (vars: { count: number }) =>
       `Inbox (${vars.count} open)`,
     connections: "Connections",
+    printers: "Printers",
     weigh: "Weigh",
     weighMaterial: "Weigh a container",
     consume: "Log usage",
@@ -204,6 +205,7 @@ export const en: Messages = {
     searchPlaceholder: "Search: identifier, material, page or action …",
     groupWeigh: "Containers to weigh",
     groupConsume: "Containers to log usage for",
+    groupLoaded: "Loaded in a printer",
     groupActions: "Actions",
     groupJumpTo: "Jump to",
     groupMaterials: "Containers",
@@ -708,6 +710,49 @@ export const en: Messages = {
     deleteConsumptionDescription:
       "The amount is credited back to the remaining quantity.",
     consumptionDeleted: "Usage entry deleted",
+  },
+
+  printers: {
+    title: "Printers",
+    description:
+      "Which spool is in which printer? When logging usage, filahub then suggests exactly these containers.",
+    newPrinter: "New printer",
+    firstPrinter: "Add your first printer",
+    emptyTitle: "No printers yet",
+    emptyDescription:
+      "Add your printers and load the containers that are currently in them. The print form, the inbox and the quick search then suggest them when logging usage – with several slots (MMU, AMS) matching the filament in the G-code.",
+    nameHint:
+      "Use the same name as in the print history, the bridge or the PrusaSlicer printer profile – that is how filahub finds the printer for a print.",
+    namePlaceholder: "e.g. Prusa Core One",
+    slotCountLabel: "Slots",
+    slotCountHint: "1 for a single-spool printer, 5 for an MMU3, 4 per AMS.",
+    slotLabel: (vars: { slot: number }) => `Slot ${vars.slot}`,
+    slotsSummary: (vars: { loaded: number; total: number }) =>
+      vars.total === 1
+        ? vars.loaded === 1
+          ? "loaded"
+          : "empty"
+        : `${vars.loaded} of ${vars.total} slots loaded`,
+    empty: "empty",
+    pickGebinde: "Load a container …",
+    searchGebinde: "Identifier or name …",
+    unload: "Unload",
+    loadedElsewhere: (vars: { printer: string; slot: number }) =>
+      `is in ${vars.printer} · slot ${vars.slot}`,
+    loaded: "Container loaded",
+    unloaded: "Slot emptied",
+    editPrinter: "Edit printer",
+    deletePrinter: "Delete printer",
+    deleteTitle: "Delete printer?",
+    deleteDescription: (vars: { name: string }) =>
+      `“${vars.name}” will be deleted and its slots emptied. Prints keep the name.`,
+    created: "Printer added",
+    saved: "Printer saved",
+    deleted: "Printer deleted",
+    loadedIn: (vars: { printer: string; slot: number | null }) =>
+      vars.slot == null
+        ? `Loaded in ${vars.printer}`
+        : `Loaded in ${vars.printer} · slot ${vars.slot}`,
   },
 
   storageBoxes: {
@@ -1501,6 +1546,9 @@ export const en: Messages = {
         `In the G-code: filament ${vars.slot}`,
       fileTypeMismatch: (vars: { type: string }) =>
         `The G-code says ${vars.type}.`,
+      groupLoaded: "Loaded in a printer",
+      loadedLabel: "Loaded in the printer – tap to use:",
+      fromLoadedSlot: "from the loaded slot",
     },
     saveAsPrint: "Save as a print",
     saveAsPrintHint:

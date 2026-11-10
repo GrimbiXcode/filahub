@@ -97,6 +97,13 @@ export const ACCOUNT_EXPORT_SECTIONS = [
   "consumptions",
   "containerTypes",
   "storageBoxes",
+  /*
+    Seit 4.9.0: die eigenen Drucker und welches Gebinde in welchem Platz
+    steckt. `printerSlots` hängt am Drucker (Ausnahmeliste des Wächters).
+    Additiv, die Exportversion bleibt 5.
+  */
+  "printers",
+  "printerSlots",
   /* Eigene Farben und Oberflächen – seine Zuordnung, also seine Angabe. */
   "customColors",
   "customTextures",

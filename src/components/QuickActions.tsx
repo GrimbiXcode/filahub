@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { FRIEND_SEARCH_MIN_LENGTH } from "@contracts/friends";
 import { PRINT_JOB_SEARCH_MIN_LENGTH } from "@contracts/printJobs";
+import { loadedSpools } from "@contracts/printers";
 import { roleAllows } from "@contracts/organizations";
 import { ConsumptionDialog } from "@/components/ConsumptionDialog";
 import { LoanRequestDialog } from "@/components/LoanRequestDialog";
@@ -54,6 +55,7 @@ import {
   LAGER_PATH,
   ORGANIZATIONS_PATH,
   PRINTS_PATH,
+  PRINTERS_PATH,
   RELEASE_NOTES_PATH,
   SETTINGS_PATH,
   gebindePath,
@@ -73,6 +75,7 @@ import { useT, type TextKey } from "@/lib/i18nContext";
 import { useAppTheme } from "@/lib/theme";
 import { trpc } from "@/lib/trpc";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
+import type { MaterialOverview } from "@/types";
 
 /**
  * Rendert die Dialoge der Schnellaktionen. Gehört genau einmal ins Layout;
@@ -154,6 +157,7 @@ type NavKey = TextKey<"nav">;
 const NAV_TARGETS: { icon: typeof Archive; label: NavKey; path: string }[] = [
   { icon: LayoutDashboard, label: "overview", path: "/" },
   { icon: History, label: "prints", path: PRINTS_PATH },
+  { icon: Printer, label: "printers", path: PRINTERS_PATH },
   /*
     Beide Einträge sind in 2.2.0 hinter der Seitenleiste hergelaufen: Das Lager
     fehlte hier ganz, und die Dryboxen zeigten noch auf den alten Pfad, der nur
@@ -214,6 +218,21 @@ function CommandPalette({
         : allMaterials?.filter(m => m.archivedAt == null),
     [allMaterials, mode]
   );
+  /*
+    Geladene Gebinde (seit 4.9.0) stehen beim Wiegen und Abbuchen obenan: Das
+    ist fast immer die Rolle, von der gerade gedruckt wurde.
+  */
+  const { data: printers } = trpc.printer.list.useQuery(scope, {
+    enabled: open && mode !== "palette",
+  });
+  const loaded = useMemo(() => {
+    if (mode === "palette" || !printers || !materials) return [];
+    const byId = new Map(materials.map(m => [m.id, m]));
+    return loadedSpools(printers).flatMap(entry => {
+      const material = byId.get(entry.materialId);
+      return material ? [{ ...entry, material }] : [];
+    });
+  }, [mode, printers, materials]);
 
   /*
     Der Suchbegriff liegt im Zustand, weil das eigene Lager und das der Freunde
@@ -260,6 +279,51 @@ function CommandPalette({
     action();
   };
 
+  const pickMaterial = (material: MaterialOverview) =>
+    run(() => {
+      if (mode === "weigh") quickActions.openWeighing(material);
+      else if (mode === "consume") quickActions.openConsumption(material);
+      else navigate(gebindePath(material.id));
+    });
+
+  const loadedItems = loaded.map(({ printer, slot, material }) => (
+    <CommandItem
+      key={`loaded-${material.id}`}
+      value={[
+        `loaded-${material.id}`,
+        printer.name,
+        material.identifier,
+        material.name,
+        material.materialType,
+        material.manufacturer,
+        material.color,
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      onSelect={() => pickMaterial(material)}
+    >
+      <Printer className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate leading-tight">{material.name}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {t.printers.loadedIn({
+            printer: printer.name,
+            slot: printer.slotCount > 1 ? slot + 1 : null,
+          })}{" "}
+          ·{" "}
+          {t.quick.remaining({
+            amount: formatGrams(material.remainingWeight),
+          })}
+        </span>
+      </div>
+      {material.identifier && (
+        <Badge variant="outline" className="ml-2 shrink-0 font-mono text-xs">
+          {material.identifier}
+        </Badge>
+      )}
+    </CommandItem>
+  ));
+
   const materialItems = (materials ?? []).map(material => (
     <CommandItem
       key={material.id}
@@ -273,13 +337,7 @@ function CommandPalette({
       ]
         .filter(Boolean)
         .join(" ")}
-      onSelect={() =>
-        run(() => {
-          if (mode === "weigh") quickActions.openWeighing(material);
-          else if (mode === "consume") quickActions.openConsumption(material);
-          else navigate(gebindePath(material.id));
-        })
-      }
+      onSelect={() => pickMaterial(material)}
     >
       <Package className="mr-2 h-4 w-4 shrink-0 text-muted-foreground" />
       <div className="flex min-w-0 flex-1 flex-col">
@@ -400,7 +458,14 @@ function CommandPalette({
         <CommandEmpty>{t.common.nothingFound}</CommandEmpty>
 
         {mode !== "palette" ? (
-          <CommandGroup heading={heading.group}>{materialItems}</CommandGroup>
+          <>
+            {loadedItems.length > 0 && (
+              <CommandGroup heading={t.quick.groupLoaded}>
+                {loadedItems}
+              </CommandGroup>
+            )}
+            <CommandGroup heading={heading.group}>{materialItems}</CommandGroup>
+          </>
         ) : (
           <>
             {/*

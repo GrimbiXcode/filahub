@@ -18,6 +18,7 @@ import {
   printJobLinks,
   printJobMaterials,
   printJobs,
+  printers,
   containerTypes,
   customColors,
   customTextures,
@@ -32,6 +33,7 @@ import {
 import { getDb, type DbTransaction } from "./connection";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
 import { deleteApiTokens, deleteTokensOfMembership } from "./apiTokens";
+import { deletePrintersWhere } from "./printers";
 import { recordAudit } from "./audit";
 
 /**
@@ -178,6 +180,8 @@ export async function deleteOrganizationCascade(
   await tx
     .delete(consumptions)
     .where(inArray(consumptions.materialId, orgMaterialIds));
+  // Drucker samt geladener Plätze (seit 4.9.0) – vor den Gebinden
+  await deletePrintersWhere(tx, eq(printers.organizationId, organizationId));
   await tx
     .delete(materials)
     .where(eq(materials.organizationId, organizationId));
@@ -453,6 +457,11 @@ export async function deleteOrganizationIfEmpty(
       .select({ value: count() })
       .from(printJobs)
       .where(eq(printJobs.organizationId, id));
+    /* Eingerichtete Drucker (seit 4.9.0) – Struktur wie Gebindearten */
+    const printerRows = await tx
+      .select({ value: count() })
+      .from(printers)
+      .where(eq(printers.organizationId, id));
     /* Offene Einträge im Eingangsfach (seit 4.7.0) sind Drucke, die noch kommen */
     const importRows = await tx
       .select({ value: count() })
@@ -468,6 +477,7 @@ export async function deleteOrganizationIfEmpty(
       Number(containerRows.at(0)?.value ?? 0) +
       Number(boxRows.at(0)?.value ?? 0) +
       Number(printRows.at(0)?.value ?? 0) +
+      Number(printerRows.at(0)?.value ?? 0) +
       Number(importRows.at(0)?.value ?? 0);
     if (inside > 0) return { blockedBy: inside };
     await deleteOrganizationCascade(tx, id, removedKeys);
