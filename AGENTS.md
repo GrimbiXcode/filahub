@@ -24,6 +24,18 @@ Benutzer).
 - **Auth:** Telegram Login Widget + Bot-Code-Login, seit 4.8.0 optional Discord (OAuth2 mit PKCE), JWT-Session-Cookie (`jose`, HS256)
 - **Laufzeit:** Node.js 26 (siehe `.nvmrc`), ESM (`"type": "module"`), Port 3000 (via `PORT` änderbar)
 
+**`overrides` in `package.json`** – drei, alle nur für Entwicklungswerkzeuge,
+damit `npm audit` leer bleibt. Jeder fällt weg, sobald das genannte Paket
+selbst nachzieht (danach `npm audit` und `npm ls <paket>` prüfen):
+
+- `@hono/vite-dev-server` → `@hono/node-server` der App (statt 1.x, GHSA-rmxm-3fg6-px4f).
+- `@esbuild-kit/core-utils` → `esbuild` 0.25 (statt 0.18, GHSA-67mh-4wv8-2f99);
+  hängt an `drizzle-kit` 0.31, erledigt mit `drizzle-kit` 1.0.
+- `minimatch` → 11.0.1 oder neuer (GHSA-g3hv-75wg-m249; über ESLint,
+  typescript-eslint und `@hono/vite-dev-server`).
+
+TypeScript bleibt bei 6.0: typescript-eslint 8 unterstützt höchstens `<6.1`.
+
 ## Projektstruktur
 
 ```
