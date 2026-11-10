@@ -198,10 +198,10 @@ export default function Printers() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid items-start gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2">
             {list.map(printer => (
               <Card key={printer.id} className="py-0">
-                <CardContent className="grid gap-3 p-4">
+                <CardContent className="grid grid-cols-1 gap-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">{printer.name}</p>
@@ -235,7 +235,7 @@ export default function Printers() {
                       </div>
                     )}
                   </div>
-                  <div className="grid gap-2">
+                  <div className="grid grid-cols-1 gap-2">
                     {Array.from({ length: printer.slotCount }, (_, slot) => {
                       const load = printer.slots.find(s => s.slot === slot);
                       const material = load
@@ -409,20 +409,16 @@ function SlotRow({
         {material ? (
           <Link
             to={gebindePath(material.id)}
-            className="block truncate text-sm hover:underline"
+            className="line-clamp-2 text-sm wrap-break-word hover:underline"
           >
             {material.name}
-            {material.identifier && (
-              <span className="ml-1.5 font-mono text-xs text-muted-foreground">
-                {material.identifier}
-              </span>
-            )}
           </Link>
         ) : (
           <p className="text-sm text-muted-foreground">{t.printers.empty}</p>
         )}
         {material && (
-          <p className="font-mono text-xs text-muted-foreground">
+          <p className="truncate font-mono text-xs text-muted-foreground">
+            {material.identifier && `${material.identifier} · `}
             {t.quick.remaining({
               amount: formatGrams(material.remainingWeight),
             })}
