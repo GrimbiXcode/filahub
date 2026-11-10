@@ -71,5 +71,12 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
+    // Schriften nie als data:-URI ins CSS legen: Die CSP setzt
+    // `font-src 'self'` (api/app.ts), und Vite inlinet sonst jede Datei unter
+    // 4 KB – zwei kleine Teilmengen von Manrope und JetBrains Mono wären dann
+    // blockiert und fielen auf eine Systemschrift zurück. `undefined` lässt
+    // für alles andere die Vorgabe gelten. Geprüft in api/fontInline.test.ts.
+    assetsInlineLimit: filePath =>
+      /\.woff2?$/i.test(filePath) ? false : undefined,
   },
 });
