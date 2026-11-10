@@ -1630,6 +1630,11 @@ export const en: Messages = {
     lastUsed: (vars: { when: string }) => `last used ${vars.when}`,
     neverUsed: "never used",
     owner: (vars: { name: string }) => `by ${vars.name}`,
+    rename: "Rename",
+    renameTitle: "Rename connection",
+    renameText:
+      "Only the name shown in filahub changes – the key and the container stay as they are.",
+    renamed: "Name saved",
     revoke: "Revoke",
     revokeTitle: "Revoke this key?",
     revokeText:

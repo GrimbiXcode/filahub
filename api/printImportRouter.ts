@@ -25,6 +25,7 @@ import {
   insertBridgePrinter,
   listApiTokens,
   listBridgePrinters,
+  renameApiToken,
   requestPrinterTest,
   updateBridgePrinter,
 } from "./queries/apiTokens";
@@ -44,12 +45,17 @@ import { consumptionRoom, withPrintJobErrors } from "./printJobRouter";
  * und Drucker der Brücke) – seit 4.7.0.
  *
  * Stufen: Fach ansehen `viewer`; übernehmen und verwerfen `weigher` (wie ein
- * Druck); Schlüssel anlegen `weigher`. Verwalten (Drucker, entziehen) darf
+ * Druck); Schlüssel anlegen `weigher`. Verwalten (umbenennen, Drucker, entziehen) darf
  * der Besitzer des Schlüssels – in einer Organisation zusätzlich jeder
  * Administrator (`findManageableToken`).
  */
 
 const idInput = z.object({ id: z.number().int().positive() });
+const tokenNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Bitte einen Namen angeben")
+  .max(100);
 
 export const printImportRouter = createRouter({
   list: authedQuery.input(scopeInput).query(async ({ ctx, input }) => {
@@ -207,7 +213,7 @@ export const connectionRouter = createRouter({
     .input(
       z.object({
         kind: z.enum(["slicer", "bridge"]),
-        name: z.string().trim().min(1, "Bitte einen Namen angeben").max(100),
+        name: tokenNameSchema,
         ...scopeInput.shape,
       })
     )
@@ -243,6 +249,24 @@ export const connectionRouter = createRouter({
       });
       // Der einzige Moment, in dem der Schlüssel im Klartext hinausgeht
       return { id, token, prefix };
+    }),
+
+  rename: authedQuery
+    .input(idInput.extend({ name: tokenNameSchema, ...scopeInput.shape }))
+    .mutation(async ({ ctx, input }) => {
+      const scope = await resolveScope(
+        ctx.user.id,
+        input.organizationId,
+        "viewer"
+      );
+      const token = await findManageableToken(ctx.user.id, scope, input.id);
+      if (!token)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Schlüssel nicht gefunden",
+        });
+      await renameApiToken(token.id, input.name);
+      return { ok: true };
     }),
 
   revoke: authedQuery
