@@ -9,7 +9,8 @@ import {
   mayDeleteWeighing,
   roleAllows,
 } from "@contracts/organizations";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
+import { PRINTERS_PATH } from "@/const";
 import {
   Archive,
   ArchiveRestore,
@@ -82,6 +83,16 @@ export default function MaterialDetail() {
     { ...scope, id: materialId },
     { enabled: Number.isFinite(materialId) }
   );
+  /* Wo die Rolle gerade steckt (seit 4.9.0) */
+  const { data: printers } = trpc.printer.list.useQuery(scope);
+  const loadedIn = (printers ?? []).flatMap(p =>
+    p.slots
+      .filter(s => s.materialId === materialId)
+      .map(s => ({
+        printer: p.name,
+        slot: p.slotCount > 1 ? s.slot + 1 : null,
+      }))
+  )[0];
 
   const resolveAppearance = useAppearanceResolver();
   const swatchLabel = useSwatchLabel();
@@ -264,6 +275,13 @@ export default function MaterialDetail() {
               {material.archivedAt && (
                 <Badge variant="outline">
                   {t.materialDetail.archivedBadge}
+                </Badge>
+              )}
+              {loadedIn && (
+                <Badge variant="outline" asChild>
+                  <Link to={PRINTERS_PATH}>
+                    {t.printers.loadedIn(loadedIn)}
+                  </Link>
                 </Badge>
               )}
             </span>

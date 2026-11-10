@@ -197,6 +197,13 @@
       "when": 1794255065621,
       "tag": "0027_discord_login",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794340041103,
+      "tag": "0028_printers",
+      "breakpoints": true
     }
   ]
 }

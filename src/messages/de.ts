@@ -85,6 +85,7 @@ export const de = {
     printInboxPending: (vars: { count: number }) =>
       `Eingangsfach (${vars.count} offen)`,
     connections: "Verbindungen",
+    printers: "Drucker",
     weigh: "Wiegen",
     weighMaterial: "Gebinde wiegen",
     consume: "Verbrauch",
@@ -220,6 +221,7 @@ export const de = {
     searchPlaceholder: "Suchen: Kennung, Material, Seite oder Aktion …",
     groupWeigh: "Gebinde zum Wiegen",
     groupConsume: "Gebinde zum Abbuchen",
+    groupLoaded: "Im Drucker geladen",
     groupActions: "Aktionen",
     groupJumpTo: "Springe zu",
     groupMaterials: "Gebinde",
@@ -733,6 +735,50 @@ export const de = {
     deleteConsumptionDescription:
       "Die Menge wird der Restmenge wieder gutgeschrieben.",
     consumptionDeleted: "Verbrauch gelöscht",
+  },
+
+  printers: {
+    title: "Drucker",
+    description:
+      "Welche Rolle steckt in welchem Drucker? Beim Abbuchen schlägt filahub dann genau diese Gebinde vor.",
+    newPrinter: "Neuer Drucker",
+    firstPrinter: "Ersten Drucker anlegen",
+    emptyTitle: "Noch keine Drucker angelegt",
+    emptyDescription:
+      "Lege deine Drucker an und lade die Gebinde, die gerade darin stecken. Druckformular, Eingangsfach und Schnellsuche schlagen sie dann beim Abbuchen vor – bei mehreren Plätzen (MMU, AMS) passend zum Filament im G-Code.",
+    nameHint:
+      "Gleicher Name wie in der Druckhistorie, bei der Brücke oder im Druckerprofil von PrusaSlicer – darüber findet filahub den Drucker zu einem Druck.",
+    namePlaceholder: "z. B. Prusa Core One",
+    slotCountLabel: "Plätze",
+    slotCountHint:
+      "1 für einen Drucker mit einer Rolle, 5 für eine MMU3, 4 je AMS.",
+    slotLabel: (vars: { slot: number }) => `Platz ${vars.slot}`,
+    slotsSummary: (vars: { loaded: number; total: number }) =>
+      vars.total === 1
+        ? vars.loaded === 1
+          ? "geladen"
+          : "leer"
+        : `${vars.loaded} von ${vars.total} Plätzen geladen`,
+    empty: "leer",
+    pickGebinde: "Gebinde laden …",
+    searchGebinde: "Kennung oder Name …",
+    unload: "Entladen",
+    loadedElsewhere: (vars: { printer: string; slot: number }) =>
+      `steckt in ${vars.printer} · Platz ${vars.slot}`,
+    loaded: "Gebinde geladen",
+    unloaded: "Platz geleert",
+    editPrinter: "Drucker bearbeiten",
+    deletePrinter: "Drucker löschen",
+    deleteTitle: "Drucker löschen?",
+    deleteDescription: (vars: { name: string }) =>
+      `„${vars.name}“ wird gelöscht und seine Plätze geleert. Drucke behalten den Namen.`,
+    created: "Drucker angelegt",
+    saved: "Drucker gespeichert",
+    deleted: "Drucker gelöscht",
+    loadedIn: (vars: { printer: string; slot: number | null }) =>
+      vars.slot == null
+        ? `Geladen in ${vars.printer}`
+        : `Geladen in ${vars.printer} · Platz ${vars.slot}`,
   },
 
   storageBoxes: {
@@ -1539,6 +1585,9 @@ export const de = {
         `Im G-Code: Filament ${vars.slot}`,
       fileTypeMismatch: (vars: { type: string }) =>
         `Im G-Code steht ${vars.type}.`,
+      groupLoaded: "Im Drucker geladen",
+      loadedLabel: "Im Drucker geladen – antippen zum Übernehmen:",
+      fromLoadedSlot: "aus dem geladenen Platz",
     },
     saveAsPrint: "Als Druck speichern",
     saveAsPrintHint:

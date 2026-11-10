@@ -10,6 +10,7 @@ import { materialRouter } from "./materialRouter";
 import { organizationRouter } from "./organizationRouter";
 import { presetRouter } from "./presetRouter";
 import { printJobRouter } from "./printJobRouter";
+import { printerRouter } from "./printerRouter";
 import { connectionRouter, printImportRouter } from "./printImportRouter";
 import { productRouter } from "./productRouter";
 import { containerTypeRouter } from "./containerTypeRouter";
@@ -32,6 +33,8 @@ export const appRouter = createRouter({
   /* Druckhistorie (seit 4.2.0) */
   print: printJobRouter,
   printImport: printImportRouter,
+  /* Drucker und ihre geladenen Gebinde (seit 4.9.0) */
+  printer: printerRouter,
   connection: connectionRouter,
   appearance: appearanceRouter,
   friend: friendRouter,

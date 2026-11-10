@@ -229,7 +229,7 @@ export const organizationRouter = createRouter({
     if (blockedBy != null) {
       throw new TRPCError({
         code: "CONFLICT",
-        message: `An dieser Organisation hängen noch ${blockedBy} Einträge (Lager, Gebindearten, Dryboxen). Lösche sie zuerst.`,
+        message: `An dieser Organisation hängen noch ${blockedBy} Einträge (Lager, Gebindearten, Dryboxen, Drucker, Drucke). Lösche sie zuerst.`,
       });
     }
     recordAudit({

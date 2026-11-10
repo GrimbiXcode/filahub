@@ -70,7 +70,7 @@ src/            React-Frontend
                 (Druckhistorie), Lager, ContainerTypes, StorageBoxes,
                 Appearance (eigene Farben und Oberflächen),
                 PrintImports (Eingangsfach), Connections (API-Schlüssel,
-                Drucker-Brücke),
+                Drucker-Brücke), Printers (Drucker und geladene Gebinde),
                 Import, Friends, FriendInventory, Organizations,
                 OrganizationDetail, Settings, AdminPresets,
                 AdminProposals, AdminUsers, AdminMonitoring, AdminSystem,
@@ -130,7 +130,8 @@ api/            Hono/tRPC-Backend
   router.ts     appRouter: ping, auth, lager, containerType, storageBox, material
                 (die Gebinde), product (die Materialien), appearance, friend,
                 organization, print (die Druckhistorie), printImport
-                (Eingangsfach), connection (API-Schlüssel, Brücke), preset,
+                (Eingangsfach), connection (API-Schlüssel, Brücke), printer
+                (Drucker, geladene Gebinde), preset,
                 admin, legal,
                 unblock (admin: preset, proposal, system, user, abuse)
   scope.ts      resolveScope / scopeWhere / scopeOwner – die einzige Stelle, die
@@ -159,6 +160,7 @@ api/            Hono/tRPC-Backend
                 Verbrauchskopplung, Suche, Seiten), printFiles.ts (Dateizeilen,
                 Kontingent, Titelbild, Aufräumlauf), printImports.ts
                 (Eingangsfach), apiTokens.ts (Schlüssel, Drucker der Brücke),
+                printers.ts (Drucker, Plätze, Entladen),
                 friends.ts (Lager-Freigaben, Projektion, Ausleih-Vorgänge),
                 organizations.ts (Mitglieder, Einladungen, Löschkaskade),
                 appearance.ts (eigene Farben und Oberflächen, Katalog je Besitzer),
@@ -188,7 +190,8 @@ contracts/      Gemeinsamer Code für Client+Server: constants.ts (Session, Path
                 Materialvorschlag), prusaProfile.ts (Filamentprofile von
                 PrusaSlicer ↔ Druckeinstellungen), printImports.ts
                 (Eingangsfach, Schlüsselform), bridge.ts (Protokoll der Brücke,
-                Diagnosecodes, Adressen), openPrintTag.ts (CBOR/NDEF,
+                Diagnosecodes, Adressen), printers.ts (Drucker: Plätze,
+                Namensvergleich, Vorschlag je Platz), openPrintTag.ts (CBOR/NDEF,
                 OpenPrintTag → Material),
                 bulkEdit.ts (Sammelbearbeitung: erlaubte Felder),
                 limits.ts (Obergrenzen gegen Missbrauch, Sperrgründe, Alarmschwellen),
@@ -984,6 +987,51 @@ Android; ohne `NDEFReader` erscheinen die Knöpfe nicht.
 - **Nicht gespeichert:** die UID des Tags. Spule antippen → Wiegen (Plan)
   bräuchte eine eigene Spalte je Gebinde; das ist der nächste Schritt.
 
+### Drucker und geladene Gebinde (seit 4.9.0)
+
+Welche Rolle steckt in welchem Drucker – damit das Abbuchen genau diese
+Gebinde vorschlägt. Tabellen `printers` (`ownerXor`, Name je Bereich
+eindeutig ohne Groß-/Kleinschreibung, `slotCount` 1–16) und `printer_slots`
+(`printerId`, `slot`, `materialId`); Router `printer.*`
+(`api/printerRouter.ts`), Abfragen in `api/queries/printers.ts`, Regeln ohne
+Datenbank in `contracts/printers.ts` (Tests in `api/printers.test.ts` und
+`api/printers.integration.test.ts`).
+
+- **Unabhängig von `bridge_printers`.** Die gehören einem API-Schlüssel und
+  damit einer Person; ein Drucker hier gehört dem Bereich, und wer keine
+  Brücke betreibt, lädt trotzdem Rollen. Zusammen finden Druck, Slicer,
+  Brücke und Drucker **über den Namen** (`findPrinterByName`, Vergleichsform
+  `normalizePrinterName`) – `print_jobs.printer` bleibt Freitext.
+- **Plätze zählen ab 0** wie `SlicerFilament.slot`, die Oberfläche ab 1.
+  Filament 2 aus G-Code oder Eingangsfach wird zum Gebinde in Platz 2
+  (`loadedMaterialId`) – vor dem Vorschlag nach Farbe und Hersteller. Ein
+  schon gewähltes Material (Formular von der Material-Seite geöffnet) bleibt;
+  der Platz zählt dann nur, wenn sein Gebinde dazu gehört.
+- **Eine Rolle steckt in höchstens einem Platz** (Unique-Index auf
+  `materialId`). Laden an anderer Stelle nimmt sie dort heraus, in derselben
+  Transaktion. Eine fehlende Zeile heißt „leer“, wie bei den Freigaben.
+- **Entladen geschieht von selbst** beim Aufbrauchen (`setMaterialArchived`,
+  `updateMaterialsBulk` mit `archived: true`) und beim Löschen
+  (`deleteMaterial`) – `unloadGebinde`. Weniger Plätze entladen, was darüber
+  lag. Laden hält das Gebinde mit `FOR SHARE` wie das Wiegen; ein
+  aufgebrauchtes lässt sich nicht laden.
+- **Stufen:** ansehen `viewer`; laden und entladen `weigher` (der Handgriff am
+  Drucker, nichts geht verloren); Drucker anlegen, ändern, löschen `editor`.
+  Höchstens `MAX_PRINTERS_PER_SCOPE` (50); `printer.loadSlot` 120/min.
+- **Freunde sehen keine Drucker**; die Freundes-Lesepfade kennen die Tabellen
+  nicht. Kein Audit-Ereignis – Nutzung, nicht Sicherheit.
+- **Registriert** in `COUNTED_TABLES`, der Tabellenliste in
+  `api/postgres.integration.test.ts`, dem DSGVO-Wächter (`printers` findet er
+  selbst, `printerSlots` steht in der Ausnahmeliste – Besitz über den
+  Drucker), im Export (`printers`, `printerSlots`; additiv, Version bleibt 5)
+  und in den Kaskaden von Konto und Organisation. Ein Drucker macht eine
+  Organisation „nicht leer“.
+- **Oberfläche:** `/drucker` (`Printers.tsx`, je Platz eine Auswahl), im
+  `PrintJobDialog` Knöpfe „Im Drucker geladen“ über den Materialzeilen und
+  eine eigene Gruppe in der Auswahl, in der Schnellsuche beim Wiegen und
+  Abbuchen die Gruppe „Im Drucker geladen“ obenan, auf der Gebindeseite ein
+  Hinweis, wo die Rolle steckt.
+
 ## Restmengen-Filter (seit 4.5.0)
 
 Ein Bereich mit zwei Griffen im Filter der Übersicht, wahlweise in Gramm, in
@@ -1192,8 +1240,8 @@ er selbst findet, muss niemand pflegen; die handgeführte Ausnahmeliste umfasst
 nur noch `profile` (über `users.id`), `weighings` und `consumptions` (beide
 über das Gebinde), `materialPrintSettings` (über das Material),
 `printJobMaterials`, `printJobLinks` und `printJobFiles` (über den Druck),
-`bridgePrinters` (über den API-Schlüssel) und `loginCodes` (über die
-Telegram-ID).
+`bridgePrinters` (über den API-Schlüssel), `printerSlots` (über den Drucker)
+und `loginCodes` (über die Telegram-ID).
 
 **Umbenennungen werden von Hand migriert.** drizzle-kit erkennt sie nicht und
 gibt `DROP TABLE` + `CREATE TABLE` aus – das löscht Daten. Und
@@ -1847,7 +1895,7 @@ Datenbank.
 - Vorhanden: `importSchema`, `presetSchema`, `presetHelpers`, `presetCatalog`,
   `materialStats`, `materialUnits`, `materialType`, `materialTrend`,
   `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
-  `printJobs`, `bulkEdit`, `printFiles`, `slicerMetadata`, `prusaProfile`,
+  `printJobs`, `printers`, `bulkEdit`, `printFiles`, `slicerMetadata`, `prusaProfile`,
   `openPrintTag`, `bridge`, `fileStorage`, `storageConfig`, `serverBundle`,
   `markdown`, `session`, `fontInline`,
   `consumption`, `format`,
@@ -1891,7 +1939,8 @@ Datenbank.
   `api/printJobs.integration.test.ts`,
   `api/printFiles.integration.test.ts`,
   `api/printImports.integration.test.ts`,
-  `api/bulkEdit.integration.test.ts` und
+  `api/bulkEdit.integration.test.ts`,
+  `api/printers.integration.test.ts` und
   `api/discord.integration.test.ts` (Discord-Ablauf mit nachgebautem
   discord.com: Anmelden, Einmal-Code, Verbinden, Trennen),
   konfiguriert in
