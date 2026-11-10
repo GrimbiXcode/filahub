@@ -454,7 +454,8 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
           )}
         </div>
         {canManage && (
-          <CardAction>
+          <CardAction className="flex gap-1">
+            <RenameButton token={bridge} />
             <RevokeButton token={bridge} />
           </CardAction>
         )}
@@ -926,8 +927,86 @@ function SlicerRow({ token }: { token: ConnectionEntry }) {
             : ""}
         </span>
       </div>
-      {canManage && <RevokeButton token={token} />}
+      {canManage && (
+        <div className="flex gap-1">
+          <RenameButton token={token} />
+          <RevokeButton token={token} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function RenameButton({ token }: { token: ConnectionEntry }) {
+  const t = useT();
+  const scope = useActiveScope();
+  const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(token.name);
+  const rename = trpc.connection.rename.useMutation({
+    onSuccess: () => {
+      toast.success(t.connections.renamed);
+      utils.connection.list.invalidate();
+      setOpen(false);
+    },
+    onError: e => toast.error(e.message),
+  });
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          setName(token.name);
+          setOpen(true);
+        }}
+      >
+        <Pencil className="mr-1.5 h-3.5 w-3.5" />
+        {t.connections.rename}
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <form
+            className="flex flex-col gap-4"
+            onSubmit={e => {
+              e.preventDefault();
+              if (!name.trim() || rename.isPending) return;
+              rename.mutate({ ...scope, id: token.id, name: name.trim() });
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle>{t.connections.renameTitle}</DialogTitle>
+              <DialogDescription>{t.connections.renameText}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`rename-${token.id}`}>
+                {t.connections.nameLabel}
+              </Label>
+              <Input
+                id={`rename-${token.id}`}
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder={t.connections.namePlaceholder[token.kind]}
+                maxLength={100}
+                autoFocus
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+              >
+                {t.common.cancel}
+              </Button>
+              <Button type="submit" disabled={rename.isPending || !name.trim()}>
+                {rename.isPending ? t.common.saving : t.common.save}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

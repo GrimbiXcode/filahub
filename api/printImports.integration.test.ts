@@ -495,6 +495,30 @@ describe("Drucker-Brücke", () => {
         enabled: true,
       })
     ).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    // Umbenennen ändert nur den Namen; Bert kommt nicht heran
+    await callerFor(anna).connection.rename({
+      ...PERSONAL,
+      id: bridge.id,
+      name: "  Keller  ",
+    });
+    expect((await callerFor(anna).connection.list(PERSONAL))[0].name).toBe(
+      "Keller"
+    );
+    expect((await bridgeConfig(bridge.token)).printers).toHaveLength(1);
+    await expect(
+      callerFor(bert).connection.rename({
+        ...PERSONAL,
+        id: bridge.id,
+        name: "Fremd",
+      })
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      callerFor(anna).connection.rename({
+        ...PERSONAL,
+        id: bridge.id,
+        name: " ",
+      })
+    ).rejects.toMatchObject({ code: "BAD_REQUEST" });
     // Bert kommt an Annas Brücke nicht heran
     await expect(
       callerFor(bert).connection.removePrinter({

@@ -142,6 +142,11 @@ export async function deleteApiTokens(
   return removed;
 }
 
+/** Neuer Anzeigename; der Schlüssel selbst bleibt unverändert */
+export async function renameApiToken(id: number, name: string): Promise<void> {
+  await getDb().update(apiTokens).set({ name }).where(eq(apiTokens.id, id));
+}
+
 export function deleteApiTokenById(id: number) {
   return getDb().transaction(tx => deleteApiTokens(tx, eq(apiTokens.id, id)));
 }

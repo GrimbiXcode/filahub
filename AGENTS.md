@@ -889,7 +889,7 @@ Drucker-Brücke liefern Drucke in ein Eingangsfach (`print_imports`), wer sie
   senden keine CORS-Kopfzeilen – keine CSRF-Fläche, kein Abruf aus fremden
   Seiten. Körper höchstens 64 KB, vor dem Parsen geprüft.
 - **Stufen:** Fach ansehen `viewer`; übernehmen, verwerfen und Schlüssel
-  anlegen `weigher`; verwalten (Drucker, entziehen) der Besitzer, in einer
+  anlegen `weigher`; verwalten (umbenennen, Drucker, entziehen) der Besitzer, in einer
   Organisation zusätzlich jeder `admin` (`findManageableToken`).
 - **Grenzen** (`contracts/limits.ts`): 10 Schlüssel je Person, 500 offene
   Einträge je Bereich (`inbox_full`), 120 Einlieferungen je Schlüssel und
