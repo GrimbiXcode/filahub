@@ -1809,6 +1809,7 @@ Datenbank.
   `identifierTemplate`, `productStock`, `remainingFilter`, `printSettings`,
   `printJobs`, `bulkEdit`, `printFiles`, `slicerMetadata`, `prusaProfile`,
   `openPrintTag`, `bridge`, `fileStorage`, `storageConfig`, `serverBundle`,
+  `fontInline`,
   `consumption`, `format`,
   `releaseNotes`, `friendVisibility`,
   `friendCode`, `rateLimit`, `limits`, `blocking`, `staticFiles` und
@@ -2005,6 +2006,15 @@ Zwei Stolpersteine, die beide an dieser Anmeldung hängen:
   CSP meldet der Browser das als Verstoß, obwohl zod den Fehler abfängt. Ein
   Aufruf im Rumpf von `main.tsx` käme zu spät, der läuft erst nach allen
   Importen.
+
+Ein dritter Stolperstein liegt im Bau selbst: Vite legt Dateien unter
+`build.assetsInlineLimit` (4 KB) als `data:`-URI ins CSS, und zwei kleine
+woff2-Teilmengen von Manrope und JetBrains Mono fielen darunter – `font-src
+'self'` blockierte sie auf jeder Seite, die Zeichen erschienen in einer
+Systemschrift. `vite.config.ts` schließt `.woff`/`.woff2` deshalb vom Inlinen
+aus, statt die CSP um `data:` zu lockern; `api/fontInline.test.ts` fragt die
+echte Konfiguration ab. Probe nach einem Bau: `grep -c "data:font/"
+dist/public/assets/*.css` muss 0 liefern.
 
 In der Entwicklung (`npm run dev`) greift nichts davon: `vite.config.ts`
 schickt nur `/api/*` durch Hono, alles andere liefert Vite ohne Kopfzeilen aus.
