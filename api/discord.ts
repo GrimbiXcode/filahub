@@ -1,7 +1,10 @@
 import { createHash, randomBytes, randomInt } from "node:crypto";
 import type { Context, Hono } from "hono";
 import type { HttpBindings } from "@hono/node-server";
-import { parseCookie, stringifySetCookie } from "cookie";
+import {
+  parse as parseCookie,
+  serialize as serializeCookie,
+} from "hono/utils/cookie";
 import { and, eq, gt, inArray, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
@@ -186,12 +189,10 @@ async function profileFor(code: string, verifier: string) {
 }
 
 function bindingCookie(headers: Headers, value: string, maxAgeSeconds: number) {
-  return stringifySetCookie({
-    name: COOKIE,
-    value,
+  return serializeCookie(COOKIE, value, {
     path: COOKIE_PATH,
     httpOnly: true,
-    sameSite: "lax",
+    sameSite: "Lax",
     secure: getSessionCookieOptions(headers).secure,
     maxAge: maxAgeSeconds,
   });
@@ -200,7 +201,7 @@ function bindingCookie(headers: Headers, value: string, maxAgeSeconds: number) {
 const clearBinding = (headers: Headers) => bindingCookie(headers, "", 0);
 
 function readBinding(headers: Headers): string | undefined {
-  return parseCookie(headers.get("cookie") || "")[COOKIE] || undefined;
+  return parseCookie(headers.get("cookie") || "", COOKIE)[COOKIE] || undefined;
 }
 
 /**

@@ -1,5 +1,12 @@
-import "dotenv/config";
 import { defineConfig } from "drizzle-kit";
+
+// Wie `api/lib/loadEnv.ts` – hier ohne Import, weil die Datei auch allein
+// ins Laufzeit-Abbild kopiert wird.
+try {
+  process.loadEnvFile();
+} catch (err) {
+  if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {

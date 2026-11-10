@@ -1,4 +1,4 @@
-import { parseCookie } from "cookie";
+import { parse as parseCookie } from "hono/utils/cookie";
 import { Session } from "@contracts/constants";
 import { Errors } from "@contracts/errors";
 import { findUserByUnionId } from "../queries/users";
@@ -6,8 +6,9 @@ import { verifySessionToken } from "./session";
 
 /** Ermittelt den eingeloggten Benutzer aus dem Session-Cookie. */
 export async function authenticateRequest(headers: Headers) {
-  const cookies = parseCookie(headers.get("cookie") || "");
-  const token = cookies[Session.cookieName];
+  const token = parseCookie(headers.get("cookie") || "", Session.cookieName)[
+    Session.cookieName
+  ];
   if (!token) {
     throw Errors.forbidden("Nicht angemeldet.");
   }

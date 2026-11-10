@@ -75,10 +75,10 @@ const sharedCsp = {
   // Fotos zu Drucken (seit 4.3.0) kommen von `/api/files/…`, also `'self'`.
   imgSrc: ["'self'", "data:"],
   /*
-    `'unsafe-inline'` ist hier unvermeidbar: `src/components/ui/chart.tsx`
-    erzeugt ein <style>-Element mit dynamischen CSS-Variablen, und Radix
-    setzt durchgehend style-Attribute. Ein Hash ist bei erzeugtem Inhalt
-    nicht möglich. Bewusst hingenommenes Restrisiko – der Inhalt stammt aus
+    `'unsafe-inline'` ist hier unvermeidbar: Radix setzt durchgehend
+    style-Attribute (Positionen von Popover, Tooltip, Slider), und sonner
+    legt seine Stile als <style>-Element an. Ein Hash ist bei erzeugtem
+    Inhalt nicht möglich. Bewusst hingenommenes Restrisiko – der Inhalt stammt aus
     dem Anwendungscode, nicht aus Benutzereingaben.
   */
   styleSrc: ["'self'", "'unsafe-inline'"],

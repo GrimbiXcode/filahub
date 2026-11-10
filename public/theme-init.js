@@ -1,7 +1,7 @@
 /*
   Farbschema vor dem ersten Paint setzen, sonst blitzt beim Laden im Dark-Mode
-  kurz die helle Oberfläche auf. Schlüssel und Werte sind dieselben wie in
-  next-themes (siehe src/providers/theme.tsx).
+  kurz die helle Oberfläche auf. Schlüssel und Werte sind dieselben wie im
+  Store in src/lib/theme.ts.
 
   Bewusst eine eigene Datei statt eines Inline-Skripts in `index.html`: Ein
   Inline-Skript verlangte `script-src 'unsafe-inline'`, und damit wäre die
