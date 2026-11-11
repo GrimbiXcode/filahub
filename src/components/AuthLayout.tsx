@@ -55,7 +55,6 @@ import {
 import {
   Archive,
   Building2,
-  ChevronDown,
   Boxes,
   Database,
   Disc3,
@@ -351,7 +350,7 @@ function AuthLayoutContent({
   const isResizing = isDragging && !isCollapsed;
   const sidebarRef = useRef<HTMLDivElement>(null);
   // Auf niedrigen Bildschirmen (Telefon quer, iPhone mit Fußzeile) passt die
-  // Navigation nicht ganz hinein; Verlauf und Knopf zeigen, dass darunter
+  // Navigation nicht ganz hinein; Verlauf und Schatten zeigen, dass darunter
   // noch Punkte liegen – eine Liste, die genau an einer Zeilengrenze endet,
   // sieht sonst vollständig aus.
   const [navScroller, setNavScroller] = useState<HTMLDivElement | null>(null);
@@ -590,38 +589,19 @@ function AuthLayoutContent({
               )}
             />
             <div
+              aria-hidden
               className={cn(
-                "pointer-events-none absolute inset-x-0 bottom-0 flex h-14 items-end justify-center bg-linear-to-t from-sidebar via-sidebar/80 to-transparent pb-1 transition-opacity group-data-[collapsible=icon]:hidden",
+                "pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-linear-to-t from-sidebar to-transparent transition-opacity group-data-[collapsible=icon]:hidden",
                 navEdges.below ? "opacity-100" : "opacity-0"
               )}
-            >
-              <button
-                type="button"
-                tabIndex={navEdges.below ? 0 : -1}
-                aria-hidden={!navEdges.below}
-                aria-label={t.nav.moreItems}
-                title={t.nav.moreItems}
-                onClick={() =>
-                  navScroller?.scrollBy({
-                    top: navScroller.clientHeight * 0.7,
-                    behavior: "smooth",
-                  })
-                }
-                className={cn(
-                  "flex items-center gap-1 rounded-full border bg-sidebar px-3 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus:outline-hidden",
-                  navEdges.below && "pointer-events-auto"
-                )}
-              >
-                <ChevronDown className="h-3.5 w-3.5 animate-bounce" />
-                {t.nav.moreItems}
-              </button>
-            </div>
+            />
           </div>
 
           <SidebarFooter
             className={cn(
-              "border-t border-transparent p-3 transition-colors group-data-[collapsible=icon]:px-0",
-              navEdges.below && "border-sidebar-border"
+              "relative border-t border-transparent p-3 transition-[border-color,box-shadow] group-data-[collapsible=icon]:px-0",
+              navEdges.below &&
+                "border-sidebar-border shadow-[0_-10px_16px_-10px_rgb(0_0_0/0.45)]"
             )}
           >
             <SidebarMenu className="group-data-[collapsible=icon]:items-center">

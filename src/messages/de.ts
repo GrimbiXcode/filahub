@@ -94,7 +94,6 @@ export const de = {
       `Suchen (${vars.shortcut})`,
     releaseNotesUnread: (vars: { count: number }) =>
       `Neuerungen (${vars.count} ungelesen)`,
-    moreItems: "Weitere Menüpunkte",
     toggleSidebar: "Navigation ein-/ausklappen",
     signOut: "Abmelden",
   },
