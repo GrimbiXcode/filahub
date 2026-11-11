@@ -334,7 +334,7 @@ function FriendRow({
         </div>
       </div>
 
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-1 gap-1.5">
         <Label>{t.friends.sharedByMe}</Label>
         {lager.length === 0 ? (
           /*
@@ -350,7 +350,7 @@ function FriendRow({
           </p>
         ) : (
           <>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               {lager.map(item => {
                 const level = shareOf.get(item.id) ?? "none";
                 const selectId = `vis-${friend.id}-${item.id}`;
@@ -406,7 +406,7 @@ function FriendRow({
         )}
       </div>
 
-      <div className="grid gap-1.5">
+      <div className="grid grid-cols-1 gap-1.5">
         <Label>{t.friends.sharedWithMe}</Label>
         <div className="flex h-9 items-center">
           <Badge variant="secondary">
@@ -577,8 +577,8 @@ function AddFriendCard({ onAdded }: { onAdded: () => void }) {
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="flex flex-col gap-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="grid gap-1.5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label htmlFor="friend-code">{t.friends.codeLabel}</Label>
               <Input
                 id="friend-code"
@@ -589,7 +589,7 @@ function AddFriendCard({ onAdded }: { onAdded: () => void }) {
                 className="font-mono"
               />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label htmlFor="friend-username">{t.friends.usernameLabel}</Label>
               <Input
                 id="friend-username"

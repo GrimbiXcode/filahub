@@ -243,7 +243,7 @@ function CreateDialog({
           </>
         ) : (
           <form
-            className="grid gap-4"
+            className="grid grid-cols-1 gap-4"
             {...formKeys}
             onSubmit={e => {
               e.preventDefault();
@@ -255,7 +255,7 @@ function CreateDialog({
               <DialogTitle>{t.connections.add}</DialogTitle>
               <DialogDescription>{t.connections.kindLabel}</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(["bridge", "slicer"] as const).map(option => {
                 const Icon = option === "bridge" ? Printer : Scissors;
                 return (
@@ -280,7 +280,7 @@ function CreateDialog({
                 );
               })}
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="conn-name">{t.connections.nameLabel}</Label>
               <Input
                 id="conn-name"
@@ -344,7 +344,7 @@ function CopyBlock({ text }: { text: string }) {
 function BridgeInstructions({ token }: { token: string }) {
   const t = useT();
   return (
-    <div className="grid gap-3 text-sm">
+    <div className="grid grid-cols-1 gap-3 text-sm">
       <p>1. {t.connections.bridgeStep1}</p>
       <CopyBlock text={bridgeCommand(token)} />
       <p>2. {t.connections.bridgeStep2}</p>
@@ -360,7 +360,7 @@ function SlicerInstructions({ token }: { token: string }) {
     2
   );
   return (
-    <div className="grid gap-3 text-sm">
+    <div className="grid grid-cols-1 gap-3 text-sm">
       <p>1. {t.connections.slicerStep1}</p>
       <Button asChild variant="outline" className="justify-self-start">
         <a href="/tools/filahub-import.py" download="filahub-import.py">
@@ -412,8 +412,10 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
       <CardHeader className="px-4 sm:px-6">
         <div className="flex min-w-0 flex-col gap-1">
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-            <Printer className="h-4 w-4 text-muted-foreground" />
-            <span className="wrap-anywhere">{bridge.name}</span>
+            <span className="flex min-w-0 items-start gap-2">
+              <Printer className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="wrap-anywhere">{bridge.name}</span>
+            </span>
             <Badge
               variant={online ? "default" : "outline"}
               className={cn(
@@ -803,8 +805,12 @@ function PrinterDialog({
             {t.connections.printer.description}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-4" {...formKeys}>
-          <div className="grid gap-2">
+        <form
+          onSubmit={submit}
+          className="grid grid-cols-1 gap-4"
+          {...formKeys}
+        >
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-name">{t.connections.printer.nameLabel}</Label>
             <Input
               id="pr-name"
@@ -816,7 +822,7 @@ function PrinterDialog({
               autoFocus
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-host">{t.connections.printer.hostLabel}</Label>
             <Input
               id="pr-host"
@@ -847,7 +853,7 @@ function PrinterDialog({
                   : t.connections.printer.hostHint}
             </p>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-auth">{t.connections.printer.authLabel}</Label>
             <Select
               value={authKind}
@@ -870,7 +876,7 @@ function PrinterDialog({
             </p>
           </div>
           {authKind === "digest" && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pr-user">
                 {t.connections.printer.usernameLabel}
               </Label>
@@ -884,7 +890,7 @@ function PrinterDialog({
               />
             </div>
           )}
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-secret">
               {t.connections.printer.secretLabel[authKind]}
             </Label>

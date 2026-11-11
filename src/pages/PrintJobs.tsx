@@ -248,7 +248,7 @@ export default function PrintJobs() {
               }))}
               onChange={value => setParam("tag", value)}
             />
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label htmlFor="pj-from" className="text-xs">
                 {t.prints.filterFrom}
               </Label>
@@ -260,7 +260,7 @@ export default function PrintJobs() {
                 className="h-9"
               />
             </div>
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label htmlFor="pj-to" className="text-xs">
                 {t.prints.filterTo}
               </Label>
@@ -300,7 +300,7 @@ export default function PrintJobs() {
         </div>
 
         {isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
             {[0, 1, 2].map(i => (
               <Skeleton key={i} className="h-32 rounded-lg" />
             ))}
@@ -321,7 +321,7 @@ export default function PrintJobs() {
           </div>
         ) : (
           <>
-            <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3">
               {items.map(job => (
                 <PrintJobCard key={job.id} job={job} />
               ))}
@@ -357,7 +357,7 @@ function FilterSelect({
   onChange: (value: string | null) => void;
 }) {
   return (
-    <div className="grid min-w-0 gap-1">
+    <div className="grid grid-cols-1 min-w-0 gap-1">
       <Label className="text-xs">{label}</Label>
       <Select
         value={value ?? ANY}

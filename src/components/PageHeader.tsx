@@ -52,7 +52,7 @@ export function PageHeader({
           </Button>
         )}
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">
+          <h1 className="text-xl font-semibold tracking-tight wrap-anywhere sm:text-2xl">
             {title}
           </h1>
           {description != null && (

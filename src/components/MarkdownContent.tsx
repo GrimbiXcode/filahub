@@ -277,7 +277,10 @@ export function MarkdownContent({
   return (
     <div
       lang={lang}
-      className={cn("text-sm leading-relaxed text-muted-foreground", className)}
+      className={cn(
+        "text-sm leading-relaxed wrap-break-word text-muted-foreground",
+        className
+      )}
     >
       {renderBlocks(blocks, { resolveImage, imageMissing })}
     </div>

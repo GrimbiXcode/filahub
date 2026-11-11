@@ -150,8 +150,8 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
             {t.consumption.description({ name: material.name })}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div className="grid gap-2">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="c-weight">{t.consumption.weightLabel}</Label>
             <Input
               id="c-weight"
@@ -196,7 +196,7 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
               checked={asPrint}
               onCheckedChange={setAsPrint}
             />
-            <div className="grid gap-1">
+            <div className="grid grid-cols-1 gap-1">
               <Label htmlFor="c-as-print">{t.prints.saveAsPrint}</Label>
               <p className="text-xs text-muted-foreground">
                 {t.prints.saveAsPrintHint}
@@ -205,7 +205,7 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
           </div>
           {asPrint && (
             <>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="c-print-title">
                   {t.prints.form.titleLabel}
                 </Label>
@@ -218,7 +218,7 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
                   required
                 />
               </div>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="c-print-link">{t.prints.printLinkLabel}</Label>
                 <Input
                   id="c-print-link"
@@ -231,7 +231,7 @@ export function ConsumptionDialog({ open, onOpenChange, material }: Props) {
               </div>
             </>
           )}
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="c-note">{t.common.notesOptional}</Label>
             <Input
               id="c-note"

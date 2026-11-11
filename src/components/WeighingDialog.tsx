@@ -99,10 +99,10 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
             })}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
           {/* Das Gewichtsfeld steht bewusst oben: Wer vor der Waage steht,
               tippt die Zahl ein und ist fertig. */}
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="w-gross">{t.weighing.grossLabel}</Label>
             <Input
               id="w-gross"
@@ -149,7 +149,7 @@ export function WeighingDialog({ open, onOpenChange, material }: Props) {
               <span>{formatGrams(material.tareWeight)}</span>
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="w-note">{t.common.notesOptional}</Label>
             <Input
               id="w-note"

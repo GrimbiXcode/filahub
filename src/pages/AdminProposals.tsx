@@ -309,7 +309,7 @@ export default function AdminProposals() {
                 : ""}
             </DialogDescription>
           </DialogHeader>
-          <dl className="grid grid-cols-[minmax(0,10rem)_1fr] gap-x-4 gap-y-2 text-sm">
+          <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-4 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)] [&>dd]:wrap-anywhere gap-y-2 text-sm">
             {payloadRows(detail?.payload, t).map(row => (
               <div key={row.label} className="contents">
                 <dt className="text-muted-foreground">{row.label}</dt>
@@ -358,7 +358,7 @@ export default function AdminProposals() {
               Vorschläge“.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="ap-reason">{t.adminProposals.reasonLabel}</Label>
             <Textarea
               id="ap-reason"

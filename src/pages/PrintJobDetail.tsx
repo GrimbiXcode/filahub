@@ -99,7 +99,7 @@ export default function PrintJobDetail() {
           backTo={PRINTS_PATH}
           title={
             <span className="flex flex-wrap items-center gap-2">
-              <span className="wrap-break-word">{job.title}</span>
+              <span className="wrap-anywhere">{job.title}</span>
               <PrintStatusBadge status={job.status} />
             </span>
           }
@@ -133,7 +133,7 @@ export default function PrintJobDetail() {
           }
         />
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
@@ -157,12 +157,12 @@ export default function PrintJobDetail() {
                         {material.productId != null ? (
                           <Link
                             to={materialPath(material.productId)}
-                            className="truncate text-sm font-medium hover:underline"
+                            className="line-clamp-2 text-sm font-medium wrap-anywhere hover:underline"
                           >
                             {material.name}
                           </Link>
                         ) : (
-                          <span className="truncate text-sm font-medium">
+                          <span className="line-clamp-2 text-sm font-medium wrap-anywhere">
                             {material.name}
                           </span>
                         )}
@@ -229,7 +229,7 @@ export default function PrintJobDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-3 text-sm">
+              <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-4 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] [&>dd]:wrap-anywhere gap-y-3 text-sm">
                 <dt className="text-muted-foreground">{t.prints.printedAt}</dt>
                 <dd className="font-mono">{formatDateTime(job.printedAt)}</dd>
                 {duration != null && (
@@ -265,11 +265,16 @@ export default function PrintJobDetail() {
                     <dt className="text-muted-foreground">{t.prints.tags}</dt>
                     <dd className="flex flex-wrap gap-1.5">
                       {job.tags.map(tag => (
-                        <Badge key={tag} variant="outline" asChild>
+                        <Badge
+                          key={tag}
+                          variant="outline"
+                          className="max-w-full"
+                          asChild
+                        >
                           <Link
                             to={`${PRINTS_PATH}?tag=${encodeURIComponent(tag)}`}
                           >
-                            #{tag}
+                            <span className="truncate">#{tag}</span>
                           </Link>
                         </Badge>
                       ))}
@@ -342,7 +347,7 @@ export default function PrintJobDetail() {
                 checked={revert}
                 onCheckedChange={value => setRevert(value === true)}
               />
-              <div className="grid gap-1">
+              <div className="grid grid-cols-1 gap-1">
                 <Label htmlFor="pj-revert">{t.prints.revertConsumptions}</Label>
                 <p className="text-xs text-muted-foreground">
                   {t.prints.revertHint}

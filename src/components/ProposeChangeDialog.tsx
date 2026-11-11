@@ -118,8 +118,12 @@ export function ProposeChangeDialog({
             })}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
-          <div className="grid gap-2">
+        <form
+          onSubmit={handleSubmit}
+          {...formKeys}
+          className="grid grid-cols-1 gap-4"
+        >
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pc-tare">{t.proposeChange.tareLabel}</Label>
             <Input
               id="pc-tare"
@@ -130,7 +134,7 @@ export function ProposeChangeDialog({
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label htmlFor="pc-outer" className="text-xs">
                 {t.proposeChange.outerDiameter}
               </Label>
@@ -141,7 +145,7 @@ export function ProposeChangeDialog({
                 onChange={e => setOuterDiameterMm(e.target.value)}
               />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label htmlFor="pc-width" className="text-xs">
                 {t.proposeChange.width}
               </Label>
@@ -152,7 +156,7 @@ export function ProposeChangeDialog({
                 onChange={e => setWidthMm(e.target.value)}
               />
             </div>
-            <div className="grid gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5">
               <Label htmlFor="pc-bore" className="text-xs">
                 {t.proposeChange.bore}
               </Label>
@@ -164,7 +168,7 @@ export function ProposeChangeDialog({
               />
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pc-comment">{t.proposeChange.reason}</Label>
             <Textarea
               id="pc-comment"

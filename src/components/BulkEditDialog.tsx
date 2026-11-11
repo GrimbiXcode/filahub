@@ -138,7 +138,7 @@ export function BulkEditDialog({ open, onOpenChange, ids, onDone }: Props) {
           <DialogTitle>{t.bulkEdit.title({ count: ids.length })}</DialogTitle>
           <DialogDescription>{t.bulkEdit.description}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="grid gap-4">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4">
           <BulkField
             id="bulk-price"
             label={t.materialForm.priceLabel({ symbol: currencySymbol })}
@@ -264,7 +264,7 @@ function BulkField({
 }) {
   const t = useT();
   return (
-    <div className="grid gap-2 rounded-lg border p-3">
+    <div className="grid grid-cols-1 gap-2 rounded-lg border p-3">
       <div className="flex items-center gap-2">
         <Checkbox
           checked={checked}

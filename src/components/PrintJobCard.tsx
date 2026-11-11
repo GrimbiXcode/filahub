@@ -78,12 +78,12 @@ export function PrintJobCard({
         />
       )}
       <div className="flex items-start justify-between gap-2">
-        <span className="min-w-0 font-medium wrap-break-word">{job.title}</span>
+        <span className="min-w-0 font-medium wrap-anywhere">{job.title}</span>
         <PrintStatusBadge status={job.status} />
       </div>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span className="font-mono">{formatDate(job.printedAt)}</span>
-        {job.printer && <span>{job.printer}</span>}
+        {job.printer && <span className="wrap-anywhere">{job.printer}</span>}
         {total > 0 && (
           <span className="font-mono">
             {t.prints.totalGrams({ amount: formatGrams(total) })}
@@ -118,8 +118,8 @@ export function PrintJobCard({
       {!compact && (job.tags.length > 0 || hosts.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {job.tags.map(tag => (
-            <Badge key={tag} variant="outline" className="text-xs">
-              #{tag}
+            <Badge key={tag} variant="outline" className="max-w-full text-xs">
+              <span className="truncate">#{tag}</span>
             </Badge>
           ))}
           {hosts.map(host => (

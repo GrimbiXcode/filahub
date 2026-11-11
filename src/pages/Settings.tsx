@@ -87,7 +87,7 @@ export default function Settings() {
             <CardTitle className="text-base">{t.settings.language}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="grid gap-2 sm:max-w-sm">
+            <div className="grid grid-cols-1 gap-2 sm:max-w-sm">
               <Label htmlFor="s-language">{t.settings.languageLabel}</Label>
               <Select
                 value={languageSetting ?? AUTO}
@@ -136,7 +136,7 @@ export default function Settings() {
             <CardTitle className="text-base">{t.settings.currency}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="grid gap-2 sm:max-w-sm">
+            <div className="grid grid-cols-1 gap-2 sm:max-w-sm">
               <Label htmlFor="s-currency">{t.settings.currencyLabel}</Label>
               <Select
                 value={currency}
@@ -171,7 +171,7 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <div className="grid gap-2 sm:max-w-sm">
+            <div className="grid grid-cols-1 gap-2 sm:max-w-sm">
               <Label htmlFor="s-locale">{t.settings.regionalFormatLabel}</Label>
               <Select
                 value={localeSetting ?? AUTO}
@@ -197,7 +197,7 @@ export default function Settings() {
                 </SelectContent>
               </Select>
             </div>
-            <dl className="grid gap-1 rounded-lg border p-3 text-sm sm:max-w-sm">
+            <dl className="grid grid-cols-1 gap-1 rounded-lg border p-3 text-sm sm:max-w-sm">
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">{t.common.date}</dt>
                 <dd className="font-medium">

@@ -680,8 +680,8 @@ export default function Home() {
   };
 
   const filterFields = (
-    <div className="grid gap-4 sm:grid-cols-2">
-      <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label htmlFor="f-type">{t.home.materialType}</Label>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger id="f-type" className="w-full min-w-0">
@@ -702,7 +702,7 @@ export default function Home() {
         wäre es ein Auswahlfeld mit einem einzigen Eintrag „Alle".
       */}
       {textures.length > 0 && (
-        <div className="grid gap-2">
+        <div className="grid grid-cols-1 gap-2">
           <Label htmlFor="f-texture">{t.home.texture}</Label>
           <Select value={textureFilter} onValueChange={setTextureFilter}>
             <SelectTrigger id="f-texture" className="w-full min-w-0">
@@ -719,7 +719,7 @@ export default function Home() {
           </Select>
         </div>
       )}
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label htmlFor="f-manufacturer">{t.common.manufacturer}</Label>
         <Select
           value={manufacturerFilter}
@@ -738,7 +738,7 @@ export default function Home() {
           </SelectContent>
         </Select>
       </div>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label htmlFor="f-box">{t.home.storageBox}</Label>
         <Select value={boxFilter} onValueChange={setBoxFilter}>
           <SelectTrigger id="f-box" className="w-full min-w-0">
@@ -755,7 +755,7 @@ export default function Home() {
           </SelectContent>
         </Select>
       </div>
-      <div className="grid gap-2">
+      <div className="grid grid-cols-1 gap-2">
         <Label htmlFor="f-sort">{t.home.sorting}</Label>
         <div className="flex gap-2">
           <Select

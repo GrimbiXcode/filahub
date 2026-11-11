@@ -730,9 +730,9 @@ export function MaterialFormDialog({
             lief das ganze Formular seitlich aus dem Bild. Mit `min-w-0` bleibt
             die Zelle bei ihrer Spaltenbreite, und der Inhalt darin kürzt sich.
           */}
-          <div className="grid items-start gap-4 overflow-y-auto p-4 [&>*]:min-w-0 sm:grid-cols-2 sm:p-6">
+          <div className="grid grid-cols-1 items-start gap-4 overflow-y-auto p-4 [&>*]:min-w-0 sm:grid-cols-2 sm:p-6">
             {!isEdit && nfcSupported() && (
-              <div className="grid gap-1.5 rounded-md border border-dashed p-3 sm:col-span-2">
+              <div className="grid grid-cols-1 gap-1.5 rounded-md border border-dashed p-3 sm:col-span-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -772,7 +772,7 @@ export function MaterialFormDialog({
               und – beim Filament – die Stärke, aus denen die Zweitanzeige
               entsteht. Wer es wechselt, ändert damit mehr als eine Zuordnung.
             */}
-            <div className="grid gap-2 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-2 sm:col-span-2">
               <Label htmlFor="m-lager">{t.materialForm.lagerLabel}</Label>
               <Select value={effectiveLagerId} onValueChange={changeLager}>
                 {/* Über die ganze Feldbreite wie die Eingabefelder daneben:
@@ -811,7 +811,7 @@ export function MaterialFormDialog({
               direkt unter dem Lager, weil beides zusammen entscheidet, was
               darunter steht.
             */}
-            <div className="grid gap-2 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-2 sm:col-span-2">
               <Label htmlFor="m-product">{t.materialForm.productLabel}</Label>
               <Select
                 value={productId == null ? NEW_PRODUCT : String(productId)}
@@ -885,7 +885,7 @@ export function MaterialFormDialog({
             </div>
             {editsOwnProduct && (
               <>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="m-type">
                     {t.materialForm.materialTypeLabel}
                   </Label>
@@ -911,7 +911,7 @@ export function MaterialFormDialog({
                     }
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="m-manufacturer">
                     {t.common.manufacturer}
                   </Label>
@@ -923,7 +923,7 @@ export function MaterialFormDialog({
                     placeholder={t.materialForm.manufacturerPlaceholder}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="m-color">{t.common.color}</Label>
                   <div className="flex min-w-0 items-center gap-2">
                     <div className="min-w-0 flex-1">
@@ -957,7 +957,7 @@ export function MaterialFormDialog({
                   und der Hinweistext darf umbrechen statt abgeschnitten zu
                   werden.
                 */
-                    <div className="grid min-w-0 gap-2 rounded-md border border-dashed p-2">
+                    <div className="grid grid-cols-1 min-w-0 gap-2 rounded-md border border-dashed p-2">
                       <span className="text-xs text-muted-foreground">
                         {t.appearance.unknownColor}
                       </span>
@@ -992,7 +992,7 @@ export function MaterialFormDialog({
                     </div>
                   )}
                 </div>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="m-texture">
                     {t.materialForm.textureLabel}
                   </Label>
@@ -1006,7 +1006,7 @@ export function MaterialFormDialog({
                 </div>
               </>
             )}
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="m-identifier">{t.materialForm.identifier}</Label>
               <Input
                 id="m-identifier"
@@ -1044,7 +1044,7 @@ export function MaterialFormDialog({
               )}
             </div>
             {editsOwnProduct && (
-              <div className="grid gap-2 sm:col-span-2">
+              <div className="grid grid-cols-1 gap-2 sm:col-span-2">
                 <Label htmlFor="m-name">{t.materialForm.nameLabel}</Label>
                 <Input
                   id="m-name"
@@ -1057,7 +1057,7 @@ export function MaterialFormDialog({
                 />
               </div>
             )}
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="m-price">
                 {t.materialForm.priceLabel({ symbol: currencySymbol })}
               </Label>
@@ -1071,7 +1071,7 @@ export function MaterialFormDialog({
                 })}
               />
             </div>
-            <div className="grid min-w-0 gap-2">
+            <div className="grid grid-cols-1 min-w-0 gap-2">
               <Label htmlFor="m-date">{t.materialForm.purchaseDate}</Label>
               <DateInput
                 id="m-date"
@@ -1079,7 +1079,7 @@ export function MaterialFormDialog({
                 onChange={setPurchaseDate}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="m-nominal">{t.materialForm.nominalLabel}</Label>
               <Input
                 id="m-nominal"
@@ -1117,7 +1117,7 @@ export function MaterialFormDialog({
             {editsOwnProduct &&
               selectedLager &&
               selectedLager.materialKind !== "powder" && (
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="m-density">{t.lager.densityLabel}</Label>
                   <Input
                     id="m-density"
@@ -1138,7 +1138,7 @@ export function MaterialFormDialog({
                   </p>
                 </div>
               )}
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label>{t.materialForm.container}</Label>
               <ContainerPicker
                 value={containerRef}
@@ -1156,7 +1156,7 @@ export function MaterialFormDialog({
                 nominalWeight={parseInt(nominalWeight, 10) || null}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label>{t.materialForm.storageBox}</Label>
               <Select value={storageBoxId} onValueChange={setStorageBoxId}>
                 <SelectTrigger className="w-full min-w-0">
@@ -1178,7 +1178,7 @@ export function MaterialFormDialog({
               )}
             </div>
             {!isEdit && (
-              <div className="grid gap-2 sm:col-span-2">
+              <div className="grid grid-cols-1 gap-2 sm:col-span-2">
                 <Label htmlFor="m-initial">
                   {t.materialForm.initialLabel({ withBox: !!selectedBox })}
                 </Label>
@@ -1201,7 +1201,7 @@ export function MaterialFormDialog({
                 </p>
               </div>
             )}
-            <div className="grid gap-2 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-2 sm:col-span-2">
               <Label htmlFor="m-notes">{t.common.notes}</Label>
               <Textarea
                 id="m-notes"

@@ -364,7 +364,7 @@ export function PrintSettingsCard({
         ) : (
           <>
             {values.length > 0 && (
-              <dl className="grid grid-cols-[minmax(0,12rem)_1fr] gap-x-4 gap-y-2 text-sm">
+              <dl className="grid grid-cols-[minmax(0,9rem)_minmax(0,1fr)] gap-x-4 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)] [&>dd]:wrap-anywhere gap-y-2 text-sm">
                 {values.map(([field, value]) => (
                   <div key={field} className="contents">
                     <dt className="text-muted-foreground">
@@ -595,11 +595,11 @@ function PrintSettingsDialog({
           {...formKeys}
           className="flex min-h-0 flex-1 flex-col"
         >
-          <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
+          <div className="grid grid-cols-1 gap-4 overflow-y-auto p-4 sm:grid-cols-2 sm:p-6">
             {imported && current && (
-              <div className="grid gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
+              <div className="grid grid-cols-1 gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground sm:col-span-2">
                 {imported.options.length > 1 && (
-                  <div className="grid gap-1.5">
+                  <div className="grid grid-cols-1 gap-1.5">
                     <Label htmlFor="ps-profile">
                       {t.printSettings.prusa.profileLabel}
                     </Label>
@@ -668,7 +668,7 @@ function PrintSettingsDialog({
               </div>
             )}
             {PRINT_SETTING_FIELDS[kind].map(field => (
-              <div key={field} className="grid gap-2">
+              <div key={field} className="grid grid-cols-1 gap-2">
                 <Label htmlFor={`ps-${field}`}>
                   {t.printSettings.fields[field]}{" "}
                   <span className="text-muted-foreground">
@@ -695,7 +695,7 @@ function PrintSettingsDialog({
                 {t.printSettings.enclosureRequired}
               </label>
             )}
-            <div className="grid gap-2 sm:col-span-2">
+            <div className="grid grid-cols-1 gap-2 sm:col-span-2">
               <Label htmlFor="ps-notes">{t.printSettings.notesLabel}</Label>
               <Textarea
                 id="ps-notes"

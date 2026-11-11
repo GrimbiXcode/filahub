@@ -491,7 +491,7 @@ export default function MaterialDetail() {
           canLog={!material.archivedAt}
         />
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           {/* Stammdaten */}
           <Card>
             <CardHeader className="pb-2">
@@ -500,7 +500,7 @@ export default function MaterialDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-3 text-sm">
+              <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-4 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] [&>dd]:wrap-anywhere gap-y-3 text-sm">
                 <dt className="text-muted-foreground">
                   {t.materialDetail.identifier}
                 </dt>

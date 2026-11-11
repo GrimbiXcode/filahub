@@ -113,7 +113,7 @@ function TableCountsCard({ data }: { data: AdminSystemStatus["tableCounts"] }) {
   const { formatNumber } = useFormat();
   return (
     <SectionCard title={t.adminSystem.tables}>
-      <div className="grid gap-x-8 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-x-8 sm:grid-cols-2">
         {data.map(t => (
           <Row key={t.table} label={t.table}>
             {formatNumber(t.rows)}

@@ -120,8 +120,12 @@ export function ProposePresetDialog({
             {t.proposePreset.descriptionSuffix}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
-          <div className="grid gap-2">
+        <form
+          onSubmit={handleSubmit}
+          {...formKeys}
+          className="grid grid-cols-1 gap-4"
+        >
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pp-manufacturer">
               {t.proposePreset.manufacturerLabel}
             </Label>
@@ -132,7 +136,7 @@ export function ProposePresetDialog({
               placeholder={t.catalogEditor.manufacturerPlaceholder}
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pp-series">{t.proposePreset.seriesLabel}</Label>
             <Input
               id="pp-series"
@@ -142,7 +146,7 @@ export function ProposePresetDialog({
             />
           </div>
           {TRANSLATION_LANGUAGES.map(lang => (
-            <div key={`series-${lang.code}`} className="grid gap-2">
+            <div key={`series-${lang.code}`} className="grid grid-cols-1 gap-2">
               <Label htmlFor={`pp-series-${lang.code}`}>
                 {t.proposePreset.seriesInLanguage({ language: lang.label })}
               </Label>
@@ -154,7 +158,7 @@ export function ProposePresetDialog({
               />
             </div>
           ))}
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pp-version">{t.proposePreset.versionLabel}</Label>
             <Input
               id="pp-version"
@@ -164,7 +168,10 @@ export function ProposePresetDialog({
             />
           </div>
           {TRANSLATION_LANGUAGES.map(lang => (
-            <div key={`version-${lang.code}`} className="grid gap-2">
+            <div
+              key={`version-${lang.code}`}
+              className="grid grid-cols-1 gap-2"
+            >
               <Label htmlFor={`pp-version-${lang.code}`}>
                 {t.proposePreset.versionInLanguage({ language: lang.label })}
               </Label>
@@ -177,7 +184,7 @@ export function ProposePresetDialog({
             </div>
           ))}
           <div className="grid grid-cols-2 gap-3">
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label>{t.proposePreset.containerMaterialLabel}</Label>
               <Select
                 value={containerMaterial}
@@ -195,7 +202,7 @@ export function ProposePresetDialog({
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pp-nominal">{t.proposePreset.nominalLabel}</Label>
               <Input
                 id="pp-nominal"
@@ -206,7 +213,7 @@ export function ProposePresetDialog({
               />
             </div>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pp-materialtype">
               {t.proposePreset.materialTypeLabel}
             </Label>
@@ -223,7 +230,7 @@ export function ProposePresetDialog({
               ))}
             </datalist>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pp-comment">{t.proposePreset.commentLabel}</Label>
             <Textarea
               id="pp-comment"
