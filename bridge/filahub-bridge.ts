@@ -28,8 +28,9 @@ import { createHash, randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { crc32, inflateSync } from "node:zlib";
 
-export const BRIDGE_VERSION = "4.9.1";
+export const BRIDGE_VERSION = "4.9.2";
 export const BRIDGE_PROTOCOL = 1;
 
 // ---------------------------------------------------------------------------
@@ -140,6 +141,16 @@ const PRUSALINK_STATES = [
 const MAX_LOG_LINES = 40;
 const MAX_QUEUE = 500;
 const REQUEST_TIMEOUT_MS = 6_000;
+/** Den Kopf einer Druckdatei lesen – der Drucker liefert langsam, auch beim Drucken */
+const FILE_HEAD_TIMEOUT_MS = 45_000;
+/**
+ * Höchstens so viel einer Druckdatei wird geladen. Bei bgcode stehen alle
+ * Metadaten vor dem ersten G-Code-Block, nach den Vorschaubildern (beim
+ * Core One einige 100 KB); gelesen wird nur bis dorthin.
+ */
+export const FILE_HEAD_MAX_BYTES = 2 * 1024 * 1024;
+const BGCODE_MAX_BLOCKS = 256;
+const BGCODE_MAX_METADATA_BYTES = 1024 * 1024;
 const FILAHUB_TIMEOUT_MS = 15_000;
 /** Wird je Durchlauf beschrieben; der HEALTHCHECK prüft sein Alter */
 const HEARTBEAT_FILE = "/tmp/filahub-bridge-alive";
@@ -239,6 +250,109 @@ export function filamentsFromMeta(
     });
   });
   return result;
+}
+
+/**
+ * Metadaten aus dem Anfang einer Druckdatei – für PrusaLink in der
+ * Buddy-Firmware (MK4S, Core One, XL), die weder am Job noch in der
+ * Dateiliste Metadaten nennt. Dieselben Schlüssel wie in den Metadaten von
+ * PrusaLink, damit `filamentsFromMeta` beide liest.
+ *
+ * - **bgcode:** alle Metadaten-Blöcke bis zum ersten G-Code-Block
+ *   (Gegenstück: `readBgcodeMetadata` in `contracts/slicerMetadata.ts`).
+ * - **ASCII-G-Code:** Kommentarzeilen `; key = value` im gelesenen Anfang.
+ *   Steht der Verbrauch nur am Ende einer großen Datei, bleibt er unbekannt –
+ *   PrusaLink in der Buddy-Firmware kennt keine Range-Anfragen.
+ *
+ * Ergebnis `"more"`: Es fehlen Bytes, `complete` sagt, dass keine mehr kommen.
+ */
+export function metaFromPrintFileHead(
+  bytes: Uint8Array,
+  complete: boolean
+): Record<string, string> | "more" | null {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length);
+  if (buffer.length < 10 && !complete) return "more";
+  if (buffer.subarray(0, 4).toString("latin1") === "GCDE")
+    return bgcodeMeta(buffer, complete);
+  const end = complete ? buffer.length : buffer.lastIndexOf(0x0a) + 1;
+  const text = buffer.subarray(0, end).toString("utf8");
+  if (text.includes("\u0000")) return null;
+  const meta: Record<string, string> = {};
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^; ([^=;]+?) = (.*)$/);
+    if (match) meta[match[1]] = match[2].trim();
+  }
+  if (meta["filament used [g]"] !== undefined) return meta;
+  return complete ? (Object.keys(meta).length ? meta : null) : "more";
+}
+
+function bgcodeMeta(
+  buffer: Buffer,
+  complete: boolean
+): Record<string, string> | "more" | null {
+  const partial = (meta: Record<string, string>) =>
+    complete ? (Object.keys(meta).length ? meta : null) : "more";
+  if (buffer.length < 10) return partial({});
+  const version = buffer.readUInt32LE(4);
+  const checksumType = buffer.readUInt16LE(8);
+  if (version !== 1 || checksumType > 1) return null;
+  const checksumBytes = checksumType === 1 ? 4 : 0;
+  const meta: Record<string, string> = {};
+  let offset = 10;
+  for (let blocks = 0; blocks < BGCODE_MAX_BLOCKS; blocks++) {
+    if (offset + 12 > buffer.length) {
+      // Ein G-Code-Block braucht nur seinen Typ, um das Ende anzuzeigen
+      if (offset + 2 <= buffer.length && buffer.readUInt16LE(offset) === 1)
+        return meta;
+      return partial(meta);
+    }
+    const type = buffer.readUInt16LE(offset);
+    const compression = buffer.readUInt16LE(offset + 2);
+    const uncompressedSize = buffer.readUInt32LE(offset + 4);
+    if (type === 1) return meta; // G-Code: alle Metadaten gelesen
+    if (type > 5) return null;
+    const headerSize = compression === 0 ? 8 : 12;
+    const dataSize =
+      compression === 0 ? uncompressedSize : buffer.readUInt32LE(offset + 8);
+    const paramsSize = type === 5 ? 6 : 2;
+    const blockSize = headerSize + paramsSize + dataSize;
+    if (type !== 5) {
+      if (
+        uncompressedSize > BGCODE_MAX_METADATA_BYTES ||
+        dataSize > BGCODE_MAX_METADATA_BYTES
+      )
+        return null;
+      if (offset + blockSize + checksumBytes > buffer.length)
+        return partial(meta);
+      const block = buffer.subarray(offset, offset + blockSize);
+      if (
+        checksumBytes &&
+        crc32(block) !== buffer.readUInt32LE(offset + blockSize)
+      )
+        return null;
+      const encoding = block.readUInt16LE(headerSize);
+      const data = block.subarray(headerSize + paramsSize);
+      let text: string | null = null;
+      try {
+        if (compression === 0) text = data.toString("utf8");
+        else if (compression === 1)
+          text = inflateSync(data, {
+            maxOutputLength: BGCODE_MAX_METADATA_BYTES,
+          }).toString("utf8");
+      } catch {
+        return null;
+      }
+      if (encoding === 0 && text !== null) {
+        for (const line of text.split(/\r?\n/)) {
+          const index = line.indexOf("=");
+          if (index > 0)
+            meta[line.slice(0, index).trim()] = line.slice(index + 1);
+        }
+      }
+    }
+    offset += blockSize + checksumBytes;
+  }
+  return null;
 }
 
 /** Fehlerursache aus `fetch` → Diagnosekennung */
@@ -355,15 +469,24 @@ export class PrusaLinkClient {
     return url;
   }
 
-  async get(path: string): Promise<unknown> {
+  /** Anfrage samt Anmeldung; wirft bei allem außer 2xx */
+  async request(
+    path: string,
+    accept = "application/json",
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<Response> {
     const base = await this.checkTarget();
     const url = new URL(path, base);
-    let response = await this.send(url, this.authHeader(url.pathname));
+    // Ein Pfad wie „//andere.host/…“ führte zu einem fremden Ziel
+    if (url.origin !== base.origin)
+      throw new PrusaLinkError("error", "Pfad außerhalb des Druckers", null);
+    const send = () =>
+      this.send(url, this.authHeader(url.pathname), accept, timeoutMs);
+    let response = await send();
     if (response.status === 401 && this.printer.authKind === "digest") {
       const challenge = response.headers.get("www-authenticate") ?? "";
       await response.body?.cancel();
-      if (this.takeChallenge(challenge))
-        response = await this.send(url, this.authHeader(url.pathname));
+      if (this.takeChallenge(challenge)) response = await send();
     }
     if (response.status === 401 || response.status === 403) {
       await response.body?.cancel();
@@ -383,7 +506,6 @@ export class PrusaLinkClient {
         404
       );
     }
-    if (response.status === 204) return null;
     if (!response.ok) {
       await response.body?.cancel();
       throw new PrusaLinkError(
@@ -391,6 +513,15 @@ export class PrusaLinkClient {
         `Unerwartete Antwort HTTP ${response.status}`,
         response.status
       );
+    }
+    return response;
+  }
+
+  async get(path: string): Promise<unknown> {
+    const response = await this.request(path);
+    if (response.status === 204) {
+      await response.body?.cancel();
+      return null;
     }
     const type = response.headers.get("content-type") ?? "";
     const text = await response.text();
@@ -411,11 +542,53 @@ export class PrusaLinkClient {
     }
   }
 
-  async send(url: URL, auth: Record<string, string>): Promise<Response> {
+  /**
+   * Liest den Anfang einer Datei vom Drucker, bis `parse` genug hat, und
+   * bricht die Übertragung dann ab – höchstens `FILE_HEAD_MAX_BYTES`.
+   */
+  async readFileHead<T>(
+    path: string,
+    parse: (bytes: Uint8Array, complete: boolean) => T | "more"
+  ): Promise<T> {
+    const response = await this.request(
+      path,
+      "application/octet-stream",
+      FILE_HEAD_TIMEOUT_MS
+    );
+    const reader = response.body?.getReader();
+    if (!reader) return parse(new Uint8Array(0), true) as T;
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (value) {
+          chunks.push(value);
+          length += value.length;
+        }
+        const complete = done || length >= FILE_HEAD_MAX_BYTES;
+        const bytes = Buffer.concat(chunks, length).subarray(
+          0,
+          FILE_HEAD_MAX_BYTES
+        );
+        const result = parse(bytes, complete);
+        if (result !== "more" || complete) return result as T;
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+  }
+
+  async send(
+    url: URL,
+    auth: Record<string, string>,
+    accept = "application/json",
+    timeoutMs = REQUEST_TIMEOUT_MS
+  ): Promise<Response> {
     try {
       return await this.fetchFn(url, {
-        headers: { accept: "application/json", ...auth },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        headers: { accept, ...auth },
+        signal: AbortSignal.timeout(timeoutMs),
         redirect: "manual",
       });
     } catch (error) {
@@ -478,6 +651,8 @@ type JobTrack = {
   jobId: number;
   fileName: string | null;
   filePath: string | null;
+  /** `file.refs.download` – die Datei selbst, z. B. `/usb/BENCHY~1.BGC` */
+  downloadPath: string | null;
   meta: Record<string, unknown> | null;
   metaTried: boolean;
   progress: number | null;
@@ -815,6 +990,7 @@ export class Bridge {
         jobId,
         fileName: null,
         filePath: null,
+        downloadPath: null,
         meta: null,
         metaTried: false,
         progress: null,
@@ -847,6 +1023,7 @@ export class Bridge {
           name?: string;
           display_name?: string;
           path?: string;
+          refs?: { download?: string };
           meta?: Record<string, unknown>;
         };
       } | null;
@@ -855,6 +1032,11 @@ export class Bridge {
         job?.file?.path && job.file.name
           ? `${job.file.path.replace(/\/$/, "")}/${job.file.name}`
           : null;
+      const download = job?.file?.refs?.download;
+      track.downloadPath =
+        typeof download === "string" && /^\/[^/]/.test(download)
+          ? download
+          : track.filePath;
       track.meta = job?.file?.meta ?? null;
     } catch (error) {
       this.write(
@@ -870,7 +1052,28 @@ export class Bridge {
         )) as { meta?: Record<string, unknown> } | null;
         track.meta = file?.meta ?? track.meta;
       } catch {
-        // Dann eben ohne Gramm – das Eingangsfach sagt es
+        // Die Buddy-Firmware kennt die Route mit Metadaten nicht – weiter unten
+      }
+    }
+    // Die Buddy-Firmware (MK4S, Core One, XL) nennt nirgends Metadaten: den
+    // Anfang der Datei selbst lesen. Bei bgcode stehen sie vor dem G-Code.
+    if (!filamentsFromMeta(track.meta) && track.downloadPath) {
+      try {
+        const meta = await runtime.client.readFileHead(
+          encodeURI(track.downloadPath),
+          metaFromPrintFileHead
+        );
+        if (meta) track.meta = { ...meta, ...(track.meta ?? {}) };
+        if (!filamentsFromMeta(track.meta))
+          this.write(
+            "warn",
+            `Drucker „${runtime.config.name}“: In der Datei steht kein Filamentverbrauch`
+          );
+      } catch (error) {
+        this.write(
+          "warn",
+          `Drucker „${runtime.config.name}“: Datei des Drucks nicht lesbar (${(error as Error).message})`
+        );
       }
     }
   }
@@ -903,7 +1106,7 @@ export class Bridge {
     }));
     runtime.report.metaWarning = full
       ? null
-      : "PrusaLink nannte zu dieser Datei keinen Filamentverbrauch – Gramm im Eingangsfach eintragen";
+      : "Zu dieser Datei war kein Filamentverbrauch lesbar – Gramm im Eingangsfach eintragen";
     const started = new Date(
       this.now() - (track.timePrinting ?? 0) * 1000
     ).toISOString();

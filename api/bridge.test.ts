@@ -6,8 +6,10 @@ import {
   BRIDGE_VERSION,
   Bridge,
   classifyNetworkError,
+  FILE_HEAD_MAX_BYTES,
   filamentsFromMeta,
   isPrivateIp,
+  metaFromPrintFileHead,
   titleFromFileName,
   type BridgeConfig,
   type ConfigPrinter,
@@ -20,6 +22,14 @@ import {
 } from "@contracts/bridge";
 import { printImportInputSchema } from "@contracts/printImports";
 import { startFakePrusaLink } from "./test/fakePrusaLink";
+import {
+  FILE_METADATA,
+  buildBgcode,
+  buildGcode,
+  gcodeBlock,
+  iniText,
+  printerMetadata,
+} from "./test/slicerFixtures";
 
 /**
  * Die Brücke gegen zwei Nachbauten auf localhost: PrusaLink
@@ -105,6 +115,37 @@ const META = {
   filament_settings_id:
     '"Prusament PLA @MK4S";"Generic PLA";"Prusament PETG @MK4S"',
 };
+
+/**
+ * bgcode wie vom Core One mit MMU3: Vorschaubild vor den Druck-Metadaten,
+ * Farbe und Profile in den Slicer-Metadaten, danach ein großer G-Code-Block.
+ */
+function coreOneBgcode(gcodeBytes = 4 * 1024 * 1024) {
+  return buildBgcode([
+    { type: 0, data: FILE_METADATA },
+    {
+      type: 3,
+      compression: 1,
+      data: printerMetadata({ "filament used [g]": "12.40, 0.00, 3.60" }),
+    },
+    { type: 5, data: new Uint8Array(200_000).fill(7) },
+    {
+      type: 4,
+      compression: 1,
+      data: iniText({ "filament used [g]": "12.40, 0.00, 3.60" }),
+    },
+    {
+      type: 2,
+      compression: 1,
+      data: iniText({
+        filament_type: "PLA;PLA;PETG",
+        extruder_colour: "#1A1A1A;#FFFFFF;#00A700",
+        filament_settings_id: META.filament_settings_id,
+      }),
+    },
+    gcodeBlock(gcodeBytes),
+  ]);
+}
 
 let clock = Date.parse("2026-11-09T12:00:00Z");
 const now = () => clock;
@@ -365,6 +406,24 @@ describe("Drucke ins Eingangsfach", () => {
     ).toHaveLength(2);
   });
 
+  it("liest die Gramm aus der Datei, wenn PrusaLink keine Metadaten nennt (Buddy-Firmware)", async () => {
+    const { link, filahub, bridge } = await printing(null, {
+      fileBytes: coreOneBgcode(),
+    });
+    link.state.printerState = "FINISHED";
+    link.state.job = { ...link.state.job!, progress: 100 };
+    await bridge.tick();
+    expect(link.requests).toContain(
+      "/usb/Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode"
+    );
+    const item = printImportInputSchema.parse(filahub.imports[0]);
+    expect(item.filaments.map(f => [f.slot, f.grams, f.colorHex])).toEqual([
+      [0, 12, "#1a1a1a"],
+      [2, 4, "#00a700"],
+    ]);
+    expect(lastReport(filahub).printers[0].metaWarning).toBeNull();
+  });
+
   it("liefert ohne Metadaten trotzdem ein und sagt es", async () => {
     const { link, filahub, bridge } = await printing(null);
     link.state.printerState = "FINISHED";
@@ -473,6 +532,53 @@ describe("Hilfen der Brücke", () => {
       },
     ]);
     expect(titleFromFileName("/usb/BENCHY~1.BGC")).toBe("BENCHY~1");
+  });
+});
+
+describe("Metadaten aus dem Kopf einer Druckdatei", () => {
+  it("liest bgcode bis zum ersten G-Code-Block und braucht den Rest nicht", () => {
+    const file = coreOneBgcode();
+    const gcodeStart = file.length - 4 * 1024 * 1024 - 2 - 8 - 4;
+    // Zu kurz: es fehlen Bytes
+    expect(metaFromPrintFileHead(file.subarray(0, 5000), false)).toBe("more");
+    // Bis kurz hinter den Kopf des G-Code-Blocks genügt
+    const meta = metaFromPrintFileHead(
+      file.subarray(0, gcodeStart + 12),
+      false
+    );
+    expect(meta).toMatchObject({
+      "filament used [g]": "12.40, 0.00, 3.60",
+      extruder_colour: "#1A1A1A;#FFFFFF;#00A700",
+    });
+    expect(filamentsFromMeta(meta as Record<string, string>)).toHaveLength(2);
+    expect(gcodeStart + 12).toBeLessThan(FILE_HEAD_MAX_BYTES);
+  });
+
+  it("lehnt eine kaputte Prüfsumme ab", () => {
+    const file = buildBgcode([
+      {
+        type: 4,
+        data: iniText({ "filament used [g]": "5" }),
+        badChecksum: true,
+      },
+      gcodeBlock(10),
+    ]);
+    expect(metaFromPrintFileHead(file, true)).toBeNull();
+  });
+
+  it("liest ASCII-G-Code aus den Kommentaren des Kopfes", () => {
+    const file = buildGcode({
+      head: { "filament used [g]": "8.21", filament_type: "PETG" },
+      bodyBytes: 3 * 1024 * 1024,
+    });
+    const meta = metaFromPrintFileHead(file.subarray(0, 64 * 1024), false);
+    expect(filamentsFromMeta(meta as Record<string, string>)).toMatchObject([
+      { slot: 0, grams: 8.21, filamentType: "PETG" },
+    ]);
+    // Ohne Verbrauch im Kopf: weiterlesen, am Ende null statt geraten
+    const bare = buildGcode({ bodyBytes: 1000 });
+    expect(metaFromPrintFileHead(bare.subarray(0, 100), false)).toBe("more");
+    expect(metaFromPrintFileHead(new Uint8Array([1, 0, 2]), true)).toBeNull();
   });
 });
 

@@ -5,7 +5,8 @@ import type { AddressInfo } from "node:net";
 /**
  * Nachbau von PrusaLink für `api/bridge.test.ts` – nur so viel, wie die
  * Brücke anfragt: `/api/version`, `/api/v1/info`, `/api/v1/status`,
- * `/api/v1/job`, `/api/v1/files/…`. Anmeldung per `X-Api-Key` oder HTTP-Digest
+ * `/api/v1/job`, `/api/v1/files/…` und die Datei selbst unter `/usb/…`
+ * (`refs.download`, wie in der Buddy-Firmware). Anmeldung per `X-Api-Key` oder HTTP-Digest
  * (Benutzer `maker`), wie die Buddy-Firmware sie anbietet. Die Antwortformen
  * folgen der OpenAPI-Beschreibung von PrusaLink; an einem echten Gerät sind
  * sie noch nicht geprüft (Plan, „Vor der Umsetzung zu prüfen“).
@@ -21,6 +22,8 @@ export type FakePrusaLinkState = {
     meta: Record<string, unknown> | null;
     /** Metadaten nur über `/api/v1/files/…` statt am Job */
     metaOnlyInFiles?: boolean;
+    /** Inhalt der Datei unter `/usb/<fileName>`; sonst 404 */
+    fileBytes?: Uint8Array;
   } | null;
   /** Statt PrusaLink: ein anderer Dienst */
   mode: "prusalink" | "not_found" | "html";
@@ -112,12 +115,17 @@ export async function startFakePrusaLink(initial: FakePrusaLinkState) {
           name: job.fileName,
           display_name: job.fileName,
           path: "/usb",
+          refs: { download: `/usb/${job.fileName}` },
           ...(job.meta && !job.metaOnlyInFiles ? { meta: job.meta } : {}),
         },
       });
     }
     if (path.startsWith("/api/v1/files/") && job?.metaOnlyInFiles)
       return json({ name: job.fileName, meta: job.meta });
+    if (job?.fileBytes && path === `/usb/${encodeURI(job.fileName)}`) {
+      res.writeHead(200, { "content-type": "application/octet-stream" });
+      return res.end(Buffer.from(job.fileBytes));
+    }
     res.writeHead(404);
     res.end();
   });

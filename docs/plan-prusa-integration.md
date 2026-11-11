@@ -479,7 +479,7 @@ werden müssen, bevor Code entsteht:
 | bgcode-Metadaten sind unkomprimiert oder `deflate` (Heatshrink nur im G-Code)   | A     | **bestätigt** (Spezifikation, Beispiele PrusaSlicer 2.6 und 2.8)                                          |
 | `filament used [g]` steht bei bgcode in den Druck-Metadaten                     | A     | **bestätigt**, auch MMU3 (echte Datei, PrusaSlicer 2.9.7)                                                 |
 | Post-Processing-Skripte bekommen ASCII-G-Code, auch wenn bgcode exportiert wird | B     | PrusaSlicer 2.9 ausprobieren                                                                              |
-| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | `GET /api/v1/files/…` an MK4S und Core One                                                                |
+| PrusaLink v1 liefert die Gramm in den Metadaten der Datei                       | C     | **widerlegt** für die Buddy-Firmware (Core One, 4.9.2) – die Brücke liest den Anfang der Datei selbst     |
 | Job-Endzustände und Seriennummer im Status                                      | C     | Mitschnitt eines Drucks und eines Abbruchs                                                                |
 | PrusaSlicer importiert ein Paket mit nur einem `[filament:…]`-Abschnitt         | D     | Export aus filahub in PrusaSlicer 2.9 importieren                                                         |
 | OpenPrintTag-Format                                                             | E     | **bestätigt** gegen die Beispiel-Tags der Spezifikation; ein echtes Tag mit Web NFC auf Android steht aus |
