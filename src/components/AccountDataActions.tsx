@@ -146,7 +146,7 @@ export function AccountDataActions({ children }: { children?: ReactNode }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="delete-confirm" className="text-xs">
               {t.settings.deleteConfirmLabel({ name: user?.name ?? "" })}
             </Label>

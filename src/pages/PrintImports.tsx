@@ -77,7 +77,7 @@ export default function PrintImports() {
         />
 
         {isLoading ? (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Skeleton className="h-28 w-full" />
             <Skeleton className="h-28 w-full" />
           </div>
@@ -99,7 +99,7 @@ export default function PrintImports() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid grid-cols-1 gap-3">
             {canAct && (
               <label className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Checkbox
@@ -212,17 +212,19 @@ function ImportCard({
             {item.filaments.map(filament => (
               <li
                 key={filament.slot}
-                className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
+                className="flex max-w-full min-w-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs"
               >
                 {filament.colorHex && (
                   <span
                     aria-hidden
-                    className="inline-block h-2.5 w-2.5 rounded-full border"
+                    className="inline-block h-2.5 w-2.5 shrink-0 rounded-full border"
                     style={{ backgroundColor: filament.colorHex }}
                   />
                 )}
-                <span className="font-mono">{formatGrams(filament.grams)}</span>
-                <span className="text-muted-foreground">
+                <span className="shrink-0 font-mono whitespace-nowrap">
+                  {formatGrams(filament.grams)}
+                </span>
+                <span className="min-w-0 truncate text-muted-foreground">
                   {[
                     filament.filamentType,
                     filament.profileName ??

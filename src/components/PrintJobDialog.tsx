@@ -600,9 +600,13 @@ export function PrintJobDialog({
           </DialogTitle>
           <DialogDescription>{t.prints.form.description}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-4" {...formKeys}>
+        <form
+          onSubmit={submit}
+          className="grid grid-cols-1 gap-4"
+          {...formKeys}
+        >
           {!editing && (
-            <div className="grid gap-1.5 rounded-md border border-dashed p-3">
+            <div className="grid grid-cols-1 gap-1.5 rounded-md border border-dashed p-3">
               <input
                 ref={fileInput}
                 type="file"
@@ -638,7 +642,7 @@ export function PrintJobDialog({
             </div>
           )}
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pj-title">{t.prints.form.titleLabel}</Label>
             <Input
               id="pj-title"
@@ -651,8 +655,8 @@ export function PrintJobDialog({
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pj-date">{t.prints.form.printedAtLabel}</Label>
               <Input
                 id="pj-date"
@@ -662,7 +666,7 @@ export function PrintJobDialog({
                 required
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pj-status">{t.prints.form.statusLabel}</Label>
               <Select
                 value={status}
@@ -682,13 +686,13 @@ export function PrintJobDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label>{t.prints.form.materialsLabel}</Label>
             <p className="text-xs text-muted-foreground">
               {t.prints.form.materialsHint}
             </p>
             {loadedHere.length > 0 && (
-              <div className="grid gap-1.5">
+              <div className="grid grid-cols-1 gap-1.5">
                 <p className="text-xs text-muted-foreground">
                   {t.prints.form.loadedLabel}
                 </p>
@@ -723,8 +727,14 @@ export function PrintJobDialog({
               </div>
             )}
             {rows.map(row => (
-              <div key={row.key} className="flex items-start gap-2">
-                <div className="min-w-0 flex-1">
+              /* Auf dem Telefon steht die Auswahl allein in der Zeile, Gramm und
+                 Entfernen darunter – sonst blieben dem Materialnamen ein paar
+                 Buchstaben. */
+              <div
+                key={row.key}
+                className="flex flex-wrap items-start gap-2 max-sm:rounded-md max-sm:border max-sm:p-2 sm:flex-nowrap"
+              >
+                <div className="w-full min-w-0 sm:w-auto sm:flex-1">
                   <MaterialRowPicker
                     row={row}
                     alreadyBooked={
@@ -761,7 +771,7 @@ export function PrintJobDialog({
                   onChange={e => setRow(row.key, { grams: e.target.value })}
                   placeholder={t.prints.form.gramsLabel}
                   aria-label={t.prints.form.gramsLabel}
-                  className="w-24 font-mono"
+                  className="flex-1 font-mono sm:w-24 sm:flex-none"
                 />
                 <Button
                   type="button"
@@ -816,8 +826,8 @@ export function PrintJobDialog({
             )}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pj-printer">{t.prints.form.printerLabel}</Label>
               <AutocompleteInput
                 id="pj-printer"
@@ -827,7 +837,7 @@ export function PrintJobDialog({
                 placeholder={t.prints.form.printerPlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pj-hours">{t.prints.form.durationLabel}</Label>
               <div className="flex items-center gap-2">
                 <Input
@@ -859,7 +869,7 @@ export function PrintJobDialog({
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pj-tags">{t.prints.form.tagsLabel}</Label>
             <Input
               id="pj-tags"
@@ -879,7 +889,7 @@ export function PrintJobDialog({
             </p>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label>{t.prints.form.linksLabel}</Label>
             {links.map(link => (
               <div
@@ -939,7 +949,7 @@ export function PrintJobDialog({
             )}
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pj-notes">{t.prints.form.notesLabel}</Label>
             <Textarea
               id="pj-notes"
@@ -1036,7 +1046,7 @@ function TagSuggestions({
           key={tag}
           type="button"
           onClick={() => onPick(tag)}
-          className="rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+          className="max-w-full truncate rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           #{tag}
         </button>
@@ -1103,7 +1113,7 @@ function MaterialRowPicker({
   };
 
   return (
-    <div className="grid gap-1">
+    <div className="grid grid-cols-1 gap-1">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

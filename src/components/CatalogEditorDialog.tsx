@@ -343,9 +343,13 @@ export function CatalogEditorDialog({
           </DialogTitle>
           <DialogDescription>{t.catalogEditor.description}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
+        <form
+          onSubmit={handleSubmit}
+          {...formKeys}
+          className="grid grid-cols-1 gap-4"
+        >
           {target.level !== "variant" && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="ce-name">
                 {translatable
                   ? `${t.catalogEditor.nameInLanguage({
@@ -372,7 +376,7 @@ export function CatalogEditorDialog({
               Reiter: So sieht man beim Tippen, was noch fehlt. */}
           {translatable &&
             TRANSLATION_LANGUAGES.map(lang => (
-              <div key={lang.code} className="grid gap-2">
+              <div key={lang.code} className="grid grid-cols-1 gap-2">
                 <Label htmlFor={`ce-name-${lang.code}`}>
                   {t.catalogEditor.nameInLanguage({ language: lang.label })}
                 </Label>
@@ -417,7 +421,7 @@ export function CatalogEditorDialog({
           )}
 
           {target.level === "manufacturer" && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="ce-website">{t.catalogEditor.website}</Label>
               <Input
                 id="ce-website"
@@ -429,7 +433,7 @@ export function CatalogEditorDialog({
           )}
 
           {target.level === "series" && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="ce-types">{t.catalogEditor.materialTypes}</Label>
               <Input
                 id="ce-types"
@@ -446,7 +450,7 @@ export function CatalogEditorDialog({
 
           {target.level === "version" && (
             <>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label>{t.catalogEditor.formLabel}</Label>
                 <Select value={form} onValueChange={setForm}>
                   <SelectTrigger className="w-full min-w-0">
@@ -464,7 +468,7 @@ export function CatalogEditorDialog({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label>{t.catalogEditor.containerMaterial}</Label>
                 <Select
                   value={containerMaterial}
@@ -486,7 +490,7 @@ export function CatalogEditorDialog({
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div className="grid min-w-0 gap-2">
+                <div className="grid grid-cols-1 min-w-0 gap-2">
                   <Label htmlFor="ce-from">{t.catalogEditor.validFrom}</Label>
                   <DateInput
                     id="ce-from"
@@ -494,7 +498,7 @@ export function CatalogEditorDialog({
                     onChange={setValidFrom}
                   />
                 </div>
-                <div className="grid min-w-0 gap-2">
+                <div className="grid grid-cols-1 min-w-0 gap-2">
                   <Label htmlFor="ce-to">{t.catalogEditor.validTo}</Label>
                   <DateInput id="ce-to" value={validTo} onChange={setValidTo} />
                 </div>
@@ -508,7 +512,7 @@ export function CatalogEditorDialog({
           {target.level === "variant" && (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="ce-nominal">
                     {t.catalogEditor.nominalLabel}
                   </Label>
@@ -520,7 +524,7 @@ export function CatalogEditorDialog({
                     onChange={e => setNominalWeight(e.target.value)}
                   />
                 </div>
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="ce-tare">{t.catalogEditor.tareLabel}</Label>
                   <Input
                     id="ce-tare"
@@ -534,7 +538,7 @@ export function CatalogEditorDialog({
               </div>
               {showGeometry && (
                 <div className="grid grid-cols-3 gap-3">
-                  <div className="grid gap-1.5">
+                  <div className="grid grid-cols-1 gap-1.5">
                     <Label htmlFor="ce-outer" className="text-xs">
                       {t.catalogEditor.outerDiameter}
                     </Label>
@@ -545,7 +549,7 @@ export function CatalogEditorDialog({
                       onChange={e => setOuterDiameterMm(e.target.value)}
                     />
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid grid-cols-1 gap-1.5">
                     <Label htmlFor="ce-width" className="text-xs">
                       {t.catalogEditor.width}
                     </Label>
@@ -556,7 +560,7 @@ export function CatalogEditorDialog({
                       onChange={e => setWidthMm(e.target.value)}
                     />
                   </div>
-                  <div className="grid gap-1.5">
+                  <div className="grid grid-cols-1 gap-1.5">
                     <Label htmlFor="ce-bore" className="text-xs">
                       {t.catalogEditor.bore}
                     </Label>
@@ -572,7 +576,7 @@ export function CatalogEditorDialog({
             </>
           )}
 
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="ce-notes">{t.common.notes}</Label>
             <Textarea
               id="ce-notes"

@@ -430,8 +430,12 @@ export default function ContainerTypes() {
               {t.containerTypes.dialogDescription}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
-            <div className="grid gap-2">
+          <form
+            onSubmit={handleSubmit}
+            {...formKeys}
+            className="grid grid-cols-1 gap-4"
+          >
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="s-name">{t.common.nameRequiredLabel}</Label>
               <Input
                 id="s-name"
@@ -440,7 +444,7 @@ export default function ContainerTypes() {
                 placeholder={t.containerTypes.namePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="s-manufacturer">{t.common.manufacturer}</Label>
               <Input
                 id="s-manufacturer"
@@ -449,7 +453,7 @@ export default function ContainerTypes() {
                 placeholder={t.containerTypes.manufacturerPlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="s-form">{t.containerTypes.formLabel}</Label>
               <Select
                 value={form}
@@ -471,7 +475,7 @@ export default function ContainerTypes() {
               </p>
             </div>
             {/* Leergewicht-Rechner: volles Gebinde wiegen */}
-            <div className="grid gap-3 rounded-lg border bg-muted/40 p-3">
+            <div className="grid grid-cols-1 gap-3 rounded-lg border bg-muted/40 p-3">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Calculator className="h-4 w-4 text-muted-foreground" />
                 {t.containerTypes.calcTitle}
@@ -480,7 +484,7 @@ export default function ContainerTypes() {
                 {t.containerTypes.calcDescription}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="grid gap-1.5">
+                <div className="grid grid-cols-1 gap-1.5">
                   <Label htmlFor="s-calc-gross" className="text-xs">
                     {t.containerTypes.calcGross}
                   </Label>
@@ -497,7 +501,7 @@ export default function ContainerTypes() {
                     placeholder={t.containerTypes.calcGrossPlaceholder}
                   />
                 </div>
-                <div className="grid gap-1.5">
+                <div className="grid grid-cols-1 gap-1.5">
                   <Label htmlFor="s-calc-nominal" className="text-xs">
                     {t.containerTypes.calcNominal}
                   </Label>
@@ -532,7 +536,7 @@ export default function ContainerTypes() {
                   </div>
                 ))}
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="s-tare">{t.containerTypes.tareLabel}</Label>
               <Input
                 id="s-tare"
@@ -544,7 +548,7 @@ export default function ContainerTypes() {
                 placeholder={t.containerTypes.tarePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="s-notes">{t.common.notes}</Label>
               <Textarea
                 id="s-notes"

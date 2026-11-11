@@ -470,7 +470,7 @@ export default function Import() {
                                 </Button>
                               </div>
                               <div className="grid grid-cols-2 gap-3">
-                                <div className="col-span-2 grid gap-1.5">
+                                <div className="col-span-2 grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-typ-${index}`}
                                     className="text-xs"
@@ -485,7 +485,7 @@ export default function Import() {
                                     }
                                   />
                                 </div>
-                                <div className="grid gap-1.5">
+                                <div className="grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-hersteller-${index}`}
                                     className="text-xs"
@@ -504,7 +504,7 @@ export default function Import() {
                                     }
                                   />
                                 </div>
-                                <div className="grid gap-1.5">
+                                <div className="grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-farbe-${index}`}
                                     className="text-xs"
@@ -523,7 +523,7 @@ export default function Import() {
                                     }
                                   />
                                 </div>
-                                <div className="grid gap-1.5">
+                                <div className="grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-gewicht-${index}`}
                                     className="text-xs"
@@ -543,7 +543,7 @@ export default function Import() {
                                     }
                                   />
                                 </div>
-                                <div className="grid gap-1.5">
+                                <div className="grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-preis-${index}`}
                                     className="text-xs"
@@ -566,7 +566,7 @@ export default function Import() {
                                     }
                                   />
                                 </div>
-                                <div className="grid gap-1.5">
+                                <div className="grid grid-cols-1 gap-1.5">
                                   <Label
                                     htmlFor={`p-anzahl-${index}`}
                                     className="text-xs"

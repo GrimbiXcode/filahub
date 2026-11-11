@@ -181,7 +181,9 @@ export default function StorageBoxes() {
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="truncate font-medium">{b.name}</p>
+                        <p className="line-clamp-2 font-medium wrap-anywhere">
+                          {b.name}
+                        </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                           {t.storageBoxes.tareSuffix({
                             amount: formatGrams(b.tareWeight),
@@ -318,8 +320,12 @@ export default function StorageBoxes() {
               Das Leergewicht der leeren Box (ohne Material) in Gramm.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
-            <div className="grid gap-2">
+          <form
+            onSubmit={handleSubmit}
+            {...formKeys}
+            className="grid grid-cols-1 gap-4"
+          >
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="b-name">{t.common.nameRequiredLabel}</Label>
               <Input
                 id="b-name"
@@ -328,7 +334,7 @@ export default function StorageBoxes() {
                 placeholder={t.storageBoxes.namePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="b-location">{t.storageBoxes.location}</Label>
               <Input
                 id="b-location"
@@ -337,7 +343,7 @@ export default function StorageBoxes() {
                 placeholder={t.storageBoxes.locationPlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="b-tare">{t.storageBoxes.tareLabel}</Label>
               <Input
                 id="b-tare"
@@ -349,7 +355,7 @@ export default function StorageBoxes() {
                 placeholder={t.storageBoxes.tarePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="b-notes">{t.common.notes}</Label>
               <Textarea
                 id="b-notes"

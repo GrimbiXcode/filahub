@@ -103,7 +103,7 @@ export default function Organizations() {
           title={t.organizations.title}
           description={t.organizations.description}
           actions={
-            <div className="flex w-full gap-2 sm:w-auto">
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
               <Button
                 variant="outline"
                 className="flex-1 sm:flex-none"

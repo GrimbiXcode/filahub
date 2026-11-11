@@ -243,7 +243,7 @@ function CreateDialog({
           </>
         ) : (
           <form
-            className="grid gap-4"
+            className="grid grid-cols-1 gap-4"
             {...formKeys}
             onSubmit={e => {
               e.preventDefault();
@@ -255,7 +255,7 @@ function CreateDialog({
               <DialogTitle>{t.connections.add}</DialogTitle>
               <DialogDescription>{t.connections.kindLabel}</DialogDescription>
             </DialogHeader>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(["bridge", "slicer"] as const).map(option => {
                 const Icon = option === "bridge" ? Printer : Scissors;
                 return (
@@ -280,7 +280,7 @@ function CreateDialog({
                 );
               })}
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="conn-name">{t.connections.nameLabel}</Label>
               <Input
                 id="conn-name"
@@ -344,7 +344,7 @@ function CopyBlock({ text }: { text: string }) {
 function BridgeInstructions({ token }: { token: string }) {
   const t = useT();
   return (
-    <div className="grid gap-3 text-sm">
+    <div className="grid grid-cols-1 gap-3 text-sm">
       <p>1. {t.connections.bridgeStep1}</p>
       <CopyBlock text={bridgeCommand(token)} />
       <p>2. {t.connections.bridgeStep2}</p>
@@ -360,7 +360,7 @@ function SlicerInstructions({ token }: { token: string }) {
     2
   );
   return (
-    <div className="grid gap-3 text-sm">
+    <div className="grid grid-cols-1 gap-3 text-sm">
       <p>1. {t.connections.slicerStep1}</p>
       <Button asChild variant="outline" className="justify-self-start">
         <a href="/tools/filahub-import.py" download="filahub-import.py">
@@ -408,12 +408,14 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
   const status = bridge.bridgeStatus;
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="gap-4 py-4 sm:gap-6 sm:py-6">
+      <CardHeader className="px-4 sm:px-6">
         <div className="flex min-w-0 flex-col gap-1">
           <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-            <Printer className="h-4 w-4 text-muted-foreground" />
-            <span className="wrap-anywhere">{bridge.name}</span>
+            <span className="flex min-w-0 items-start gap-2">
+              <Printer className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="wrap-anywhere">{bridge.name}</span>
+            </span>
             <Badge
               variant={online ? "default" : "outline"}
               className={cn(
@@ -454,13 +456,13 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
           )}
         </div>
         {canManage && (
-          <CardAction className="flex gap-1">
+          <CardAction className="flex gap-1 max-sm:-mr-1.5">
             <RenameButton token={bridge} />
             <RevokeButton token={bridge} />
           </CardAction>
         )}
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-3 px-4 sm:px-6">
         {seenAt == null && (
           <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
             {t.connections.bridge.neverHint}
@@ -494,7 +496,7 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
           <Button
             variant="outline"
             size="sm"
-            className="justify-self-start self-start"
+            className="self-stretch sm:self-start"
             onClick={() => setPrinterDialog({ mode: "add" })}
           >
             <Plus className="mr-1.5 h-3.5 w-3.5" />
@@ -542,6 +544,9 @@ function BridgeCard({ bridge }: { bridge: ConnectionEntry }) {
     </Card>
   );
 }
+
+/** Auf dem Telefon nur das Symbol: die Beschriftung nähme dem Namen die Zeile. */
+const COMPACT_BUTTON = "max-sm:size-8 max-sm:px-0";
 
 const STATE_TONE: Record<string, string> = {
   ok: "bg-emerald-600 text-white hover:bg-emerald-600",
@@ -591,11 +596,13 @@ function PrinterRow({
 
   return (
     <div className="flex flex-col gap-2 p-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-2">
         <span className="font-medium wrap-anywhere">{printer.name}</span>
         <span className="font-mono text-xs text-muted-foreground wrap-anywhere">
           {printer.host}
         </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
         {state ? (
           <Badge
             variant={state === "ok" ? "default" : "outline"}
@@ -622,7 +629,7 @@ function PrinterRow({
       </div>
 
       {job?.fileName && (
-        <p className="text-xs">
+        <p className="text-xs wrap-anywhere">
           {t.connections.printer.job({
             file: job.fileName,
             percent: formatPercent(Math.round(job.progressPercent ?? 0)),
@@ -645,7 +652,7 @@ function PrinterRow({
           {status.metaWarning}
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground wrap-anywhere">
         {[
           info?.model,
           info?.firmware
@@ -665,10 +672,11 @@ function PrinterRow({
       </p>
 
       {canManage && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex gap-2">
           <Button
             size="sm"
             variant="outline"
+            className="flex-1 sm:flex-none"
             disabled={testing || test.isPending || !printer.enabled}
             onClick={() =>
               test.mutate({ ...scope, tokenId: bridge.id, id: printer.id })
@@ -681,13 +689,25 @@ function PrinterRow({
               ? t.connections.printer.testing
               : t.connections.printer.test}
           </Button>
-          <Button size="sm" variant="ghost" onClick={onEdit}>
-            <Pencil className="mr-1.5 h-3.5 w-3.5" />
-            {t.connections.printer.edit}
+          <Button
+            size="sm"
+            variant="ghost"
+            className={COMPACT_BUTTON}
+            aria-label={t.connections.printer.edit}
+            title={t.connections.printer.edit}
+            onClick={onEdit}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">
+              {t.connections.printer.edit}
+            </span>
           </Button>
           <Button
             size="sm"
             variant="ghost"
+            className={COMPACT_BUTTON}
+            aria-label={t.connections.printer.remove}
+            title={t.connections.printer.remove}
             disabled={remove.isPending}
             onClick={() => {
               if (
@@ -698,8 +718,10 @@ function PrinterRow({
                 remove.mutate({ ...scope, tokenId: bridge.id, id: printer.id });
             }}
           >
-            <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-            {t.connections.printer.remove}
+            <Trash2 className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">
+              {t.connections.printer.remove}
+            </span>
           </Button>
         </div>
       )}
@@ -783,8 +805,12 @@ function PrinterDialog({
             {t.connections.printer.description}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} className="grid gap-4" {...formKeys}>
-          <div className="grid gap-2">
+        <form
+          onSubmit={submit}
+          className="grid grid-cols-1 gap-4"
+          {...formKeys}
+        >
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-name">{t.connections.printer.nameLabel}</Label>
             <Input
               id="pr-name"
@@ -796,7 +822,7 @@ function PrinterDialog({
               autoFocus
             />
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-host">{t.connections.printer.hostLabel}</Label>
             <Input
               id="pr-host"
@@ -827,7 +853,7 @@ function PrinterDialog({
                   : t.connections.printer.hostHint}
             </p>
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-auth">{t.connections.printer.authLabel}</Label>
             <Select
               value={authKind}
@@ -850,7 +876,7 @@ function PrinterDialog({
             </p>
           </div>
           {authKind === "digest" && (
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pr-user">
                 {t.connections.printer.usernameLabel}
               </Label>
@@ -864,7 +890,7 @@ function PrinterDialog({
               />
             </div>
           )}
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="pr-secret">
               {t.connections.printer.secretLabel[authKind]}
             </Label>
@@ -956,13 +982,16 @@ function RenameButton({ token }: { token: ConnectionEntry }) {
       <Button
         size="sm"
         variant="ghost"
+        className={COMPACT_BUTTON}
+        aria-label={t.connections.rename}
+        title={t.connections.rename}
         onClick={() => {
           setName(token.name);
           setOpen(true);
         }}
       >
-        <Pencil className="mr-1.5 h-3.5 w-3.5" />
-        {t.connections.rename}
+        <Pencil className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">{t.connections.rename}</span>
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1023,10 +1052,13 @@ function RevokeButton({ token }: { token: ConnectionEntry }) {
   });
   return (
     <AlertDialog>
-      <Button asChild size="sm" variant="ghost">
-        <AlertDialogTrigger>
-          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
-          {t.connections.revoke}
+      <Button asChild size="sm" variant="ghost" className={COMPACT_BUTTON}>
+        <AlertDialogTrigger
+          aria-label={t.connections.revoke}
+          title={t.connections.revoke}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{t.connections.revoke}</span>
         </AlertDialogTrigger>
       </Button>
       <AlertDialogContent>

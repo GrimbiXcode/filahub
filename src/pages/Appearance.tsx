@@ -319,8 +319,12 @@ export default function Appearance() {
             </DialogTitle>
             <DialogDescription>{t.appearance.nameHint}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitColor} {...formKeys} className="grid gap-4">
-            <div className="grid gap-2">
+          <form
+            onSubmit={submitColor}
+            {...formKeys}
+            className="grid grid-cols-1 gap-4"
+          >
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="a-color-name">{t.appearance.nameLabel}</Label>
               <Input
                 id="a-color-name"
@@ -329,7 +333,7 @@ export default function Appearance() {
                 placeholder={t.appearance.colorNamePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="a-color-hex">{t.appearance.hexLabel}</Label>
               <div className="flex items-center gap-2">
                 {/*
@@ -389,8 +393,12 @@ export default function Appearance() {
             </DialogTitle>
             <DialogDescription>{t.appearance.kindHint}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={submitTexture} {...formKeys} className="grid gap-4">
-            <div className="grid gap-2">
+          <form
+            onSubmit={submitTexture}
+            {...formKeys}
+            className="grid grid-cols-1 gap-4"
+          >
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="a-texture-name">{t.appearance.nameLabel}</Label>
               <Input
                 id="a-texture-name"
@@ -399,7 +407,7 @@ export default function Appearance() {
                 placeholder={t.appearance.textureNamePlaceholder}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="a-texture-kind">{t.appearance.kindLabel}</Label>
               <div className="flex items-center gap-2">
                 <Select

@@ -72,7 +72,7 @@ export function StockTiles({
     .slice(0, 3);
 
   return (
-    <div className="grid gap-3 md:grid-cols-12 md:gap-4">
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-12 md:gap-4">
       <Tile className="gap-2 md:col-span-5">
         <TileLabel>
           {t.home.tileRemainingTitle} ·{" "}

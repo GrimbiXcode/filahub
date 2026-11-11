@@ -150,7 +150,7 @@ export default function ProductDetail() {
           }
         />
 
-        <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
@@ -175,7 +175,7 @@ export default function ProductDetail() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="grid grid-cols-[minmax(0,9rem)_1fr] gap-x-4 gap-y-3 text-sm">
+              <dl className="grid grid-cols-[minmax(0,7.5rem)_minmax(0,1fr)] gap-x-4 sm:grid-cols-[minmax(0,9rem)_minmax(0,1fr)] [&>dd]:wrap-anywhere gap-y-3 text-sm">
                 <dt className="text-muted-foreground">
                   {t.materialDetail.materialType}
                 </dt>
@@ -333,7 +333,7 @@ function MergeCard({ product }: { product: ProductDetailData }) {
           </div>
         )}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-          <div className="grid min-w-0 flex-1 gap-2">
+          <div className="grid grid-cols-1 min-w-0 flex-1 gap-2">
             <Label htmlFor="merge-other">{t.product.mergeOther}</Label>
             <Select value={chosen} onValueChange={setChosen}>
               <SelectTrigger id="merge-other" className="w-full min-w-0">
@@ -509,8 +509,12 @@ function ProductFormDialog({
             })}
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={submit} {...formKeys} className="grid gap-4">
-          <div className="grid gap-2">
+        <form
+          onSubmit={submit}
+          {...formKeys}
+          className="grid grid-cols-1 gap-4"
+        >
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="p-name">{t.materialForm.nameLabel}</Label>
             <Input
               id="p-name"
@@ -518,8 +522,8 @@ function ProductFormDialog({
               onChange={e => setName(e.target.value)}
             />
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="p-type">{t.materialForm.materialTypeLabel}</Label>
               <AutocompleteInput
                 id="p-type"
@@ -533,7 +537,7 @@ function ProductFormDialog({
                 }
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="p-manufacturer">{t.common.manufacturer}</Label>
               <AutocompleteInput
                 id="p-manufacturer"
@@ -542,7 +546,7 @@ function ProductFormDialog({
                 suggestions={suggestionsOf(p => p.manufacturer)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="p-color">{t.common.color}</Label>
               <AutocompleteInput
                 id="p-color"
@@ -551,7 +555,7 @@ function ProductFormDialog({
                 suggestions={suggestionsOf(p => p.color)}
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="p-texture">{t.materialForm.textureLabel}</Label>
               <AutocompleteInput
                 id="p-texture"
@@ -566,7 +570,7 @@ function ProductFormDialog({
               />
             </div>
             {product.kind !== "powder" && (
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="p-density">{t.lager.densityLabel}</Label>
                 <Input
                   id="p-density"
@@ -579,7 +583,7 @@ function ProductFormDialog({
               </div>
             )}
           </div>
-          <div className="grid gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Label htmlFor="p-notes">{t.common.notes}</Label>
             <Textarea
               id="p-notes"

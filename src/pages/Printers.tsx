@@ -177,7 +177,7 @@ export default function Printers() {
         />
 
         {isLoading ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
             {[...Array(2)].map((_, i) => (
               <Skeleton key={i} className="h-40 w-full rounded-xl" />
             ))}
@@ -204,7 +204,9 @@ export default function Printers() {
                 <CardContent className="grid grid-cols-1 gap-3 p-4">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-medium">{printer.name}</p>
+                      <p className="line-clamp-2 font-medium wrap-anywhere">
+                        {printer.name}
+                      </p>
                       <Badge variant="outline" className="mt-1 font-normal">
                         {t.printers.slotsSummary({
                           loaded: printer.slots.filter(s =>
@@ -280,8 +282,12 @@ export default function Printers() {
             </DialogTitle>
             <DialogDescription>{t.printers.nameHint}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit} {...formKeys} className="grid gap-4">
-            <div className="grid gap-2">
+          <form
+            onSubmit={handleSubmit}
+            {...formKeys}
+            className="grid grid-cols-1 gap-4"
+          >
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pr-name">{t.common.nameRequiredLabel}</Label>
               <Input
                 id="pr-name"
@@ -292,7 +298,7 @@ export default function Printers() {
                 autoFocus
               />
             </div>
-            <div className="grid gap-2">
+            <div className="grid grid-cols-1 gap-2">
               <Label htmlFor="pr-slots">{t.printers.slotCountLabel}</Label>
               <Input
                 id="pr-slots"

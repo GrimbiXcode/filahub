@@ -85,7 +85,7 @@ export function LoanRequestDialog({ open, onOpenChange, material }: Props) {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-2 py-4">
+          <div className="grid grid-cols-1 gap-2 py-4">
             <Label htmlFor="loan-message">{t.loan.messageLabel}</Label>
             <Textarea
               id="loan-message"

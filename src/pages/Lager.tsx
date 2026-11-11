@@ -284,7 +284,7 @@ export default function LagerPage() {
                     <div className="flex min-w-0 items-start gap-3">
                       <Icon className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" />
                       <div className="flex min-w-0 flex-col gap-1">
-                        <span className="truncate font-medium">
+                        <span className="line-clamp-2 font-medium wrap-anywhere">
                           {item.name}
                         </span>
                         <div className="flex flex-wrap items-center gap-1.5">
@@ -379,7 +379,7 @@ export default function LagerPage() {
             </DialogHeader>
 
             <div className="flex flex-col gap-4 py-4">
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="lager-name">{t.lager.nameLabel}</Label>
                 <Input
                   id="lager-name"
@@ -389,7 +389,7 @@ export default function LagerPage() {
                 />
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="lager-kind">{t.lager.kindLabel}</Label>
                 <Select
                   value={kind}
@@ -413,7 +413,7 @@ export default function LagerPage() {
 
               {/* Die Stärke gibt es nur beim Filament – siehe lagerConfigIsValid */}
               {kind === "filament" && (
-                <div className="grid gap-2">
+                <div className="grid grid-cols-1 gap-2">
                   <Label htmlFor="lager-diameter">
                     {t.lager.diameterLabel}
                   </Label>
@@ -443,7 +443,7 @@ export default function LagerPage() {
                 </div>
               )}
 
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="lager-template">
                   {t.lager.identifierTemplateLabel}
                 </Label>
@@ -482,7 +482,7 @@ export default function LagerPage() {
                 das hier liegt – über alle seine Gebinde, auch die in anderen
                 Lagern; liegt es in mehreren, gilt die höchste Schwelle.
               */}
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="lager-low-stock">{t.lager.lowStockLabel}</Label>
                 <Input
                   id="lager-low-stock"
@@ -506,7 +506,7 @@ export default function LagerPage() {
                 </p>
               </div>
 
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <Label htmlFor="lager-notes">{t.common.notesOptional}</Label>
                 <Textarea
                   id="lager-notes"
