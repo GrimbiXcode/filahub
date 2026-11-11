@@ -949,8 +949,14 @@ Weitere pflegt der Benutzer unter `/verbindungen`; die Brücke holt es sich ab.
 - **Fertige Drucke:** FINISHED → `success`, STOPPED → `cancelled` (Gramm
   × Fortschritt, `gramsEstimated`), ERROR → `failed`; ein verschwundener Job
   nach dem letzten Fortschritt. Die Gramm aus den Metadaten der Datei
-  (`job.file.meta`, sonst `/api/v1/files/…`); ohne sie wird trotzdem
-  eingeliefert, mit `metaWarning`. Ein gemeldeter Job trägt seine ID negativ
+  (`job.file.meta`, sonst `/api/v1/files/…`, sonst der Anfang der Datei
+  selbst über `file.refs.download`); ohne sie wird trotzdem eingeliefert, mit
+  `metaWarning`. **Die Buddy-Firmware (MK4S, Core One, XL) nennt nirgends
+  Metadaten** – geprüft im Quelltext der Firmware, gefunden an einem Core One
+  (4.9.2). `metaFromPrintFileHead` liest bei bgcode bis zum ersten
+  G-Code-Block (CRC geprüft, je Block höchstens 1 MB entpackt) und bricht die
+  Übertragung dann ab, höchstens `FILE_HEAD_MAX_BYTES` (2 MB); ASCII-G-Code
+  nur aus dem Kopf – Range-Anfragen kennt die Firmware nicht. Ein gemeldeter Job trägt seine ID negativ
   – PrusaLink zeigt ihn nach FINISHED weiter an.
 - **Warteschlange** in `/data/queue.json` (Volume), solange filahub nicht
   annimmt; 4xx verwirft, 429/5xx wartet. 401/403 vom Server pausiert die
