@@ -55,6 +55,7 @@ import {
 import {
   Archive,
   Building2,
+  ChevronDown,
   Boxes,
   Database,
   Disc3,
@@ -96,6 +97,8 @@ import { QuickActionsHost } from "./QuickActions";
 import { useQuickActions } from "@/lib/quickActions";
 import { setActiveLagerId, useActiveLagerId } from "@/lib/activeLager";
 import { useReleaseNotes } from "@/hooks/useReleaseNotes";
+import { useScrollEdges } from "@/hooks/useScrollEdges";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -347,6 +350,12 @@ function AuthLayoutContent({
   // per Effekt zurückgesetzt.
   const isResizing = isDragging && !isCollapsed;
   const sidebarRef = useRef<HTMLDivElement>(null);
+  // Auf niedrigen Bildschirmen (Telefon quer, iPhone mit Fußzeile) passt die
+  // Navigation nicht ganz hinein; Verlauf und Knopf zeigen, dass darunter
+  // noch Punkte liegen – eine Liste, die genau an einer Zeilengrenze endet,
+  // sieht sonst vollständig aus.
+  const [navScroller, setNavScroller] = useState<HTMLDivElement | null>(null);
+  const navEdges = useScrollEdges(navScroller);
 
   /** Navigieren und dabei die ausgefahrene Leiste auf dem Telefon schließen */
   const go = (path: string) => {
@@ -409,169 +418,212 @@ function AuthLayoutContent({
             </div>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0">
-            {/* Ab dem Tablet stehen Bereich und Lager in der Kopfzeile
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <SidebarContent ref={setNavScroller} className="gap-0">
+              {/* Ab dem Tablet stehen Bereich und Lager in der Kopfzeile
                 (`TopBar`); hier nur noch für die ausgefahrene Leiste auf dem
                 Telefon. */}
-            <div className="md:hidden">
-              <OrganizationSwitcher />
-              <LagerSwitcher />
-            </div>
+              <div className="md:hidden">
+                <OrganizationSwitcher />
+                <LagerSwitcher />
+              </div>
 
-            {/* Häufigste Aktionen ganz oben: wiegen und suchen. Ab dem Tablet
+              {/* Häufigste Aktionen ganz oben: wiegen und suchen. Ab dem Tablet
                 trägt sie die Kopfzeile, deshalb dort ausgeblendet. */}
-            <SidebarMenu className="px-2 py-1 md:hidden">
-              {/*
+              <SidebarMenu className="px-2 py-1 md:hidden">
+                {/*
                 Der auffälligste Knopf der ganzen Oberfläche – unterhalb von
                 `weigher` gehört er weg, sonst führt der wichtigste Weg der App
                 in ein `FORBIDDEN`. Die Schnellsuche darunter bleibt: Suchen
                 darf jedes Mitglied.
               */}
-              {roleAllows(role, "weigher") && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    onClick={() => {
-                      setOpenMobile(false);
-                      openPalette("weigh");
-                    }}
-                    tooltip={t.nav.weighMaterial}
-                    className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-                  >
-                    <Scale className="h-4 w-4" />
-                    <span>{t.nav.weigh}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-              {/*
+                {roleAllows(role, "weigher") && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setOpenMobile(false);
+                        openPalette("weigh");
+                      }}
+                      tooltip={t.nav.weighMaterial}
+                      className="h-10 bg-primary font-medium text-primary-foreground hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
+                    >
+                      <Scale className="h-4 w-4" />
+                      <span>{t.nav.weigh}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
+                {/*
                 Verbrauch abbuchen (seit 2.9.0): so häufig wie Wiegen, aber
                 ohne die Hervorhebung – der auffälligste Knopf bleibt einer.
               */}
-              {roleAllows(role, "weigher") && (
+                {roleAllows(role, "weigher") && (
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setOpenMobile(false);
+                        openPalette("consume");
+                      }}
+                      tooltip={t.nav.consumeMaterial}
+                      className="h-10 font-medium"
+                    >
+                      <Printer className="h-4 w-4" />
+                      <span>{t.nav.consume}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )}
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => {
                       setOpenMobile(false);
-                      openPalette("consume");
+                      openPalette();
                     }}
-                    tooltip={t.nav.consumeMaterial}
-                    className="h-10 font-medium"
+                    tooltip={t.nav.searchWithShortcut({
+                      shortcut: searchShortcut(t),
+                    })}
+                    className="h-10 font-normal text-muted-foreground"
                   >
-                    <Printer className="h-4 w-4" />
-                    <span>{t.nav.consume}</span>
+                    <Search className="h-4 w-4" />
+                    <span>{t.common.search}</span>
+                    <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
+                      {searchShortcut(t)}
+                    </kbd>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )}
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => {
-                    setOpenMobile(false);
-                    openPalette();
-                  }}
-                  tooltip={t.nav.searchWithShortcut({
-                    shortcut: searchShortcut(t),
-                  })}
-                  className="h-10 font-normal text-muted-foreground"
-                >
-                  <Search className="h-4 w-4" />
-                  <span>{t.common.search}</span>
-                  <kbd className="ml-auto hidden rounded border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground md:inline-block">
-                    {searchShortcut(t)}
-                  </kbd>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
+              </SidebarMenu>
 
-            <SidebarSeparator className="my-2" />
+              <SidebarSeparator className="my-2" />
 
-            <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
-              {menuItems.map(item => {
-                const isActive = location.pathname === item.path;
-                /*
+              <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
+                {menuItems.map(item => {
+                  const isActive = location.pathname === item.path;
+                  /*
                   Offene Freundschafts- und Ausleih-Anfragen als Zähler. Nur
                   dieser Eintrag trägt einen – deshalb die Abfrage hier statt
                   eines `badge`-Feldes in der Tabelle oben, das bei allen
                   anderen leer bliebe.
                 */
-                const badge =
-                  item.path === FRIENDS_PATH
-                    ? pendingFriends
-                    : item.path === ORGANIZATIONS_PATH
-                      ? pendingOrganizations
-                      : item.path === PRINT_IMPORTS_PATH
-                        ? pendingImports
-                        : 0;
-                return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      isActive={isActive}
-                      onClick={() => go(item.path)}
-                      tooltip={
-                        badge === 0
-                          ? t.nav[item.label]
-                          : item.path === FRIENDS_PATH
-                            ? t.nav.friendsPending({ count: badge })
-                            : item.path === PRINT_IMPORTS_PATH
-                              ? t.nav.printInboxPending({ count: badge })
-                              : t.nav.organizationsPending({ count: badge })
-                      }
-                      className={`${railButton} font-normal`}
-                    >
-                      <span className="relative flex shrink-0 items-center justify-center">
-                        <item.icon
-                          className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
-                        />
-                        {/* Wie bei den Neuerungen: In der eingeklappten Leiste
-                            blendet SidebarMenuBadge aus, dort bleibt der Punkt. */}
-                        {badge > 0 && (
-                          <span
-                            aria-hidden
-                            className="absolute -right-1 -top-1 hidden h-2 w-2 rounded-full bg-primary group-data-[collapsible=icon]:block"
+                  const badge =
+                    item.path === FRIENDS_PATH
+                      ? pendingFriends
+                      : item.path === ORGANIZATIONS_PATH
+                        ? pendingOrganizations
+                        : item.path === PRINT_IMPORTS_PATH
+                          ? pendingImports
+                          : 0;
+                  return (
+                    <SidebarMenuItem key={item.path}>
+                      <SidebarMenuButton
+                        isActive={isActive}
+                        onClick={() => go(item.path)}
+                        tooltip={
+                          badge === 0
+                            ? t.nav[item.label]
+                            : item.path === FRIENDS_PATH
+                              ? t.nav.friendsPending({ count: badge })
+                              : item.path === PRINT_IMPORTS_PATH
+                                ? t.nav.printInboxPending({ count: badge })
+                                : t.nav.organizationsPending({ count: badge })
+                        }
+                        className={`${railButton} font-normal`}
+                      >
+                        <span className="relative flex shrink-0 items-center justify-center">
+                          <item.icon
+                            className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
                           />
-                        )}
-                      </span>
-                      <span>{t.nav[item.label]}</span>
-                    </SidebarMenuButton>
-                    {badge > 0 && (
-                      <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground">
-                        {badge}
-                      </SidebarMenuBadge>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-
-            {isAdmin && (
-              <>
-                <SidebarSeparator className="my-2" />
-                <SidebarGroup className="py-0">
-                  <SidebarGroupLabel>{t.nav.administration}</SidebarGroupLabel>
-                  <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
-                    {adminMenuItems.map(item => {
-                      const isActive = location.pathname === item.path;
-                      return (
-                        <SidebarMenuItem key={item.path}>
-                          <SidebarMenuButton
-                            isActive={isActive}
-                            onClick={() => go(item.path)}
-                            tooltip={t.nav[item.label]}
-                            className={`${railButton} font-normal`}
-                          >
-                            <item.icon
-                              className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                          {/* Wie bei den Neuerungen: In der eingeklappten Leiste
+                            blendet SidebarMenuBadge aus, dort bleibt der Punkt. */}
+                          {badge > 0 && (
+                            <span
+                              aria-hidden
+                              className="absolute -right-1 -top-1 hidden h-2 w-2 rounded-full bg-primary group-data-[collapsible=icon]:block"
                             />
-                            <span>{t.nav[item.label]}</span>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                </SidebarGroup>
-              </>
-            )}
-          </SidebarContent>
+                          )}
+                        </span>
+                        <span>{t.nav[item.label]}</span>
+                      </SidebarMenuButton>
+                      {badge > 0 && (
+                        <SidebarMenuBadge className="bg-primary text-primary-foreground peer-hover/menu-button:text-primary-foreground peer-data-[active=true]/menu-button:text-primary-foreground">
+                          {badge}
+                        </SidebarMenuBadge>
+                      )}
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
 
-          <SidebarFooter className="p-3 group-data-[collapsible=icon]:px-0">
+              {isAdmin && (
+                <>
+                  <SidebarSeparator className="my-2" />
+                  <SidebarGroup className="py-0">
+                    <SidebarGroupLabel>
+                      {t.nav.administration}
+                    </SidebarGroupLabel>
+                    <SidebarMenu className="px-2 py-1 group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:px-0">
+                      {adminMenuItems.map(item => {
+                        const isActive = location.pathname === item.path;
+                        return (
+                          <SidebarMenuItem key={item.path}>
+                            <SidebarMenuButton
+                              isActive={isActive}
+                              onClick={() => go(item.path)}
+                              tooltip={t.nav[item.label]}
+                              className={`${railButton} font-normal`}
+                            >
+                              <item.icon
+                                className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                              />
+                              <span>{t.nav[item.label]}</span>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroup>
+                </>
+              )}
+            </SidebarContent>
+            <div
+              aria-hidden
+              className={cn(
+                "pointer-events-none absolute inset-x-0 top-0 h-6 bg-linear-to-b from-sidebar to-transparent transition-opacity group-data-[collapsible=icon]:hidden",
+                navEdges.above ? "opacity-100" : "opacity-0"
+              )}
+            />
+            <div
+              className={cn(
+                "pointer-events-none absolute inset-x-0 bottom-0 flex h-14 items-end justify-center bg-linear-to-t from-sidebar via-sidebar/80 to-transparent pb-1 transition-opacity group-data-[collapsible=icon]:hidden",
+                navEdges.below ? "opacity-100" : "opacity-0"
+              )}
+            >
+              <button
+                type="button"
+                tabIndex={navEdges.below ? 0 : -1}
+                aria-hidden={!navEdges.below}
+                aria-label={t.nav.moreItems}
+                title={t.nav.moreItems}
+                onClick={() =>
+                  navScroller?.scrollBy({
+                    top: navScroller.clientHeight * 0.7,
+                    behavior: "smooth",
+                  })
+                }
+                className={cn(
+                  "flex items-center gap-1 rounded-full border bg-sidebar px-3 py-1 text-xs text-muted-foreground shadow-sm transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring focus:outline-hidden",
+                  navEdges.below && "pointer-events-auto"
+                )}
+              >
+                <ChevronDown className="h-3.5 w-3.5 animate-bounce" />
+                {t.nav.moreItems}
+              </button>
+            </div>
+          </div>
+
+          <SidebarFooter
+            className={cn(
+              "border-t border-transparent p-3 transition-colors group-data-[collapsible=icon]:px-0",
+              navEdges.below && "border-sidebar-border"
+            )}
+          >
             <SidebarMenu className="group-data-[collapsible=icon]:items-center">
               <SidebarMenuItem>
                 <SidebarMenuButton

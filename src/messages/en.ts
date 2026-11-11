@@ -85,6 +85,7 @@ export const en: Messages = {
       `Search (${vars.shortcut})`,
     releaseNotesUnread: (vars: { count: number }) =>
       `What's new (${vars.count} unread)`,
+    moreItems: "More menu items",
     toggleSidebar: "Show or hide the navigation",
     signOut: "Sign out",
   },
