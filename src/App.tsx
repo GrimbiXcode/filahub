@@ -167,8 +167,13 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
       {/* Auf dem Telefon oben: unten rechts würde die Meldung den
-          Aktionsknopf über der Materialliste verdecken. */}
-      <Toaster richColors position={isMobile ? "top-center" : "bottom-right"} />
+          Aktionsknopf über der Materialliste verdecken. Der Abstand nach oben
+          rechnet die Statusleiste mit (siehe `pt-safe` in index.css). */}
+      <Toaster
+        richColors
+        position={isMobile ? "top-center" : "bottom-right"}
+        mobileOffset={{ top: "calc(env(safe-area-inset-top) + 16px)" }}
+      />
     </ErrorBoundary>
   );
 }

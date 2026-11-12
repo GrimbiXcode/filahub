@@ -115,6 +115,17 @@
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+@utility pt-safe {
+  /*
+    Platz für die Statusleiste. Die App vom Home-Bildschirm legt iOS je nach
+    Start unter die Statusleiste, obwohl `apple-mobile-web-app-status-bar-style`
+    auf `default` steht – dann lag die Kopfzeile unerreichbar dahinter, und die
+    Seite liess sich scheinbar nicht ganz nach oben scrollen. Außerhalb dieses
+    Falls ist der Wert 0, die Klasse kostet also nichts.
+  */
+  padding-top: env(safe-area-inset-top);
+}
+
 @layer base {
   /*
     Die Palette der Neugestaltung 3.0 („Spulen-Cockpit“): kühle Grautöne mit
