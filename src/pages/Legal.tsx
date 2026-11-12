@@ -29,8 +29,8 @@ export default function Legal({ document }: { document: LegalDocument }) {
     text && operator ? fillOperator(text.body, operator) : text?.body;
 
   return (
-    <div className="flex min-h-screen justify-center p-4 sm:p-6">
-      <div className="fixed right-3 top-3">
+    <div className="flex min-h-screen justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:p-6">
+      <div className="fixed right-3 top-[max(0.75rem,env(safe-area-inset-top))]">
         <ThemeToggle />
       </div>
 

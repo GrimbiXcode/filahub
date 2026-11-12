@@ -38,7 +38,7 @@ export function TopBar() {
   const { openMaterialForm, openPalette } = useQuickActions();
 
   return (
-    <div className="sticky top-0 z-30 hidden h-16 items-center gap-2 border-b border-border/60 bg-background/95 px-4 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:flex lg:px-6">
+    <div className="pt-safe sticky top-0 z-30 hidden h-[calc(4rem+env(safe-area-inset-top))] items-center gap-2 border-b border-border/60 bg-background/95 px-4 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:flex lg:px-6">
       <ScopePill />
       <LagerPill />
       <IdentifierLookup compact className="min-w-0 max-w-md flex-1" />

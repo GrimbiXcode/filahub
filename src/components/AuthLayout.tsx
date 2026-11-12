@@ -745,8 +745,9 @@ function AuthLayoutContent({
             Handgriffe – per CSS ausgeblendet, nicht per Hook, damit beim
             ersten Rendern nichts springt. */}
         <TopBar />
-        {/* Kopfzeile nur auf schmalen Geräten – ebenfalls per CSS. */}
-        <div className="sticky top-0 z-40 flex h-14 items-center gap-1 border-b bg-background/95 px-2 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:hidden">
+        {/* Kopfzeile nur auf schmalen Geräten – ebenfalls per CSS. Die Höhe
+            wächst um die Statusleiste (`pt-safe`, siehe index.css). */}
+        <div className="pt-safe sticky top-0 z-40 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-1 border-b bg-background/95 px-2 backdrop-blur-sm supports-backdrop-filter:bg-background/80 md:hidden">
           <SidebarTrigger className="size-10 rounded-lg" />
           <span className="min-w-0 flex-1 truncate font-medium tracking-tight">
             {titleForPath(location.pathname, t)}

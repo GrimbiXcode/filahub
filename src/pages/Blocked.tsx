@@ -58,7 +58,7 @@ export default function Blocked() {
   const reason = data?.blockedReason as BlockReason | null | undefined;
 
   return (
-    <div className="flex min-h-screen items-start justify-center p-4 sm:items-center sm:p-6">
+    <div className="flex min-h-screen items-start justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:items-center sm:p-6">
       <div className="flex w-full max-w-xl flex-col gap-4">
         <Card>
           <CardHeader>
