@@ -24,6 +24,12 @@ export type FakePrusaLinkState = {
     metaOnlyInFiles?: boolean;
     /** Inhalt der Datei unter `/usb/<fileName>`; sonst 404 */
     fileBytes?: Uint8Array;
+    /**
+     * Kurzname (8.3) wie in der Buddy-Firmware: `name` und `refs.download`
+     * nennen ihn, die Datei liegt aber nur unter dem langen Namen
+     * (veraltete Kurzform nach dem Ersetzen einer gleichnamigen Datei).
+     */
+    shortName?: string;
     /** So viele Downloads zuerst mit 503 beantworten (Drucker beschäftigt) */
     fileBusy?: number;
   } | null;
@@ -114,10 +120,10 @@ export async function startFakePrusaLink(initial: FakePrusaLinkState) {
         progress: job.progress,
         time_printing: job.timePrinting,
         file: {
-          name: job.fileName,
+          name: job.shortName ?? job.fileName,
           display_name: job.fileName,
           path: "/usb",
-          refs: { download: `/usb/${job.fileName}` },
+          refs: { download: `/usb/${job.shortName ?? job.fileName}` },
           ...(job.meta && !job.metaOnlyInFiles ? { meta: job.meta } : {}),
         },
       });

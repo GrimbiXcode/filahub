@@ -30,7 +30,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { crc32, inflateSync } from "node:zlib";
 
-export const BRIDGE_VERSION = "4.9.5";
+export const BRIDGE_VERSION = "4.9.6";
 export const BRIDGE_PROTOCOL = 1;
 
 // ---------------------------------------------------------------------------
@@ -157,6 +157,15 @@ const BGCODE_MAX_BLOCKS = 256;
  * MMU-Plätze, Laden des Filaments) und beantwortet den Download nicht.
  */
 const META_ATTEMPTS = 6;
+/**
+ * ASCII-G-Code nennt den Verbrauch erst am Ende (PrusaSlicer 3.0 auch nicht
+ * mehr im Kopf). Range-Anfragen kennt die Buddy-Firmware nicht: Nach dem
+ * Druck – der Drucker ist dann frei – wird die ganze Datei durchgereicht und
+ * nur ihr Ende behalten. Im Hintergrund, damit die Meldungen weiterlaufen.
+ */
+export const GCODE_TAIL_BYTES = 512 * 1024;
+const GCODE_TAIL_MAX_FILE_BYTES = 512 * 1024 * 1024;
+const GCODE_TAIL_TIMEOUT_MS = 30 * 60_000;
 const META_RETRY_BASE_MS = 30_000;
 const BGCODE_MAX_METADATA_BYTES = 1024 * 1024;
 const FILAHUB_TIMEOUT_MS = 15_000;
@@ -292,12 +301,46 @@ export function metaFromPrintFileHead(
   if (text.includes("\u0000"))
     throw new PrintFileHeadError("weder G-Code noch Binär-G-Code");
   const meta: Record<string, string> = {};
+  // Der Kopf endet mit dem ersten Befehl – danach kommt nur noch G-Code
+  let reachedGcode = false;
   for (const line of text.split(/\r?\n/)) {
     const match = line.match(/^; ([^=;]+?) = (.*)$/);
     if (match) meta[match[1]] = match[2].trim();
+    else if (/^[GMT]\d/.test(line)) {
+      reachedGcode = true;
+      break;
+    }
   }
   if (meta["filament used [g]"] !== undefined) return meta;
-  return complete ? (Object.keys(meta).length ? meta : null) : "more";
+  if (!complete && !reachedGcode) return "more";
+  return Object.keys(meta).length ? meta : null;
+}
+
+/** `true`, wenn der Anfang zu Binär-G-Code gehört */
+export function isBgcodeHead(bytes: Uint8Array): boolean {
+  return (
+    bytes.length >= 4 &&
+    Buffer.from(bytes.buffer, bytes.byteOffset, 4).toString("latin1") === "GCDE"
+  );
+}
+
+/**
+ * Kommentarzeilen `; key = value` aus dem Ende einer ASCII-Datei. Die erste
+ * Zeile ist angeschnitten und fällt weg, außer das Ende ist die ganze Datei.
+ */
+export function metaFromGcodeTail(
+  bytes: Uint8Array,
+  wholeFile: boolean
+): Record<string, string> {
+  const text = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length)
+    .toString("utf8")
+    .split(/\r?\n/);
+  const meta: Record<string, string> = {};
+  for (let i = wholeFile ? 0 : 1; i < text.length; i++) {
+    const match = text[i].match(/^; ([^=;]+?) = (.*)$/);
+    if (match) meta[match[1]] = match[2].trim();
+  }
+  return meta;
 }
 
 function bgcodeMeta(
@@ -602,6 +645,47 @@ export class PrusaLinkClient {
     }
   }
 
+  /**
+   * Reicht eine ganze Datei durch und behält nur die letzten `tailBytes` –
+   * für ASCII-G-Code, dessen Verbrauch erst am Ende steht.
+   */
+  async readFileTail(
+    path: string,
+    tailBytes: number
+  ): Promise<{ tail: Uint8Array; total: number }> {
+    const response = await this.request(
+      path,
+      "application/octet-stream",
+      GCODE_TAIL_TIMEOUT_MS
+    );
+    const reader = response.body?.getReader();
+    if (!reader) return { tail: new Uint8Array(0), total: 0 };
+    let chunks: Uint8Array[] = [];
+    let kept = 0;
+    let total = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.length;
+        if (total > GCODE_TAIL_MAX_FILE_BYTES)
+          throw new PrusaLinkError("error", "Datei zu groß", null);
+        chunks.push(value);
+        kept += value.length;
+        // Erst bei doppelter Menge kürzen – nicht bei jedem Stück kopieren
+        if (kept > tailBytes * 2) {
+          const merged = Buffer.concat(chunks, kept);
+          chunks = [merged.subarray(kept - tailBytes)];
+          kept = tailBytes;
+        }
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    const merged = Buffer.concat(chunks, kept);
+    return { tail: merged.subarray(Math.max(0, kept - tailBytes)), total };
+  }
+
   async send(
     url: URL,
     auth: Record<string, string>,
@@ -676,6 +760,10 @@ type JobTrack = {
   filePath: string | null;
   /** `file.refs.download` – die Datei selbst, z. B. `/usb/BENCHY~1.BGC` */
   downloadPath: string | null;
+  /** Statt der Kurzform: der lange Name im selben Verzeichnis */
+  longPath: string | null;
+  /** ASCII-G-Code ohne Verbrauch im Kopf: nach dem Druck das Ende lesen */
+  needsTail: boolean;
   meta: Record<string, unknown> | null;
   metaTried: boolean;
   /** Versuche, die Datei selbst zu lesen, und wann der nächste dran ist */
@@ -719,6 +807,10 @@ export class Bridge {
   config: BridgeConfig | null = null;
   printers = new Map<number, PrinterRuntime>();
   queue: PrintImport[] = [];
+  /** Laufende Lesevorgänge nach dem Druck (Ende einer ASCII-Datei) */
+  background = new Set<Promise<void>>();
+  /** Beim Herunterfahren: Drucke, deren Ende noch gelesen wird, ohne Gramm vormerken */
+  abandon = new Set<() => void>();
   log: LogLine[] = [];
   lastConfigAt = 0;
   /** Bis wann der Server nicht gefragt wird (Schlüssel ungültig) */
@@ -1019,6 +1111,8 @@ export class Bridge {
         fileName: null,
         filePath: null,
         downloadPath: null,
+        longPath: null,
+        needsTail: false,
         meta: null,
         metaTried: false,
         metaAttempts: 0,
@@ -1069,6 +1163,11 @@ export class Bridge {
         typeof download === "string" && /^\/[^/]/.test(download)
           ? download
           : track.filePath;
+      track.longPath =
+        job?.file?.path && job.file.display_name
+          ? `${job.file.path.replace(/\/$/, "")}/${job.file.display_name}`
+          : null;
+      if (track.longPath === track.downloadPath) track.longPath = null;
       track.meta = job?.file?.meta ?? null;
     } catch (error) {
       this.write(
@@ -1097,6 +1196,7 @@ export class Bridge {
    */
   async readFileMeta(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
     if (filamentsFromMeta(track.meta) || !track.downloadPath) return;
+    if (track.needsTail) return; // der Kopf hilft nicht, das Ende kommt nach dem Druck
     if (track.metaAttempts >= META_ATTEMPTS + (final ? 1 : 0)) return;
     if (!final && this.now() < track.nextMetaAt) return;
     track.metaAttempts += 1;
@@ -1105,9 +1205,13 @@ export class Bridge {
     const name = runtime.config.name;
     let reason: string;
     try {
-      const meta = await runtime.client.readFileHead(
-        encodeURI(track.downloadPath),
-        metaFromPrintFileHead
+      let bgcode = false;
+      const parse = (bytes: Uint8Array, complete: boolean) => {
+        bgcode = isBgcodeHead(bytes);
+        return metaFromPrintFileHead(bytes, complete);
+      };
+      const meta = await this.withFilePath(runtime, track, path =>
+        runtime.client.readFileHead(path, parse)
       );
       if (meta) track.meta = { ...meta, ...(track.meta ?? {}) };
       if (filamentsFromMeta(track.meta)) {
@@ -1116,6 +1220,14 @@ export class Bridge {
             "info",
             `Drucker „${name}“: Filamentverbrauch im ${track.metaAttempts}. Versuch gelesen`
           );
+        return;
+      }
+      if (!bgcode) {
+        track.needsTail = true;
+        this.write(
+          "info",
+          `Drucker „${name}“: G-Code nennt den Verbrauch erst am Ende – die Datei wird nach dem Druck gelesen`
+        );
         return;
       }
       // Nur Schlüsselnamen, nie Werte – sie sagen, was der Slicer schrieb
@@ -1138,12 +1250,98 @@ export class Bridge {
     track.lastMetaError = reason;
   }
 
+  /**
+   * Erst die Kurzform aus `refs.download`, bei 404 der lange Name im selben
+   * Verzeichnis – die Kurzform kann veraltet sein, wenn eine gleichnamige
+   * Datei kurz vorher ersetzt wurde.
+   */
+  async withFilePath<T>(
+    runtime: PrinterRuntime,
+    track: JobTrack,
+    read: (path: string) => Promise<T>
+  ): Promise<T> {
+    try {
+      return await read(encodeURI(track.downloadPath ?? ""));
+    } catch (error) {
+      const notFound =
+        error instanceof PrusaLinkError && error.httpStatus === 404;
+      if (!notFound || !track.longPath) throw error;
+      return await read(encodeURI(track.longPath));
+    }
+  }
+
+  /** Ende einer ASCII-Datei lesen und mit dem Kopf zusammenführen */
+  async readTail(runtime: PrinterRuntime, track: JobTrack) {
+    const name = runtime.config.name;
+    try {
+      const { tail, total } = await this.withFilePath(runtime, track, path =>
+        runtime.client.readFileTail(path, GCODE_TAIL_BYTES)
+      );
+      track.meta = {
+        ...(track.meta ?? {}),
+        ...metaFromGcodeTail(tail, total <= tail.length),
+      };
+      if (filamentsFromMeta(track.meta))
+        this.write(
+          "info",
+          `Drucker „${name}“: Filamentverbrauch aus dem Ende der Datei gelesen (${(total / 1024 / 1024).toFixed(1)} MB)`
+        );
+      else
+        this.write(
+          "warn",
+          `Drucker „${name}“: Filamentverbrauch nicht gelesen – auch am Ende der Datei steht kein „filament used [g]“`
+        );
+    } catch (error) {
+      this.write(
+        "warn",
+        `Drucker „${name}“: Filamentverbrauch nicht gelesen – Ende der Datei nicht lesbar: ${(error as Error).message}`
+      );
+    }
+  }
+
+  /** Bis alle Lesevorgänge im Hintergrund fertig sind (Tests, Herunterfahren) */
+  async settle(): Promise<void> {
+    while (this.background.size > 0) await Promise.all(this.background);
+  }
+
   finishJob(
     runtime: PrinterRuntime,
     track: JobTrack,
     printerState: string | null
   ) {
     if (track.jobId < 0) return;
+    const endedAt = this.now();
+    if (track.needsTail && !filamentsFromMeta(track.meta)) {
+      const snapshot = { ...track };
+      this.write(
+        "info",
+        `Drucker „${runtime.config.name}“: Druck ${track.jobId} beendet – lese das Ende der Datei`
+      );
+      let done = false;
+      const enqueue = () => {
+        if (done) return;
+        done = true;
+        this.enqueueImport(runtime, snapshot, printerState, endedAt);
+      };
+      const task = this.readTail(runtime, snapshot)
+        .then(enqueue)
+        .finally(() => {
+          this.background.delete(task);
+          this.abandon.delete(enqueue);
+        });
+      this.background.add(task);
+      this.abandon.add(enqueue);
+      return;
+    }
+    this.enqueueImport(runtime, track, printerState, endedAt);
+  }
+
+  enqueueImport(
+    runtime: PrinterRuntime,
+    track: JobTrack,
+    printerState: string | null,
+    endedAt: number
+  ) {
     const progress = track.progress;
     const status: PrintImport["status"] =
       printerState === "FINISHED"
@@ -1168,13 +1366,13 @@ export class Bridge {
       ? null
       : "Zu dieser Datei war kein Filamentverbrauch lesbar – Gramm im Eingangsfach eintragen";
     const started = new Date(
-      this.now() - (track.timePrinting ?? 0) * 1000
+      endedAt - (track.timePrinting ?? 0) * 1000
     ).toISOString();
     const item: PrintImport = {
       source: "printer",
       externalKey: `prusalink:${runtime.info?.serial ?? `printer-${runtime.config.id}`}:${track.jobId}:${started.slice(0, 15)}`,
       title: titleFromFileName(track.fileName ?? `Druck ${track.jobId}`),
-      printedAt: new Date(this.now()).toISOString(),
+      printedAt: new Date(endedAt).toISOString(),
       status,
       progressPercent:
         progress === null
@@ -1333,6 +1531,8 @@ export class Bridge {
       );
       await new Promise(resolve => setTimeout(resolve, 3_000));
     }
+    // Ein Druck geht nicht verloren, nur weil sein Ende noch gelesen wurde
+    for (const enqueue of [...this.abandon]) enqueue();
     await this.saveQueue();
   }
 }

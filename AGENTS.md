@@ -961,7 +961,17 @@ Weitere pflegt der Benutzer unter `/verbindungen`; die Brücke holt es sich ab.
   und 8 min, und ein letztes Mal beim Ende – beim Start beantwortet der
   Drucker den Download oft nicht (Vorschau, MMU-Zuordnung, Laden). Das
   Protokoll nennt den Grund (`PrintFileHeadError`, fehlende Schlüssel nur
-  mit Namen, nie Werten). Ein gemeldeter Job trägt seine ID negativ
+  mit Namen, nie Werten). **ASCII-G-Code** (seit 4.9.6): PrusaSlicer 3.0
+  schreibt den Verbrauch nicht mehr in den Kopf. Der Kopf wird nur bis zum
+  ersten Befehl gelesen; fehlt der Verbrauch dort, reicht die Brücke **nach
+  dem Druck** die ganze Datei durch und behält die letzten 512 KB
+  (`readFileTail`, höchstens 512 MB, 30 min) – im Hintergrund
+  (`background`, `settle` für Tests), damit die Meldungen weiterlaufen.
+  Beim Herunterfahren wird ein solcher Druck ohne Gramm vorgemerkt
+  (`abandon`), statt verloren zu gehen. Wird die Kurzform aus
+  `refs.download` nicht gefunden (veraltet, wenn eine gleichnamige Datei
+  kurz vorher ersetzt wurde), versucht `withFilePath` den langen Namen im
+  selben Verzeichnis. Ein gemeldeter Job trägt seine ID negativ
   – PrusaLink zeigt ihn nach FINISHED weiter an.
 - **Warteschlange** in `/data/queue.json` (Volume), solange filahub nicht
   annimmt; 4xx verwirft, 429/5xx wartet. 401/403 vom Server pausiert die
