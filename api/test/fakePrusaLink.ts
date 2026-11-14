@@ -24,6 +24,8 @@ export type FakePrusaLinkState = {
     metaOnlyInFiles?: boolean;
     /** Inhalt der Datei unter `/usb/<fileName>`; sonst 404 */
     fileBytes?: Uint8Array;
+    /** So viele Downloads zuerst mit 503 beantworten (Drucker beschäftigt) */
+    fileBusy?: number;
   } | null;
   /** Statt PrusaLink: ein anderer Dienst */
   mode: "prusalink" | "not_found" | "html";
@@ -123,6 +125,11 @@ export async function startFakePrusaLink(initial: FakePrusaLinkState) {
     if (path.startsWith("/api/v1/files/") && job?.metaOnlyInFiles)
       return json({ name: job.fileName, meta: job.meta });
     if (job?.fileBytes && path === `/usb/${encodeURI(job.fileName)}`) {
+      if (job.fileBusy) {
+        job.fileBusy -= 1;
+        res.writeHead(503);
+        return res.end();
+      }
       res.writeHead(200, { "content-type": "application/octet-stream" });
       return res.end(Buffer.from(job.fileBytes));
     }

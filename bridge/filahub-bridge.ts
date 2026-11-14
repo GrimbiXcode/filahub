@@ -30,7 +30,7 @@ import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { crc32, inflateSync } from "node:zlib";
 
-export const BRIDGE_VERSION = "4.9.4";
+export const BRIDGE_VERSION = "4.9.5";
 export const BRIDGE_PROTOCOL = 1;
 
 // ---------------------------------------------------------------------------
@@ -150,6 +150,14 @@ const FILE_HEAD_TIMEOUT_MS = 45_000;
  */
 export const FILE_HEAD_MAX_BYTES = 2 * 1024 * 1024;
 const BGCODE_MAX_BLOCKS = 256;
+/**
+ * Versuche, die Gramm aus der Datei zu lesen: beim ersten Sehen des Drucks,
+ * dann mit wachsendem Abstand (30 s, 1, 2, 4, 8 min) und ein letztes Mal beim
+ * Ende. Beim Start ist der Drucker oft beschäftigt (Vorschau, Zuordnung der
+ * MMU-Plätze, Laden des Filaments) und beantwortet den Download nicht.
+ */
+const META_ATTEMPTS = 6;
+const META_RETRY_BASE_MS = 30_000;
 const BGCODE_MAX_METADATA_BYTES = 1024 * 1024;
 const FILAHUB_TIMEOUT_MS = 15_000;
 /** Wird je Durchlauf beschrieben; der HEALTHCHECK prüft sein Alter */
@@ -252,6 +260,9 @@ export function filamentsFromMeta(
   return result;
 }
 
+/** Eine Druckdatei, deren Kopf sich nicht lesen lässt – mit Grund fürs Protokoll */
+export class PrintFileHeadError extends Error {}
+
 /**
  * Metadaten aus dem Anfang einer Druckdatei – für PrusaLink in der
  * Buddy-Firmware (MK4S, Core One, XL), die weder am Job noch in der
@@ -265,6 +276,8 @@ export function filamentsFromMeta(
  *   PrusaLink in der Buddy-Firmware kennt keine Range-Anfragen.
  *
  * Ergebnis `"more"`: Es fehlen Bytes, `complete` sagt, dass keine mehr kommen.
+ * `null`: keine Angaben eines Slicers. Eine kaputte oder unbekannte Datei
+ * wirft `PrintFileHeadError` mit dem Grund.
  */
 export function metaFromPrintFileHead(
   bytes: Uint8Array,
@@ -276,7 +289,8 @@ export function metaFromPrintFileHead(
     return bgcodeMeta(buffer, complete);
   const end = complete ? buffer.length : buffer.lastIndexOf(0x0a) + 1;
   const text = buffer.subarray(0, end).toString("utf8");
-  if (text.includes("\u0000")) return null;
+  if (text.includes("\u0000"))
+    throw new PrintFileHeadError("weder G-Code noch Binär-G-Code");
   const meta: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
     const match = line.match(/^; ([^=;]+?) = (.*)$/);
@@ -295,7 +309,10 @@ function bgcodeMeta(
   if (buffer.length < 10) return partial({});
   const version = buffer.readUInt32LE(4);
   const checksumType = buffer.readUInt16LE(8);
-  if (version !== 1 || checksumType > 1) return null;
+  if (version !== 1 || checksumType > 1)
+    throw new PrintFileHeadError(
+      `bgcode-Fassung ${version}, Prüfsummenart ${checksumType} unbekannt`
+    );
   const checksumBytes = checksumType === 1 ? 4 : 0;
   const meta: Record<string, string> = {};
   let offset = 10;
@@ -310,7 +327,7 @@ function bgcodeMeta(
     const compression = buffer.readUInt16LE(offset + 2);
     const uncompressedSize = buffer.readUInt32LE(offset + 4);
     if (type === 1) return meta; // G-Code: alle Metadaten gelesen
-    if (type > 5) return null;
+    if (type > 5) throw new PrintFileHeadError(`unbekannter Blocktyp ${type}`);
     const headerSize = compression === 0 ? 8 : 12;
     const dataSize =
       compression === 0 ? uncompressedSize : buffer.readUInt32LE(offset + 8);
@@ -321,7 +338,7 @@ function bgcodeMeta(
         uncompressedSize > BGCODE_MAX_METADATA_BYTES ||
         dataSize > BGCODE_MAX_METADATA_BYTES
       )
-        return null;
+        throw new PrintFileHeadError("Metadaten-Block zu groß");
       if (offset + blockSize + checksumBytes > buffer.length)
         return partial(meta);
       const block = buffer.subarray(offset, offset + blockSize);
@@ -329,7 +346,7 @@ function bgcodeMeta(
         checksumBytes &&
         crc32(block) !== buffer.readUInt32LE(offset + blockSize)
       )
-        return null;
+        throw new PrintFileHeadError(`Prüfsumme von Block ${type} falsch`);
       const encoding = block.readUInt16LE(headerSize);
       const data = block.subarray(headerSize + paramsSize);
       let text: string | null = null;
@@ -340,9 +357,15 @@ function bgcodeMeta(
             maxOutputLength: BGCODE_MAX_METADATA_BYTES,
           }).toString("utf8");
       } catch {
-        return null;
+        throw new PrintFileHeadError(
+          `Block ${type} lässt sich nicht entpacken`
+        );
       }
-      if (encoding === 0 && text !== null) {
+      if (text === null)
+        throw new PrintFileHeadError(
+          `Block ${type}: Kompression ${compression} unbekannt`
+        );
+      if (encoding === 0) {
         for (const line of text.split(/\r?\n/)) {
           const index = line.indexOf("=");
           if (index > 0)
@@ -352,7 +375,7 @@ function bgcodeMeta(
     }
     offset += blockSize + checksumBytes;
   }
-  return null;
+  throw new PrintFileHeadError("zu viele Blöcke vor dem G-Code");
 }
 
 /** Fehlerursache aus `fetch` → Diagnosekennung */
@@ -655,6 +678,10 @@ type JobTrack = {
   downloadPath: string | null;
   meta: Record<string, unknown> | null;
   metaTried: boolean;
+  /** Versuche, die Datei selbst zu lesen, und wann der nächste dran ist */
+  metaAttempts: number;
+  nextMetaAt: number;
+  lastMetaError: string | null;
   progress: number | null;
   timePrinting: number | null;
   firstSeenAt: number;
@@ -977,6 +1004,7 @@ export class Bridge {
 
     // Ein erledigter Job trägt seine ID negativ (siehe unten)
     if (current && (jobId === null || jobId !== Math.abs(current.jobId))) {
+      if (current.jobId > 0) await this.readFileMeta(runtime, current, true);
       this.finishJob(runtime, current, current.lastPrinterState);
       runtime.job = null;
     }
@@ -993,6 +1021,9 @@ export class Bridge {
         downloadPath: null,
         meta: null,
         metaTried: false,
+        metaAttempts: 0,
+        nextMetaAt: 0,
+        lastMetaError: null,
         progress: null,
         timePrinting: null,
         firstSeenAt: this.now(),
@@ -1009,6 +1040,7 @@ export class Bridge {
     if (typeof job?.time_printing === "number")
       track.timePrinting = Math.round(job.time_printing);
     track.lastPrinterState = printerState;
+    await this.readFileMeta(runtime, track, ended);
     if (ended) {
       this.finishJob(runtime, track, printerState);
       // Erledigt merken, damit derselbe Job nicht noch einmal gemeldet wird
@@ -1055,27 +1087,55 @@ export class Bridge {
         // Die Buddy-Firmware kennt die Route mit Metadaten nicht – weiter unten
       }
     }
-    // Die Buddy-Firmware (MK4S, Core One, XL) nennt nirgends Metadaten: den
-    // Anfang der Datei selbst lesen. Bei bgcode stehen sie vor dem G-Code.
-    if (!filamentsFromMeta(track.meta) && track.downloadPath) {
-      try {
-        const meta = await runtime.client.readFileHead(
-          encodeURI(track.downloadPath),
-          metaFromPrintFileHead
-        );
-        if (meta) track.meta = { ...meta, ...(track.meta ?? {}) };
-        if (!filamentsFromMeta(track.meta))
+  }
+
+  /**
+   * Die Buddy-Firmware (MK4S, Core One, XL) nennt nirgends Metadaten: den
+   * Anfang der Datei selbst lesen. Bei bgcode stehen sie vor dem G-Code.
+   * Wiederholt mit wachsendem Abstand; `final` ist der letzte Versuch beim
+   * Ende des Drucks und wartet den Abstand nicht ab.
+   */
+  async readFileMeta(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
+    if (filamentsFromMeta(track.meta) || !track.downloadPath) return;
+    if (track.metaAttempts >= META_ATTEMPTS + (final ? 1 : 0)) return;
+    if (!final && this.now() < track.nextMetaAt) return;
+    track.metaAttempts += 1;
+    track.nextMetaAt =
+      this.now() + META_RETRY_BASE_MS * 2 ** (track.metaAttempts - 1);
+    const name = runtime.config.name;
+    let reason: string;
+    try {
+      const meta = await runtime.client.readFileHead(
+        encodeURI(track.downloadPath),
+        metaFromPrintFileHead
+      );
+      if (meta) track.meta = { ...meta, ...(track.meta ?? {}) };
+      if (filamentsFromMeta(track.meta)) {
+        if (track.metaAttempts > 1)
           this.write(
-            "warn",
-            `Drucker „${runtime.config.name}“: In der Datei steht kein Filamentverbrauch`
+            "info",
+            `Drucker „${name}“: Filamentverbrauch im ${track.metaAttempts}. Versuch gelesen`
           );
-      } catch (error) {
-        this.write(
-          "warn",
-          `Drucker „${runtime.config.name}“: Datei des Drucks nicht lesbar (${(error as Error).message})`
-        );
+        return;
       }
+      // Nur Schlüsselnamen, nie Werte – sie sagen, was der Slicer schrieb
+      const keys = Object.keys(meta ?? {})
+        .filter(key => /filament/i.test(key))
+        .slice(0, 8);
+      reason = meta
+        ? `kein „filament used [g]“ in der Datei${keys.length ? ` (vorhanden: ${keys.join(", ")})` : ""}`
+        : "keine Angaben eines Slicers in der Datei";
+    } catch (error) {
+      reason = `Datei nicht lesbar: ${(error as Error).message}`;
     }
+    const last = track.metaAttempts >= META_ATTEMPTS || final;
+    // Derselbe Grund nicht bei jedem Versuch ins Protokoll
+    if (reason !== track.lastMetaError || last)
+      this.write(
+        "warn",
+        `Drucker „${name}“: Filamentverbrauch nicht gelesen, ${track.metaAttempts}. Versuch – ${reason}${last ? "" : " (neuer Versuch folgt)"}`
+      );
+    track.lastMetaError = reason;
   }
 
   finishJob(
