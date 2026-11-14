@@ -18,6 +18,7 @@ import {
 import { detectPrintFile } from "@contracts/printFiles";
 import {
   MAX_INGEST_BODY_BYTES,
+  PRINT_IMPORT_PREVIEW_INGEST_ROUTE,
   printImportInputSchema,
 } from "@contracts/printImports";
 import type { ApiToken } from "@db/schema";
@@ -290,7 +291,7 @@ export function registerIngestRoutes(app: App) {
     Bilder, keine Metadaten, Maße vom Server gelesen, Kontingent des Bereichs
     nach der Bereichsprüfung und noch einmal unter Sperre.
   */
-  app.post("/api/ingest/print-imports/:id/preview", async c => {
+  app.post(PRINT_IMPORT_PREVIEW_INGEST_ROUTE, async c => {
     const auth = await authenticate(c, {
       bridgeOnly: false,
       bucket: "ingest_preview",

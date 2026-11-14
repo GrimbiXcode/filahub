@@ -302,6 +302,17 @@ export function filamentsFromMeta(
   return result;
 }
 
+/**
+ * Eine Vorschau, die nie brauchbar wird (zu groß) – kein weiterer Versuch,
+ * anders als bei einem beschäftigten Drucker.
+ */
+export class PreviewUnusableError extends Error {}
+
+/** Wohin die Vorschau eines Eintrags geht (Gegenstück: `printImportPreviewIngestPath`) */
+export function previewIngestPath(importId: number): string {
+  return `/api/ingest/print-imports/${importId}/preview`;
+}
+
 /** Eine Druckdatei, deren Kopf sich nicht lesen lässt – mit Grund fürs Protokoll */
 export class PrintFileHeadError extends Error {}
 
@@ -741,7 +752,9 @@ export class PrusaLinkClient {
         if (done) break;
         length += value.length;
         if (length > maxBytes)
-          throw new PrusaLinkError("error", "Vorschau zu groß", null);
+          throw new PreviewUnusableError(
+            `Vorschau größer als ${Math.round(maxBytes / 1024)} KB`
+          );
         chunks.push(value);
       }
     } finally {
@@ -929,6 +942,8 @@ type JobTrack = {
   previewDone: boolean;
   previewAttempts: number;
   nextPreviewAt: number;
+  /** Ein laufender Versuch im Hintergrund – die Abfrage wartet nicht darauf */
+  previewTask: Promise<void> | null;
   meta: Record<string, unknown> | null;
   metaTried: boolean;
   /** Versuche, die Datei selbst zu lesen, und wann der nächste dran ist */
@@ -1271,10 +1286,12 @@ export class Bridge {
 
     // Ein erledigter Job trägt seine ID negativ (siehe unten)
     if (current && (jobId === null || jobId !== Math.abs(current.jobId))) {
-      if (current.jobId > 0) {
-        await this.readFileMeta(runtime, current, true);
-        await this.readPreview(runtime, current, true);
-      }
+      /*
+        Keine letzte Vorschau: Der Job ist verschwunden, die Datei womöglich
+        gelöscht oder schon der nächste Druck dran – ein 404 hieße dann nicht
+        „keine Vorschau in der Datei“. Ein laufender Versuch zählt noch.
+      */
+      if (current.jobId > 0) await this.readFileMeta(runtime, current, true);
       this.finishJob(runtime, current, current.lastPrinterState);
       runtime.job = null;
     }
@@ -1297,6 +1314,7 @@ export class Bridge {
         previewDone: false,
         previewAttempts: 0,
         nextPreviewAt: 0,
+        previewTask: null,
         meta: null,
         metaTried: false,
         metaAttempts: 0,
@@ -1319,7 +1337,7 @@ export class Bridge {
       track.timePrinting = Math.round(job.time_printing);
     track.lastPrinterState = printerState;
     await this.readFileMeta(runtime, track, ended);
-    await this.readPreview(runtime, track, ended);
+    this.startPreview(runtime, track, ended);
     if (ended) {
       this.finishJob(runtime, track, printerState);
       // Erledigt merken, damit derselbe Job nicht noch einmal gemeldet wird
@@ -1463,17 +1481,36 @@ export class Bridge {
   /**
    * Die Vorschau aus der Druckdatei: beim ersten Sehen des Drucks, dann nach
    * 30 s, 1 und 2 min und ein letztes Mal beim Ende – wie beim Verbrauch, nur
-   * mit weniger Versuchen. Ohne Vorschau in der Datei (404 auch unter dem
-   * langen Namen) oder mit einem unbrauchbaren Bild wird nicht weiter
-   * gefragt. Scheitert alles, geht der Druck ohne Vorschau ins Fach.
+   * mit weniger Versuchen. **Im Hintergrund:** Die Firmware braucht beim
+   * Drucken bis zu 20 s je Anfrage, mit dem Rückgriff auf den langen Namen
+   * das Doppelte; Zustand und Testantworten des Druckers sollen darauf nicht
+   * warten. Endet der Druck, während ein Versuch läuft, wartet nur das
+   * Vormerken (`finishJob`).
    */
-  async readPreview(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
-    if (track.previewDone || !track.thumbnailPath) return;
+  startPreview(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
+    if (track.previewTask || track.previewDone || !track.thumbnailPath) return;
     if (track.previewAttempts >= PREVIEW_ATTEMPTS + (final ? 1 : 0)) return;
     if (!final && this.now() < track.nextPreviewAt) return;
     track.previewAttempts += 1;
     track.nextPreviewAt =
       this.now() + META_RETRY_BASE_MS * 2 ** (track.previewAttempts - 1);
+    const task: Promise<void> = this.readPreview(runtime, track, final)
+      .catch(() => undefined)
+      .finally(() => {
+        track.previewTask = null;
+        this.background.delete(task);
+      });
+    track.previewTask = task;
+    this.background.add(task);
+  }
+
+  /**
+   * Ein Versuch. Ohne Vorschau in der Datei (404 auch unter dem langen
+   * Namen), zu groß oder kein lesbares PNG: kein weiterer Versuch. Scheitert
+   * alles, geht der Druck ohne Vorschau ins Fach.
+   */
+  async readPreview(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
+    if (!track.thumbnailPath) return;
     const name = runtime.config.name;
     let bytes: Uint8Array;
     try {
@@ -1485,7 +1522,20 @@ export class Bridge {
     } catch (error) {
       if (error instanceof PrusaLinkError && error.httpStatus === 404) {
         track.previewDone = true;
-        this.write("info", `Drucker „${name}“: keine Vorschau in der Datei`);
+        this.write(
+          "info",
+          track.previewAttempts > 1
+            ? `Drucker „${name}“: Vorschau nicht mehr gefunden – der Druck kommt ohne sie`
+            : `Drucker „${name}“: keine Vorschau in der Datei`
+        );
+        return;
+      }
+      if (error instanceof PreviewUnusableError) {
+        track.previewDone = true;
+        this.write(
+          "warn",
+          `Drucker „${name}“: ${error.message} – der Druck kommt ohne sie`
+        );
         return;
       }
       const last = track.previewAttempts >= PREVIEW_ATTEMPTS || final;
@@ -1549,19 +1599,25 @@ export class Bridge {
   ) {
     if (track.jobId < 0) return;
     const endedAt = this.now();
-    if (track.needsTail && !filamentsFromMeta(track.meta)) {
+    const needsTail = track.needsTail && !filamentsFromMeta(track.meta);
+    const pendingPreview = track.previewTask;
+    if (needsTail || pendingPreview) {
       const snapshot = { ...track };
-      this.write(
-        "info",
-        `Drucker „${runtime.config.name}“: Druck ${track.jobId} beendet – lese das Ende der Datei`
-      );
+      if (needsTail)
+        this.write(
+          "info",
+          `Drucker „${runtime.config.name}“: Druck ${track.jobId} beendet – lese das Ende der Datei`
+        );
       let done = false;
       const enqueue = () => {
         if (done) return;
         done = true;
+        // Die Vorschau kommt im Hintergrund am ursprünglichen Track an
+        snapshot.preview = track.preview;
         this.enqueueImport(runtime, snapshot, printerState, endedAt);
       };
-      const task = this.readTail(runtime, snapshot)
+      const task = (pendingPreview ?? Promise.resolve())
+        .then(() => (needsTail ? this.readTail(runtime, snapshot) : undefined))
         .then(enqueue)
         .finally(() => {
           this.background.delete(task);
@@ -1704,11 +1760,16 @@ export class Bridge {
   }
 
   /**
-   * Lädt die Vorschau zu einem angenommenen Eintrag hoch. `"retry"`: Server
-   * gerade nicht bereit, später noch einmal; sonst ist sie erledigt –
-   * angenommen oder endgültig abgelehnt.
+   * Lädt die Vorschau zu einem angenommenen Eintrag hoch.
+   *
+   * - `"done"`: erledigt – angenommen oder endgültig abgelehnt (4xx, auch
+   *   ein voller Speicher: Die Vorschau ist verzichtbar, und bis jemand Platz
+   *   schafft, vergingen sonst Tage).
+   * - `"retry"`: Server gerade nicht bereit (429, 5xx, Netz) – beim nächsten
+   *   Durchlauf noch einmal, höchstens `PREVIEW_UPLOAD_TRIES`-mal.
+   * - `"stop"`: Schlüssel abgelehnt – der ganze Durchlauf hält an.
    */
-  async uploadPreview(entry: QueuedImport): Promise<"done" | "retry"> {
+  async uploadPreview(entry: QueuedImport): Promise<"done" | "retry" | "stop"> {
     if (!entry.preview || entry.importId === null) return "done";
     const bytes = await this.loadPreview(entry.preview);
     if (!bytes) return "done";
@@ -1716,24 +1777,23 @@ export class Bridge {
     try {
       response = await this.filahub(
         "POST",
-        `/api/ingest/print-imports/${entry.importId}/preview`,
+        previewIngestPath(entry.importId),
         undefined,
         { bytes, contentType: "image/png" }
       );
     } catch {
       return this.retryPreview(entry);
     }
-    if (this.handleAuthFailure(response)) return "retry";
-    if (response.status === 429 || response.status >= 500)
+    if (this.handleAuthFailure(response)) return "stop";
+    const body = response.json as { error?: string; code?: string } | null;
+    const storageFull = body?.code === "storage_full";
+    if ((response.status === 429 && !storageFull) || response.status >= 500)
       return this.retryPreview(entry);
-    if (response.status !== 200 && response.status !== 201) {
-      const message =
-        (response.json as { error?: string } | null)?.error ?? "abgelehnt";
+    if (response.status !== 200 && response.status !== 201)
       this.write(
         "warn",
-        `Vorschau zu „${entry.item.title}“ von filahub abgelehnt (HTTP ${response.status}: ${message}) – der Druck bleibt ohne`
+        `Vorschau zu „${entry.item.title}“ von filahub abgelehnt (HTTP ${response.status}: ${body?.error ?? "abgelehnt"}) – der Druck bleibt ohne`
       );
-    }
     return "done";
   }
 
@@ -1747,19 +1807,36 @@ export class Bridge {
     return "done";
   }
 
+  /**
+   * Nimmt genau diesen Eintrag aus der Warteschlange – nicht einfach den
+   * ersten: Während auf das Netz gewartet wird, kann `enqueueImport` (auch aus
+   * einem Lesevorgang im Hintergrund) Einträge anhängen und bei voller
+   * Warteschlange den ältesten verdrängen.
+   */
+  removeEntry(entry: QueuedImport) {
+    const index = this.queue.indexOf(entry);
+    if (index >= 0) this.queue.splice(index, 1);
+    this.dropEntry(entry);
+  }
+
   // -- Einliefern, melden -----------------------------------------------------
 
+  /**
+   * Liefert die vorgemerkten Drucke der Reihe nach ein; ein Druck, der nicht
+   * angenommen wird, hält die nach ihm auf (Reihenfolge im Fach). Eine
+   * Vorschau, deren Hochladen später noch einmal versucht wird, hält
+   * **nichts** auf: Ihr Eintrag bleibt stehen, die übrigen gehen weiter.
+   */
   async flushQueue(): Promise<void> {
-    while (this.queue.length > 0) {
-      const entry = this.queue[0];
-      const { item } = entry;
+    for (const entry of [...this.queue]) {
+      if (!this.queue.includes(entry)) continue; // inzwischen verdrängt
       if (entry.importId === null) {
         let response: FilahubResponse;
         try {
           response = await this.filahub(
             "POST",
             "/api/ingest/print-imports",
-            item
+            entry.item
           );
         } catch {
           return; // Server nicht erreichbar – später noch einmal
@@ -1770,21 +1847,22 @@ export class Bridge {
           // 4xx: der Eintrag ist kaputt und wird es bleiben
           this.write(
             "error",
-            `Druck „${item.title}“ von filahub abgelehnt (HTTP ${response.status}) – verworfen`
+            `Druck „${entry.item.title}“ von filahub abgelehnt (HTTP ${response.status}) – verworfen`
           );
-          this.dropEntry(this.queue.shift());
+          this.removeEntry(entry);
           continue;
         }
         // Auch eine Wiederholung (200) nennt die ID – die Vorschau folgt
         const id = (response.json as { id?: unknown } | null)?.id;
         entry.importId = typeof id === "number" ? id : null;
         if (entry.importId === null) {
-          this.dropEntry(this.queue.shift());
+          this.removeEntry(entry);
           continue;
         }
       }
-      if ((await this.uploadPreview(entry)) === "retry") return;
-      this.dropEntry(this.queue.shift());
+      const result = await this.uploadPreview(entry);
+      if (result === "stop") return;
+      if (result === "done") this.removeEntry(entry);
     }
   }
 

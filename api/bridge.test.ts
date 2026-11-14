@@ -12,6 +12,7 @@ import {
   filamentsFromMeta,
   PREVIEW_MAX_BYTES,
   PrintFileHeadError,
+  previewIngestPath,
   isPrivateIp,
   stripPngMetadata,
   metaFromPrintFileHead,
@@ -27,7 +28,10 @@ import {
 } from "@contracts/bridge";
 import { MAX_PRINT_IMPORT_PREVIEW_BYTES } from "@contracts/limits";
 import { detectPrintFile } from "@contracts/printFiles";
-import { printImportInputSchema } from "@contracts/printImports";
+import {
+  printImportInputSchema,
+  printImportPreviewIngestPath,
+} from "@contracts/printImports";
 import { startFakePrusaLink } from "./test/fakePrusaLink";
 import { buildPng, pngChunk, pngWithText } from "./test/pngFixtures";
 import {
@@ -56,6 +60,10 @@ type FakeFilahub = {
   imports: unknown[];
   /** Hochgeladene Vorschauen: Eintrag und Bytes */
   previews: { id: number; contentType: string; bytes: Buffer }[];
+  /** Antwort auf eine Vorschau: Status und Körper (z. B. `storage_full`) */
+  previewReply: { status: number; body: unknown } | null;
+  /** Läuft, während eine Vorschau hereinkommt – vor der Antwort */
+  onPreview: (() => void) | null;
   ingestStatus: number;
   previewStatus: number;
   configStatus: number;
@@ -77,6 +85,8 @@ async function startFakeFilahub(
     previews: [],
     ingestStatus: 201,
     previewStatus: 201,
+    previewReply: null,
+    onPreview: null,
     configStatus: 200,
   } as unknown as FakeFilahub;
   const server: Server = createServer(async (req, res) => {
@@ -107,6 +117,9 @@ async function startFakeFilahub(
       /^\/api\/ingest\/print-imports\/(\d+)\/preview$/
     );
     if (preview && req.method === "POST") {
+      fake.onPreview?.();
+      if (fake.previewReply)
+        return reply(fake.previewReply.status, fake.previewReply.body);
       if (fake.previewStatus >= 300) return reply(fake.previewStatus, {});
       fake.previews.push({
         id: Number(preview[1]),
@@ -211,7 +224,18 @@ async function setup(
     resolve: options.resolve,
   });
   bridge.write = () => undefined; // die Konsole der Tests bleibt still
-  return { filahub, bridge };
+  /*
+    Die Vorschau lädt im Hintergrund (`startPreview`). Die Tests warten nach
+    jedem Durchlauf, bis sie da ist – sonst hinge ihr Ergebnis davon ab, wie
+    schnell localhost antwortet. Dass der Durchlauf selbst nicht wartet,
+    prüft „hält die Abfrage nicht auf“ mit `rawTick`.
+  */
+  const rawTick = bridge.tick.bind(bridge);
+  bridge.tick = async () => {
+    await rawTick();
+    await bridge.settle();
+  };
+  return { filahub, bridge, rawTick };
 }
 
 describe("Brücke gegen PrusaLink", () => {
@@ -833,6 +857,140 @@ describe("Vorschau aus der Druckdatei", () => {
     expect(lastReport(filahub).queued).toBe(0);
   });
 
+  it("eine wartende Vorschau hält spätere Drucke nicht auf", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+    });
+    filahub.previewStatus = 503;
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(1);
+    expect(lastReport(filahub).queued).toBe(1);
+    // Der nächste Druck kommt ins Fach, obwohl die erste Vorschau noch wartet
+    link.state.printerState = "PRINTING";
+    link.state.job = { ...link.state.job!, id: 43, progress: 10 };
+    clock += 60_000;
+    await bridge.tick();
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(2);
+    expect(filahub.previews).toHaveLength(0);
+    filahub.previewStatus = 201;
+    await bridge.tick();
+    expect(filahub.previews.map(p => p.id)).toEqual([1, 2]);
+    expect(lastReport(filahub).queued).toBe(0);
+  });
+
+  it("gibt die Vorschau bei vollem Speicher auf, statt zu wiederholen", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+    });
+    filahub.previewReply = {
+      status: 429,
+      body: { code: "storage_full", error: "voll" },
+    };
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(1);
+    expect(lastReport(filahub).queued).toBe(0);
+  });
+
+  it("nimmt nach dem Hochladen genau diesen Eintrag heraus, auch wenn die Warteschlange sich inzwischen verschoben hat", async () => {
+    const { filahub, bridge } = await setup([]);
+    const entry = (id: number) => {
+      bridge.previewMemory.set(`${String(id).repeat(32)}.png`, pngWithText());
+      return {
+        item: {
+          source: "printer" as const,
+          externalKey: `k${id}`,
+          title: `Druck ${id}`,
+          printedAt: new Date(clock).toISOString(),
+          status: "success" as const,
+          progressPercent: 100,
+          durationMinutes: 1,
+          printer: "MK4S",
+          filaments: [],
+          gramsEstimated: false,
+        },
+        preview: `${String(id).repeat(32)}.png`,
+        importId: id,
+        previewTries: 0,
+      };
+    };
+    bridge.queue = [entry(1), entry(2)];
+    // Während die erste Vorschau unterwegs ist, verdrängt ein neuer Druck
+    // den ältesten Eintrag (volle Warteschlange)
+    filahub.onPreview = () => {
+      filahub.onPreview = null;
+      bridge.queue.shift();
+    };
+    await bridge.flushQueue();
+    expect(filahub.previews.map(p => p.id)).toEqual([1, 2]);
+    expect(bridge.queue).toEqual([]);
+  });
+
+  it("versucht eine zu große Vorschau nur einmal", async () => {
+    const huge = new Uint8Array(PREVIEW_MAX_BYTES + 1);
+    huge.set(pngWithText());
+    const { link, filahub, bridge } = await printing({ thumbnail: huge });
+    for (let i = 0; i < 4; i++) {
+      clock += 5 * 60_000;
+      await bridge.tick();
+    }
+    await finish(link, bridge);
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(0);
+  });
+
+  it("hält die Abfrage nicht auf, wenn der Drucker die Vorschau langsam liefert", async () => {
+    const link = await startFakePrusaLink({
+      auth: { kind: "api_key", key: "geheim" },
+      printerState: "PRINTING",
+      job: {
+        id: 42,
+        progress: 10,
+        timePrinting: 600,
+        fileName: "Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode",
+        meta: META,
+        thumbnail: pngWithText(),
+        thumbnailDelayMs: 400,
+      },
+      mode: "prusalink",
+    });
+    cleanup.push(link.close);
+    const { filahub, bridge, rawTick } = await setup([
+      printer({ host: link.host }),
+    ]);
+    const started = Date.now();
+    await rawTick();
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(lastReport(filahub).printers[0]).toMatchObject({
+      state: "ok",
+      job: { id: 42 },
+    });
+    // Endet der Druck, während die Vorschau noch lädt, wartet nur das Vormerken
+    link.state.printerState = "FINISHED";
+    await rawTick();
+    expect(filahub.imports).toHaveLength(0);
+    await bridge.settle();
+    await rawTick();
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(1);
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+  });
+
+  it("fragt bei einem verschwundenen Job nicht noch einmal nach der Vorschau", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+      thumbnailBusy: 100,
+    });
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    link.state.printerState = "IDLE";
+    link.state.job = null;
+    await bridge.tick();
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(0);
+  });
+
   it("gibt eine abgelehnte Vorschau auf (4xx) und behält den Druck", async () => {
     const { link, filahub, bridge } = await printing({
       thumbnail: pngWithText(),
@@ -957,8 +1115,9 @@ describe("PNG ohne Metadaten", () => {
     expect(stripPngMetadata(textFirst)).toBeNull();
   });
 
-  it("hält dieselbe Größengrenze wie der Server", () => {
+  it("hält dieselbe Größengrenze und Adresse wie der Server", () => {
     expect(PREVIEW_MAX_BYTES).toBe(MAX_PRINT_IMPORT_PREVIEW_BYTES);
+    expect(previewIngestPath(4711)).toBe(printImportPreviewIngestPath(4711));
   });
 });
 

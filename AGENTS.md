@@ -998,10 +998,16 @@ sie erstes Foto und Titelbild des Drucks. Tests in `api/bridge.test.ts`
 - **Quelle:** `file.refs.thumbnail` aus `/api/v1/job` (`/thumb/l<Kurzpfad>`,
   Buddy-Firmware: das erste PNG über 16 × 16 px), bei 404 `/thumb/l` mit dem
   langen Namen (`withFallbackPath`, derselbe Rückgriff wie für die Datei).
-  Versuche beim ersten Sehen, nach 30 s, 1 und 2 min und beim Ende; 404 heißt
-  „keine Vorschau in der Datei“ und beendet die Versuche. Ohne Vorschau geht
-  der Druck trotzdem ins Fach. Höchstens 1 MB (`PREVIEW_MAX_BYTES` =
-  `MAX_PRINT_IMPORT_PREVIEW_BYTES`, ein Test vergleicht beide).
+  Versuche beim ersten Sehen, nach 30 s, 1 und 2 min und beim Ende – **im
+  Hintergrund** (`startPreview`, `background`): Die Firmware braucht beim
+  Drucken bis zu 20 s je Anfrage, Zustand und Testantworten sollen nicht
+  warten. Endet der Druck während eines Versuchs, wartet nur das Vormerken
+  (`finishJob`). 404, zu groß (`PreviewUnusableError`) oder kein PNG beenden
+  die Versuche; ein verschwundener Job bekommt keinen letzten Versuch (die
+  Datei kann weg sein). Ohne Vorschau geht der Druck trotzdem ins Fach.
+  Höchstens 1 MB (`PREVIEW_MAX_BYTES` = `MAX_PRINT_IMPORT_PREVIEW_BYTES`),
+  Adresse `previewIngestPath` = `printImportPreviewIngestPath` – ein Test
+  vergleicht beides.
 - **Die Brücke entfernt alle Hilfs-Chunks** (`stripPngMetadata`: nur IHDR,
   PLTE, tRNS, IDAT, IEND, Byte für Byte, Prüfsummen geprüft) – der Server
   lehnt jedes Bild mit Metadaten ab, wie bei den Fotos.
@@ -1011,22 +1017,28 @@ sie erstes Foto und Titelbild des Drucks. Tests in `api/bridge.test.ts`
   `queue.json` – die wird bei jedem Durchlauf neu geschrieben. Frisch vom
   Drucker beim Einliefern ginge auch, aber dann können Datei, Stick oder
   Drucker weg sein. Nach dem Einliefern steht `importId`; scheitert danach das
-  Hochladen (429/5xx/Netz), wird nur die Vorschau wiederholt, höchstens zehnmal.
+  Hochladen (429/5xx/Netz), wird nur die Vorschau wiederholt, höchstens
+  zehnmal – **ohne** die Drucke dahinter aufzuhalten; ein voller Speicher
+  (`storage_full`) gibt sie gleich auf. Herausgenommen wird immer genau der
+  bearbeitete Eintrag (`removeEntry`), nie blind der erste: Während auf das
+  Netz gewartet wird, kann `enqueueImport` den ältesten verdrängen.
 - **Route** `POST /api/ingest/print-imports/:id/preview` (beide
   Schlüsselarten, Körper = Bytes): fremder, erledigter oder unbekannter
   Eintrag 404; eine zweite Vorschau `200 { duplicate: true }` ohne
   Speichern; Typ aus den Bytes (nur PNG/JPEG/WebP), Metadaten 422, Kontingent
   nach der Bereichsprüfung und noch einmal unter Sperre des Eintrags
   (`attachImportPreview`); 60/min je Schlüssel. Ansehen über
-  `GET /api/files/print-imports/:id/preview` mit Sitzung, wie die Vorschau
-  eines Fotos.
+  `GET /api/files/print-imports/:id/preview` mit Sitzung – dieselbe Pforte
+  wie jede Datei (`viewerFor`, `mayView` in `api/fileRoutes.ts`). Beide
+  Pfade stehen einmal in `contracts/printImports.ts`.
 - **Spalten an `print_imports`** (`previewKey` … `previewHeight`), keine
   eigene Tabelle: genau eine je Eintrag, sie lebt mit ihm. Deshalb keine neue
   Zeile in `COUNTED_TABLES` oder den Listen der Tests; der Export lässt
   `previewKey` weg, der ZIP-Export enthält die Datei
   (`eingangsfach-<id>/vorschau.png`).
 - **Speicher:** `usedStorageInScope` zählt `previewBytes` offener Vorschauen
-  mit, auch in der Prüfung unter Sperre von `insertPrintFile`.
+  mit (eine Abfrage, die Dateien als skalare Unterabfrage), auch in der
+  Prüfung unter Sperre von `insertPrintFile`.
 - **Übernehmen** (`claimImportHooks.after`): in derselben Transaktion eine
   Zeile in `print_job_files` mit dem **Schlüssel der Vorschau** (keine Kopie,
   `thumbnailKey` NULL – die Vorschau-Route liefert dann das Bild selbst) und

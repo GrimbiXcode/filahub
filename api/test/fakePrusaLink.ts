@@ -40,6 +40,8 @@ export type FakePrusaLinkState = {
     thumbnail?: Uint8Array;
     /** So viele Vorschau-Anfragen zuerst mit 503 beantworten */
     thumbnailBusy?: number;
+    /** Die Vorschau erst nach so vielen Millisekunden liefern (Drucker beschäftigt) */
+    thumbnailDelayMs?: number;
   } | null;
   /** Statt PrusaLink: ein anderer Dienst */
   mode: "prusalink" | "not_found" | "html";
@@ -147,8 +149,13 @@ export async function startFakePrusaLink(initial: FakePrusaLinkState) {
         res.writeHead(503);
         return res.end();
       }
-      res.writeHead(200, { "content-type": "image/png" });
-      return res.end(Buffer.from(job.thumbnail));
+      const send = () => {
+        res.writeHead(200, { "content-type": "image/png" });
+        res.end(Buffer.from(job.thumbnail!));
+      };
+      if (job.thumbnailDelayMs) setTimeout(send, job.thumbnailDelayMs);
+      else send();
+      return;
     }
     if (job?.fileBytes && path === `/usb/${encodeURI(job.fileName)}`) {
       if (job.fileBusy) {

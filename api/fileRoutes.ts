@@ -16,8 +16,10 @@ import {
 import {
   contentDisposition,
   detectPrintFile,
+  imageFileExtension,
   sanitizeFileName,
 } from "@contracts/printFiles";
+import { PRINT_IMPORT_PREVIEW_ROUTE } from "@contracts/printImports";
 import { clientIpFrom } from "./lib/clientIp";
 import { getFileStorage, newStorageKey } from "./lib/fileStorage";
 import { assertWithinLimit } from "./lib/quota";
@@ -221,6 +223,58 @@ function limitChecks(
   };
 }
 
+/**
+ * Zugriffsbegrenzung beim Ausliefern. Vorschauen großzügig – eine Druckliste
+ * oder das Eingangsfach lädt Dutzende auf einmal. Originale enger: Sie sind
+ * bis zu 45 MB groß.
+ */
+const SERVE_LIMITS = {
+  thumbnail: { key: "files.thumbnail", limit: 1200 },
+  original: { key: "files.get", limit: 120 },
+} as const;
+
+/**
+ * Die gemeinsame Pforte vor jeder Auslieferung (Datei, Foto-Vorschau,
+ * Vorschau im Eingangsfach): Sitzung, Sperre, Zugriffsbegrenzung. Gibt den
+ * Benutzer zurück oder die fertige Fehlerantwort.
+ */
+async function viewerFor(
+  c: Ctx,
+  kind: keyof typeof SERVE_LIMITS
+): Promise<User | Response> {
+  const user = await currentUser(c);
+  if (!user) return fail(c, 401, "unauthenticated", "Nicht angemeldet.");
+  if (user.blockedAt)
+    return fail(c, 403, "blocked", "Dein Konto ist gesperrt.");
+  const { key, limit } = SERVE_LIMITS[kind];
+  if (rateLimitedFor(c, user, key, limit, 60_000))
+    return fail(
+      c,
+      429,
+      "rate_limited",
+      "Zu viele Anfragen. Bitte kurz warten."
+    );
+  return user;
+}
+
+/**
+ * Ob der Betrachter etwas dieses Eigentümers sehen darf: in einer
+ * Organisation mindestens `viewer`, sonst nur die eigene Person. Der
+ * Aufrufer antwortet bei `false` mit 404 – fremde IDs bleiben unbestätigt.
+ */
+async function mayView(
+  user: User,
+  owner: { userId: number | null; organizationId: number | null }
+): Promise<boolean> {
+  if (owner.organizationId == null) return owner.userId === user.id;
+  try {
+    await resolveScope(user.id, owner.organizationId, "viewer");
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function registerFileRoutes(app: App) {
   /*
     Export aller eigenen Dateien als ZIP – neben dem JSON-Export, der sie per
@@ -292,7 +346,7 @@ export function registerFileRoutes(app: App) {
           ? [
               {
                 storageKey: preview.storageKey,
-                path: `eingangsfach-${preview.id}/vorschau.${preview.mimeType === "image/jpeg" ? "jpg" : preview.mimeType === "image/webp" ? "webp" : "png"}`,
+                path: `eingangsfach-${preview.id}/vorschau.${imageFileExtension(preview.mimeType ?? "")}`,
                 manifest: {
                   printImportId: preview.id,
                   mimeType: preview.mimeType,
@@ -537,38 +591,16 @@ export function registerFileRoutes(app: App) {
   };
 
   const serve = (variant: "file" | "thumbnail") => async (c: Ctx) => {
-    const user = await currentUser(c);
-    if (!user) return fail(c, 401, "unauthenticated", "Nicht angemeldet.");
-    if (user.blockedAt)
-      return fail(c, 403, "blocked", "Dein Konto ist gesperrt.");
-    /*
-      Vorschauen großzügig – eine Druckliste lädt Dutzende auf einmal. Die
-      Originale enger: Sie sind bis zu 45 MB groß.
-    */
-    if (
-      variant === "thumbnail"
-        ? rateLimitedFor(c, user, "files.thumbnail", 1200, 60_000)
-        : rateLimitedFor(c, user, "files.get", 120, 60_000)
-    )
-      return fail(
-        c,
-        429,
-        "rate_limited",
-        "Zu viele Anfragen. Bitte kurz warten."
-      );
+    const user = await viewerFor(
+      c,
+      variant === "thumbnail" ? "thumbnail" : "original"
+    );
+    if (user instanceof Response) return user;
 
     const id = positiveInt(c.req.param("id"));
     const row = id ? await findPrintFileWithOwner(id) : null;
-    if (!row) return fail(c, 404, "not_found", "Datei nicht gefunden");
-    if (row.organizationId != null) {
-      try {
-        await resolveScope(user.id, row.organizationId, "viewer");
-      } catch {
-        return fail(c, 404, "not_found", "Datei nicht gefunden");
-      }
-    } else if (row.userId !== user.id) {
+    if (!row || !(await mayView(user, row)))
       return fail(c, 404, "not_found", "Datei nicht gefunden");
-    }
 
     const storage = getFileStorage();
     let body: ReadableStream<Uint8Array> | Uint8Array;
@@ -616,30 +648,13 @@ export function registerFileRoutes(app: App) {
     dieselbe großzügige Zugriffsbegrenzung. Eine Vorschau ändert sich nie –
     sie wird höchstens einmal je Eintrag gesetzt.
   */
-  app.get("/api/files/print-imports/:id{[0-9]+}/preview", async c => {
-    const user = await currentUser(c);
-    if (!user) return fail(c, 401, "unauthenticated", "Nicht angemeldet.");
-    if (user.blockedAt)
-      return fail(c, 403, "blocked", "Dein Konto ist gesperrt.");
-    if (rateLimitedFor(c, user, "files.thumbnail", 1200, 60_000))
-      return fail(
-        c,
-        429,
-        "rate_limited",
-        "Zu viele Anfragen. Bitte kurz warten."
-      );
+  app.get(PRINT_IMPORT_PREVIEW_ROUTE.replace(":id", ":id{[0-9]+}"), async c => {
+    const user = await viewerFor(c, "thumbnail");
+    if (user instanceof Response) return user;
     const id = positiveInt(c.req.param("id"));
     const row = id ? await findImportPreviewWithOwner(id) : null;
-    if (!row) return fail(c, 404, "not_found", "Vorschau nicht gefunden");
-    if (row.organizationId != null) {
-      try {
-        await resolveScope(user.id, row.organizationId, "viewer");
-      } catch {
-        return fail(c, 404, "not_found", "Vorschau nicht gefunden");
-      }
-    } else if (row.userId !== user.id) {
+    if (!row || !(await mayView(user, row)))
       return fail(c, 404, "not_found", "Vorschau nicht gefunden");
-    }
     const bytes = await getFileStorage().get(row.storageKey);
     if (!bytes) return fail(c, 404, "not_found", "Vorschau nicht gefunden");
     return new Response(bytes, {

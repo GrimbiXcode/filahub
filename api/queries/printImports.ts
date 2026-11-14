@@ -17,6 +17,7 @@ import {
   type PrintImportInput,
   type PrintImportItem,
 } from "@contracts/printImports";
+import { imageFileExtension } from "@contracts/printFiles";
 import { scopeOwner, scopeWhere, type Scope } from "../scope";
 import { getDb, type DbTransaction } from "./connection";
 import { removeStoredFiles, usedStorageInScope } from "./printFiles";
@@ -395,13 +396,7 @@ export function claimImportHooks(scope: Scope, importId: number) {
 
 /** Der Dateiname, unter dem eine übernommene Vorschau beim Druck steht */
 function previewFileName(mimeType: string): string {
-  const extension =
-    mimeType === "image/jpeg"
-      ? "jpg"
-      : mimeType === "image/webp"
-        ? "webp"
-        : "png";
-  return `vorschau.${extension}`;
+  return `vorschau.${imageFileExtension(mimeType)}`;
 }
 
 /**

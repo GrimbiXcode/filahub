@@ -79,47 +79,43 @@ export async function countFilesOfPrintJob(printJobId: number) {
   return row?.value ?? 0;
 }
 
+const fileBytesSum = sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`;
+const previewBytesSum = sql<string>`coalesce(sum(${printImports.previewBytes}), 0)`;
+
 /**
  * Belegter Speicher eines Bereichs in Bytes – Grundlage des Kontingents: die
- * Dateien der Drucke und seit 4.10.0 die Vorschauen im Eingangsfach. Mit
- * `executor` in einer laufenden Transaktion gezählt (Prüfung unter Sperre).
+ * Dateien der Drucke und seit 4.10.0 die Vorschauen im Eingangsfach. **Eine**
+ * Abfrage (die Dateien als skalare Unterabfrage): Sie läuft bei jedem Upload,
+ * bei Vorschauen zweimal, und unter Sperre zählt jede Runde zur Datenbank.
+ * Mit `executor` in einer laufenden Transaktion gezählt.
  */
 export async function usedStorageInScope(
   scope: Scope,
   executor: Pick<ReturnType<typeof getDb>, "select"> = getDb()
 ): Promise<number> {
-  const [files] = await executor
-    .select({
-      value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
-    })
+  const files = executor
+    .select({ value: fileBytesSum })
     .from(printJobFiles)
     .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
     .where(scopeWhere(printJobs, scope));
-  const [previews] = await executor
-    .select({
-      value: sql<string>`coalesce(sum(${printImports.previewBytes}), 0)`,
-    })
+  const [row] = await executor
+    .select({ files: sql<string>`(${files})`, previews: previewBytesSum })
     .from(printImports)
     .where(
       and(scopeWhere(printImports, scope), isNotNull(printImports.previewKey))
     );
-  return Number(files?.value ?? 0) + Number(previews?.value ?? 0);
+  return Number(row?.files ?? 0) + Number(row?.previews ?? 0);
 }
 
 /** Belegter Speicher der ganzen Instanz – für `/verwaltung/system` */
 export async function usedStorageTotal(): Promise<number> {
-  const [files] = await getDb()
-    .select({
-      value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
-    })
-    .from(printJobFiles);
-  const [previews] = await getDb()
-    .select({
-      value: sql<string>`coalesce(sum(${printImports.previewBytes}), 0)`,
-    })
+  const db = getDb();
+  const files = db.select({ value: fileBytesSum }).from(printJobFiles);
+  const [row] = await db
+    .select({ files: sql<string>`(${files})`, previews: previewBytesSum })
     .from(printImports)
     .where(isNotNull(printImports.previewKey));
-  return Number(files?.value ?? 0) + Number(previews?.value ?? 0);
+  return Number(row?.files ?? 0) + Number(row?.previews ?? 0);
 }
 
 export type NewPrintFile = {

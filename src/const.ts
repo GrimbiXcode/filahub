@@ -99,9 +99,7 @@ export function printFileUploadUrl(
 }
 
 /** Vorschau eines Eintrags im Eingangsfach (seit 4.10.0) */
-export function printImportPreviewUrl(id: number): string {
-  return `/api/files/print-imports/${id}/preview`;
-}
+export { printImportPreviewPath as printImportPreviewUrl } from "@contracts/printImports";
 
 /** Alle eigenen Dateien als ZIP – neben dem JSON-Export */
 export const PRINT_FILES_EXPORT_URL = "/api/files/export";

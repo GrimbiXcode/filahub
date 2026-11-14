@@ -220,12 +220,22 @@ describe("Einliefern mit Schlüssel", () => {
       ).toBe(401);
     const blocked = await ingest(bad, {}, { "x-forwarded-for": "203.0.113.9" });
     expect(blocked.status).toBe(429);
-    await new Promise(resolve => setTimeout(resolve, 50));
-    const audit = await db()
-      .select()
-      .from(schema.auditLog)
-      .where(eq(schema.auditLog.event, "api_token.invalid"));
-    expect(audit).toHaveLength(1);
+    /*
+      `recordAudit` schreibt im Hintergrund, ohne dass die Antwort darauf
+      wartet. Eine feste Pause reichte auf dem CI-Runner nicht – abfragen,
+      bis der Eintrag da ist (höchstens 2 s), dann noch einmal kurz warten,
+      damit auch ein zweiter, falscher Eintrag aufgefallen wäre.
+    */
+    const invalidEntries = () =>
+      db()
+        .select()
+        .from(schema.auditLog)
+        .where(eq(schema.auditLog.event, "api_token.invalid"));
+    const deadline = Date.now() + 2_000;
+    while ((await invalidEntries()).length === 0 && Date.now() < deadline)
+      await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(await invalidEntries()).toHaveLength(1);
   });
 
   it("prüft den Körper", async () => {
