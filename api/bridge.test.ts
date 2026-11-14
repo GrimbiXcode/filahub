@@ -8,6 +8,7 @@ import {
   classifyNetworkError,
   FILE_HEAD_MAX_BYTES,
   filamentsFromMeta,
+  PrintFileHeadError,
   isPrivateIp,
   metaFromPrintFileHead,
   titleFromFileName,
@@ -424,6 +425,48 @@ describe("Drucke ins Eingangsfach", () => {
     expect(lastReport(filahub).printers[0].metaWarning).toBeNull();
   });
 
+  it("versucht es wieder, wenn der Drucker den Download beim Start verweigert", async () => {
+    const { link, filahub, bridge } = await printing(null, {
+      fileBytes: coreOneBgcode(),
+      fileBusy: 2,
+    });
+    const downloads = () =>
+      link.requests.filter(path => path.startsWith("/usb/")).length;
+    expect(downloads()).toBe(1);
+    // Vor Ablauf des Abstands kein neuer Versuch
+    clock += 10_000;
+    await bridge.tick();
+    expect(downloads()).toBe(1);
+    clock += 30_000;
+    await bridge.tick();
+    expect(downloads()).toBe(2);
+    clock += 60_000;
+    await bridge.tick();
+    expect(downloads()).toBe(3);
+    link.state.printerState = "FINISHED";
+    link.state.job = { ...link.state.job!, progress: 100 };
+    await bridge.tick();
+    expect(downloads()).toBe(3);
+    const item = printImportInputSchema.parse(filahub.imports[0]);
+    expect(item.filaments.map(f => [f.slot, f.grams])).toEqual([
+      [0, 12],
+      [2, 4],
+    ]);
+    expect(lastReport(filahub).printers[0].metaWarning).toBeNull();
+  });
+
+  it("versucht es beim Ende ein letztes Mal", async () => {
+    const { link, filahub, bridge } = await printing(null, {
+      fileBytes: coreOneBgcode(),
+      fileBusy: 1,
+    });
+    link.state.printerState = "FINISHED";
+    await bridge.tick();
+    expect(
+      printImportInputSchema.parse(filahub.imports[0]).filaments
+    ).toHaveLength(2);
+  });
+
   it("liefert ohne Metadaten trotzdem ein und sagt es", async () => {
     const { link, filahub, bridge } = await printing(null);
     link.state.printerState = "FINISHED";
@@ -531,6 +574,13 @@ describe("Hilfen der Brücke", () => {
         vendor: null,
       },
     ]);
+    // MMU, nur Platz 3 benutzt
+    expect(
+      filamentsFromMeta({
+        "filament used [g]": "0.00, 0.00, 18.72, 0.00, 0.00",
+        filament_type: "PLA;PLA;PETG;PLA;PLA",
+      })
+    ).toMatchObject([{ slot: 2, grams: 18.72, filamentType: "PETG" }]);
     expect(titleFromFileName("/usb/BENCHY~1.BGC")).toBe("BENCHY~1");
   });
 });
@@ -563,7 +613,7 @@ describe("Metadaten aus dem Kopf einer Druckdatei", () => {
       },
       gcodeBlock(10),
     ]);
-    expect(metaFromPrintFileHead(file, true)).toBeNull();
+    expect(() => metaFromPrintFileHead(file, true)).toThrow(PrintFileHeadError);
   });
 
   it("liest ASCII-G-Code aus den Kommentaren des Kopfes", () => {
@@ -578,7 +628,9 @@ describe("Metadaten aus dem Kopf einer Druckdatei", () => {
     // Ohne Verbrauch im Kopf: weiterlesen, am Ende null statt geraten
     const bare = buildGcode({ bodyBytes: 1000 });
     expect(metaFromPrintFileHead(bare.subarray(0, 100), false)).toBe("more");
-    expect(metaFromPrintFileHead(new Uint8Array([1, 0, 2]), true)).toBeNull();
+    expect(() =>
+      metaFromPrintFileHead(new Uint8Array([1, 0, 2]), true)
+    ).toThrow(PrintFileHeadError);
   });
 });
 

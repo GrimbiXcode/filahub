@@ -956,7 +956,12 @@ Weitere pflegt der Benutzer unter `/verbindungen`; die Brücke holt es sich ab.
   (4.9.2). `metaFromPrintFileHead` liest bei bgcode bis zum ersten
   G-Code-Block (CRC geprüft, je Block höchstens 1 MB entpackt) und bricht die
   Übertragung dann ab, höchstens `FILE_HEAD_MAX_BYTES` (2 MB); ASCII-G-Code
-  nur aus dem Kopf – Range-Anfragen kennt die Firmware nicht. Ein gemeldeter Job trägt seine ID negativ
+  nur aus dem Kopf – Range-Anfragen kennt die Firmware nicht. **Wiederholt**
+  (seit 4.9.5, `readFileMeta`): beim ersten Sehen, dann nach 30 s, 1, 2, 4
+  und 8 min, und ein letztes Mal beim Ende – beim Start beantwortet der
+  Drucker den Download oft nicht (Vorschau, MMU-Zuordnung, Laden). Das
+  Protokoll nennt den Grund (`PrintFileHeadError`, fehlende Schlüssel nur
+  mit Namen, nie Werten). Ein gemeldeter Job trägt seine ID negativ
   – PrusaLink zeigt ihn nach FINISHED weiter an.
 - **Warteschlange** in `/data/queue.json` (Volume), solange filahub nicht
   annimmt; 4xx verwirft, 429/5xx wartet. 401/403 vom Server pausiert die
