@@ -1623,6 +1623,9 @@ export const de = {
     progress: (vars: { percent: string }) => `abgebrochen bei ${vars.percent}`,
     via: (vars: { name: string }) => `über „${vars.name}“`,
     filament: (vars: { slot: number }) => `Filament ${vars.slot}`,
+    previewAlt: (vars: { title: string }) => `Vorschau von „${vars.title}“`,
+    previewHint:
+      "Vorschau aus der Druckdatei – beim Übernehmen wird sie Titelbild des Drucks.",
     inboxLink: (vars: { count: number }) => `Eingangsfach (${vars.count})`,
   },
 

@@ -1582,6 +1582,9 @@ export const en: Messages = {
     progress: (vars: { percent: string }) => `stopped at ${vars.percent}`,
     via: (vars: { name: string }) => `via “${vars.name}”`,
     filament: (vars: { slot: number }) => `Filament ${vars.slot}`,
+    previewAlt: (vars: { title: string }) => `Preview of “${vars.title}”`,
+    previewHint:
+      "Preview from the print file – it becomes the print's cover picture when you take it over.",
     inboxLink: (vars: { count: number }) => `Inbox (${vars.count})`,
   },
 

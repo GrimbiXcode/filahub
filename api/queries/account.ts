@@ -6,6 +6,7 @@ import {
 import { visibilityAllows, type FriendVisibility } from "@contracts/friends";
 import * as schema from "@db/schema";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
+import { previewKeysWhere } from "./printImports";
 import { getDb } from "./connection";
 import { deleteApiTokens } from "./apiTokens";
 import { deletePrintersWhere } from "./printers";
@@ -378,8 +379,10 @@ export async function exportUserData(userId: number): Promise<AccountExport> {
     für eine Organisation: Ein Schlüssel ist ihre Vollmacht, nicht Bestand der
     Organisation. Dazu die Drucker ihrer Brücken ohne Zugangsdaten.
   */
+  // Die Vorschau ohne Speicherschlüssel – die Datei liegt im ZIP-Export
   const printImports = await db.query.printImports.findMany({
     where: eq(schema.printImports.userId, userId),
+    columns: { previewKey: false },
   });
   const apiTokens = await db.query.apiTokens.findMany({
     where: eq(schema.apiTokens.userId, userId),
@@ -546,7 +549,10 @@ export async function deleteUserAccount(
     await tx
       .delete(schema.printJobs)
       .where(eq(schema.printJobs.userId, userId));
-    // 1c. Eingangsfach und API-Schlüssel samt Druckern der Brücke (seit 4.7.0)
+    // 1c. Eingangsfach samt Vorschauen und API-Schlüssel samt Druckern der Brücke (seit 4.7.0)
+    removedKeys.push(
+      ...(await previewKeysWhere(tx, eq(schema.printImports.userId, userId)))
+    );
     await tx
       .delete(schema.printImports)
       .where(eq(schema.printImports.userId, userId));

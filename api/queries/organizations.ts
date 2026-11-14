@@ -32,6 +32,7 @@ import {
 } from "@db/schema";
 import { getDb, type DbTransaction } from "./connection";
 import { deleteFileRowsOfJobs, removeStoredFiles } from "./printFiles";
+import { previewKeysWhere } from "./printImports";
 import { deleteApiTokens, deleteTokensOfMembership } from "./apiTokens";
 import { deletePrintersWhere } from "./printers";
 import { recordAudit } from "./audit";
@@ -246,6 +247,12 @@ export async function deleteOrganizationCascade(
     Personen, zielen aber auf diese Organisation – ohne sie zeigte ihre
     `organizationId` später auf eine neu vergebene ID.
   */
+  removedKeys.push(
+    ...(await previewKeysWhere(
+      tx,
+      eq(printImports.organizationId, organizationId)
+    ))
+  );
   await tx
     .delete(printImports)
     .where(eq(printImports.organizationId, organizationId));

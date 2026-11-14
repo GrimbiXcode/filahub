@@ -17,6 +17,13 @@ export type PrintFileKind = (typeof PRINT_FILE_KINDS)[number];
 export const IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
 export type ImageMimeType = "image/jpeg" | "image/png" | "image/webp";
 
+/** Dateiendung zu einem Bildtyp – für Namen beim Übernehmen und im ZIP-Export */
+export function imageFileExtension(mimeType: string): string {
+  if (mimeType === "image/jpeg") return "jpg";
+  if (mimeType === "image/webp") return "webp";
+  return "png";
+}
+
 /** Der registrierte Medientyp für 3MF (IANA, 2018) */
 export const MODEL_3MF_MIME_TYPE = "model/3mf";
 

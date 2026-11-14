@@ -128,8 +128,31 @@ export type PrintImportItem = {
   filaments: ImportedFilament[];
   gramsEstimated: boolean;
   tokenName: string | null;
+  /** Vorschau aus der Druckdatei (seit 4.10.0) – ohne Speicherschlüssel */
+  preview: { width: number | null; height: number | null } | null;
   createdAt: Date;
 };
+
+/**
+ * Die Vorschau eines Eintrags: hochladen mit API-Schlüssel (`POST`, Körper
+ * sind die Bytes des Bildes). Die Route registriert sich mit dem Muster, die
+ * Brücke baut die Adresse mit `previewIngestPath` nach – `api/bridge.test.ts`
+ * vergleicht beide.
+ */
+export const PRINT_IMPORT_PREVIEW_INGEST_ROUTE =
+  "/api/ingest/print-imports/:id/preview";
+
+export function printImportPreviewIngestPath(id: number): string {
+  return PRINT_IMPORT_PREVIEW_INGEST_ROUTE.replace(":id", String(id));
+}
+
+/** Ansehen mit Sitzung (`api/fileRoutes.ts`, `<img src>` im Eingangsfach) */
+export const PRINT_IMPORT_PREVIEW_ROUTE =
+  "/api/files/print-imports/:id/preview";
+
+export function printImportPreviewPath(id: number): string {
+  return PRINT_IMPORT_PREVIEW_ROUTE.replace(":id", String(id));
+}
 
 /** Filamente mit Gramm, in fester Form – was die Datenbank speichert */
 export function normalizeImportedFilaments(

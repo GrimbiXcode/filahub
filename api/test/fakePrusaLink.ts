@@ -5,8 +5,9 @@ import type { AddressInfo } from "node:net";
 /**
  * Nachbau von PrusaLink für `api/bridge.test.ts` – nur so viel, wie die
  * Brücke anfragt: `/api/version`, `/api/v1/info`, `/api/v1/status`,
- * `/api/v1/job`, `/api/v1/files/…` und die Datei selbst unter `/usb/…`
- * (`refs.download`, wie in der Buddy-Firmware). Anmeldung per `X-Api-Key` oder HTTP-Digest
+ * `/api/v1/job`, `/api/v1/files/…`, die Datei selbst unter `/usb/…`
+ * (`refs.download`, wie in der Buddy-Firmware) und ihre Vorschau unter
+ * `/thumb/l/usb/…` (`refs.thumbnail`). Anmeldung per `X-Api-Key` oder HTTP-Digest
  * (Benutzer `maker`), wie die Buddy-Firmware sie anbietet. Die Antwortformen
  * folgen der OpenAPI-Beschreibung von PrusaLink; an einem echten Gerät sind
  * sie noch nicht geprüft (Plan, „Vor der Umsetzung zu prüfen“).
@@ -32,6 +33,15 @@ export type FakePrusaLinkState = {
     shortName?: string;
     /** So viele Downloads zuerst mit 503 beantworten (Drucker beschäftigt) */
     fileBusy?: number;
+    /**
+     * Vorschau unter `/thumb/l/usb/<fileName>` (wie die Datei nur unter dem
+     * langen Namen); sonst 404 – keine Vorschau in der Datei.
+     */
+    thumbnail?: Uint8Array;
+    /** So viele Vorschau-Anfragen zuerst mit 503 beantworten */
+    thumbnailBusy?: number;
+    /** Die Vorschau erst nach so vielen Millisekunden liefern (Drucker beschäftigt) */
+    thumbnailDelayMs?: number;
   } | null;
   /** Statt PrusaLink: ein anderer Dienst */
   mode: "prusalink" | "not_found" | "html";
@@ -123,13 +133,30 @@ export async function startFakePrusaLink(initial: FakePrusaLinkState) {
           name: job.shortName ?? job.fileName,
           display_name: job.fileName,
           path: "/usb",
-          refs: { download: `/usb/${job.shortName ?? job.fileName}` },
+          refs: {
+            download: `/usb/${job.shortName ?? job.fileName}`,
+            thumbnail: `/thumb/l/usb/${job.shortName ?? job.fileName}`,
+          },
           ...(job.meta && !job.metaOnlyInFiles ? { meta: job.meta } : {}),
         },
       });
     }
     if (path.startsWith("/api/v1/files/") && job?.metaOnlyInFiles)
       return json({ name: job.fileName, meta: job.meta });
+    if (job?.thumbnail && path === `/thumb/l/usb/${encodeURI(job.fileName)}`) {
+      if (job.thumbnailBusy) {
+        job.thumbnailBusy -= 1;
+        res.writeHead(503);
+        return res.end();
+      }
+      const send = () => {
+        res.writeHead(200, { "content-type": "image/png" });
+        res.end(Buffer.from(job.thumbnail!));
+      };
+      if (job.thumbnailDelayMs) setTimeout(send, job.thumbnailDelayMs);
+      else send();
+      return;
+    }
     if (job?.fileBytes && path === `/usb/${encodeURI(job.fileName)}`) {
       if (job.fileBusy) {
         job.fileBusy -= 1;
