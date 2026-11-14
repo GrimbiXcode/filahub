@@ -128,8 +128,19 @@ export type PrintImportItem = {
   filaments: ImportedFilament[];
   gramsEstimated: boolean;
   tokenName: string | null;
+  /** Vorschau aus der Druckdatei (seit 4.10.0) – ohne Speicherschlüssel */
+  preview: { width: number | null; height: number | null } | null;
   createdAt: Date;
 };
+
+/**
+ * Die Vorschau eines Eintrags: hochladen mit API-Schlüssel (`POST`, Körper
+ * sind die Bytes des Bildes), ansehen mit Sitzung unter
+ * `/api/files/print-imports/:id/preview`.
+ */
+export function printImportPreviewIngestPath(id: number): string {
+  return `/api/ingest/print-imports/${id}/preview`;
+}
 
 /** Filamente mit Gramm, in fester Form – was die Datenbank speichert */
 export function normalizeImportedFilaments(

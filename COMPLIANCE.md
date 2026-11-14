@@ -238,7 +238,7 @@ Known gaps, deliberately recorded rather than glossed over:
 | Data                                                                                     | On account deletion                                                              |
 | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Own stock: materials, weigh-ins, consumptions, container types, dryboxes, hidden presets | deleted                                                                          |
-| Print history and its uploaded photos and 3MF files                                      | rows deleted in the transaction, files right after it; a sweep catches leftovers |
+| Print history and its uploaded photos and 3MF files; inbox entries and their previews    | rows deleted in the transaction, files right after it; a sweep catches leftovers |
 | Store shares (`lager_shares`) — granted and received, **before** the stores              | deleted                                                                          |
 | Stores (`lager`) — deleted **after** the materials that point at them                    | deleted                                                                          |
 | Proposals — pending, rejected, withdrawn                                                 | deleted                                                                          |

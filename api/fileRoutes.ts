@@ -3,9 +3,9 @@ import type { Context, Hono } from "hono";
 import type { HttpBindings } from "@hono/node-server";
 import { TRPCError } from "@trpc/server";
 import { Zip, ZipPassThrough, strToU8 } from "fflate";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { User } from "@db/schema";
-import { printJobFiles, printJobs } from "@db/schema";
+import { printImports, printJobFiles, printJobs } from "@db/schema";
 import {
   MAX_3MF_BYTES,
   MAX_FILES_PER_PRINT_JOB,
@@ -31,6 +31,7 @@ import {
   removeStoredFiles,
   usedStorageInScope,
 } from "./queries/printFiles";
+import { findImportPreviewWithOwner } from "./queries/printImports";
 import { findPrintJobRowInScope } from "./queries/printJobs";
 import { resolveScope, type Scope } from "./scope";
 import { authenticateRequest } from "./telegram/auth";
@@ -244,8 +245,68 @@ export function registerFileRoutes(app: App) {
       .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
       .where(eq(printJobs.userId, user.id))
       .orderBy(printJobFiles.printJobId, printJobFiles.id);
+    /*
+      Vorschauen offener Einträge im Eingangsfach (seit 4.10.0) – sie gehören
+      wie die Fotos zum eigenen Bestand. Erledigte haben keine mehr: Ihre ist
+      beim Übernehmen zur Datei eines Drucks geworden (oben dabei) oder beim
+      Verwerfen gegangen.
+    */
+    const previews = await getDb()
+      .select({
+        id: printImports.id,
+        storageKey: printImports.previewKey,
+        mimeType: printImports.previewMimeType,
+        sizeBytes: printImports.previewBytes,
+        sha256: printImports.previewSha256,
+        createdAt: printImports.createdAt,
+      })
+      .from(printImports)
+      .where(
+        and(
+          eq(printImports.userId, user.id),
+          isNull(printImports.resolvedAt),
+          isNotNull(printImports.previewKey)
+        )
+      )
+      .orderBy(printImports.id);
+    type ExportEntry = {
+      storageKey: string;
+      path: string;
+      manifest: Record<string, unknown>;
+    };
+    const entries: ExportEntry[] = [
+      ...files.map(({ file }) => ({
+        storageKey: file.storageKey,
+        path: `druck-${file.printJobId}/${file.id}-${sanitizeFileName(file.originalName)}`,
+        manifest: {
+          printJobId: file.printJobId,
+          originalName: file.originalName,
+          mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
+          sha256: file.sha256,
+          createdAt: file.createdAt,
+        },
+      })),
+      ...previews.flatMap(preview =>
+        preview.storageKey
+          ? [
+              {
+                storageKey: preview.storageKey,
+                path: `eingangsfach-${preview.id}/vorschau.${preview.mimeType === "image/jpeg" ? "jpg" : preview.mimeType === "image/webp" ? "webp" : "png"}`,
+                manifest: {
+                  printImportId: preview.id,
+                  mimeType: preview.mimeType,
+                  sizeBytes: preview.sizeBytes,
+                  sha256: preview.sha256,
+                  createdAt: preview.createdAt,
+                },
+              },
+            ]
+          : []
+      ),
+    ];
     // Ein ZIP ohne ZIP64 fasst 65 535 Einträge; darüber wäre es kaputt
-    if (files.length >= MAX_EXPORT_FILES)
+    if (entries.length >= MAX_EXPORT_FILES)
       return fail(
         c,
         413,
@@ -276,19 +337,10 @@ export function registerFileRoutes(app: App) {
           aus diesem Aufruf sonst nichts, und der Strom riefe `pull` nie
           wieder – der Download hinge für immer.
         */
-        while (next < files.length) {
-          const { file } = files[next++];
-          const bytes = await storage.get(file.storageKey);
-          const path = `druck-${file.printJobId}/${file.id}-${sanitizeFileName(file.originalName)}`;
-          manifest.push({
-            path: bytes ? path : null,
-            printJobId: file.printJobId,
-            originalName: file.originalName,
-            mimeType: file.mimeType,
-            sizeBytes: file.sizeBytes,
-            sha256: file.sha256,
-            createdAt: file.createdAt,
-          });
+        while (next < entries.length) {
+          const { storageKey, path, manifest: info } = entries[next++];
+          const bytes = await storage.get(storageKey);
+          manifest.push({ path: bytes ? path : null, ...info });
           if (!bytes) continue;
           // Ohne Kompression: Fotos und 3MF sind es schon
           const entry = new ZipPassThrough(path);
@@ -296,7 +348,7 @@ export function registerFileRoutes(app: App) {
           entry.push(bytes, true);
           return;
         }
-        if (next === files.length) {
+        if (next === entries.length) {
           next++;
           const index = new ZipPassThrough("dateien.json");
           zip.add(index);
@@ -557,6 +609,48 @@ export function registerFileRoutes(app: App) {
       },
     });
   };
+
+  /*
+    Die Vorschau eines offenen Eintrags im Eingangsfach (seit 4.10.0). Wie die
+    Vorschau eines Fotos: Sitzung, Sperre, Bereich (fremd = 404),
+    dieselbe großzügige Zugriffsbegrenzung. Eine Vorschau ändert sich nie –
+    sie wird höchstens einmal je Eintrag gesetzt.
+  */
+  app.get("/api/files/print-imports/:id{[0-9]+}/preview", async c => {
+    const user = await currentUser(c);
+    if (!user) return fail(c, 401, "unauthenticated", "Nicht angemeldet.");
+    if (user.blockedAt)
+      return fail(c, 403, "blocked", "Dein Konto ist gesperrt.");
+    if (rateLimitedFor(c, user, "files.thumbnail", 1200, 60_000))
+      return fail(
+        c,
+        429,
+        "rate_limited",
+        "Zu viele Anfragen. Bitte kurz warten."
+      );
+    const id = positiveInt(c.req.param("id"));
+    const row = id ? await findImportPreviewWithOwner(id) : null;
+    if (!row) return fail(c, 404, "not_found", "Vorschau nicht gefunden");
+    if (row.organizationId != null) {
+      try {
+        await resolveScope(user.id, row.organizationId, "viewer");
+      } catch {
+        return fail(c, 404, "not_found", "Vorschau nicht gefunden");
+      }
+    } else if (row.userId !== user.id) {
+      return fail(c, 404, "not_found", "Vorschau nicht gefunden");
+    }
+    const bytes = await getFileStorage().get(row.storageKey);
+    if (!bytes) return fail(c, 404, "not_found", "Vorschau nicht gefunden");
+    return new Response(bytes, {
+      headers: {
+        "content-type": row.mimeType,
+        "content-length": String(bytes.length),
+        "cache-control": "private, max-age=3600",
+        etag: `"${row.sha256}-p"`,
+      },
+    });
+  });
 
   app.get("/api/files/:id{[0-9]+}/thumbnail", serve("thumbnail"));
   app.get("/api/files/:id{[0-9]+}", serve("file"));

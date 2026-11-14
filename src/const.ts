@@ -98,6 +98,11 @@ export function printFileUploadUrl(
   return `/api/files/print-jobs/${printJobId}${query}`;
 }
 
+/** Vorschau eines Eintrags im Eingangsfach (seit 4.10.0) */
+export function printImportPreviewUrl(id: number): string {
+  return `/api/files/print-imports/${id}/preview`;
+}
+
 /** Alle eigenen Dateien als ZIP – neben dem JSON-Export */
 export const PRINT_FILES_EXPORT_URL = "/api/files/export";
 

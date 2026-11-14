@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CONNECTIONS_PATH, PRINTS_PATH } from "@/const";
+import { CONNECTIONS_PATH, PRINTS_PATH, printImportPreviewUrl } from "@/const";
 import { useActiveScope, useScopeRole } from "@/lib/activeScope";
 import { useFormat } from "@/lib/formatContext";
 import { useT } from "@/lib/i18nContext";
@@ -173,6 +173,20 @@ function ImportCard({
               checked={selected}
               onCheckedChange={onToggle}
               aria-label={t.printImports.select({ title: item.title })}
+            />
+          )}
+          {item.preview && (
+            <img
+              src={printImportPreviewUrl(item.id)}
+              alt={t.printImports.previewAlt({ title: item.title })}
+              title={t.printImports.previewHint}
+              width={item.preview.width ?? undefined}
+              height={item.preview.height ?? undefined}
+              loading="lazy"
+              onError={event => {
+                event.currentTarget.hidden = true;
+              }}
+              className="h-16 w-16 shrink-0 rounded-md border bg-muted object-contain"
             />
           )}
           <div className="flex min-w-0 flex-1 flex-col gap-1">

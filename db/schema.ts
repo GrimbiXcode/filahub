@@ -984,6 +984,13 @@ export const printImportSourceEnum = pgEnum(
  *   `parseStoredFilaments`.
  * - Übernehmen setzt `printJobId` und `resolvedAt`, Verwerfen nur
  *   `resolvedAt`. Kein Fremdschlüssel, wie überall.
+ * - **Vorschau** (seit 4.10.0): höchstens ein Bild je Eintrag, die Bytes in
+ *   der Dateiablage unter `previewKey` – dieselbe Schlüsselform wie bei
+ *   `print_job_files`. Spalten statt eigener Tabelle, weil es genau eines ist
+ *   und es mit dem Eintrag lebt. Übernehmen macht daraus eine Zeile in
+ *   `print_job_files` (derselbe Schlüssel, die Datei wird nicht kopiert),
+ *   Übernehmen und Verwerfen leeren die Spalten. `previewBytes` zählt zum
+ *   Speicher des Bereichs (`usedStorageInScope`).
  */
 export const printImports = pgTable(
   "print_imports",
@@ -1006,10 +1013,17 @@ export const printImports = pgTable(
     apiTokenId: bigint("apiTokenId", { mode: "number" }),
     printJobId: bigint("printJobId", { mode: "number" }),
     resolvedAt: tsColumn("resolvedAt"),
+    previewKey: varchar("previewKey", { length: 32 }),
+    previewMimeType: varchar("previewMimeType", { length: 100 }),
+    previewBytes: integer("previewBytes").default(0).notNull(),
+    previewSha256: varchar("previewSha256", { length: 64 }),
+    previewWidth: integer("previewWidth"),
+    previewHeight: integer("previewHeight"),
     createdAt: tsColumn("createdAt").defaultNow().notNull(),
   },
   t => [
     ownerXor("print_imports_owner_xor"),
+    uniqueIndex("print_imports_preview_key_unique").on(t.previewKey),
     uniqueIndex("print_imports_user_key_unique")
       .on(t.userId, t.externalKey)
       .where(sql`"organizationId" IS NULL`),

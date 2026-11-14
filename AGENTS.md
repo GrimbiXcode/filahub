@@ -716,7 +716,8 @@ Benutzerdaten außerhalb der Datenbank liegen.
   `mayDeleteWeighing`).
 - **Grenzen** (`contracts/limits.ts`): 20 Dateien je Druck, Foto 10 MB,
   Vorschau 1 MB, 3MF 45 MB (unter dem Body-Limit von 50 MB samt Hülle),
-  **1 GB Speicher je Bereich** als Summe über `sizeBytes + thumbnailBytes`.
+  **1 GB Speicher je Bereich** als Summe über `sizeBytes + thumbnailBytes`
+  (seit 4.10.0 samt den Vorschauen im Eingangsfach).
   Uploads 30/min, Vorschauen 1200/min, Originale 120/min, Export 5/h je
   Benutzer. Dazu höchstens 8 gleichzeitige Uploads je Instanz und 2 je
   Benutzer – ein Upload liegt bis zu 50 MB im Speicher, und die
@@ -985,6 +986,56 @@ Weitere pflegt der Benutzer unter `/verbindungen`; die Brücke holt es sich ab.
 - **Noch nicht an echten Geräten geprüft:** die Antwortformen von PrusaLink
   (Plan, „Vor der Umsetzung zu prüfen“); ein MK3S mit PrusaLink auf dem Pi
   hat eine ältere Schnittstelle und wird noch nicht unterstützt.
+
+### Vorschau aus der Druckdatei (seit 4.10.0)
+
+Die Brücke holt beim ersten Sehen eines Drucks dessen Vorschau von PrusaLink
+und liefert sie nach dem Eintrag ins Eingangsfach nach; beim Übernehmen wird
+sie erstes Foto und Titelbild des Drucks. Tests in `api/bridge.test.ts`
+(Brücke, `stripPngMetadata`) und im Block „Vorschau aus der Druckdatei“ in
+`api/printImports.integration.test.ts`.
+
+- **Quelle:** `file.refs.thumbnail` aus `/api/v1/job` (`/thumb/l<Kurzpfad>`,
+  Buddy-Firmware: das erste PNG über 16 × 16 px), bei 404 `/thumb/l` mit dem
+  langen Namen (`withFallbackPath`, derselbe Rückgriff wie für die Datei).
+  Versuche beim ersten Sehen, nach 30 s, 1 und 2 min und beim Ende; 404 heißt
+  „keine Vorschau in der Datei“ und beendet die Versuche. Ohne Vorschau geht
+  der Druck trotzdem ins Fach. Höchstens 1 MB (`PREVIEW_MAX_BYTES` =
+  `MAX_PRINT_IMPORT_PREVIEW_BYTES`, ein Test vergleicht beide).
+- **Die Brücke entfernt alle Hilfs-Chunks** (`stripPngMetadata`: nur IHDR,
+  PLTE, tRNS, IDAT, IEND, Byte für Byte, Prüfsummen geprüft) – der Server
+  lehnt jedes Bild mit Metadaten ab, wie bei den Fotos.
+- **Warteschlange:** Ein Eintrag ist seit 4.10.0 ein `QueuedImport`
+  (`item`, `preview`, `importId`); `loadQueue` liest auch die alte Form. Das
+  Bild liegt als Datei unter `DATA_DIR/previews/`, **nicht** base64 in
+  `queue.json` – die wird bei jedem Durchlauf neu geschrieben. Frisch vom
+  Drucker beim Einliefern ginge auch, aber dann können Datei, Stick oder
+  Drucker weg sein. Nach dem Einliefern steht `importId`; scheitert danach das
+  Hochladen (429/5xx/Netz), wird nur die Vorschau wiederholt, höchstens zehnmal.
+- **Route** `POST /api/ingest/print-imports/:id/preview` (beide
+  Schlüsselarten, Körper = Bytes): fremder, erledigter oder unbekannter
+  Eintrag 404; eine zweite Vorschau `200 { duplicate: true }` ohne
+  Speichern; Typ aus den Bytes (nur PNG/JPEG/WebP), Metadaten 422, Kontingent
+  nach der Bereichsprüfung und noch einmal unter Sperre des Eintrags
+  (`attachImportPreview`); 60/min je Schlüssel. Ansehen über
+  `GET /api/files/print-imports/:id/preview` mit Sitzung, wie die Vorschau
+  eines Fotos.
+- **Spalten an `print_imports`** (`previewKey` … `previewHeight`), keine
+  eigene Tabelle: genau eine je Eintrag, sie lebt mit ihm. Deshalb keine neue
+  Zeile in `COUNTED_TABLES` oder den Listen der Tests; der Export lässt
+  `previewKey` weg, der ZIP-Export enthält die Datei
+  (`eingangsfach-<id>/vorschau.png`).
+- **Speicher:** `usedStorageInScope` zählt `previewBytes` offener Vorschauen
+  mit, auch in der Prüfung unter Sperre von `insertPrintFile`.
+- **Übernehmen** (`claimImportHooks.after`): in derselben Transaktion eine
+  Zeile in `print_job_files` mit dem **Schlüssel der Vorschau** (keine Kopie,
+  `thumbnailKey` NULL – die Vorschau-Route liefert dann das Bild selbst) und
+  `coverFileId`; der Eintrag gibt den Schlüssel ab (`NO_PREVIEW`).
+- **Aufräumen:** Verwerfen (`dismissImports`, unter Sperre), der
+  Aufbewahrungslauf und beide Kaskaden (`previewKeysWhere` vor dem `DELETE`)
+  entfernen die Datei nach dem Commit; `sweepOrphanFiles` kennt
+  `previewKey` als belegt.
+- **Noch nicht an echten Geräten geprüft**, wie die übrige Brücke.
 
 ### OpenPrintTag (seit 4.7.0)
 

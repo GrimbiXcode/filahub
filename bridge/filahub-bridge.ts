@@ -10,7 +10,8 @@
  * App unter „Verbindungen“. Die Brücke holt die Konfiguration regelmäßig ab
  * (`GET /api/bridge/config`), fragt die Drucker über PrusaLink ab, meldet
  * Zustand und Diagnose zurück (`POST /api/bridge/report`) und liefert fertige
- * Drucke ins Eingangsfach (`POST /api/ingest/print-imports`).
+ * Drucke ins Eingangsfach (`POST /api/ingest/print-imports`), seit 4.10.0
+ * samt der Vorschau aus der Druckdatei (`…/print-imports/:id/preview`).
  *
  * Bewusst **ohne Abhängigkeiten**: Node 26 führt diese Datei direkt aus
  * (Type Stripping), das Image enthält nichts als Node und sie. Deshalb nur
@@ -20,17 +21,24 @@
  * `api/bridge.test.ts` prüft beide gegeneinander.
  *
  * Optional:
- *   DATA_DIR             Ablage der Warteschlange (Vorgabe /data)
+ *   DATA_DIR             Ablage der Warteschlange und ihrer Vorschauen (Vorgabe /data)
  *   BRIDGE_ALLOW_PUBLIC  1 = auch Drucker außerhalb des lokalen Netzes
  */
 
 import { createHash, randomBytes } from "node:crypto";
 import { lookup } from "node:dns/promises";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { crc32, inflateSync } from "node:zlib";
 
-export const BRIDGE_VERSION = "4.9.6";
+export const BRIDGE_VERSION = "4.10.0";
 export const BRIDGE_PROTOCOL = 1;
 
 // ---------------------------------------------------------------------------
@@ -122,6 +130,19 @@ export type PrintImport = {
   gramsEstimated: boolean;
 };
 
+/**
+ * Ein vorgemerkter Druck in der Warteschlange. `importId` steht, sobald
+ * filahub den Eintrag angenommen hat – dann fehlt nur noch die Vorschau.
+ * `preview` ist der Name ihrer Datei unter `DATA_DIR/previews/` (ohne
+ * `DATA_DIR`: nur im Speicher).
+ */
+export type QueuedImport = {
+  item: PrintImport;
+  preview: string | null;
+  importId: number | null;
+  previewTries: number;
+};
+
 const PRUSALINK_STATES = [
   "IDLE",
   "BUSY",
@@ -169,6 +190,18 @@ const GCODE_TAIL_TIMEOUT_MS = 30 * 60_000;
 const META_RETRY_BASE_MS = 30_000;
 const BGCODE_MAX_METADATA_BYTES = 1024 * 1024;
 const FILAHUB_TIMEOUT_MS = 15_000;
+/**
+ * Vorschau aus der Druckdatei (seit 4.10.0): `GET /thumb/l/<pfad>` liefert das
+ * erste PNG über 16 × 16 px. Höchstens 1 MB – dieselbe Grenze wie der Server
+ * (`MAX_PRINT_IMPORT_PREVIEW_BYTES`). Die Firmware muss das Bild erst aus der
+ * Datei holen; das dauert beim Drucken.
+ */
+export const PREVIEW_MAX_BYTES = 1024 * 1024;
+const PREVIEW_TIMEOUT_MS = 20_000;
+/** Versuche beim ersten Sehen und danach (30 s, 1, 2 min), dazu einer beim Ende */
+const PREVIEW_ATTEMPTS = 4;
+/** So oft wird das Hochladen der Vorschau wiederholt, bevor sie verfällt */
+const PREVIEW_UPLOAD_TRIES = 10;
 /** Wird je Durchlauf beschrieben; der HEALTHCHECK prüft sein Alter */
 const HEARTBEAT_FILE = "/tmp/filahub-bridge-alive";
 
@@ -421,6 +454,53 @@ function bgcodeMeta(
   throw new PrintFileHeadError("zu viele Blöcke vor dem G-Code");
 }
 
+/** Chunks, die ein PNG zum Zeichnen braucht – alles andere fällt weg */
+const PNG_KEEP_CHUNKS = new Set(["IHDR", "PLTE", "tRNS", "IDAT", "IEND"]);
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
+
+/**
+ * Entfernt aus einem PNG alle Hilfs-Chunks: Text (`tEXt`, `zTXt`, `iTXt`),
+ * EXIF, Zeitstempel, Farbprofile, Animation. Behalten werden nur IHDR, PLTE,
+ * tRNS, IDAT und IEND, Byte für Byte – die Bildpunkte bleiben unverändert.
+ * Der Server lehnt jedes Bild mit Metadaten ab (`hasMetadata` in
+ * `contracts/printFiles.ts`); PrusaSlicer schreibt zwar keine, aber was in
+ * der Datei steckt, bestimmt am Ende das Programm, das sie erzeugt hat.
+ *
+ * `null`, wenn es kein vollständiges, unversehrtes PNG ist (Signatur, IHDR
+ * zuerst, Bilddaten, Prüfsummen der behaltenen Chunks, IEND).
+ */
+export function stripPngMetadata(bytes: Uint8Array): Uint8Array | null {
+  const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length);
+  if (buffer.length < 8 + 12 || !buffer.subarray(0, 8).equals(PNG_SIGNATURE))
+    return null;
+  const kept: Buffer[] = [PNG_SIGNATURE];
+  let offset = 8;
+  let first = true;
+  let hasImage = false;
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const end = offset + 12 + length;
+    if (length > 0x7fffffff || end > buffer.length) return null;
+    const type = buffer.subarray(offset + 4, offset + 8).toString("latin1");
+    if (first && type !== "IHDR") return null;
+    first = false;
+    if (PNG_KEEP_CHUNKS.has(type)) {
+      const crc = buffer.readUInt32BE(offset + 8 + length);
+      if (crc32(buffer.subarray(offset + 4, offset + 8 + length)) !== crc)
+        return null;
+      kept.push(buffer.subarray(offset, end));
+      if (type === "IDAT") hasImage = true;
+    }
+    offset = end;
+    // Was hinter dem Bildende steht, gehört nicht zum Bild
+    if (type === "IEND")
+      return hasImage ? new Uint8Array(Buffer.concat(kept)) : null;
+  }
+  return null;
+}
+
 /** Fehlerursache aus `fetch` → Diagnosekennung */
 export function classifyNetworkError(error: unknown): {
   state: PrinterState;
@@ -646,6 +726,31 @@ export class PrusaLinkClient {
   }
 
   /**
+   * Lädt ein Bild vom Drucker, höchstens `maxBytes`. Größer: Fehler, und die
+   * Übertragung wird abgebrochen.
+   */
+  async readImage(path: string, maxBytes: number): Promise<Uint8Array> {
+    const response = await this.request(path, "image/png", PREVIEW_TIMEOUT_MS);
+    const reader = response.body?.getReader();
+    if (!reader) return new Uint8Array(0);
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        length += value.length;
+        if (length > maxBytes)
+          throw new PrusaLinkError("error", "Vorschau zu groß", null);
+        chunks.push(value);
+      }
+    } finally {
+      await reader.cancel().catch(() => undefined);
+    }
+    return new Uint8Array(Buffer.concat(chunks, length));
+  }
+
+  /**
    * Reicht eine ganze Datei durch und behält nur die letzten `tailBytes` –
    * für ASCII-G-Code, dessen Verbrauch erst am Ende steht.
    */
@@ -750,6 +855,56 @@ export class PrusaLinkClient {
   }
 }
 
+/**
+ * Erst die Kurzform, bei 404 der lange Name im selben Verzeichnis – die
+ * Kurzform kann veraltet sein, wenn eine gleichnamige Datei kurz vorher
+ * ersetzt wurde. Für die Datei selbst und für ihre Vorschau.
+ */
+async function withFallbackPath<T>(
+  primary: string,
+  fallback: string | null,
+  read: (path: string) => Promise<T>
+): Promise<T> {
+  try {
+    return await read(encodeURI(primary));
+  } catch (error) {
+    const notFound =
+      error instanceof PrusaLinkError && error.httpStatus === 404;
+    if (!notFound || !fallback) throw error;
+    return await read(encodeURI(fallback));
+  }
+}
+
+/**
+ * Ein Eintrag aus `queue.json`. Bis 4.9 lag dort der Druck selbst, seit
+ * 4.10.0 ein `QueuedImport` – beides wird gelesen, damit ein Update keine
+ * vorgemerkten Drucke verliert.
+ */
+function toQueuedImport(raw: unknown): QueuedImport[] {
+  if (!raw || typeof raw !== "object") return [];
+  const value = raw as Partial<QueuedImport> & Partial<PrintImport>;
+  if (value.item && typeof value.item === "object")
+    return [
+      {
+        item: value.item,
+        preview: typeof value.preview === "string" ? value.preview : null,
+        importId: typeof value.importId === "number" ? value.importId : null,
+        previewTries:
+          typeof value.previewTries === "number" ? value.previewTries : 0,
+      },
+    ];
+  if (typeof value.externalKey === "string")
+    return [
+      {
+        item: value as PrintImport,
+        preview: null,
+        importId: null,
+        previewTries: 0,
+      },
+    ];
+  return [];
+}
+
 // ---------------------------------------------------------------------------
 // Die Brücke
 // ---------------------------------------------------------------------------
@@ -764,6 +919,16 @@ type JobTrack = {
   longPath: string | null;
   /** ASCII-G-Code ohne Verbrauch im Kopf: nach dem Druck das Ende lesen */
   needsTail: boolean;
+  /** `file.refs.thumbnail`, z. B. `/thumb/l/usb/BENCHY~1.BGC` */
+  thumbnailPath: string | null;
+  /** Statt der Kurzform: `/thumb/l` mit dem langen Namen */
+  longThumbnailPath: string | null;
+  /** Die Vorschau, ohne Metadaten – gesetzt, sobald sie geladen ist */
+  preview: Uint8Array | null;
+  /** Kein weiterer Versuch: geladen, keine in der Datei oder unbrauchbar */
+  previewDone: boolean;
+  previewAttempts: number;
+  nextPreviewAt: number;
   meta: Record<string, unknown> | null;
   metaTried: boolean;
   /** Versuche, die Datei selbst zu lesen, und wann der nächste dran ist */
@@ -806,7 +971,11 @@ export class Bridge {
   startedAt: string;
   config: BridgeConfig | null = null;
   printers = new Map<number, PrinterRuntime>();
-  queue: PrintImport[] = [];
+  queue: QueuedImport[] = [];
+  /** Vorschauen der Warteschlange ohne `DATA_DIR` – sonst liegen sie als Datei */
+  previewMemory = new Map<string, Uint8Array>();
+  /** Vorschauen, die gerade auf den Datenträger geschrieben werden */
+  previewWrites = new Map<string, Promise<void>>();
   /** Laufende Lesevorgänge nach dem Druck (Ende einer ASCII-Datei) */
   background = new Set<Promise<void>>();
   /** Beim Herunterfahren: Drucke, deren Ende noch gelesen wird, ohne Gramm vormerken */
@@ -842,7 +1011,9 @@ export class Bridge {
   async filahub(
     method: "GET" | "POST",
     path: string,
-    body?: unknown
+    body?: unknown,
+    /** Statt JSON: Bytes mit diesem Typ (die Vorschau) */
+    raw?: { bytes: Uint8Array; contentType: string }
   ): Promise<FilahubResponse> {
     const url = new URL(path, this.options.filahubUrl);
     const response = await this.fetchFn(url, {
@@ -850,9 +1021,13 @@ export class Bridge {
       headers: {
         authorization: `Bearer ${this.options.token}`,
         "user-agent": `filahub-bridge/${BRIDGE_VERSION}`,
-        ...(body ? { "content-type": "application/json" } : {}),
+        ...(raw
+          ? { "content-type": raw.contentType }
+          : body
+            ? { "content-type": "application/json" }
+            : {}),
       },
-      body: body ? JSON.stringify(body) : undefined,
+      body: raw ? raw.bytes : body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(FILAHUB_TIMEOUT_MS),
     });
     const json: unknown = await response.json().catch(() => null);
@@ -1096,7 +1271,10 @@ export class Bridge {
 
     // Ein erledigter Job trägt seine ID negativ (siehe unten)
     if (current && (jobId === null || jobId !== Math.abs(current.jobId))) {
-      if (current.jobId > 0) await this.readFileMeta(runtime, current, true);
+      if (current.jobId > 0) {
+        await this.readFileMeta(runtime, current, true);
+        await this.readPreview(runtime, current, true);
+      }
       this.finishJob(runtime, current, current.lastPrinterState);
       runtime.job = null;
     }
@@ -1113,6 +1291,12 @@ export class Bridge {
         downloadPath: null,
         longPath: null,
         needsTail: false,
+        thumbnailPath: null,
+        longThumbnailPath: null,
+        preview: null,
+        previewDone: false,
+        previewAttempts: 0,
+        nextPreviewAt: 0,
         meta: null,
         metaTried: false,
         metaAttempts: 0,
@@ -1135,6 +1319,7 @@ export class Bridge {
       track.timePrinting = Math.round(job.time_printing);
     track.lastPrinterState = printerState;
     await this.readFileMeta(runtime, track, ended);
+    await this.readPreview(runtime, track, ended);
     if (ended) {
       this.finishJob(runtime, track, printerState);
       // Erledigt merken, damit derselbe Job nicht noch einmal gemeldet wird
@@ -1149,7 +1334,7 @@ export class Bridge {
           name?: string;
           display_name?: string;
           path?: string;
-          refs?: { download?: string };
+          refs?: { download?: string; thumbnail?: string };
           meta?: Record<string, unknown>;
         };
       } | null;
@@ -1168,6 +1353,18 @@ export class Bridge {
           ? `${job.file.path.replace(/\/$/, "")}/${job.file.display_name}`
           : null;
       if (track.longPath === track.downloadPath) track.longPath = null;
+      // Die Buddy-Firmware nennt die Vorschau unter `/thumb/l<Kurzpfad>`
+      const thumbnail = job?.file?.refs?.thumbnail;
+      track.thumbnailPath =
+        typeof thumbnail === "string" && /^\/thumb\/[a-z]\/[^/]/.test(thumbnail)
+          ? thumbnail
+          : null;
+      track.longThumbnailPath =
+        track.thumbnailPath && track.longPath
+          ? `/thumb/l${track.longPath}`
+          : null;
+      if (track.longThumbnailPath === track.thumbnailPath)
+        track.longThumbnailPath = null;
       track.meta = job?.file?.meta ?? null;
     } catch (error) {
       this.write(
@@ -1260,14 +1457,54 @@ export class Bridge {
     track: JobTrack,
     read: (path: string) => Promise<T>
   ): Promise<T> {
+    return withFallbackPath(track.downloadPath ?? "", track.longPath, read);
+  }
+
+  /**
+   * Die Vorschau aus der Druckdatei: beim ersten Sehen des Drucks, dann nach
+   * 30 s, 1 und 2 min und ein letztes Mal beim Ende – wie beim Verbrauch, nur
+   * mit weniger Versuchen. Ohne Vorschau in der Datei (404 auch unter dem
+   * langen Namen) oder mit einem unbrauchbaren Bild wird nicht weiter
+   * gefragt. Scheitert alles, geht der Druck ohne Vorschau ins Fach.
+   */
+  async readPreview(runtime: PrinterRuntime, track: JobTrack, final: boolean) {
+    if (track.previewDone || !track.thumbnailPath) return;
+    if (track.previewAttempts >= PREVIEW_ATTEMPTS + (final ? 1 : 0)) return;
+    if (!final && this.now() < track.nextPreviewAt) return;
+    track.previewAttempts += 1;
+    track.nextPreviewAt =
+      this.now() + META_RETRY_BASE_MS * 2 ** (track.previewAttempts - 1);
+    const name = runtime.config.name;
+    let bytes: Uint8Array;
     try {
-      return await read(encodeURI(track.downloadPath ?? ""));
+      bytes = await withFallbackPath(
+        track.thumbnailPath,
+        track.longThumbnailPath,
+        path => runtime.client.readImage(path, PREVIEW_MAX_BYTES)
+      );
     } catch (error) {
-      const notFound =
-        error instanceof PrusaLinkError && error.httpStatus === 404;
-      if (!notFound || !track.longPath) throw error;
-      return await read(encodeURI(track.longPath));
+      if (error instanceof PrusaLinkError && error.httpStatus === 404) {
+        track.previewDone = true;
+        this.write("info", `Drucker „${name}“: keine Vorschau in der Datei`);
+        return;
+      }
+      const last = track.previewAttempts >= PREVIEW_ATTEMPTS || final;
+      this.write(
+        "warn",
+        `Drucker „${name}“: Vorschau nicht geladen, ${track.previewAttempts}. Versuch – ${(error as Error).message}${last ? "" : " (neuer Versuch folgt)"}`
+      );
+      return;
     }
+    track.previewDone = true;
+    const clean = stripPngMetadata(bytes);
+    if (!clean) {
+      this.write(
+        "warn",
+        `Drucker „${name}“: Vorschau ist kein lesbares PNG – der Druck kommt ohne sie`
+      );
+      return;
+    }
+    track.preview = clean;
   }
 
   /** Ende einer ASCII-Datei lesen und mit dem Kopf zusammenführen */
@@ -1301,7 +1538,8 @@ export class Bridge {
 
   /** Bis alle Lesevorgänge im Hintergrund fertig sind (Tests, Herunterfahren) */
   async settle(): Promise<void> {
-    while (this.background.size > 0) await Promise.all(this.background);
+    while (this.background.size > 0 || this.previewWrites.size > 0)
+      await Promise.all([...this.background, ...this.previewWrites.values()]);
   }
 
   finishJob(
@@ -1390,37 +1628,163 @@ export class Bridge {
       "info",
       `Drucker „${runtime.config.name}“: Druck ${track.jobId} ${status} – fürs Eingangsfach vorgemerkt`
     );
-    this.queue.push(item);
-    if (this.queue.length > MAX_QUEUE) this.queue.shift();
+    const preview = track.preview
+      ? this.storePreview(item.externalKey, track.preview)
+      : null;
+    this.queue.push({ item, preview, importId: null, previewTries: 0 });
+    if (this.queue.length > MAX_QUEUE) this.dropEntry(this.queue.shift());
+  }
+
+  // -- Vorschauen der Warteschlange -------------------------------------------
+
+  /**
+   * Legt die Vorschau eines vorgemerkten Drucks ab: als Datei neben der
+   * Warteschlange, nicht in ihr. `queue.json` bleibt so klein und wird bei
+   * jedem Durchlauf neu geschrieben; 500 Drucke mit Vorschau als base64
+   * wären bis zu 650 MB, die jedes Mal durch `JSON.stringify` gingen.
+   * Erst beim Einliefern frisch vom Drucker zu holen, ginge auch – aber dann
+   * kann die Datei gelöscht, der Stick gezogen oder der Drucker aus sein, und
+   * das Einliefern wartet ohnehin oft genau dann, wenn etwas nicht läuft.
+   */
+  storePreview(externalKey: string, bytes: Uint8Array): string {
+    const name = `${createHash("sha256").update(externalKey).digest("hex").slice(0, 32)}.png`;
+    if (!this.options.dataDir) {
+      this.previewMemory.set(name, bytes);
+      return name;
+    }
+    const dir = join(this.options.dataDir, "previews");
+    // Geschrieben wird im Hintergrund; bis dahin – und scheitert es: weiter –
+    // hält der Speicher sie
+    this.previewMemory.set(name, bytes);
+    const task = mkdir(dir, { recursive: true })
+      .then(() => writeFile(join(dir, name), bytes))
+      .then(() => {
+        this.previewMemory.delete(name);
+      })
+      .catch(error => {
+        this.write(
+          "warn",
+          `Vorschau nicht gespeichert in ${dir}: ${(error as Error).message}`
+        );
+      })
+      .finally(() => {
+        if (this.previewWrites.get(name) === task)
+          this.previewWrites.delete(name);
+      });
+    this.previewWrites.set(name, task);
+    return name;
+  }
+
+  async loadPreview(name: string): Promise<Uint8Array | null> {
+    const inMemory = this.previewMemory.get(name);
+    if (inMemory) return inMemory;
+    if (!this.options.dataDir || !/^[0-9a-f]{32}\.png$/.test(name)) return null;
+    try {
+      return new Uint8Array(
+        await readFile(join(this.options.dataDir, "previews", name))
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /** Entfernt einen Eintrag samt Vorschau aus dem Speicher und vom Datenträger */
+  dropEntry(entry: QueuedImport | undefined) {
+    if (!entry?.preview) return;
+    const name = entry.preview;
+    entry.preview = null;
+    this.previewMemory.delete(name);
+    const dataDir = this.options.dataDir;
+    if (!dataDir || !/^[0-9a-f]{32}\.png$/.test(name)) return;
+    // Erst löschen, wenn das Schreiben durch ist – sonst bliebe sie liegen
+    const pending = this.previewWrites.get(name) ?? Promise.resolve();
+    void pending
+      .then(() => unlink(join(dataDir, "previews", name)))
+      .catch(() => undefined);
+  }
+
+  /**
+   * Lädt die Vorschau zu einem angenommenen Eintrag hoch. `"retry"`: Server
+   * gerade nicht bereit, später noch einmal; sonst ist sie erledigt –
+   * angenommen oder endgültig abgelehnt.
+   */
+  async uploadPreview(entry: QueuedImport): Promise<"done" | "retry"> {
+    if (!entry.preview || entry.importId === null) return "done";
+    const bytes = await this.loadPreview(entry.preview);
+    if (!bytes) return "done";
+    let response: FilahubResponse;
+    try {
+      response = await this.filahub(
+        "POST",
+        `/api/ingest/print-imports/${entry.importId}/preview`,
+        undefined,
+        { bytes, contentType: "image/png" }
+      );
+    } catch {
+      return this.retryPreview(entry);
+    }
+    if (this.handleAuthFailure(response)) return "retry";
+    if (response.status === 429 || response.status >= 500)
+      return this.retryPreview(entry);
+    if (response.status !== 200 && response.status !== 201) {
+      const message =
+        (response.json as { error?: string } | null)?.error ?? "abgelehnt";
+      this.write(
+        "warn",
+        `Vorschau zu „${entry.item.title}“ von filahub abgelehnt (HTTP ${response.status}: ${message}) – der Druck bleibt ohne`
+      );
+    }
+    return "done";
+  }
+
+  retryPreview(entry: QueuedImport): "done" | "retry" {
+    entry.previewTries += 1;
+    if (entry.previewTries < PREVIEW_UPLOAD_TRIES) return "retry";
+    this.write(
+      "warn",
+      `Vorschau zu „${entry.item.title}“ nach ${PREVIEW_UPLOAD_TRIES} Versuchen aufgegeben – der Druck bleibt ohne`
+    );
+    return "done";
   }
 
   // -- Einliefern, melden -----------------------------------------------------
 
   async flushQueue(): Promise<void> {
     while (this.queue.length > 0) {
-      const item = this.queue[0];
-      let response: FilahubResponse;
-      try {
-        response = await this.filahub(
-          "POST",
-          "/api/ingest/print-imports",
-          item
-        );
-      } catch {
-        return; // Server nicht erreichbar – später noch einmal
+      const entry = this.queue[0];
+      const { item } = entry;
+      if (entry.importId === null) {
+        let response: FilahubResponse;
+        try {
+          response = await this.filahub(
+            "POST",
+            "/api/ingest/print-imports",
+            item
+          );
+        } catch {
+          return; // Server nicht erreichbar – später noch einmal
+        }
+        if (this.handleAuthFailure(response)) return;
+        if (response.status === 429 || response.status >= 500) return;
+        if (response.status !== 200 && response.status !== 201) {
+          // 4xx: der Eintrag ist kaputt und wird es bleiben
+          this.write(
+            "error",
+            `Druck „${item.title}“ von filahub abgelehnt (HTTP ${response.status}) – verworfen`
+          );
+          this.dropEntry(this.queue.shift());
+          continue;
+        }
+        // Auch eine Wiederholung (200) nennt die ID – die Vorschau folgt
+        const id = (response.json as { id?: unknown } | null)?.id;
+        entry.importId = typeof id === "number" ? id : null;
+        if (entry.importId === null) {
+          this.dropEntry(this.queue.shift());
+          continue;
+        }
       }
-      if (this.handleAuthFailure(response)) return;
-      if (response.status === 429 || response.status >= 500) return;
-      if (response.status === 200 || response.status === 201) {
-        this.queue.shift();
-        continue;
-      }
-      // 4xx: der Eintrag ist kaputt und wird es bleiben
-      this.write(
-        "error",
-        `Druck „${item.title}“ von filahub abgelehnt (HTTP ${response.status}) – verworfen`
-      );
-      this.queue.shift();
+      if ((await this.uploadPreview(entry)) === "retry") return;
+      this.dropEntry(this.queue.shift());
     }
   }
 
@@ -1479,12 +1843,28 @@ export class Bridge {
         join(this.options.dataDir, "queue.json"),
         "utf8"
       );
-      const parsed = JSON.parse(raw) as PrintImport[];
-      if (Array.isArray(parsed)) this.queue = parsed.slice(-MAX_QUEUE);
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed))
+        this.queue = parsed.flatMap(toQueuedImport).slice(-MAX_QUEUE);
       if (this.queue.length > 0)
         this.write("info", `${this.queue.length} vorgemerkte Drucke geladen`);
     } catch {
       // Keine oder unlesbare Warteschlange – leer anfangen
+    }
+    await this.removeStalePreviews();
+  }
+
+  /** Vorschaudateien, zu denen kein Eintrag mehr gehört (Absturz, Neustart) */
+  async removeStalePreviews(): Promise<void> {
+    if (!this.options.dataDir) return;
+    const dir = join(this.options.dataDir, "previews");
+    const wanted = new Set(this.queue.map(entry => entry.preview));
+    try {
+      for (const name of await readdir(dir))
+        if (/^[0-9a-f]{32}\.png$/.test(name) && !wanted.has(name))
+          await unlink(join(dir, name)).catch(() => undefined);
+    } catch {
+      // Kein Verzeichnis – nichts aufzuräumen
     }
   }
 
@@ -1534,6 +1914,8 @@ export class Bridge {
     // Ein Druck geht nicht verloren, nur weil sein Ende noch gelesen wurde
     for (const enqueue of [...this.abandon]) enqueue();
     await this.saveQueue();
+    // Vorschauen, die gerade geschrieben werden, nicht abschneiden
+    await Promise.all(this.previewWrites.values());
   }
 }
 

@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -8,8 +10,10 @@ import {
   classifyNetworkError,
   FILE_HEAD_MAX_BYTES,
   filamentsFromMeta,
+  PREVIEW_MAX_BYTES,
   PrintFileHeadError,
   isPrivateIp,
+  stripPngMetadata,
   metaFromPrintFileHead,
   titleFromFileName,
   type BridgeConfig,
@@ -21,8 +25,11 @@ import {
   isPrivateAddress,
   normalizePrinterHost,
 } from "@contracts/bridge";
+import { MAX_PRINT_IMPORT_PREVIEW_BYTES } from "@contracts/limits";
+import { detectPrintFile } from "@contracts/printFiles";
 import { printImportInputSchema } from "@contracts/printImports";
 import { startFakePrusaLink } from "./test/fakePrusaLink";
+import { buildPng, pngChunk, pngWithText } from "./test/pngFixtures";
 import {
   FILE_METADATA,
   buildBgcode,
@@ -47,7 +54,10 @@ type FakeFilahub = {
   config: BridgeConfig;
   reports: unknown[];
   imports: unknown[];
+  /** Hochgeladene Vorschauen: Eintrag und Bytes */
+  previews: { id: number; contentType: string; bytes: Buffer }[];
   ingestStatus: number;
+  previewStatus: number;
   configStatus: number;
   close: () => Promise<void>;
 };
@@ -64,16 +74,20 @@ async function startFakeFilahub(
     },
     reports: [] as unknown[],
     imports: [] as unknown[],
+    previews: [],
     ingestStatus: 201,
+    previewStatus: 201,
     configStatus: 200,
-  } as FakeFilahub;
+  } as unknown as FakeFilahub;
   const server: Server = createServer(async (req, res) => {
     if (req.headers.authorization !== `Bearer ${TOKEN}`) {
       res.writeHead(401, { "content-type": "application/json" });
       return res.end(JSON.stringify({ error: "nope" }));
     }
-    let body = "";
-    for await (const chunk of req) body += chunk;
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(chunk as Buffer);
+    const raw = Buffer.concat(chunks);
+    const body = raw.toString("utf8");
     const reply = (status: number, json: unknown) => {
       res.writeHead(status, { "content-type": "application/json" });
       res.end(JSON.stringify(json));
@@ -88,6 +102,18 @@ async function startFakeFilahub(
       if (fake.ingestStatus >= 300) return reply(fake.ingestStatus, {});
       fake.imports.push(JSON.parse(body));
       return reply(201, { id: fake.imports.length, duplicate: false });
+    }
+    const preview = req.url?.match(
+      /^\/api\/ingest\/print-imports\/(\d+)\/preview$/
+    );
+    if (preview && req.method === "POST") {
+      if (fake.previewStatus >= 300) return reply(fake.previewStatus, {});
+      fake.previews.push({
+        id: Number(preview[1]),
+        contentType: req.headers["content-type"] ?? "",
+        bytes: raw,
+      });
+      return reply(201, { id: Number(preview[1]), duplicate: false });
     }
     reply(404, {});
   });
@@ -169,14 +195,17 @@ afterEach(async () => {
 
 async function setup(
   printers: ConfigPrinter[],
-  options: { resolve?: (host: string) => Promise<string[]> } = {}
+  options: {
+    resolve?: (host: string) => Promise<string[]>;
+    dataDir?: string;
+  } = {}
 ) {
   const filahub = await startFakeFilahub(printers);
   cleanup.push(filahub.close);
   const bridge = new Bridge({
     filahubUrl: filahub.url,
     token: TOKEN,
-    dataDir: null,
+    dataDir: options.dataDir ?? null,
     allowPublic: false,
     now,
     resolve: options.resolve,
@@ -680,6 +709,256 @@ describe("Metadaten aus dem Kopf einer Druckdatei", () => {
     expect(() =>
       metaFromPrintFileHead(new Uint8Array([1, 0, 2]), true)
     ).toThrow(PrintFileHeadError);
+  });
+});
+
+describe("Vorschau aus der Druckdatei", () => {
+  async function printing(extra = {}, options: { dataDir?: string } = {}) {
+    const link = await startFakePrusaLink({
+      auth: { kind: "api_key", key: "geheim" },
+      printerState: "PRINTING",
+      job: {
+        id: 42,
+        progress: 10,
+        timePrinting: 600,
+        fileName: "Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode",
+        meta: META,
+        ...extra,
+      },
+      mode: "prusalink",
+    });
+    cleanup.push(link.close);
+    const env = await setup([printer({ host: link.host })], options);
+    await env.bridge.tick();
+    return { link, ...env };
+  }
+  const thumbRequests = (requests: string[]) =>
+    requests.filter(path => path.startsWith("/thumb/"));
+  async function finish(
+    link: { state: { printerState: string } },
+    bridge: Bridge
+  ) {
+    link.state.printerState = "FINISHED";
+    await bridge.tick();
+    await bridge.settle();
+  }
+
+  it("holt sie beim ersten Sehen und liefert sie nach dem Eintrag ein – ohne Metadaten", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+    });
+    expect(thumbRequests(link.requests)).toEqual([
+      "/thumb/l/usb/Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode",
+    ]);
+    await finish(link, bridge);
+    // Kein zweites Laden beim Ende, sie liegt schon vor
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(1);
+    const [preview] = filahub.previews;
+    expect(preview.id).toBe(1);
+    expect(preview.contentType).toBe("image/png");
+    expect(detectPrintFile(preview.bytes)).toEqual({
+      kind: "image",
+      mimeType: "image/png",
+      width: 300,
+      height: 300,
+      hasMetadata: false,
+    });
+    expect(lastReport(filahub).queued).toBe(0);
+  });
+
+  it("versucht es wieder, wenn der Drucker die Vorschau beim Start nicht liefert", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+      thumbnailBusy: 1,
+    });
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    clock += 10_000;
+    await bridge.tick();
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    clock += 30_000;
+    await bridge.tick();
+    expect(thumbRequests(link.requests)).toHaveLength(2);
+    await finish(link, bridge);
+    expect(filahub.previews).toHaveLength(1);
+  });
+
+  it("nimmt den langen Namen, wenn die Kurzform nicht gefunden wird", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+      shortName: "BENCHY~1.BGC",
+    });
+    expect(thumbRequests(link.requests)).toEqual([
+      "/thumb/l/usb/BENCHY~1.BGC",
+      "/thumb/l/usb/Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode",
+    ]);
+    await finish(link, bridge);
+    expect(filahub.previews).toHaveLength(1);
+  });
+
+  it("liefert ohne Vorschau ein, wenn die Datei keine hat, und fragt nicht weiter", async () => {
+    const { link, filahub, bridge } = await printing();
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    clock += 5 * 60_000;
+    await bridge.tick();
+    await finish(link, bridge);
+    expect(thumbRequests(link.requests)).toHaveLength(1);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(0);
+  });
+
+  it("verwirft eine Vorschau, die kein PNG ist, und liefert den Druck trotzdem ein", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: new TextEncoder().encode("<svg/>"),
+    });
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(0);
+  });
+
+  it("hält die Vorschau zurück, solange filahub sie nicht annimmt, ohne den Druck doppelt einzuliefern", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+    });
+    filahub.previewStatus = 503;
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(0);
+    expect(lastReport(filahub).queued).toBe(1);
+    filahub.previewStatus = 201;
+    await bridge.tick();
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(1);
+    expect(lastReport(filahub).queued).toBe(0);
+  });
+
+  it("gibt eine abgelehnte Vorschau auf (4xx) und behält den Druck", async () => {
+    const { link, filahub, bridge } = await printing({
+      thumbnail: pngWithText(),
+    });
+    filahub.previewStatus = 404;
+    await finish(link, bridge);
+    expect(filahub.imports).toHaveLength(1);
+    expect(lastReport(filahub).queued).toBe(0);
+  });
+
+  it("legt die Vorschau neben die Warteschlange und liefert sie nach einem Neustart ein", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "filahub-bridge-"));
+    const { link, filahub, bridge } = await printing(
+      { thumbnail: pngWithText() },
+      { dataDir }
+    );
+    filahub.ingestStatus = 503;
+    await finish(link, bridge);
+    await bridge.settle();
+    await bridge.saveQueue();
+    const files = readdirSync(join(dataDir, "previews"));
+    expect(files).toHaveLength(1);
+    const queue = JSON.parse(readFileSync(join(dataDir, "queue.json"), "utf8"));
+    expect(queue).toHaveLength(1);
+    expect(queue[0].preview).toBe(files[0]);
+    // In der Warteschlange stehen keine Bilddaten
+    expect(JSON.stringify(queue)).not.toContain("iVBOR");
+
+    // Eine übrig gebliebene Datei ohne Eintrag räumt der Start ab
+    writeFileSync(join(dataDir, "previews", `${"0".repeat(32)}.png`), "x");
+    filahub.ingestStatus = 201;
+    const restarted = new Bridge({
+      filahubUrl: filahub.url,
+      token: TOKEN,
+      dataDir,
+      allowPublic: false,
+      now,
+    });
+    restarted.write = () => undefined;
+    await restarted.loadQueue();
+    expect(readdirSync(join(dataDir, "previews"))).toEqual(files);
+    await restarted.flushQueue();
+    await restarted.settle();
+    expect(filahub.imports).toHaveLength(1);
+    expect(filahub.previews).toHaveLength(1);
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(readdirSync(join(dataDir, "previews"))).toEqual([]);
+  });
+
+  it("liest eine Warteschlange im Format bis 4.9", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "filahub-bridge-"));
+    const item = {
+      source: "printer",
+      externalKey: "prusalink:SN-4711:7:2026-11-09T11",
+      title: "Alt",
+      printedAt: "2026-11-09T11:30:00.000Z",
+      status: "success",
+      progressPercent: 100,
+      durationMinutes: 10,
+      printer: "MK4S",
+      filaments: [],
+      gramsEstimated: false,
+    };
+    writeFileSync(join(dataDir, "queue.json"), JSON.stringify([item]));
+    const { filahub, bridge } = await setup([], { dataDir });
+    await bridge.loadQueue();
+    expect(bridge.queue).toHaveLength(1);
+    await bridge.flushQueue();
+    expect(filahub.imports).toEqual([item]);
+  });
+});
+
+describe("PNG ohne Metadaten", () => {
+  it("entfernt Hilfs-Chunks und lässt die Bildpunkte unverändert", () => {
+    const original = pngWithText();
+    expect(detectPrintFile(original)).toMatchObject({ hasMetadata: true });
+    const clean = stripPngMetadata(original)!;
+    expect(clean).not.toBeNull();
+    expect(detectPrintFile(clean)).toEqual({
+      kind: "image",
+      mimeType: "image/png",
+      width: 300,
+      height: 300,
+      hasMetadata: false,
+    });
+    // Genau das PNG ohne die Hilfs-Chunks – IHDR, IDAT und IEND Byte für Byte
+    expect(Buffer.from(clean)).toEqual(
+      Buffer.from(buildPng({ width: 300, height: 300 }))
+    );
+  });
+
+  it("schneidet ab, was hinter dem Bildende steht", () => {
+    const withTrailer = buildPng({ trailer: Buffer.from("geheim") });
+    expect(detectPrintFile(withTrailer)).toMatchObject({ hasMetadata: true });
+    expect(Buffer.from(stripPngMetadata(withTrailer)!)).toEqual(
+      Buffer.from(buildPng())
+    );
+  });
+
+  it("behält Palette und Transparenz", () => {
+    const plte = pngChunk("PLTE", Buffer.from([0, 0, 0, 255, 255, 255]));
+    const trns = pngChunk("tRNS", Buffer.from([0, 255]));
+    const png = buildPng({ before: [plte, trns] });
+    expect(Buffer.from(stripPngMetadata(png)!)).toEqual(Buffer.from(png));
+  });
+
+  it("lehnt kaputte Dateien ab", () => {
+    const png = Buffer.from(buildPng());
+    expect(stripPngMetadata(new Uint8Array([1, 2, 3]))).toBeNull();
+    // Abgeschnitten: kein IEND
+    expect(stripPngMetadata(png.subarray(0, png.length - 12))).toBeNull();
+    // Prüfsumme eines behaltenen Chunks falsch
+    const broken = Buffer.from(png);
+    broken[45] ^= 0xff;
+    expect(stripPngMetadata(broken)).toBeNull();
+    // IHDR nicht zuerst
+    const textFirst = Buffer.concat([
+      png.subarray(0, 8),
+      pngChunk("tEXt", Buffer.from("a\0b")),
+      png.subarray(8),
+    ]);
+    expect(stripPngMetadata(textFirst)).toBeNull();
+  });
+
+  it("hält dieselbe Größengrenze wie der Server", () => {
+    expect(PREVIEW_MAX_BYTES).toBe(MAX_PRINT_IMPORT_PREVIEW_BYTES);
   });
 });
 

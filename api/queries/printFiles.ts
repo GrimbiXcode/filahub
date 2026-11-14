@@ -1,5 +1,14 @@
-import { and, desc, eq, inArray, or, sql, type SQLWrapper } from "drizzle-orm";
-import { printJobFiles, printJobs } from "@db/schema";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  or,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
+import { printImports, printJobFiles, printJobs } from "@db/schema";
 import type { PrintFileKind } from "@contracts/printFiles";
 import { getFileStorage } from "../lib/fileStorage";
 import { scopeWhere, type Scope } from "../scope";
@@ -70,26 +79,47 @@ export async function countFilesOfPrintJob(printJobId: number) {
   return row?.value ?? 0;
 }
 
-/** Belegter Speicher eines Bereichs in Bytes – Grundlage des Kontingents */
-export async function usedStorageInScope(scope: Scope): Promise<number> {
-  const [row] = await getDb()
+/**
+ * Belegter Speicher eines Bereichs in Bytes – Grundlage des Kontingents: die
+ * Dateien der Drucke und seit 4.10.0 die Vorschauen im Eingangsfach. Mit
+ * `executor` in einer laufenden Transaktion gezählt (Prüfung unter Sperre).
+ */
+export async function usedStorageInScope(
+  scope: Scope,
+  executor: Pick<ReturnType<typeof getDb>, "select"> = getDb()
+): Promise<number> {
+  const [files] = await executor
     .select({
       value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
     })
     .from(printJobFiles)
     .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
     .where(scopeWhere(printJobs, scope));
-  return Number(row?.value ?? 0);
+  const [previews] = await executor
+    .select({
+      value: sql<string>`coalesce(sum(${printImports.previewBytes}), 0)`,
+    })
+    .from(printImports)
+    .where(
+      and(scopeWhere(printImports, scope), isNotNull(printImports.previewKey))
+    );
+  return Number(files?.value ?? 0) + Number(previews?.value ?? 0);
 }
 
 /** Belegter Speicher der ganzen Instanz – für `/verwaltung/system` */
 export async function usedStorageTotal(): Promise<number> {
-  const [row] = await getDb()
+  const [files] = await getDb()
     .select({
       value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
     })
     .from(printJobFiles);
-  return Number(row?.value ?? 0);
+  const [previews] = await getDb()
+    .select({
+      value: sql<string>`coalesce(sum(${printImports.previewBytes}), 0)`,
+    })
+    .from(printImports)
+    .where(isNotNull(printImports.previewKey));
+  return Number(files?.value ?? 0) + Number(previews?.value ?? 0);
 }
 
 export type NewPrintFile = {
@@ -136,14 +166,7 @@ export async function insertPrintFile(
         .select({ value: sql<number>`count(*)::int` })
         .from(printJobFiles)
         .where(eq(printJobFiles.printJobId, printJobId));
-      const [used] = await tx
-        .select({
-          value: sql<string>`coalesce(sum(${printJobFiles.sizeBytes} + ${printJobFiles.thumbnailBytes}), 0)`,
-        })
-        .from(printJobFiles)
-        .innerJoin(printJobs, eq(printJobs.id, printJobFiles.printJobId))
-        .where(scopeWhere(printJobs, scope));
-      recheck(files?.value ?? 0, Number(used?.value ?? 0));
+      recheck(files?.value ?? 0, await usedStorageInScope(scope, tx));
     }
     const [row] = await tx
       .insert(printJobFiles)
@@ -330,7 +353,8 @@ export async function setPrintJobCover(
 }
 
 /**
- * Aufräumlauf: Dateien in der Ablage, zu denen keine Zeile gehört, und halb
+ * Aufräumlauf: Dateien in der Ablage, zu denen keine Zeile gehört – weder in
+ * `print_job_files` noch als Vorschau im Eingangsfach –, und halb
  * geschriebene Reste. Nur, was älter als eine Stunde ist – eine Datei, deren
  * Zeile gerade in einer offenen Transaktion entsteht, darf nicht verschwinden.
  */
@@ -355,7 +379,14 @@ export async function sweepOrphanFiles(now = new Date()) {
           inArray(printJobFiles.thumbnailKey, chunk)
         )
       );
-    const referenced = new Set(keysOf(known));
+    const previews = await getDb()
+      .select({ previewKey: printImports.previewKey })
+      .from(printImports)
+      .where(inArray(printImports.previewKey, chunk));
+    const referenced = new Set([
+      ...keysOf(known),
+      ...previews.flatMap(p => (p.previewKey ? [p.previewKey] : [])),
+    ]);
     for (const key of chunk) {
       if (referenced.has(key)) continue;
       await storage.delete(key);

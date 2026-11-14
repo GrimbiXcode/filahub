@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.title="filahub-bridge" \
 
 WORKDIR /app
 COPY filahub-bridge.ts ./
-# /data hält die Warteschlange, falls filahub kurz nicht erreichbar ist
+# /data hält die Warteschlange samt Vorschauen, falls filahub kurz nicht erreichbar ist
 RUN mkdir -p /data && chown node:node /data
 USER node
 ENV DATA_DIR=/data NODE_ENV=production

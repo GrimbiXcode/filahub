@@ -1,16 +1,37 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { mkdtemp, readdir, rm, utimes } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { and, eq } from "drizzle-orm";
+import { unzipSync } from "fflate";
 import type { BridgeConfig } from "@contracts/bridge";
+import { Session } from "@contracts/constants";
+import {
+  MAX_PRINT_IMPORT_PREVIEW_BYTES,
+  MAX_STORAGE_BYTES_PER_SCOPE,
+} from "@contracts/limits";
 import * as schema from "@db/schema";
 import type { User } from "@db/schema";
 import app from "./app";
 import { openSecret } from "./lib/apiToken";
+import { localFileStorage, setFileStorage } from "./lib/fileStorage";
 import { resetRateLimits } from "./lib/rateLimit";
 import { deleteUserAccount } from "./queries/account";
 import { blockUser } from "./queries/blocking";
 import { getDb } from "./queries/connection";
+import { sweepOrphanFiles } from "./queries/printFiles";
 import { purgeResolvedImports } from "./queries/printImports";
 import { findUserByUnionId, upsertUser } from "./queries/users";
+import { signSessionToken } from "./telegram/session";
+import { buildPng, pngWithText } from "./test/pngFixtures";
 import {
   callerFor,
   closeDb,
@@ -35,6 +56,7 @@ beforeAll(async () => {
 }, 60_000);
 
 afterAll(async () => {
+  setFileStorage(null);
   await closeDb();
 });
 
@@ -306,6 +328,299 @@ describe("Übernehmen", () => {
       .update(schema.printImports)
       .set({ resolvedAt: new Date(Date.now() - 31 * 24 * 3600 * 1000) });
     expect(await purgeResolvedImports()).toBe(1);
+    expect(await countRows("print_imports")).toBe(0);
+  });
+});
+
+// --- Vorschau (seit 4.10.0) ---------------------------------------------------------
+
+describe("Vorschau aus der Druckdatei", () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), "filahub-previews-"));
+    setFileStorage(localFileStorage(dir));
+  });
+  afterEach(async () => {
+    setFileStorage(null);
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** Alle Dateien der Ablage (Unterverzeichnisse je Schlüsselanfang) */
+  async function storedFiles(): Promise<string[]> {
+    const entries = await readdir(dir, {
+      recursive: true,
+      withFileTypes: true,
+    });
+    return entries
+      .filter(entry => entry.isFile() && /^[0-9a-f]{32}$/.test(entry.name))
+      .map(entry => entry.name);
+  }
+
+  function sendPreview(token: string, id: number, bytes: Uint8Array) {
+    return app.request(`/api/ingest/print-imports/${id}/preview`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "image/png",
+      },
+      body: new Uint8Array(bytes),
+    });
+  }
+
+  async function cookieFor(user: User) {
+    const token = await signSessionToken({
+      unionId: user.unionId,
+      tokenVersion: user.tokenVersion,
+    });
+    return `${Session.cookieName}=${token}`;
+  }
+
+  async function get(user: User, url: string) {
+    return app.request(url, { headers: { cookie: await cookieFor(user) } });
+  }
+
+  async function printerImport(
+    user: User,
+    organizationId: number | null = null
+  ) {
+    const bridge = await newToken(user, "bridge", organizationId);
+    const response = await ingest(bridge.token, {
+      ...slicedPrint(),
+      source: "printer",
+    });
+    const { id } = (await response.json()) as { id: number };
+    return { token: bridge.token, id };
+  }
+
+  const PREVIEW = buildPng({ width: 300, height: 300 });
+
+  it("nimmt eine Vorschau an, zeigt sie im Fach und liefert sie nur an den Bereich aus", async () => {
+    const { token, id } = await printerImport(anna);
+    const first = await sendPreview(token, id, PREVIEW);
+    expect(first.status).toBe(201);
+    expect(await first.json()).toEqual({ id, duplicate: false });
+    // Eine Wiederholung der Brücke speichert nichts Neues
+    const again = await sendPreview(token, id, PREVIEW);
+    expect(again.status).toBe(200);
+    expect(await again.json()).toEqual({ id, duplicate: true });
+    expect(await storedFiles()).toHaveLength(1);
+
+    const [item] = await callerFor(anna).printImport.list(PERSONAL);
+    expect(item.preview).toEqual({ width: 300, height: 300 });
+    expect(JSON.stringify(item)).not.toContain("previewKey");
+
+    const served = await get(anna, `/api/files/print-imports/${id}/preview`);
+    expect(served.status).toBe(200);
+    expect(served.headers.get("content-type")).toBe("image/png");
+    expect(served.headers.get("cache-control")).toBe("private, max-age=3600");
+    expect(new Uint8Array(await served.arrayBuffer())).toEqual(PREVIEW);
+    // Fremd: 404, ohne Sitzung: 401
+    expect(
+      (await get(bert, `/api/files/print-imports/${id}/preview`)).status
+    ).toBe(404);
+    expect(
+      (await app.request(`/api/files/print-imports/${id}/preview`)).status
+    ).toBe(401);
+  });
+
+  it("prüft Typ, Metadaten und Größe aus den Bytes", async () => {
+    const { token, id } = await printerImport(anna);
+    const withText = await sendPreview(token, id, pngWithText());
+    expect(withText.status).toBe(422);
+    expect(await withText.json()).toMatchObject({ code: "has_metadata" });
+    const svg = await sendPreview(
+      token,
+      id,
+      new TextEncoder().encode("<svg xmlns='http://www.w3.org/2000/svg'/>")
+    );
+    expect(svg.status).toBe(415);
+    const huge = new Uint8Array(MAX_PRINT_IMPORT_PREVIEW_BYTES + 1);
+    huge.set(PREVIEW);
+    expect((await sendPreview(token, id, huge)).status).toBe(413);
+    expect(await storedFiles()).toEqual([]);
+    expect((await callerFor(anna).printImport.list(PERSONAL))[0].preview).toBe(
+      null
+    );
+  });
+
+  it("antwortet 404 für fremde, erledigte und unbekannte Einträge", async () => {
+    const annas = await printerImport(anna);
+    const berts = await newToken(bert, "bridge");
+    expect((await sendPreview(berts.token, annas.id, PREVIEW)).status).toBe(
+      404
+    );
+    expect((await sendPreview(annas.token, 999_999, PREVIEW)).status).toBe(404);
+    await callerFor(anna).printImport.dismiss({ ...PERSONAL, ids: [annas.id] });
+    expect((await sendPreview(annas.token, annas.id, PREVIEW)).status).toBe(
+      404
+    );
+    expect(await storedFiles()).toEqual([]);
+  });
+
+  it("verlangt die Stufe weigher in einer Organisation", async () => {
+    const org = await callerFor(anna).organization.create({ name: "Hub" });
+    await db()
+      .insert(schema.organizationMembers)
+      .values({ organizationId: org.id, userId: bert.id, role: "weigher" });
+    const { token, id } = await printerImport(bert, org.id);
+    await db()
+      .update(schema.organizationMembers)
+      .set({ role: "viewer" })
+      .where(eq(schema.organizationMembers.userId, bert.id));
+    expect((await sendPreview(token, id, PREVIEW)).status).toBe(403);
+    // Anna liefert für denselben Eintrag der Organisation – Bert sieht sie als viewer
+    const annas = await newToken(anna, "bridge", org.id);
+    expect((await sendPreview(annas.token, id, PREVIEW)).status).toBe(201);
+    expect(
+      (await get(bert, `/api/files/print-imports/${id}/preview`)).status
+    ).toBe(200);
+  });
+
+  it("wird beim Übernehmen erstes Foto und Titelbild – ohne Kopie", async () => {
+    const gebinde = await spoolFor(anna);
+    const { token, id } = await printerImport(anna);
+    await sendPreview(token, id, PREVIEW);
+    const [before] = await db().select().from(schema.printImports);
+    const { id: printJobId } = await callerFor(anna).printImport.resolve({
+      ...PERSONAL,
+      importId: id,
+      title: "Benchy",
+      printedAt: new Date(),
+      status: "success",
+      durationMinutes: 63,
+      printer: "MK4S",
+      notes: null,
+      tags: [],
+      links: [],
+      materials: [
+        { productId: gebinde.productId, materialId: gebinde.id, grams: 12 },
+      ],
+    });
+    const files = await db().select().from(schema.printJobFiles);
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({
+      printJobId,
+      kind: "image",
+      mimeType: "image/png",
+      originalName: "vorschau.png",
+      storageKey: before.previewKey,
+      thumbnailKey: null,
+      sizeBytes: PREVIEW.length,
+      width: 300,
+      height: 300,
+    });
+    const [job] = await db()
+      .select()
+      .from(schema.printJobs)
+      .where(eq(schema.printJobs.id, printJobId));
+    expect(job.coverFileId).toBe(files[0].id);
+    const [after] = await db().select().from(schema.printImports);
+    expect(after).toMatchObject({
+      previewKey: null,
+      previewBytes: 0,
+      printJobId,
+    });
+    // Dieselbe Datei, jetzt als Foto des Drucks
+    expect(await storedFiles()).toHaveLength(1);
+    const thumb = await get(anna, `/api/files/${files[0].id}/thumbnail`);
+    expect(thumb.status).toBe(200);
+    expect(new Uint8Array(await thumb.arrayBuffer())).toEqual(PREVIEW);
+    expect(
+      (await get(anna, `/api/files/print-imports/${id}/preview`)).status
+    ).toBe(404);
+    // Der Aufräumlauf hält sie für belegt
+    expect(await sweepOrphanFiles(new Date(Date.now() + 2 * 3600_000))).toBe(0);
+    expect(await storedFiles()).toHaveLength(1);
+  });
+
+  it("geht beim Verwerfen mit, bleibt aber im offenen Fach vor dem Aufräumlauf sicher", async () => {
+    const { token, id } = await printerImport(anna);
+    await sendPreview(token, id, PREVIEW);
+    // Alt genug für den Aufräumlauf – und trotzdem belegt
+    const [name] = await storedFiles();
+    const file = path.join(dir, name.slice(0, 2), name);
+    const old = new Date(Date.now() - 3 * 3600_000);
+    await utimes(file, old, old);
+    expect(await sweepOrphanFiles()).toBe(0);
+    expect(await storedFiles()).toHaveLength(1);
+
+    await callerFor(anna).printImport.dismiss({ ...PERSONAL, ids: [id] });
+    expect(await storedFiles()).toEqual([]);
+    const [row] = await db().select().from(schema.printImports);
+    expect(row.previewKey).toBeNull();
+  });
+
+  it("zählt zum Speicher des Bereichs", async () => {
+    const { token, id } = await printerImport(anna);
+    // Ein zweiter Eintrag, dessen Vorschau den Speicher fast füllt
+    await db()
+      .insert(schema.printImports)
+      .values({
+        userId: anna.id,
+        source: "printer",
+        externalKey: "voll",
+        title: "Voll",
+        printedAt: new Date(),
+        previewKey: "f".repeat(32),
+        previewMimeType: "image/png",
+        previewSha256: "0".repeat(64),
+        previewBytes: MAX_STORAGE_BYTES_PER_SCOPE - 100,
+        previewWidth: 1,
+        previewHeight: 1,
+      });
+    const response = await sendPreview(token, id, PREVIEW);
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ code: "storage_full" });
+    expect(await storedFiles()).toEqual([]);
+    // Bert hat seinen eigenen Speicher
+    const berts = await printerImport(bert);
+    expect((await sendPreview(berts.token, berts.id, PREVIEW)).status).toBe(
+      201
+    );
+  });
+
+  it("geht mit Konto und Organisation und steht im Export", async () => {
+    const { token, id } = await printerImport(anna);
+    await sendPreview(token, id, PREVIEW);
+    const dump = await callerFor(anna).account.export();
+    expect(dump.printImports).toEqual([
+      expect.objectContaining({
+        previewMimeType: "image/png",
+        previewBytes: PREVIEW.length,
+      }),
+    ]);
+    expect(JSON.stringify(dump.printImports)).not.toContain("previewKey");
+    const zip = await get(anna, "/api/files/export");
+    expect(zip.status).toBe(200);
+    const entries = unzipSync(new Uint8Array(await zip.arrayBuffer()));
+    expect(entries[`eingangsfach-${id}/vorschau.png`]).toEqual(PREVIEW);
+    const manifest = JSON.parse(
+      new TextDecoder().decode(entries["dateien.json"])
+    );
+    expect(manifest).toEqual([
+      expect.objectContaining({
+        path: `eingangsfach-${id}/vorschau.png`,
+        printImportId: id,
+      }),
+    ]);
+
+    await deleteUserAccount(anna.id);
+    expect(await storedFiles()).toEqual([]);
+
+    const org = await callerFor(bert).organization.create({ name: "Hub" });
+    const inOrg = await printerImport(bert, org.id);
+    await sendPreview(inOrg.token, inOrg.id, PREVIEW);
+    await callerFor(bert).printImport.dismiss({
+      organizationId: org.id,
+      ids: [inOrg.id],
+    });
+    expect(await storedFiles()).toEqual([]);
+    // Eine Vorschau an einem schon erledigten Eintrag geht mit der Organisation
+    await db()
+      .update(schema.printImports)
+      .set({ previewKey: "a".repeat(32), previewBytes: 1 })
+      .where(eq(schema.printImports.id, inOrg.id));
+    await callerFor(bert).organization.delete({ organizationId: org.id });
     expect(await countRows("print_imports")).toBe(0);
   });
 });

@@ -115,10 +115,20 @@ export const MAX_THUMBNAIL_BYTES = 1024 * 1024;
 export const MAX_3MF_BYTES = 45 * 1024 * 1024;
 
 /**
+ * Vorschau eines Drucks im Eingangsfach (seit 4.10.0), von der Brücke aus
+ * PrusaLink geholt: das PNG aus der Druckdatei, beim Core One 300 × 300 px und
+ * meist unter 100 KB. 1 MB wie eine Foto-Vorschau – mehr bringt eine
+ * Slicer-Vorschau nicht mit, und der Körper liegt beim Einliefern ganz im
+ * Speicher. Die Brücke hält dieselbe Grenze (`PREVIEW_MAX_BYTES`).
+ */
+export const MAX_PRINT_IMPORT_PREVIEW_BYTES = 1024 * 1024;
+
+/**
  * Speicher je Bereich: 1 GB – rund 500 Fotos und 20 Projekte. Die Ablage ist
  * ein Volume des Betreibers, ohne Kontingent füllte ein einzelnes Konto die
  * Platte der ganzen Instanz. Gezählt wird die Summe über `sizeBytes` und
- * `thumbnailBytes` in der Datenbank.
+ * `thumbnailBytes` in der Datenbank, seit 4.10.0 samt den Vorschauen im
+ * Eingangsfach (`print_imports.previewBytes`).
  */
 export const MAX_STORAGE_BYTES_PER_SCOPE = 1024 * 1024 * 1024;
 
