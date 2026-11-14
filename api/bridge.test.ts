@@ -467,6 +467,54 @@ describe("Drucke ins Eingangsfach", () => {
     ).toHaveLength(2);
   });
 
+  it("liest bei ASCII-G-Code nach dem Druck das Ende der Datei", async () => {
+    const file = buildGcode({
+      foot: { "filament used [g]": "0.00, 0.00, 18.72" },
+      config: {
+        filament_type: "PLA;PLA;PETG",
+        extruder_colour: "#1A1A1A;#FFFFFF;#00A700",
+      },
+      bodyBytes: 3 * 1024 * 1024,
+    });
+    const { link, filahub, bridge } = await printing(null, {
+      fileBytes: file,
+    });
+    const downloads = () =>
+      link.requests.filter(path => path.startsWith("/usb/")).length;
+    expect(downloads()).toBe(1);
+    // Der Kopf hilft nicht – kein erneuter Versuch während des Drucks
+    clock += 10 * 60_000;
+    await bridge.tick();
+    expect(downloads()).toBe(1);
+    link.state.printerState = "FINISHED";
+    link.state.job = { ...link.state.job!, progress: 100 };
+    await bridge.tick();
+    await bridge.settle();
+    expect(downloads()).toBe(2);
+    await bridge.tick();
+    const item = printImportInputSchema.parse(filahub.imports[0]);
+    expect(item.filaments.map(f => [f.slot, f.grams, f.colorHex])).toEqual([
+      [2, 19, "#00a700"],
+    ]);
+    expect(lastReport(filahub).printers[0].metaWarning).toBeNull();
+  });
+
+  it("nimmt den langen Dateinamen, wenn die Kurzform nicht gefunden wird", async () => {
+    const { link, filahub, bridge } = await printing(null, {
+      fileBytes: coreOneBgcode(),
+      shortName: "BENCHY~1.BGC",
+    });
+    link.state.printerState = "FINISHED";
+    await bridge.tick();
+    expect(link.requests).toContain("/usb/BENCHY~1.BGC");
+    expect(link.requests).toContain(
+      "/usb/Benchy_0.4n_0.2mm_PLA_MK4S_1h3m.bgcode"
+    );
+    expect(
+      printImportInputSchema.parse(filahub.imports[0]).filaments
+    ).toHaveLength(2);
+  });
+
   it("liefert ohne Metadaten trotzdem ein und sagt es", async () => {
     const { link, filahub, bridge } = await printing(null);
     link.state.printerState = "FINISHED";
@@ -625,9 +673,10 @@ describe("Metadaten aus dem Kopf einer Druckdatei", () => {
     expect(filamentsFromMeta(meta as Record<string, string>)).toMatchObject([
       { slot: 0, grams: 8.21, filamentType: "PETG" },
     ]);
-    // Ohne Verbrauch im Kopf: weiterlesen, am Ende null statt geraten
-    const bare = buildGcode({ bodyBytes: 1000 });
-    expect(metaFromPrintFileHead(bare.subarray(0, 100), false)).toBe("more");
+    // Ohne Verbrauch im Kopf: weiterlesen bis zum ersten Befehl, dann aufhören
+    const bare = buildGcode({ bodyBytes: 3 * 1024 * 1024 });
+    expect(metaFromPrintFileHead(bare.subarray(0, 60), false)).toBe("more");
+    expect(metaFromPrintFileHead(bare.subarray(0, 4096), false)).toBeNull();
     expect(() =>
       metaFromPrintFileHead(new Uint8Array([1, 0, 2]), true)
     ).toThrow(PrintFileHeadError);

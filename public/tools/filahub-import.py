@@ -41,7 +41,7 @@ import urllib.error
 import urllib.request
 import zlib
 
-VERSION = "4.9.5"
+VERSION = "4.9.6"
 HEAD_BYTES = 64 * 1024
 TAIL_BYTES = 512 * 1024
 MAX_BLOCKS = 256
